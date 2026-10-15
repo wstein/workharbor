@@ -1508,3 +1508,144 @@ error and unchanged data hashes. An unrelated early phase refusal cannot satisfy
 the intended failed-build proof. This changes no product code, root/subtest IDs or
 capabilities; the same36 expected outcomes per real root remain UNRUN. Exact
 finite fixture-delta review precedes the final canonical source pin.
+
+### Feature006 T009 evidence checkpoint — 2026-10-15
+
+**Feature006 T009 is NOT accepted; its checkbox remains unchecked and Feature006
+T010 waits.** The frozen product/source candidate is
+`90ea176d7e11e49c3d544e4a884e02c66071ea51`. Independent whole-source review and the
+exact pristine canonical check are CLEAR. Actual Linux/Docker acceptance is still
+UNRUN. This documentation-only checkpoint changes no behavior, contract,
+capability, required test identity, task status or fixture implementation.
+
+The final pristine command was
+`make check PYTHON=/Users/werner/.local/share/mise/installs/python/3.14.8/bin/python`
+against exact90, using the bound pinned Go1.27.2, Node26.11.1/npm11.20.0,
+Elixir1.20.4-otp-29 and OTP29.1.1. External development-only serial wrappers apply
+GOMAXPROCS2/Go-p1 and ERL_FLAGS='+S 2:2'; they do not change check semantics.
+It completed exit0 in1581.0415000915527s and all owned children were reaped.
+Raw427 passed in490.951s; qualified849 passed in883.802s. Actual final application
+counts were whr1, host_agent441, api_client162 and control_plane187, with every
+required identity present (host426 Test* requirements plus15 executed fuzz seed
+outcomes). Locked dependency setup, format, vet, build, asset and application
+checks ran. The source checkout's456 tracked regular files matched bytes and modes.
+The retained evidence root is
+`/private/tmp/workharbor-t009-canonical-90ea176-oiso_kzz/`:
+
+| File | SHA256 |
+| --- | --- |
+| binding.json | dadd58dfedcf3250d167b7747d0463685139843b801d7b866f0404930e337608 |
+| canonical.log | b54e2aeeda2c81379a0c51068a610bd4a499e5d9322033430592d58862e13847 |
+| result.json | b66a510f626d16f031344e33ba5245dee645a45d47c383a38f2792a60e7edd31 |
+
+Independent canonical binding review is
+`/private/tmp/workharbor-t009-canonical90-review-onez8nwj/assessment.json`,
+SHA256 `2527a428bfd88c7faebe318a33b9e7c1c23765a3c0863ffc60ce3d3da102c87a`.
+These gates belong to exact90; the documentation successor must separately prove
+unchanged source blobs and appropriate pristine/source/manifest checks.
+
+All original failures remain retained. In particular, exact2042586 preflight exit2
+rejected15 newly appended Fuzz* required identities under the existing Test* schema;
+only those new invalid inventory entries were removed, without dropping executed
+seed cases or predecessor requirements. Exact06b5c7e canonical overall exit2
+(1444.462s) passed raw427/qualified848 but failed the first npm setup because the
+same /dev/null was used for both npm configuration files: **no Go/Phoenix
+application suites ran in that failed canonical**. The independently reviewed
+befe43af correction uses distinct exclusive empty0600 private files. Its actual
+application-only preflight passed217.334727s with1/441/162/187 outcomes; it did not
+substitute for the later full exact90 canonical. Earlier assertion REDs, setup
+failures, cleanup failures, reviewer probes and superseding GREENs described above
+remain unchanged; no failed aggregate is relabeled passing.
+
+The sole fixture owner consumed four separately authorized exact90 acceptance
+attempts. Every attempt ended exit125 BEFORE creation, with no owned guest ID,
+no Linux/source/Docker tests and final machine inventory empty. No acceptance
+guest was ever created by this sequence; no deletion was needed. Earlier small
+1GiB discovery guests described above were deleted and are not Docker acceptance.
+
+| Attempt | Measured refusal and scope | Retained finite outcome SHA256 |
+| --- | --- | --- |
+| 017ioqlx | Targeted lsof command15 exited1;16226 stdout bytes and0 stderr bytes did not satisfy the strict exit0 reader. Backing parsing was not reached. | 7ac49fe5302f2c3f7e3a36f64a688fabe84c56d6bc79c43ad14783dcdb6abd6a |
+| hlz6pdz1 | Fresh pressure2 WARNING refused the then-NORMAL-only entry guard, despite3806101504 available bytes exceeding the3221225472-byte planning threshold. No lsof/backing query ran. | b9319ca29ee29401658c16998cd6b133f5c540a0ba3b9f519ce90e2917886e69 |
+| kf52n2hr | Corrected fixed selector lsof exited0 but158 stderr bytes triggered BACKING_WARNING before parsing. Pressure1 NORMAL and3887857664 available bytes passed that attempt's entry gate. | f609f9e7d11b0d0218937f775d832de368a26c5e97773a925bc7439caeac2e98 |
+| 5sjea_61 | Native reader command16 exited125 in0.212821s with fixed LIBPROC_BACKING_REFUSED; underlying subcondition initially remained opaque. Pressure1 NORMAL and4157227008 available bytes passed. | 7672805219b931a8d746f3b7f4917543db69e3938c5239f3da7c7bcbb869c33b |
+
+Each table hash identifies `finite-outcome.json` under, respectively:
+`/private/tmp/workharbor-t009-acceptance-90ea176-017ioqlx/`,
+`/private/tmp/workharbor-t009-acceptance-90-retry-hlz6pdz1/`,
+`/private/tmp/workharbor-t009-acceptance-90-pressure-kf52n2hr/` and
+`/private/tmp/workharbor-t009-acceptance-90-libproc-5sjea_61/`.
+The original commands/results and independent audits remain private alongside
+these summaries. The first selector-only correction retained all unique-descriptor
+and exit0 requirements. The independently reviewed pressure amendment admits
+known1 NORMAL or2 WARNING distinctly, retains the3GiB entry planning index and
+adds a1GiB live host reserve; the fixed2GiB guest and remaining proof obligations
+are unchanged. No resource guard was silently waived. The host-available index
+is not physical RAM, a product specification or a between-sample guarantee.
+
+Bounded before/after outer Engine/context/BuildKit observations matched within
+017, kf52 and5sjea observation windows. hlz6 stopped before outer probes, so it has
+no fresh outer continuity proof. No attempt issued an outer runtime mutation;
+these statements make no broader historical continuity claim. None of these
+refusals was an execution auto-review rejection or a demonstrated product-source
+failure, and none authorizes an automatic retry.
+
+Subsequent separately reviewed, read-only diagnostics preserved the refusal:
+
+- The warning classifier identified MOUNT_STAT_WARNING (nfs), OUTPUT_INCOMPLETE
+  and MOUNT_TABLE_DEVICE_ASSUMPTION, with no unknown lines. Classification did not
+  establish completeness, harmlessness or irrelevance. Observation:
+  `/private/tmp/workharbor-t009-lsof-diagnostic-20261015-1909-4bdfa76e/observation.json`,
+  SHA256 `4310714ce84505d9ffa316d7ed34684e30de61fc672e7ea3e5e754b6534cdd8f`.
+- The native reason diagnostic reported IMAGE_ABSENT_OR_AMBIGUOUS with last API
+  proc_pidinfo returning64 bytes/errno0; the count-only diagnostic measured
+  selected2/image0/unique-identity0 within the frozen selected-process scope.
+  Neither distinguishes global absence, permissions or platform support.
+  Count observation:
+  `/private/tmp/workharbor-t009-libproc-diagnostic-count-20261015-1940-2eb049cc/observation.json`,
+  SHA256 `90c9e3d090713e036a73166bb30d3ea4b7fee05e9075a0f2b852a4de8b62c5b1`.
+- The fixed installed-lsof channel diagnostic found0 literal data.img candidate
+  records,0 candidate owner processes and0 cells across numeric-FD, fileport,
+  mapped-text and unknown channels. Incomplete-output warnings remain material;
+  those counts are scoped observations, not a global absence or identity proof.
+  Observation:
+  `/private/tmp/workharbor-t009-lsof-channel-diagnostic-20261015-1952-d26a853c/observation.json`,
+  SHA256 `33c2b0df74d71a0bcdbf04290ff5dd744e6f669cf617dcb9bb39a205f3fbb259`.
+
+The separate vendor UI observation invoked only `cua.getApp('OrbStack')`. It
+returned **Computer Use permissions are not granted**, with no UI state, storage
+path or pending relocation/restart state. The tool blocked367.0225s before control
+returned, exceeding the requested60s scope; the helper stopped immediately with
+no navigation, settings writes or further native/filesystem probes. This is a
+Computer Use capability failure, not an execution auto-review rejection. Record:
+`/private/tmp/workharbor-t009-vendor-storage-ui-kpmuyeb4/observation.json`,
+SHA256 `718d53d2100dc98dd1ef806a6da6c7ca3dd8991ef592b365ae362a1c236a9293`.
+No permission bypass, global setting change or inferred UI/storage state followed.
+
+The current external input block is an actual authoritative backing-location
+mapping required by the reviewed P3 capacity/identity proof. The observations
+above have not supplied it. Backing identity and quota-domain enforcement remain
+UNMEASURED; they do not establish unsupported OrbStack, missing backing storage,
+a product defect or insufficient physical RAM. An equivalent mapping/anchor must
+be concrete and independently reviewed before another separately authorized run;
+this checkpoint neither replaces the criterion nor adds a human approval gate for
+routine already-authorized reversible preparation.
+
+The operator's **2026-10-15 maximum is3,000,000,000 bytes per test guest**. The planned
+single guest remains2GiB (2147483648 bytes),2vCPU/16GiB disk, isolated with isolated
+network and verified native architecture. These are planned caps, not measured
+T009 acceptance caps. Whole-guest CPU/memory/disk coverage, daemon/tool ancestry,
+OOM/swap and outer preservation must be measured before workload, with bounded
+exact owned-ID teardown on every outcome. No silent increase, host-global change
+or unreviewed backing mechanism is authorized by this evidence.
+
+Still required are two sequential fresh-cache real roots (36 outcomes each),
+actual numeric nonroot Git/chmod and exact binary/untracked retention through
+stop/start/replacement/failed build, real raw TLS metadata/no-layer/zero-forward
+refusals, full official image AND Dockerfile phases and generated-metadata/reopen
+proof. The separate Linux config/storage command still requires141 outcomes,
+including six subprocess SIGKILL SEED boundaries and competing publishers.
+Those tests have not run in this acceptance sequence. T009 owns SEED recovery;
+provisioning/lifecycle reconciliation belongs to Feature006 T010. Same-author fixes,
+independent whole-WI review and committed actual evidence remain prerequisites to
+accepting Feature006 T009 or starting Feature006 T010.
