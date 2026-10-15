@@ -25,3 +25,22 @@ func TestDockerfilePlanBindsSelectedStageToExternalBase(t *testing.T) {
 		t.Fatal(p, e)
 	}
 }
+
+func TestDockerfilePlanCanonicalizesMixedCaseStagesAndAliases(t *testing.T) {
+	base := "ubuntu@sha256:" + strings.Repeat("a", 64)
+	raw := []byte("FROM " + base + " AS Builder\nFROM BUILDER AS App\n")
+	for _, target := range []string{"builder", "BUILDER", "app", "APP", ""} {
+		plan, e := AnalyzeDockerfile(raw, target)
+		stage := "app"
+		if strings.EqualFold(target, "builder") {
+			stage = "builder"
+		}
+		if e != nil || plan.SelectedBase != base || plan.Stage != stage {
+			t.Fatal(target, plan, e)
+		}
+	}
+	for _, reserved := range []string{"DEV_CONTAINERS_TARGET_STAGE", "Dev_Container_Auto_Added_Stage_Label"} {
+		_, e := AnalyzeDockerfile([]byte("FROM "+base+" AS "+reserved+"\n"), "")
+		code(t, e, "unsupported_configuration")
+	}
+}

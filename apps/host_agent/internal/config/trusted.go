@@ -369,8 +369,13 @@ func ValidateDockerfile(raw []byte) ([]string, error) {
 		case "volume", "onbuild":
 			return nil, unsupportedConfiguration()
 		case "arg":
-			if node.Next == nil || reservedArgument(strings.SplitN(node.Next.Value, "=", 2)[0]) {
+			if node.Next == nil {
 				return nil, unsupportedConfiguration()
+			}
+			for argument := node.Next; argument != nil; argument = argument.Next {
+				if reservedArgument(strings.SplitN(argument.Value, "=", 2)[0]) {
+					return nil, unsupportedConfiguration()
+				}
 			}
 		case "from":
 			from = true

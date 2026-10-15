@@ -38,15 +38,15 @@ func AnalyzeDockerfile(raw []byte, target string) (DockerfilePlan, error) {
 		}
 		name := ""
 		if node.Next.Next != nil {
-			name = node.Next.Next.Next.Value
+			name = strings.ToLower(node.Next.Next.Next.Value)
 		}
-		if name == "dev_containers_target_stage" {
+		if name == "dev_containers_target_stage" || name == "dev_container_auto_added_stage_label" {
 			return DockerfilePlan{}, unsupportedConfiguration()
 		}
 		if name != "" {
 			aliases[strings.ToLower(name)] = base
 		}
-		if target == "" || name == target {
+		if target == "" || strings.EqualFold(name, target) {
 			stage := name
 			if stage == "" {
 				stage = "dev_container_auto_added_stage_label"
