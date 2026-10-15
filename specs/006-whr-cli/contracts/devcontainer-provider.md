@@ -75,7 +75,11 @@ Devcontainer-relative parent references may resolve only inside approved config
 staging; lexical validation alone cannot establish containment.
 
 Devcontainer JSONC uses explicitly pinned official jsonc-parser. Reject syntax and
-duplicate decoded keys at every depth before semantic conversion. The accepted
+duplicate decoded keys at every depth before semantic conversion. Render validated
+AST number nodes from their original source slices, without JavaScript numeric
+conversion; native UseNumber retains exact lexemes and integer gates reject
+fractional/exponent/overflow spellings rather than coercing them. This also applies
+to strict raw registry JSON before descriptor size/schema checks. The accepted
 integer-only wirejson profile is not a Devcontainer parser. Initial source values
 containing Devcontainer `${...}` substitutions are unsupported.
 
@@ -171,7 +175,24 @@ script-disabled npm installation; the original JSONC wrapper is embedded product
 code, so a repository cannot select/replace its parser program. Shared native
 application gates install this same lock with npm ci --ignore-scripts first.
 
-Buildx v0.38.0 is pinned for raw registry metadata without a bespoke registry client.
+Buildx v0.38.0 is pinned for raw registry manifests. Its formatted .Image output
+normalizes JSON and drops Docker Config.OnBuild, so it never authorizes raw config
+capabilities. The independently reviewed amendment pins maintained crane v0.22.1
+(Apache-2.0), including official Linux arm64/amd64 archive and extracted binary
+SHA256 values, for exactly `crane config <selected-leaf@sha256>`; no bespoke registry
+client, layers, save or pull. Verify raw root/selected-leaf manifest SHA256, then
+raw config SHA256 AND its declared positive byte size before strict duplicate/type/
+metadata parsing. Each raw manifest/config has an explicit 1MiB host input limit;
+reject oversized advertised config size before spawning crane, and enforce streamed
+stdout size/deadline with owned-child kill/reap and discarded bounded stderr.
+
+Registry tools receive a fresh host-owned0700 private HOME/config/XDG staging area,
+both HOME/.docker/config.json and DOCKER_CONFIG/config.json containing only `{}`
+with0600 permissions, and empty private XDG_CONFIG_HOME/XDG_RUNTIME_DIR. Environment
+is restricted to tool PATH, LANG and those private paths; ambient registry auth,
+cloud/proxy credentials and credential-helper configuration never pass through.
+No insecure endpoint/source flags or tags/indexes substitute for the selected leaf.
+Unavailable/ambiguous/over-budget raw input refuses before provider effects.
 Node26.11.1 is the repository runtime pin. These selections are not measured
 provider compatibility; exact installed version/hash and real Docker evidence must
 pass before acceptance. Docker Engine29.8.2 is the initial intended provider pin;
@@ -188,6 +209,23 @@ ONLY THEN seed storage, pull exact digests, build/create/start. Fresh-cache regi
 metadata is allowed; unavailable/ambiguous metadata refuses without pull. The
 CLI's registry-inspect failure can fall back to docker pull: the adapter MUST
 block it in preflight. No cache-only requirement or separate image trust grant.
+
+The reviewed native run identity amendment uses a fresh exclusively reserved
+host-private operation directory and generated CIDfile path, left absent for Docker
+itself. Raw source CIDfile/runArgs remain forbidden. Docker CLI's CIDfile creation
+is not an exclusive/fsync guarantee; only the live same fenced allocation request,
+fresh current authorization, full64hex CID, and independent unique full name/all
+labels/image/sole mount inspection can bind the first exact target. Never replace
+a different target or adopt from names/events/labels after ambiguous loss. CIDfile
+is allocation identity only, never completion or a durable receipt.
+
+The native typed run uses the independently verified FINAL local config ImageID
+and fixed provider `--pull=never`; missing images/layers fail unavailable without
+implicit pull or tag fallback. Explicit admitted digest pulls occur only after all
+approval/capability gates, followed by fresh raw/local metadata+ID checks. Official
+up retains workflow authority; no native create/start workflow substitute is added.
+Typed run/events/exact-ID exec streams stay within the phase's owned host-client
+lifetime; disconnect cancels/reaps that client without inferring daemon quiescence.
 
 ## Runtime identity and closed provider driver
 
@@ -331,3 +369,62 @@ head; run appropriate native/pristine app/source/manifest gates and retain raw l
 Exact pins/install/build, native behavior and actual guest proof remain unverified
 until recorded. No wire/lifecycle/browser/terminal completion is implied by native
 trust/provider primitives or by this consolidation review.
+
+## Native implementation alignment and reviewed transport refinements
+
+Provider.Prepare accepts only native Admission produced from authenticated T007
+context, exact approval and authoritative ORIGINAL storage binding plus current
+fence checker. It resolves/seals source, admits all raw registry inputs, checks
+rootful unmapped daemon/candidate union and explicit users, validates full official
+read-configuration, then Inspect ALWAYS Seed (including existing-final parent
+fsync/current Check) before returning a handle. A newly absent final requires the
+resolved descriptor equal ORIGINAL; known handle plus absent final refuses.
+
+Prepared.Resources and Hooks are one-attempt native primitives, not a dispatcher.
+Explicit typed digest pulls happen only after every preparation gate, then official
+up performs resource semantics. Hooks require positively completed resources and
+exact-ID run-user-commands. Full normal Node exit, private adapter/client reap,
+closed result, independent effective-input comparison and fresh exact running
+runtime inspection precede PhaseEvidence. T010 must durably record that evidence
+before acknowledgment; it owns all interrupted provisioning/lifecycle recovery.
+Close cancels and reaps owned official CLI/client groups before private staging
+cleanup; cancellation never proves daemon completion or ends container hooks.
+
+The generated build uses one private absent provider-only IID file, added only to
+reconstructed native buildx argv. Full normal build exit plus exact owned regular
+IID bytes, inspection of THAT image ID, nonempty expected final metadata and tag
+same-ID agreement precede immutable proof registration. Missing, stale, partial,
+foreign, mismatched, failed or canceled evidence never registers/adopts/reuses.
+The final built image supplies command expectations when overrideCommand is false;
+never substitute the original base image's command. Official startup script bytes
+are measured against pinned CLI0.89.0 and retained only as SHA256 expectation.
+
+The private Unix streaming adapter registers a random 32-byte/64-hex token before
+one-use invoke. Registration alone starts no work. Duplicate/canceled/unregistered
+invokes refuse; cancellation closes only that exact private request connection and
+owned input, cancels its native client context and waits boundedly for completion
+or reports unknown. A positive completion acknowledgment requires the exact forward
+handler/client to finish, never daemon/resource quiescence. Closing registration,
+aborting owned input/output and reaping handlers is part of phase cleanup. No
+browser/CP wire capability, broad socket executor or source-selected endpoint exists.
+
+Pinned crane uses plaintext automatically for loopback/.localhost/RFC1918 literal
+registry authorities even without an insecure flag. These and link-local/unspecified
+literal authorities refuse before metadata subprocesses/provider effects. Named
+registry authorities use the pinned tools' HTTPS entrypoint; do not claim a stronger
+transport policy than measured pinned-tool behavior. Every raw manifest/config
+still requires the exact approved digest/size chain and strict admission. Optional
+CAFile/CASHA256 is trusted native host setup only: exact physical privately owned
+regular bounded PEM CA bytes/hash/validity verified before each subprocess; only
+SSL_CERT_FILE is appended to the existing private registry-read environment. No
+source/wire/env passthrough, credential helper, TLS private key, insecure flag or OS
+trust mutation. A changed/missing/invalid bundle refuses. Actual pinned-tool TLS
+compatibility is a required real test, not established by native fixtures.
+
+The maintained pure Dockerfile grammar imports remain under config capability
+validation. The architecture checker permits only exact whole-line unaliased
+parser import in dockerfile_plan.go and parser/instructions/linter in trusted.go.
+All Docker clients/sockets, other imports/files and control-plane provider access
+remain rejected, with preserved inherited and new independent negative harness IDs.
+This checker alignment requires full canonical verification on the exact pristine
+candidate; earlier docs-only canonical evidence cannot cover it.

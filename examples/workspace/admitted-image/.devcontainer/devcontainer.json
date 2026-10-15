@@ -1,0 +1,16 @@
+{
+  "name": "WorkHarbor admitted image example",
+  "containerUser": "0:0",
+  "remoteUser": "1000:1000",
+  "overrideCommand": true,
+  "userEnvProbe": "none",
+  "updateRemoteUserUID": false,
+  "waitFor": "postStartCommand",
+  "shutdownAction": "none",
+  "onCreateCommand": [
+    "sh",
+    "-c",
+    "test \"$(id -u)\" = 1000 && touch .workharbor-created"
+  ],
+  "image": "docker.io/library/buildpack-deps@sha256:4163ac2c58660c533f3cf3d178551287ddd0ac18269ef84f3a382d0698c89254"
+}

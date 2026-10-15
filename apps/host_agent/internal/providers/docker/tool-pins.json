@@ -31,5 +31,27 @@
   "docker_engine": {
     "version": "29.8.2",
     "guest_package_verification": "pending runtime preparation"
+  },
+  "atomic_filesystem": {
+    "module": "golang.org/x/sys",
+    "version": "v0.48.0",
+    "license": "BSD-3-Clause",
+    "linux": "Renameat2/RENAME_NOREPLACE",
+    "darwin": "RenameatxNp/RENAME_EXCL",
+    "fallback": "none"
+  },
+  "crane": {
+    "version": "v0.22.1",
+    "license": "Apache-2.0",
+    "purpose": "raw registry config bytes only; no pull/layers",
+    "linux_arm64_archive_sha256": "898c0cff975f898a33e8c4580bdafb0e7c02c7faa33374e946762f97c4ab7110",
+    "linux_arm64_sha256": "1799f559c299f068951822a5efe6689ebab6974f2054d5562e60798fa9db6a55",
+    "linux_amd64_archive_sha256": "0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0",
+    "linux_amd64_sha256": "8e75c326adb43b053cfd78b9b987663f8f4fe4557f4d3915905643f25c730992",
+    "linux_arm64_url": "https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_arm64.tar.gz",
+    "linux_amd64_url": "https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz",
+    "checksums_url": "https://github.com/google/go-containerregistry/releases/download/v0.22.1/checksums.txt",
+    "checksums_sha256": "889e6996ef939c12d613f4cae657cc2ecce822e69ea74a58a453a95d723a857d",
+    "metadata_input_limit_bytes": 1048576
   }
 }

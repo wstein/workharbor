@@ -53,6 +53,26 @@ class HarnessTests(unittest.TestCase):
         self.assertEqual([], checks.boundary_errors(Path('apps/host_agent/internal/providers/docker/provider.go'), text))
         self.assertTrue(checks.boundary_errors(Path('apps/control_plane/lib/service.ex'), 'DockerProvider'))
 
+    def test_exact_pure_dockerfile_grammar_imports_do_not_grant_docker_access(self):
+        grammar = 'github.com/moby/buildkit/frontend/dockerfile/'
+        base = 'apps/host_agent/internal/config/'
+        allowed = {'dockerfile_plan.go': ['parser'], 'trusted.go': ['parser', 'instructions', 'linter']}
+        for filename, packages in allowed.items():
+            for package in packages:
+                text = '  "' + grammar + package + '"  '
+                with self.subTest(filename=filename, package=package):
+                    self.assertEqual([], checks.boundary_errors(Path(base + filename), text))
+                    self.assertTrue(checks.boundary_errors(Path(base + 'other.go'), text))
+                    for bad in (text + '\n"github.com/docker/docker/client"',
+                                text + '\ndocker.sock',
+                                'alias "' + grammar + package + '"',
+                                text + ' // comment',
+                                text + '; "github.com/moby/buildkit/client"'):
+                        self.assertTrue(checks.boundary_errors(Path(base + filename), bad))
+                    self.assertTrue(checks.boundary_errors(Path('apps/control_plane/lib/test.ex'), text))
+        self.assertTrue(checks.boundary_errors(Path(base + 'trusted.go'), '"' + grammar + 'shell"'))
+        self.assertTrue(checks.boundary_errors(Path(base + 'dockerfile_plan.go'), '"' + grammar + 'instructions"'))
+
     def test_development_orchestrator_rejected_in_product(self):
         self.assertTrue(checks.boundary_errors(Path('apps/control_plane/lib/service.ex'), 'codex app-server'))
 
