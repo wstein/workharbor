@@ -36,7 +36,12 @@ verified integrity, dependencies, tool paths and attachment requirements.
 `BundleAttacher.validate(resolved, capabilities)` precedes provisioning;
 `attach(resolved, runtime, operation)` returns a recorded attachment. Removal must
 not alter the language image or delete project data. Feature 002 tests one real
-Bundledock artifact after examining its upstream documentation and format.
+BundleDock artifact after examining its upstream documentation and format. The
+historical feature number collides with the Symphony smoke feature; allocate a
+distinct identifier before planning bundle implementation.
+[Workspace shell design input](../docs/papers/bundledock-workspace-shell.md) records
+the proposed loading and prompt trust policy for issue #81; it does not change
+these accepted ports or approve runtime integration.
 
 ## CLI contracts
 - [`cli/exit-codes.json`](cli/exit-codes.json): frozen `whr` exit-code table, proposed in [ADR 0013](../docs/adr/0013-whr-exit-codes.md) (H15:b).
