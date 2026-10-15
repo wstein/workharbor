@@ -228,7 +228,6 @@ func realAdmissionRefusals(t *testing.T, ctx context.Context, host Provider, b s
 				if e := os.Symlink("../../outside.json", sourcePath); e != nil {
 					t.Fatal(e)
 				}
-				want = "context_schema"
 			case "jsonc-duplicate":
 				realWrite(t, sourcePath, []byte(`{"image":"one","\u0069mage":"two"}`))
 			case "jsonc-surrogate":

@@ -954,7 +954,8 @@
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay/1000-1000",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestResourceResultNumericUsersMatchPinnedCLIDisplay",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestPinnedOfficialCLIReadConfigurationPreservesSourceAndMetadata/resource-result-retains-actual-official-provenance",
-      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestRegistryUnknownRawDockerConfigFieldRefusesAfterDigestVerification"
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker/TestRegistryUnknownRawDockerConfigFieldRefusesAfterDigestVerification",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestResolverRelativeSourceSymlinkUsesConfigurationDiagnostic"
     ],
     "api_client": [
       "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestFrozenJSONVectors",

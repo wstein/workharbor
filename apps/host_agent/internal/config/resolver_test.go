@@ -225,3 +225,20 @@ func TestResolverHTTPSRootUsesExplicitSSHOnlyForApprovedGitlink(t *testing.T) {
 		t.Fatal("explicit SSH transport never used", e)
 	}
 }
+
+func TestResolverRelativeSourceSymlinkUsesConfigurationDiagnostic(t *testing.T) {
+	r, d := resolverFixture(t, func(root string) {
+		path := filepath.Join(root, ".devcontainer/devcontainer.json")
+		if e := os.Remove(path); e != nil {
+			t.Fatal(e)
+		}
+		if e := os.Symlink("../../outside.json", path); e != nil {
+			t.Fatal(e)
+		}
+	})
+	resolved, e := r.Resolve(context.Background(), d)
+	if resolved != nil {
+		resolved.Close()
+	}
+	code(t, e, "invalid_configuration")
+}
