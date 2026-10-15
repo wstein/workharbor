@@ -358,3 +358,49 @@ func TestSeedIndependentProcessesSerializeOneFinal(t *testing.T) {
 		}
 	}
 }
+
+func TestSeedActualSymlinkChainsNeverEscapeDataOrRemainIndeterminate(t *testing.T) {
+	for _, kind := range []string{"escape-after-symlink", "cycle", "dangling"} {
+		t.Run(kind, func(t *testing.T) {
+			s, b, source := fixture(t)
+			external := filepath.Join(filepath.Dir(source.ProjectsPath), "seed.json")
+			os.WriteFile(external, []byte("private-canary"), 0600)
+			switch kind {
+			case "escape-after-symlink":
+				os.Symlink(".", filepath.Join(source.ProjectsPath, "same"))
+				os.Symlink("same/../seed.json", filepath.Join(source.ProjectsPath, "escape"))
+			case "cycle":
+				os.Symlink("b", filepath.Join(source.ProjectsPath, "a"))
+				os.Symlink("a", filepath.Join(source.ProjectsPath, "b"))
+			case "dangling":
+				os.Symlink("missing", filepath.Join(source.ProjectsPath, "dangling"))
+			}
+			_, e := s.Seed(context.Background(), b, source, allow)
+			assertCode(t, e, "invalid_seed")
+			if _, e = os.Lstat(filepath.Join(s.Root, b.StorageID)); !os.IsNotExist(e) {
+				t.Fatal("invalid link published")
+			}
+			raw, e := os.ReadFile(external)
+			if e != nil || string(raw) != "private-canary" {
+				t.Fatal("external data changed")
+			}
+		})
+	}
+}
+
+func TestSeedFullyResolvedContainedLinkChainKeepsOriginalLinkBytes(t *testing.T) {
+	s, b, source := fixture(t)
+	os.Symlink("dir/link", filepath.Join(source.ProjectsPath, "chain"))
+	h, e := s.Seed(context.Background(), b, source, allow)
+	if e != nil {
+		t.Fatal(e)
+	}
+	link, e := os.Readlink(filepath.Join(h.Data, "chain"))
+	if e != nil || link != "dir/link" {
+		t.Fatal("link rewritten", link, e)
+	}
+	raw, e := os.ReadFile(filepath.Join(h.Data, "chain"))
+	if e != nil || string(raw) != string([]byte{0, 1, 255, 128}) {
+		t.Fatal("contained chain broken", e)
+	}
+}

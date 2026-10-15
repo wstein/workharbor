@@ -278,6 +278,13 @@ refuse, never delete/repair/recopy. Rename collision validates final under same 
 After-rename/before-receipt crash reuses exact complete final after parent fsync,
 never seeds twice. Temp cleanup only exact owned staged candidates. Source filesystem
 APIs/filenames are implementation detail; crash tests do not claim power-loss proof.
+Initial copied symlinks must be relative and their complete existing target chains
+must resolve inside canonical ORIGINAL ProjectsPath. Absolute, escaping, cyclic,
+dangling or otherwise indeterminate initial links refuse invalid_seed before
+publication. Standard filesystem resolution checks actual chains, not only lexical
+Clean. Preserve original bytes for legitimate ../binary and contained chains.
+This explicit initial-input subset never traverses or rewrites valid retained data.
+
 Runtime stop/start/remove never delete storage. T010 owns lifecycle/data-delete and
 multi-runtime cleanup authorization; no broad label-based removal. Host systemd
 stays on Linux host; no AI orchestration/native tool/bootstrap enters images.

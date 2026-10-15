@@ -1286,3 +1286,25 @@ and focused vet exits0 in /private/tmp/workharbor-t009-config-review-fixes-vet.l
 Exact independent correction review remains required; this is not a claim that
 all T009 source is reviewed. Provider implementation and real Linux/Docker gates
 remain unfinished and Feature006 T009 remains unchecked.
+
+### T009 storage independent symlink finding and correction
+
+Independent review of the c606 seed blobs found a P2: lexical Clean admitted
+`same -> .` followed by `escape -> same/../seed.json`, whose actual host-side
+resolution leaves data/ and reaches the private parent manifest. This violates
+initial-data containment; no claim of escaping the container's bind mount follows.
+Reviewer RED remains /private/tmp/workharbor-t009-config-fix-review-mnx__mnj/storage-probe.log.
+Author escape/cycle/dangling RED remains
+/private/tmp/workharbor-t009-storage-link-review-red.log (exit1,0.404s).
+
+The independently DESIGN-CLEAR narrowing requires relative INITIAL symlinks with
+existing complete target chains inside canonical ORIGINAL ProjectsPath. Standard
+EvalSymlinks plus Rel/IsLocal rejects actual escapes, cycles and dangling/indeterminate
+inputs before publication; original link bytes for ../binary and contained chains
+are preserved. Valid retained data is never traversed or rewritten. All TestSeed
+roots pass in /private/tmp/workharbor-t009-storage-link-review-green-final.log
+(exit0,1.358s), including six SIGKILL boundaries and independent publishers;
+focused vet exits0 in /private/tmp/workharbor-t009-storage-link-review-vet.log.
+This is author native Darwin correction evidence; exact independent source
+re-review and all real Linux/Docker acceptance remain pending. The new read-only
+Store.Inspect integration file/tests are separate WIP outside this checkpoint.
