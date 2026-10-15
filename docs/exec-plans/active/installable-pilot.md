@@ -1649,3 +1649,154 @@ Those tests have not run in this acceptance sequence. T009 owns SEED recovery;
 provisioning/lifecycle reconciliation belongs to Feature006 T010. Same-author fixes,
 independent whole-WI review and committed actual evidence remain prerequisites to
 accepting Feature006 T009 or starting Feature006 T010.
+
+### Feature006 T009 bounded-disk fixture checkpoint — 2026-10-16
+
+**Feature006 T009 is NOT accepted; its checkbox remains unchecked and Feature006
+T010 waits.** The product/source candidate remains
+`90ea176d7e11e49c3d544e4a884e02c66071ea51`; the preceding documentation-only head is
+`832dd63000257bad01656154b639251d643f2a2d`. The exact90 independent source review
+and pristine canonical GREEN above remain valid for their unchanged source.
+No full canonical rerun or product-source change is claimed by this checkpoint.
+Actual acceptance still requires the unchanged36 IMAGE,36 Dockerfile and141
+ordinary Linux config/storage outcomes, including numeric nonroot Git/chmod,
+retention, official phases, raw TLS refusals and SEED crash boundaries.
+
+The separately reviewed bounded-disk strategy replaces the unavailable privileged
+quota/active-backing-image prerequisites with an explicit **measured planning
+watchdog**. Each guest remains2CPU/2GiB (2147483648 bytes), below the operator's
+3000000000-byte ceiling, with supported16G disk configuration. The12GiB whole-root
+planning budget includes base OS, signed package closure, pinned tools, source and
+helpers, Go modules/build outputs, Docker/containerd/BuildKit/workspaces, temporary
+files, logs and evidence. A nonoverlapping longest-prefix walker counts every
+owned-root backing entry, including the root inode, using the greater of apparent
+bytes and allocated blocks; it deduplicates hardlinks globally and refuses category
+conflicts, unknown writable domains, unreadable entries and observed races.
+Before each phase it conservatively reserves ALL remaining declared total growth
+plus4GiB logical filesystem free space. Live and terminal category/total checks
+remain bounded by the original deadlines. These are monitored test-plan ceilings,
+not kernel-enforced disk quotas or a between-sample guarantee.
+
+Vendor16G is **CONFIGURED only**. Kernel disk-quota enforcement, OS-inclusive16GiB
+accounting and Mac physical OrbStack backing capacity remain **UNMEASURED**.
+The host root filesystem20GiB planning observation is explicitly not an OrbStack
+backing mapping. The reviewed entry planning index is2.75GiB (2952790016 bytes),
+with1GiB live host availability and a measured128MiB runner-RSS refusal. Whole-guest
+memory/CPU, swap/OOM, all actor ancestry, closed daemon configuration, immutable
+owned-ID teardown and outer preservation gates remain mandatory.
+
+Pinned crane's OCI mode writes a directory layout. The fixture bounds its aggregate
+files to128MiB, verifies the exact selected leaf/config/layer hashes and declared
+sizes, and counts aggregate decompressed gzip tar bytes AND regular-file payloads
+within1GiB. Config diff IDs must match. Sparse, unsupported and size-override
+encodings refuse. No layer is extracted, executed or imported; the identity-owned
+layout is removed before real Docker work, leaving its cache fresh. Signed package
+Size512MiB, Installed-Size1GiB and indices256MiB are frozen before installation;
+unknown or excessive metadata refuses. All original source/archive/tool/TLS/test
+identity bindings remain unchanged.
+
+The strategy and final prepared code were independently reviewed. Code2's two
+P2 findings (aggregate layer consumption before remaining-budget enforcement and
+signed resolution before its fresh phase reserve) were reproduced RED, corrected
+in code3 and independently closed. Code3 passed32 native-denied tests. Its actual
+failure subsequently exposed an observability defect: known mount-domain guard
+refusals and unrelated TypeError exceptions collapsed to the same generic receipt.
+Code4 changes only the disk helper and native adapter to emit fixed safe stage,
+exception-family and whitelisted reason/errno fields, and retain a validated
+at-most1KiB nonzero receipt before raising. It never records raw exception text or
+paths. Its five new error-entrypoint/retention tests and all37 native-denied tests
+pass. Same-reviewer code4 PREPARATION and final identity reviews are CLEAR; these
+are not actual Docker acceptance.
+
+| Retained evidence | SHA256 |
+| --- | --- |
+| original strategy.json | 80037ab1a6d38f27fcbbd5747c7564cbaa91db2d778b2e3597d0e464cc97a7bf |
+| reviewed strategy.revision2.json | 0b076903843253d46b1e50b99f50edef77cfba175a1499a8599f669ec46c713f |
+| bounded-disk design assessment | ee3fd84123d92c31bd39d67bcc63b6727b8e9c06618293f9a98183feb41ec3b3 |
+| code3 review-packet.json | d9bbdd62a3e4f9f35513cc3472959b0253d8943919264ce735e1f634959433fe |
+| code3 independent assessment | a741f311739225cec3962e5a58f49eaf014c35db910e8d8c5f4bac6d8b41c0ac |
+| code4 review-packet.json | 1ac1874be370b381d729e2f7ad15246e04e1eb243abe1fa4b195786cde22a3fe |
+| code4 independent assessment | 9459676537da87cc56549419d488a8650405a69b4706e3fc9e7bf4431c96afd6 |
+| exact90 source.tar.gz | ce71b26983b30960fc812fd554882bd626cbc383b028ccbae8e8714f132d7bff |
+| exact90 runtime test-manifest.json | c35f15c2252a1545cc71c183d5dffe8ce9661bbf62bda9d5f6b20be6dc6a4d50 |
+| code3 activation-manifest.json | 603cfe0b9f075589821578ab66568bbc8eefa68e91855d714f68d9fed252b0c9 |
+| code4 activation-manifest.json | 804752a69bc4598fc1e2f3096dc8382080afbb9fb1822667ee1b7f62ca105abe |
+
+Strategy and packets are under
+`/private/tmp/workharbor-t009-bounded-disk-strategy-wlsha3bp/` (packets in
+`code3/` and `code4/`). The retained reviewed revision2 clarifies category accounting, OCI counting and
+the entry amendment.
+Independent assessment directories are, respectively,
+`/private/tmp/workharbor-t009-bounded-disk-design-review-m8uem5eh/`,
+`/private/tmp/workharbor-t009-code3-review-6wougg2b/` and
+`/private/tmp/workharbor-t009-code4-review-15m30z7m/`, each `assessment.json`.
+All original code2/code3 failures, independent reproductions, RED/GREEN logs,
+activation manifests, separate coordinator GO artifacts and private raw evidence
+remain retained. No consumed GO was reused and no automatic retry occurred.
+
+The first bounded-disk invocation was exactly:
+
+```text
+/opt/homebrew/opt/python@3.15/bin/python3.15 -B /private/tmp/workharbor-t009-bounded-disk-strategy-wlsha3bp/code3/runner.py /private/tmp/workharbor-t009-bounded-code3-activation-td60n65f/activation-manifest.json --execute --evidence-directory /private/tmp/workharbor-t009-acceptance-90-bounded-f1e569a6
+```
+
+It exited125 after14.267166s of recorded command time (44 commands). One isolated
+Ubuntu24.04/arm64 guest was created; actual parent `cpu.max=200000 100000` and
+`memory.max=2147483648` were verified. Memory current214560768/peak345313280 bytes,
+all max/OOM counters0, swap.max/current0 and visible process ancestry passed.
+Host entry NORMAL1 availability5813239808 and pre-staging4829184000 bytes passed.
+Command30's disk-baseline helper refused before source upload or package/tool/
+daemon/OCI/test work. Its129-byte filtered stdout SHA256
+`7498fa2ebd7329e38435d2991f1befe79d946a6478e77043e54b8174eea55780`
+exactly matches the retained fixed-schema reconstruction
+`MEASUREMENT_UNAVAILABLE / OTHER`. The underlying operation/cause is **UNKNOWN**;
+the later offline collapse reproduction does not establish an actual mount,
+platform, quota, capacity or product-source failure.
+
+Owned ID `01M50REBDAKANRDHPVE0QJQE3R` was stopped (command34 exit0), independently
+deleted (command37 exit0), and final inventory was empty. The outer before/after
+observations matched within that window. Session1326 and every owned direct
+command were reaped; no second guest ran. The finite summary is
+`/private/tmp/workharbor-t009-acceptance-90-bounded-f1e569a6/finite-actual.json`,
+SHA256 `11dccddc80ec614754a0a63f7357d1c9f95c8c7cd4a2d6fa418377cc592770eb`.
+Its independent actual assessment is
+`/private/tmp/workharbor-t009-actual-code3-review-t6cjy7kt/assessment.json`, SHA256
+`0e719765d345a081a08ad78637d21e26fbc10cb66543982dd22d52a2e165ce01`.
+That directory also retains `diagnostic-collapse-repro.json`.
+
+After the independently reviewed observability correction and a NEW separately
+bound GO, the second bounded-disk invocation was exactly:
+
+```text
+/opt/homebrew/opt/python@3.15/bin/python3.15 -B /private/tmp/workharbor-t009-bounded-disk-strategy-wlsha3bp/code4/runner.py /private/tmp/workharbor-t009-bounded-code4-activation-ulus6z81/activation-manifest.json --execute --evidence-directory /private/tmp/workharbor-t009-acceptance-90-bounded-code4-369fb543
+```
+
+It exited125 BEFORE creation, in5.329881s of recorded command time (nine commands).
+Host entry NORMAL1 availability5523292160 bytes passed. The existing outer Engine
+`GET /_ping` request used the explicitly whitelisted current local Unix endpoint
+and `curl --max-time 5`; command10 exited28 after5.01606s. Its exact diagnostic was
+`Operation timed out after 5004 milliseconds with 0 bytes received`. This is one
+bounded readiness failure, not proof of a persistent outage or product/platform
+fault. No owned ID/create/guest/source/package/tool/daemon/OCI/test work occurred.
+The corrected disk baseline was **UNRUN**, and the prior actual baseline cause
+remains UNKNOWN. Final inventory was empty; stop/delete were inapplicable because
+no guest was created. Session63797 and all direct commands were reaped.
+
+The initial outer baseline did not complete, so this second window's outer
+continuity is **UNMEASURED**, not "unchanged". No outer mutation, repair, restart,
+settings change, extra health probe, timeout increase or automatic retry followed.
+The finite summary is
+`/private/tmp/workharbor-t009-acceptance-90-bounded-code4-369fb543/finite-actual.json`,
+SHA256 `2a1a52ecbc237302f3489d993265f75719b7a13ce08117c8fff345bde4bce9a4`.
+The independent actual assessment is
+`/private/tmp/workharbor-t009-code4-actual-review-8yhdg777/assessment.json`, SHA256
+`ccd6ab20a06db9cb84f9bb8d6c8ec312c0434676c0c4b97e738611a97bb43de7`.
+
+The current fixture input block is a successful bounded read of the required
+existing outer Engine, needed to establish the outer-preservation baseline.
+Earlier successful pings (0.088/0.015s) provide no measured basis for an arbitrary
+new timeout. Source90 canonical GREEN remains separate from this missing runtime
+evidence. No active guest or owned native check remains; resource windows were
+released. T009 still requires actual whole-root budget/domain, daemon/tool actor,
+36+36 Docker and141 Linux evidence and independent whole-WI acceptance before
+T010 may start. This checkpoint changes no acceptance criterion or runtime guard.
