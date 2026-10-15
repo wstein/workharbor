@@ -33,4 +33,5 @@
 ## Background and references
 
 - [Concept paper: optional AI execution board](papers/optional-ai-execution.md)
+- [BundleDock workspace shell integration (proposal)](papers/bundledock-workspace-shell.md)
 - [Source references](references.md)
