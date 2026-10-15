@@ -349,9 +349,15 @@ func dockerAcceptance(t *testing.T, example string) {
 	if e != nil {
 		t.Fatal("failed build preparation", e)
 	}
+	beforeFailedBuild := fixtureLedger(t, ledger)
 	if _, e = failed.Resources(ctx); e == nil {
 		failed.Close()
 		t.Fatal("failed build reported success")
+	}
+	afterFailedBuild := fixtureLedger(t, ledger)
+	if !bytes.HasPrefix(afterFailedBuild, beforeFailedBuild) || !bytes.Contains(afterFailedBuild[len(beforeFailedBuild):], []byte("build\n")) {
+		failed.Close()
+		t.Fatal("failed-build retention did not reach an actual forwarded build")
 	}
 	failed.Close()
 	assertRetained()
