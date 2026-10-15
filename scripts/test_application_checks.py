@@ -86,13 +86,14 @@ class ApplicationChecksTests(unittest.TestCase):
                 path.write_bytes(content)
                 with self.subTest(content=content), self.assertRaises(ValueError): self.apps.read_events(path)
 
-    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False):
+    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)/'source'; root.mkdir()
             (root/'.tool-versions').write_text('erlang 29.1.1\nelixir 1.20.4-otp-29\ngolang 1.27.2\nnodejs 26.11.1\npython 3.14.8\n')
             observed = []
             def execute(argv, cwd, *, env, output_path):
                 observed.append((argv, cwd, env))
+                if observe: observe(argv, env)
                 command = tuple(argv)
                 if fail and fail(command): return 1
                 name = Path(argv[0]).name
@@ -179,3 +180,20 @@ class ApplicationChecksTests(unittest.TestCase):
         for version in ('29.1.1', '1.20.4', '1.27.2', '26.11.1', '3.14.8'):
             self.assertIn(version, workflow)
         self.assertNotIn('continue-on-error', workflow)
+
+    def test_npm_configs_are_distinct_private_empty_files_at_invocation(self):
+        calls = []
+        def observe(argv, env):
+            if Path(argv[0]).name != 'npm' or argv[1:2] != ['ci']: return
+            user, global_ = Path(env['npm_config_userconfig']), Path(env['npm_config_globalconfig'])
+            self.assertNotEqual(user, global_)
+            for path in (user, global_):
+                self.assertTrue(path.is_absolute())
+                self.assertFalse(path.is_symlink())
+                self.assertTrue(path.is_file())
+                self.assertEqual(0o600, path.stat().st_mode & 0o777)
+                self.assertEqual(b'', path.read_bytes())
+                self.assertTrue(path.is_relative_to(Path(env['HOME']).parent))
+            calls.append(True)
+        self.exercise(observe=observe)
+        self.assertEqual([True], calls)
