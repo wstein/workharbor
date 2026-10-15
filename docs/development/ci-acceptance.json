@@ -522,7 +522,8 @@
     "test_go_vectors.GoVectorTests.test_source_and_product_domains_remain_distinct",
     "test_go_vectors.GoVectorTests.test_strict_fixture_loader_rejects_duplicate_keys_constants_utf8_and_size",
     "test_application_checks.ApplicationChecksTests.test_pinned_companion_setup_precedes_host_tests_and_refuses_scripts",
-    "test_harness.HarnessTests.test_exact_pure_dockerfile_grammar_imports_do_not_grant_docker_access"
+    "test_harness.HarnessTests.test_exact_pure_dockerfile_grammar_imports_do_not_grant_docker_access",
+    "test_application_checks.ApplicationChecksTests.test_npm_configs_are_distinct_private_empty_files_at_invocation"
   ],
   "retained_assertion_failures": [],
   "application_tests": {

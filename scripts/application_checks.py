@@ -175,8 +175,13 @@ def check_applications(root, inventory, run):
             if not matches(execute(argv).read_text()):
                 raise ValueError('Tool version does not match .tool-versions: ' + argv[0])
         env['npm_config_cache'] = str(cache/'npm')
-        env['npm_config_userconfig'] = os.devnull
-        env['npm_config_globalconfig'] = os.devnull
+        # npm refuses loading the same physical file for user and global config.
+        # Distinct private empty files preserve isolation without inherited defaults.
+        for kind in ('user', 'global'):
+            config = cache/('npm-' + kind + '.conf')
+            descriptor = os.open(config, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(descriptor)
+            env['npm_config_' + kind + 'config'] = str(config)
         execute([tools['npm'], 'ci', '--ignore-scripts', '--no-audit', '--no-fund',
                  '--registry=https://registry.npmjs.org'], root/'apps/host_agent/tools/devcontainer')
         for module in GO_MODULES:

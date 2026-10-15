@@ -1480,3 +1480,24 @@ mismatch in /private/tmp/workharbor-t009-symlink-fixture-diagnostic-red.log
 in symlink-fixture-diagnostic-green.log (exit0,1.147s). Product resolver behavior
 is unchanged and strict exact diagnostic checking remains. New native required
 ID is appended; same-reviewer exact correction/fixture closure remains pending.
+
+Exact06b5c7e WHOLE T009 SOURCE REVIEW CLEAR is independent source evidence only.
+Its pristine pinned canonical run is retained in
+/private/tmp/workharbor-t009-canonical-06b5c7e-dcg4uy14/{binding.json,canonical.log,result.json}:
+raw427 PASS522.385s and qualified848 PASS917.922s, but OVERALL exit2/1444.462s.
+The first actual application npm ci failed because pinned npm refuses the same
+/dev/null file as both user and global config. NO Go/Phoenix application suites
+ran in that canonical, and raw/qualified passes do not qualify it GREEN.
+
+Same-reviewer DESIGN CLEAR permits only distinct exclusive empty0600 user/global
+config files under the existing private cache, keeping hermetic environment,
+fixed npm ci/ignore-scripts/public registry and locked package bytes unchanged.
+Invocation-time regression RED is
+/private/tmp/workharbor-t009-npm-private-config-red.log (exit1); full focused
+application-checker superseding GREEN is npm-private-config-green.log (exit0).
+Actual pinned npm config-get registry proof with those private files passes in
+/private/tmp/workharbor-t009-npm-config-native-t20h4nxp/{evidence.json,stdout.log,stderr.log};
+no package fetch/install or project script was executed by that proof. Required
+regression ID is appended. Exact correction review, fresh application gates and
+new pristine canonical remain mandatory; Feature006 T009 is still NOT accepted
+and T010 waits. All original logs/failures remain retained.
