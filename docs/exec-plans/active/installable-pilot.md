@@ -1501,3 +1501,10 @@ no package fetch/install or project script was executed by that proof. Required
 regression ID is appended. Exact correction review, fresh application gates and
 new pristine canonical remain mandatory; Feature006 T009 is still NOT accepted
 and T010 waits. All original logs/failures remain retained.
+
+The existing actual failed-build retention fixture is tightened to require a new
+forwarded build category during that failed Resources attempt, in addition to
+error and unchanged data hashes. An unrelated early phase refusal cannot satisfy
+the intended failed-build proof. This changes no product code, root/subtest IDs or
+capabilities; the same36 expected outcomes per real root remain UNRUN. Exact
+finite fixture-delta review precedes the final canonical source pin.
