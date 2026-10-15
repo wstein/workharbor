@@ -1,6 +1,6 @@
 # 0006-optional-ai-execution: Optional execution board after the baseline
 
-Date: 2026-10-12 | Proposal updated: 2026-10-13
+Date: 2026-10-12 | Proposal updated: 2026-10-15
 Status: Proposed; no product implementation authorization
 Amended by: [ADR 0009](0009-in-container-ai-agents.md) (in-container agents, wave one)
 Superseded in part by: [ADR 0011](0011-readonly-spec-dashboard.md), for the first
@@ -18,7 +18,8 @@ It creates no accepted feature, implementation task or change to current approva
 
 After the workspace baseline is demonstrated, consider an optional internal
 Phoenix LiveView execution board connecting repository-owned Spec Kit artifacts,
-an independently operated Symphony scheduler and WorkHarbor-managed resources.
+one independently operated external orchestrator (Symphony or Gas Town) and
+WorkHarbor-managed resources.
 Ordinary workspace lifecycle and terminal access must remain usable without this
 extension, an AI subscription or a tracker account.
 
@@ -32,7 +33,7 @@ self-hosted component. No Linear server or Elixir SDK capability is assumed.
 | --- | --- |
 | Requirements, plan and task definitions | Versioned repository artifacts, maintained through Spec Kit |
 | Scope and spec/plan approval | Human owner, in durable external review evidence |
-| Dispatch eligibility, concurrency, attempts and retry scheduling | Symphony alone |
+| Dispatch eligibility, concurrency, attempts, retries and worker launch | One selected external orchestrator per workstream/attempt |
 | Workspace/provider lifecycle, resources and access authorization | WorkHarbor |
 | Internal execution view, intervention requests and durable evidence links | WorkHarbor |
 | Public issue/PR discussion and optional roadmap views | GitHub, with explicit mappings |
@@ -85,18 +86,26 @@ below; "read-only first" does not bypass that gate.
 
 ## Integration boundary
 
-The initial proposed topology uses two separate OS processes/BEAM instances for
-WorkHarbor and Symphony, with independently pinned updates and restarts. An
-authenticated, versioned adapter would exchange requests and observations; its
-protocol and failure behavior remain design work. WorkHarbor would not duplicate
-Symphony's queue or retry engine. Resource admission can reject or suspend a
-request without becoming a second scheduler.
+The initial proposed topology keeps WorkHarbor and the selected orchestrator in
+separate processes, with independent pins, updates and restarts. An authenticated,
+versioned adapter would exchange bounded requests and observations. The
+[proposed adapter design](../design/orchestrator-adapters.md) records ownership,
+workspace/path mappings, retained data, credential boundaries and failure questions;
+its protocol and execution transport remain unimplemented design work.
 
-Sharing one BEAM is a later option only after proving instanceable process names,
-configuration/secret isolation, supervision and dependency compatibility. The
-pinned upstream is not assumed to be a ready plugin. Prefer a narrow adapter and
-upstream contributions; this proposal recommends neither a fork nor vendoring
-Symphony or Spec Kit core.
+Only the selected orchestrator schedules and retries a workstream/attempt.
+WorkHarbor admission can refuse resources without becoming a second scheduler.
+External completion and merge workflows remain subject to independent review and
+human merge/release policy; selecting Gas Town grants no automatic merge authority.
+Native agent launch and authentication belong to the external runner, never to
+`whr`, the control plane or a host-agent native-tool wrapper.
+
+Same-BEAM hosting is a Symphony-specific later option needing proof of instanceable
+names, configuration/secret isolation, supervision and dependency compatibility.
+Neither upstream is assumed to be a supported plug-in. Prefer a narrow adapter and
+upstream contributions rather than forking or vendoring either orchestrator or
+Spec Kit core. This proposal remains outside the Feature 006 pilot and does not
+alter the pinned, prepared development-only Symphony workflow.
 
 ## Approval and evidence gates
 
@@ -114,7 +123,7 @@ intervention races and cross-project access before claiming integration readines
 
 ## Consequences
 
-The baseline and features 001–004 retain their existing scope and approval state;
+The baseline and features 001–006 retain their existing scope and approval state;
 current issue execution is unaffected. The proposal adds documentation only.
 Adapter feasibility, resource costs and same-BEAM operation are unmeasured. Reject
 or revise this direction if its operational or security costs outweigh the value

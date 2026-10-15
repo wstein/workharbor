@@ -29,3 +29,18 @@ Spec Kit pins above are retained.
 - [Pinned Spec Kit README](https://github.com/github/spec-kit/blob/0443760542e7e5269724744a2ac55c4bd386d095/README.md) — repository-centered development artifacts and workflow.
 - [GitHub Projects](https://docs.github.com/en/issues/planning-and-tracking-with-projects/learning-about-projects/about-projects) — external planning views over issues and pull requests; separate from the proposed internal board.
 - [Linear API documentation](https://linear.app/developers/graphql) — hosted GraphQL endpoint and authentication; no self-hosted server or Elixir SDK claim.
+
+## Future orchestrator adapter design inputs
+
+Inspected: 2026-10-15. These mutable upstream sources inform the
+[proposed adapter design](design/orchestrator-adapters.md); they are not product
+dependencies, verified integration profiles or permission to activate anything.
+The pinned Symphony/Spec Kit development sources above remain unchanged.
+
+- [Gas Town README](https://github.com/gastownhall/gastown#readme) — team roles,
+  Beads, mailboxes, Git worktrees and Refinery merge queue; WorkHarbor human merge
+  policy still governs any future use.
+- [Symphony specification, main](https://github.com/openai/symphony/blob/main/SPEC.md) —
+  issue polling, dispatch, retries and per-issue workspace model.
+- [Symphony Elixir README, main](https://github.com/openai/symphony/blob/main/elixir/README.md) —
+  Codex app-server execution and repository workflow configuration.

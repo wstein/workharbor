@@ -69,14 +69,21 @@ Runtime backups and Git configuration backups are separate recovery concerns.
 
 [ADR 0006](adr/0006-optional-ai-execution.md) describes a future option outside this
 target baseline. An internal LiveView board would connect execution evidence to
-WorkHarbor's authorized workspaces and resources; Symphony alone would schedule
-agents. The first proposed increment is a read-only, revision-bound Spec Kit view:
+WorkHarbor's authorized workspaces and resources. One selected external orchestrator
+(Symphony or Gas Town) would schedule, launch and retry agents through a separately
+reviewed [adapter boundary](design/orchestrator-adapters.md); WorkHarbor owns the
+authenticated devcontainer lifecycle, retained storage and access. The first
+proposed increment is a read-only, revision-bound Spec Kit view:
 Git owns spec/plan/tasks; the view links distinct approvals, attempts, workspaces,
 acceptance, review, merge and live evidence. Cards explain blockers and the next
 permitted action. Guarded controls follow only after that view is proven; card
-movement grants no approval or dispatch authority. The first proposed topology keeps separate OS processes/BEAM instances,
-versioned integration boundaries, updates and restarts. Same-BEAM hosting needs
-later proof of instanceable names, configuration and compatible dependencies.
+movement grants no approval or dispatch authority. The first proposed topology
+keeps separate processes, versioned integration boundaries, updates and restarts.
+Only one orchestrator may dispatch/retry a workstream/attempt. Native-tool launch,
+authentication and provider credentials belong to the external runner; no adapter
+grants host credentials, Docker sockets or raw host shell to workspace agents.
+Human merge/release rules remain binding. Same-BEAM Symphony hosting needs later
+proof of instanceable names, configuration and compatible dependencies.
 Neither topology is implemented or approved for product work. The
 [concept paper](papers/optional-ai-execution.md) records identity, intervention and
 credential questions for a separately approved design.

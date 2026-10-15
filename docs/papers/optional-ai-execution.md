@@ -1,6 +1,6 @@
 # WorkHarbor as an optional execution home
 
-Date: 2026-10-12 | Proposal updated: 2026-10-13
+Date: 2026-10-12 | Proposal updated: 2026-10-15
 Status: Concept proposal; neither an accepted feature nor implementation evidence.
 
 ## Motivation and boundary
@@ -26,14 +26,18 @@ review-requested items, always distinguishing a requested transition from a
 confirmed observation. These are illustrative view states, not a new dispatch
 protocol or accepted state machine.
 
-An eligible item could link to a Symphony attempt and its WorkHarbor workspace,
+An eligible item could link to an attempt from one selected external orchestrator
+(Symphony or Gas Town) and its WorkHarbor workspace,
 with resource usage, connection health, intervention requests and redacted evidence.
 When disconnected, it should show stale or unknown observations with timestamps.
 An owner could request a pause or cancellation and see acknowledgement rather than
 an immediate success assumption. Retry and handoff would preserve prior attempts,
 commits and evidence; a finished task would not silently reopen because a process
 restarted. WorkHarbor would own workspace access and resource operations through
-its existing authorization boundaries. Symphony would remain the sole scheduler.
+its existing authorization boundaries. The selected orchestrator would remain the
+sole scheduling/retry authority for that workstream/attempt. Native agent launch,
+authentication and provider credentials stay with its external runner; human merge
+and release policy remains unchanged.
 
 Public GitHub Issues would carry bounded work requests and collaboration. Optional
 GitHub Projects views could present roadmap status; neither would replace the
@@ -142,8 +146,15 @@ would remain repository authority. The board would link them and surface approva
 status, rather than create a second editable specification or treat a generated
 task list as owner consent.
 
-Initially, two separate OS processes/BEAM instances would permit independent
-updates and restarts of WorkHarbor and Symphony. A narrow authenticated adapter
+The [proposed adapter design](../design/orchestrator-adapters.md) extends this seam
+to a choice of Symphony or Gas Town, with explicit task/attempt/workspace/path
+ownership, retained-data rules and failure questions. Gas Town's role/mailbox/Beads
+and Git-worktree model needs a different mapping from Symphony's issue/workflow
+model; neither is a verified WorkHarbor plug-in. Selecting an orchestrator cannot
+authorize dual dispatch or its automated merge behavior.
+
+Initially, separate processes would permit independent updates and restarts of
+WorkHarbor and the selected orchestrator. A narrow authenticated, versioned adapter
 is the proposed seam; no stable upstream product-integration API is assumed.
 The pinned [Elixir README](https://github.com/openai/symphony/blob/be10a1b79df723d6d7612b5651c8522704dafb2e/elixir/README.md)
 labels the reference implementation a prototype and documents GitHub Issues and
@@ -151,8 +162,8 @@ Linear adapters plus a LiveView/JSON observability service. Its existence does
 not establish authorization, durable intervention handling or integration readiness
 for WorkHarbor.
 
-Running both in one BEAM could be investigated later, but needs proof that all
-process registrations, supervisors, configuration and secret references are
+Running WorkHarbor and Symphony in one BEAM could be investigated later, but
+needs proof that all process registrations, supervisors, configuration and secret references are
 instanceable and that dependencies and restart behavior coexist safely. For
 example, the pinned [orchestrator source](https://github.com/openai/symphony/blob/be10a1b79df723d6d7612b5651c8522704dafb2e/elixir/lib/symphony_elixir/orchestrator.ex)
 accepts a process-name option while retaining a default named task supervisor and
@@ -170,7 +181,7 @@ would need verification during later design.
 
 The owner must first approve scope and the required constitutional change or
 exception, then a feature spec and plan. Baseline work keeps its current priority
-and scope; this paper adds no task to features 001–004 or the live execution queue.
+and scope; this paper adds no task to features 001–006 or the live execution queue.
 
 The first feasibility work should establish the adapter contract, retained evidence
 model and failure recovery across independently restarted services. Measurements

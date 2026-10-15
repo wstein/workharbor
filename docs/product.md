@@ -37,7 +37,8 @@ in-container agent session interface provides interop; its details live in a
 future versioned contract under `contracts/`
 ([#71](https://github.com/wstein/workharbor-nxt/issues/71)); see
 [ADR 0009](adr/0009-in-container-ai-agents.md). Wave two:
-Symphony/OpenAI-style orchestration, proposed in ADR 0006. Not yet implemented.
+optional external orchestration (Symphony or Gas Town) through a separately reviewed
+adapter, proposed in ADR 0006. Not yet implemented or part of the Feature 006 pilot.
 
 ## Success criteria
 The owner can create, inspect, access, stop and restart a workspace using only the
@@ -53,14 +54,17 @@ integration design. No partial devenv runtime support is planned before that
 feature is approved and verified; the current Docker/devcontainer baseline remains.
 
 [ADR 0006](adr/0006-optional-ai-execution.md) proposes a later optional internal
-execution board linking Spec Kit artifacts, Symphony scheduling and WorkHarbor
+execution board linking Spec Kit artifacts, one selected external orchestrator and WorkHarbor
 workspaces, resources, interventions and evidence. This is outside the accepted
 baseline and the sequence above; orchestration remains a wave-two non-goal. Start with
 a proposed read-only Spec Kit view at an identified Git revision, linking task
 prerequisites, attempts, workspaces and separate approval/check/review/merge/live
 evidence. Add guarded controls only after that view is proven; moving a card
 cannot approve or dispatch work. The
-[concept paper](papers/optional-ai-execution.md) describes the owner experience.
+[concept paper](papers/optional-ai-execution.md) describes the owner experience;
+the [proposed adapter design](design/orchestrator-adapters.md) separates scheduling
+and native-tool authentication from WorkHarbor environment/lifecycle/access.
+External workflows retain human review, merge and release gates.
 Product implementation requires separate explicit owner scope and constitutional
 approval, followed by an approved feature spec and plan. Saving this proposal
 does not provide that authorization.

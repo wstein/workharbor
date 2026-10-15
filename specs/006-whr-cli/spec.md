@@ -24,6 +24,13 @@ Feature [001](../001-workspace-lifecycle/spec.md) delivers the lifecycle through
 describes a command-line path to the same owner-scoped operations. Planning approval (H13:a) does not authorize
 implementation.
 
+Future Gas Town or Symphony integration is documented only in the
+[proposed external orchestrator adapter design](../../docs/design/orchestrator-adapters.md).
+It is outside this feature and the installable pilot: no scheduler, adapter, native-tool launch,
+provider-credential relay or automated merge capability is added. FR-029/FR-030 retain the in-container
+session boundary. Any future integration needs separate scope/governance and feature spec/plan approval;
+this contextual proposal changes no current execution approval or implementation task.
+
 The legacy WorkHarbor `whr` tool (Go, single binary, Apple Container) is reference material only. Its task and
 agent supervision commands are not adopted as such: session interoperation follows decision H9 below, and
 `run`, `pause`, `resume`, `usage` and `purge` are deferred. Other legacy task commands (`inbox`, `approve`,
