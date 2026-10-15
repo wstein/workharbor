@@ -1103,3 +1103,91 @@ Scope-corrected SAME public URL read succeeded (exit0,0.252s), followed by expli
 parser dependency selection/locking via Go (exit0) without executing fetched source.
 CLI/JSONC package-lock-only exited0; all npm runtime dependencies are pinned and
 integrity-checked in package-lock. No behavior or runtime proof is inferred.
+
+## T009 failure-first native slices (in progress)
+
+Retained independent faithful-consolidation CLEAR at
+5de4a8e59a506e8d6c499cb5d6268a1c747621e4 released only behavior authoring. Original
+red evidence remains /private/tmp/workharbor-t009-initial-red-le4x9uu6/results.json
+(seven Go behavior roots; six native approval assertions), plus separate strict
+JSONC reds /private/tmp/workharbor-t009-jsonc-red-h0_4ei8u/result.json. Native storage
+setup compilation failure is retained separately in
+/private/tmp/workharbor-t009-storage-red.log; actual four assertion reds are
+/private/tmp/workharbor-t009-storage-behavior-red.log. HTTPS resolver, provider
+config/identity, exact target, tool integrity, ownership admission and application
+companion setup reds are retained as workharbor-t009-{resolver,provider-config,
+target,tool-integrity,user-admission,app-companion}-red.log in /private/tmp.
+
+Pure descriptor/source/official AST and strict JSONC behavior, native ConfigTrust
+and first storage-handle/original-seed binding are implemented. Focused native
+Accounts/Foundation/trust/storage52 tests passed; approval host lookup used a real
+enrolled certificate and rechecked revocation. Git fixtures use actual exact-commit
+HTTPS fetch/checkout, explicit gitlink initialization, isolated ambient Git config,
+and no owner credentials. Official installed CLI reports0.89.0; bundled file hashes
+were measured after locked script-disabled npm ci. None of these establishes
+Docker provisioning, Linux identity mapping or real runtime retention acceptance.
+
+The same independent reviewer cleared x/sys0.48.0 no-replace wrappers, the known
+persistent-handle missing-data refusal, trusted current-intent Check boundary and
+explicit numeric user ownership clarification. Coordinator accepted those narrow
+contract deltas. The discarded0666/0777 alternative was never implemented: it would
+not provide Git/chmod ownership semantics. New initial data receives explicit
+remote UID/GID with ordinary modes, while private parent/marker remain host-owned;
+retained data is never reowned or recopied. Actual nonroot Linux Git/chmod evidence
+remains mandatory. Native Darwin seed fault/race roots passed before additional
+SIGKILL/process-race/mode tests; the extended run exposed test readonly-directory
+cleanup failure, retained in /private/tmp/workharbor-t009-seed-process-crashes.log.
+It is being repaired honestly; that run is not a passing suite.
+
+Two commands used a wrong project cwd: the first attempted implementation write
+found no target and made no source change; the later Mix format/test invocation
+ran at repository root and could not find Mix.Project. Correct app-root commands
+then ran. Automatic review also temporarily failed with its own usage-limit error
+before executing the storage-test command. Coordinator confirmed ordinary usage
+had recovered and explicitly resumed the same authorized command. These were
+execution failures, not behavior acceptance or source reset. Worktree preserved.
+
+No task checkbox changed. T010 dispatch/recovery and T013 terminal component remain
+outside this source scope. Actual guest/Docker execution remains independently
+gated; capacity/pressure/Orb minimum-size refusals did not create a guest and do
+not prove quota capabilities. Native batches use modest serial concurrency while
+helper-owned resource discovery is active. Full canonical gate remains reserved
+for the combined exact head unless harness changes warrant its applicable controls.
+
+### Current Feature006 T009 tracker (source work only)
+
+Feature006 T009 is NOT accepted and remains unchecked. Feature006 T010 lifecycle
+provisioning/reconciliation waits on its acceptance; this is distinct from the
+historical Feature001 T010 task. T009's crash recovery scope is atomic initial
+SEED publication/reuse only. It does not establish lifecycle recovery/dispatch.
+The explicit numeric UID:GID ownership DESIGN is independently CLEAR; real
+numeric nonroot Linux Git/chmod/retention acceptance remains open.
+
+Preserved extended seed run (actual failure, never relabeled):
+`GOMAXPROCS=2 go test -p 1 -count=1 ./internal/storage` in apps/host_agent,
+/private/tmp/workharbor-t009-seed-process-crashes.log, exit1,1.258s: readonly owned
+test TempDir teardown failed. The earlier combined pure batch likewise failed
+on that cleanup and remains /private/tmp/workharbor-t009-pure-native-green.log
+(the filename predates its outcome and does NOT make it green).
+Superseding same storage command after fixing only test-owned or exact-verified
+incomplete temp directories: /private/tmp/workharbor-t009-seed-process-crashes-green.log,
+exit0,1.332s native Darwin. Six own-child SIGKILL boundaries and independent process
+publishers pass; no Linux/Docker/power-loss claim follows. Final retained user data
+is never chmodded/chowned/reset by recovery.
+
+Current fixed official CLI argv and snapshot-only read gate tests pass in
+/private/tmp/workharbor-t009-official-driver-green.log; original meaningful reds
+remain /private/tmp/workharbor-t009-official-argv-red.log and
+/private/tmp/workharbor-t009-readonly-driver-red.log. The same reviewer confirmed
+fixed --omit-syntax-directive=true for resource up, not run-user-commands, as the
+existing bundled-frontend policy. Raw custom syntax remains refused. Real closed
+build/run/exec forwarding, registry metadata, effective schema preservation and
+complete before-effect integration remain source work, not accepted behavior.
+
+Small source-free diagnostic guests and their guarded cleanup are resource
+preparation only. Their CPU/memory observations do not prove full Docker workload
+containment, filesystem quota enforcement or retained runtime data. The P3 fresh
+4GiB host-available threshold is a self-imposed test guard, not physical host RAM
+or a product/spec requirement. Reviewed reversible plan amendments remain within
+existing authorization; no additional human approval gate is invented. Only a
+committed version of this section is a durable tracker; dirty edits are preparation.

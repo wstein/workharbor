@@ -84,7 +84,7 @@ containing Devcontainer `${...}` substitutions are unsupported.
 | name | string |
 | image OR build | exactly one; image digest-qualified string; build closed object below |
 | build | dockerfile:string; optional context:string, args:string map, target:string |
-| containerUser, remoteUser | string |
+| containerUser, remoteUser | required explicit canonical numeric UID:GID (semantic gate below) |
 | containerEnv, remoteEnv | string map |
 | overrideCommand | boolean |
 | userEnvProbe | none |
@@ -92,6 +92,27 @@ containing Devcontainer `${...}` substitutions are unsupported.
 | waitFor | postStartCommand |
 | shutdownAction | none |
 | onCreateCommand, updateContentCommand, postCreateCommand, postStartCommand | string, string argv array, or object of string/string-array commands |
+
+The independently reviewed ownership clarification admits both source users only
+as explicit canonical decimal UID:GID pairs (no leading zeros except zero, EACH
+ID is in 0..4294967294; sentinel 4294967295 and larger values refuse). containerUser must equal remoteUser or be exactly 0:0. Source-last
+metadata precedence and exact run/exec users must be independently verified, making
+image Config.User, metadata defaults and Dockerfile USER irrelevant to workspace
+ownership. No inferred passwd entry, named root, named vscode or bare numeric UID;
+absent/named/ambiguous identities refuse before seed/provider effects. Preserve the
+historical workspace example; add separately identified admitted fixtures.
+
+Read-only daemon information must establish rootful Docker without userns-remap;
+unknown/rootless/remapped operation refuses before host/container UID equivalence
+is used. Exact runtime inspection and real user-namespace evidence corroborate this
+at acceptance. Host initial-chown capability must be established before seeding
+(root with CAP_CHOWN on Linux when needed, or exact own UID/GID). Initial data files,
+directories and symlinks receive remoteUser's UID/GID once; ordinary modes/executable
+bits remain, with setid/sticky bits stripped. Host-private parent/marker remain
+host-owned0700/0600. The immutable initial marker includes the initial data UID/GID.
+A changed remoteUser UID/GID refuses before effects; retained data is never
+recursively chmodded/chowned/reset and no wildcard Git safe.directory is added.
+Real numeric nonroot Git, chmod and byte-retention evidence is mandatory.
 
 All other source fields refuse: initializeCommand (host execution),
 postAttachCommand, Features including nested/local/transitive inputs, Compose,
@@ -141,6 +162,15 @@ The host companion package lock pins CLI0.89.0 and jsonc-parser3.3.1. The CLI np
 artifact is bundled with no runtime npm dependencies. Dockerfile parser is
 Moby/BuildKit v0.34.0 (Apache-2.0), selected maintained release with Go1.26.8 minimum,
 compatible with pinned Go1.27.2; its dependency graph is locked in go.mod/go.sum.
+The reviewed direct low-level dependency golang.org/x/sys v0.48.0 matches that
+BuildKit requirement and supplies maintained Linux Renameat2/RENAME_NOREPLACE and
+Darwin RenameatxNp/RENAME_EXCL wrappers. No overwrite or emulated fallback; other
+platforms refuse. Extracted official companion runtime file SHA256 values are
+embedded from internal/devcontainer/tool-files.json after integrity-locked,
+script-disabled npm installation; the original JSONC wrapper is embedded product
+code, so a repository cannot select/replace its parser program. Shared native
+application gates install this same lock with npm ci --ignore-scripts first.
+
 Buildx v0.38.0 is pinned for raw registry metadata without a bespoke registry client.
 Node26.11.1 is the repository runtime pin. These selections are not measured
 provider compatibility; exact installed version/hash and real Docker evidence must
@@ -182,7 +212,10 @@ Fixed resource command is official up with retained workspace, immutable --confi
 full --override-config, repeated exact --id-label, --skip-post-create,
 --skip-post-attach, --default-user-env-probe none,
 --update-remote-user-uid-default never, --mount-workspace-git-root false,
---mount-git-worktree-common-dir false and typed --docker-path. No source flags or
+--mount-git-worktree-common-dir false, --omit-syntax-directive true and typed
+--docker-path. The omit flag enforces the reviewed bundled-frontend policy on the
+official generated build, with independent generated Dockerfile/build-argv checks;
+raw source directives still refuse. It is not passed to run-user-commands. No source flags or
 remove-existing-container. skip-post-create suppresses all container lifecycle hooks
 and dotfiles, NOT host initializeCommand, which the raw matrix rejects.
 
@@ -214,6 +247,22 @@ operation/current intent/scope; once set it is immutable. No data deletion here.
 The original create operation supplies immutable INITIAL seed descriptor. Never
 compare seed marker to a later rebuild execution descriptor or desired projection.
 New approved config changes staging/candidate only, preserving existing user data.
+Native Foundation.storage_binding(owner,host,operation,intent,storage) returns the
+scoped immutable original create descriptor/reservation and existing provider handle.
+Foundation.observe_storage additionally requires executing/current intent, stores
+only a first handle, and repeats it without replacing it or duplicating audit. These
+are authenticated-caller primitives, not new transport/dispatch capabilities.
+
+Store.Seed receives this authoritative binding, ExistingHandle outside the immutable
+marker, initial UID/GID, a trusted immutable ORIGINAL resolver source and a native
+current-operation/approval Check. Check runs before filesystem effects, inside the
+exact-storage lock, before publication and before returning a completion handle.
+IDs alone grant no effect. A known handle with absent final is storage_unavailable;
+never recopy or repair missing retained data. An unexpected handle/path refuses.
+Only never-observed storage may copy an absent final, from an exact ORIGINAL
+source descriptor; valid existing final reuse does not depend on a later rebuild
+source descriptor. T010 must supply actual authenticated delivery/durable fencing.
+
 
 A host-private final storage PARENT contains data/ (only mounted subtree) plus
 private sibling seed manifest. Under exact-storage serialization build a same-FS
