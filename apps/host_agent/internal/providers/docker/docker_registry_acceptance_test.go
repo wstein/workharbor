@@ -27,7 +27,7 @@ import (
 	"github.com/wstein/workharbor-nxt/apps/host_agent/internal/storage"
 )
 
-func rawRegistryRefusals(t *testing.T, ctx context.Context, host Provider, binding storage.Binding, mutate func(map[string]any) config.Descriptor, original map[string]any, root string) {
+func rawRegistryRefusals(t *testing.T, ctx context.Context, host Provider, binding storage.Binding, mutate func(map[string]any) config.Descriptor, original map[string]any, root, ledger string) {
 	t.Helper()
 	caPath, keyPath := realEnv(t, "WORKHARBOR_T009_REGISTRY_CA_FILE"), realEnv(t, "WORKHARBOR_T009_REGISTRY_KEY_FILE")
 	caHash, keyHash := os.Getenv("WORKHARBOR_T009_REGISTRY_CA_SHA256"), os.Getenv("WORKHARBOR_T009_REGISTRY_KEY_SHA256")
@@ -87,6 +87,7 @@ func rawRegistryRefusals(t *testing.T, ctx context.Context, host Provider, bindi
 	proof := map[string]any{}
 	for _, kind := range []string{"duplicate-raw-key", "onbuild", "volumes", "host-metadata", "malformed-metadata", "unknown-raw-field"} {
 		t.Run("raw-"+kind, func(t *testing.T) {
+			forwarded := fixtureLedger(t, ledger)
 			cfg := map[string]any{"architecture": runtimeArchitecture(), "os": "linux", "rootfs": map[string]any{"type": "layers", "diff_ids": []any{}}, "config": map[string]any{"User": "0:0", "Labels": map[string]any{}}}
 			properties := cfg["config"].(map[string]any)
 			switch kind {
@@ -191,6 +192,9 @@ func rawRegistryRefusals(t *testing.T, ctx context.Context, host Provider, bindi
 			if len(bad) != 0 {
 				t.Fatal("non-metadata/plaintext/layer request", bad)
 			}
+			if !bytes.Equal(forwarded, fixtureLedger(t, ledger)) {
+				t.Fatal("raw refusal forwarded mutating Docker command")
+			}
 			if snapshot() != baseline {
 				t.Fatal("raw refusal changed daemon inventory")
 			}
@@ -200,7 +204,7 @@ func rawRegistryRefusals(t *testing.T, ctx context.Context, host Provider, bindi
 			if _, e := os.Lstat(filepath.Join(root, "RAW_HOST_MUST_NOT_RUN")); !os.IsNotExist(e) {
 				t.Fatal("raw metadata host hook executed", e)
 			}
-			proof[kind] = map[string]any{"raw_config_sha256": hex.EncodeToString(configSum[:]), "manifest_digest": manifestDigest, "config_size": len(configBytes), "metadata_requests": record, "daemon_unchanged": true, "seed_absent": true, "hooks_absent": true}
+			proof[kind] = map[string]any{"raw_config_sha256": hex.EncodeToString(configSum[:]), "manifest_digest": manifestDigest, "config_size": len(configBytes), "metadata_requests": record, "daemon_unchanged": true, "zero_mutating_forwards": true, "seed_absent": true, "hooks_absent": true}
 		})
 	}
 	raw, _ := json.MarshalIndent(map[string]any{"ca_sha256": caHash, "server_name": "registry.workharbor.test", "cases": proof}, "", "  ")

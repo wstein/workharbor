@@ -1442,3 +1442,31 @@ metadata only; its actual raw Config fit and tool compatibility remain mandatory
 real Linux gates, with no subset weakening if unsupported. These author fixes
 await exact retained-reviewer closure; canonical restart and real acceptance
 remain pending, Feature006 T009 unchecked and T010 waiting.
+
+Independent exact0d435d6 THREE-FIX SOURCE CLEAR is retained at
+/private/tmp/workharbor-t009-candidate-fix-review-ywwwqavy/: full isolated
+provider/config/devcontainer/storage and reviewer regressions pass, vet exits0;
+tagged Docker compile-only passes0.294s, no runtime claim. Original independent
+2042586 reviewer probe RED remains in candidate-review-i_gw7zu_.
+
+Reviewer identified a finite real-acceptance source coverage gap. The SAME two
+fixed Linux roots now each declare36 required root/subtest outcomes, adding exact
+trust/scope/current-fence, revisions/gitlinks, actual Git/path/JSONC/SSH-credential,
+Compose/runArgs and actual duplicate/partial/name/wrong-target refusal cases.
+Each negative requires its intended diagnostic, unchanged actual Docker inventory
+and identical mutating-forward ledger. A host-trusted physical test-only wrapper
+forwards exact original Docker argv/stdio/exit, recognizes fixed global arguments
+and records only command categories in private0600 storage; unexpected shapes
+refuse. Pinned registry tools remain unchanged/unwrapped. Owned collision objects
+are separately allocated/inspected and removed by exact ID; setup/removal effects
+are outside refusal baselines. Successful resource/build paths provide positive
+ledger controls. The expected actual36+36 outcomes remain UNRUN, with no guest GO.
+Owned-shell ledger and independently authored pure trust-command controls pass
+/private/tmp/workharbor-t009-refusal-fixture-controls.log (exit0,0.522s); tagged
+compile-only passes refusal-coverage-compile.log (exit0,0.212s,no tests run).
+These fixture controls do not substitute for actual Docker proof. Exact added
+fixture source review and pristine pinned canonical remain mandatory.
+
+Tagged fixture vet has an original wrong-directory setup failure retained in
+/private/tmp/workharbor-t009-refusal-coverage-vet.log; the correct module invocation
+supersedes it in refusal-coverage-vet-superseding.log (exit0).

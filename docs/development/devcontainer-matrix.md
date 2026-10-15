@@ -53,3 +53,15 @@ increase is authorized. Host-available memory guard proposals are separate from
 that per-guest ceiling and from measured containment. Real proof.json/outcome.json
 exports are declared by each test-owned artifact-manifest.json; no project files,
 private credentials, raw hook output or ambient host configuration is exported.
+
+The two actual Docker roots each require36 Go root/subtest outcomes: six raw
+registry refusals; six exact trust/current-scope admissions; three revision/gitlink
+refusals; five actual Git/path/JSONC/SSH-credential source refusals; eleven unsupported
+source cases (including Compose and raw runArgs); four actual scoped-runtime
+collision/wrong-target refusals; and the root itself. This is an expected matrix,
+not an executed count. Every refusal compares exact private fixed-category Docker
+forward ledger bytes and actual daemon inventory. Ledger positive controls require
+real pull/run and Dockerfile build; collision setup/cleanup is test-owned and
+excluded from each product-refusal baseline. No argv, environment, credential or
+project file bytes are exported. Two separate owned-shell/pure admission fixture
+controls can run natively; their success is not real Docker acceptance.
