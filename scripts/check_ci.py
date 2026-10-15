@@ -48,11 +48,11 @@ def _source_context(root, event=None, base=None, head=None, checkout=None):
         payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
         if github_event == 'pull_request':
             pr = payload['pull_request']
-            if pr['base']['ref'] != 'main' or pr['base']['repo']['full_name'] != 'wstein/workharbor-nxt':
+            if pr['base']['ref'] != 'main' or pr['base']['repo']['full_name'] != 'wstein/workharbor':
                 raise ValueError('PR must target repository main')
             observed = SourceContext(github_event, pr['base']['sha'], pr['head']['sha'], actual)
         else:
-            if payload['repository']['full_name'] != 'wstein/workharbor-nxt' or payload['after'] != actual:
+            if payload['repository']['full_name'] != 'wstein/workharbor' or payload['after'] != actual:
                 raise ValueError('Stale or foreign push')
             observed = SourceContext(github_event, actual, actual, actual)
         if all(provided) and SourceContext(*provided) != observed:

@@ -530,7 +530,7 @@ class SourceTests(unittest.TestCase):
 
     def test_stale_foreign_nonmain_and_unsupported_event_metadata_block(self):
         context = self.proposal()
-        event = {'pull_request': {'base': {'sha': context.base, 'ref': 'main', 'repo': {'full_name': 'wstein/workharbor-nxt'}},
+        event = {'pull_request': {'base': {'sha': context.base, 'ref': 'main', 'repo': {'full_name': 'wstein/workharbor'}},
                                   'head': {'sha': context.head}}}
         path = Path(self.temporary.name)/'event.json'; path.write_text(json.dumps(event))
         os.environ.update(GITHUB_EVENT_NAME='pull_request', GITHUB_SHA=context.checkout, GITHUB_EVENT_PATH=str(path))
@@ -538,10 +538,28 @@ class SourceTests(unittest.TestCase):
         for field, value in (('GITHUB_SHA', context.head), ('GITHUB_EVENT_NAME', 'workflow_dispatch')):
             with self.subTest(field=field), mock.patch.dict(os.environ, {field: value}), self.assertRaises(ValueError):
                 ci.source_context(self.root, *context)
-        for field, value in (('ref', 'topic'), ('repo', {'full_name': 'foreign/repository'}), ('sha', self.base)):
+        for field, value in (('ref', 'topic'), ('repo', {'full_name': 'foreign/repository'}),
+                              ('repo', {'full_name': 'wstein/workharbor-nxt'}),
+                              ('repo', {'full_name': 'wstein/workharbor-old'}), ('sha', self.base)):
             changed = json.loads(json.dumps(event)); changed['pull_request']['base'][field] = value
             path.write_text(json.dumps(changed))
             with self.subTest(field=field), self.assertRaises(ValueError): ci.source_context(self.root, *context)
+
+    def test_current_repository_push_accepts_exact_head_and_refuses_foreign_or_stale(self):
+        event = {'repository': {'full_name': 'wstein/workharbor'}, 'after': self.base}
+        path = Path(self.temporary.name)/'event.json'
+        path.write_text(json.dumps(event))
+        os.environ.update(GITHUB_EVENT_NAME='push', GITHUB_SHA=self.base, GITHUB_EVENT_PATH=str(path))
+        expected = ci.SourceContext('push', self.base, self.base, self.base)
+        self.assertEqual(expected, ci.source_context(self.root))
+        for repository in ('foreign/repository', 'wstein/workharbor-nxt', 'wstein/workharbor-old'):
+            changed = dict(event, repository={'full_name': repository})
+            path.write_text(json.dumps(changed))
+            with self.subTest(repository=repository), self.assertRaises(ValueError):
+                ci.source_context(self.root)
+        path.write_text(json.dumps(dict(event, after='0' * 40)))
+        with self.assertRaises(ValueError):
+            ci.source_context(self.root)
 
     def test_dirty_index_modes_untracked_and_assume_unchanged_block(self):
         context = self.proposal(); path = self.root/'proposal.md'
