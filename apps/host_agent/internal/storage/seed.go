@@ -266,6 +266,10 @@ func syncDir(path string) error {
 	return e
 }
 func copyData(ctx context.Context, source, dest string, b Binding, point func(string) error) error {
+	physicalSource, evalErr := filepath.EvalSymlinks(source)
+	if evalErr != nil {
+		return failure("invalid_seed")
+	}
 	type directory struct {
 		path string
 		mode os.FileMode
@@ -332,6 +336,14 @@ func copyData(ctx context.Context, source, dest string, b Binding, point func(st
 			}
 			resolved := filepath.Clean(filepath.Join(filepath.Dir(rel), link))
 			if resolved == ".." || strings.HasPrefix(resolved, "../") {
+				return failure("invalid_seed")
+			}
+			// Clean alone cannot resolve "same/.." when same is itself a link.
+			// Initial links must resolve completely inside the ORIGINAL copied
+			// project subtree. Dangling and cyclic inputs are deliberately refused.
+			actual, resolveErr := filepath.EvalSymlinks(path)
+			actualRelative, relativeErr := filepath.Rel(physicalSource, actual)
+			if resolveErr != nil || relativeErr != nil || !filepath.IsLocal(actualRelative) {
 				return failure("invalid_seed")
 			}
 			if os.Symlink(link, target) != nil || os.Lchown(target, int(b.DataUID), int(b.DataGID)) != nil {
