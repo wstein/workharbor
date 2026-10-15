@@ -2,6 +2,12 @@
 
 Status: prepared, not activated. No tracker, remote or credentials are supplied.
 
+This runbook describes development tooling used to build WorkHarbor, separate from
+the [proposed product orchestrator adapters](../design/orchestrator-adapters.md).
+That wave-two proposal adds Gas Town as a design option only; it changes no pin,
+execution approval, tracker setup or activation step in this runbook and introduces
+no product dependency or verified compatibility profile.
+
 ## Compatibility
 The workflow targets OpenAI Symphony's Elixir reference implementation at
 `be10a1b79df723d6d7612b5651c8522704dafb2e`. Its adapter uses `tracker.provider`;
