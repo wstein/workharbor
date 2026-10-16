@@ -112,6 +112,37 @@ func TestDockerfileASTRefusesBeforeBuild(t *testing.T) {
 	}
 }
 
+func TestDockerfileExternalStageSourcesRefuseBeforeBuild(t *testing.T) {
+	base := "ubuntu@sha256:" + strings.Repeat("a", 64)
+	head := "FROM " + base + " AS tool\nFROM " + base + "\n"
+	for _, data := range []string{
+		head + "COPY --from=tool /bin/x /x\n",
+		head + "COPY --from=0 /bin/x /x\n",
+		head + "RUN --mount=type=bind,from=tool,target=/t true\n",
+		head + "RUN --mount=type=cache,target=/c true\n",
+		head + "ADD local.tar /dst\n",
+	} {
+		if _, err := ValidateDockerfile([]byte(data)); err != nil {
+			t.Fatalf("prior-stage source refused: %q %v", data, err)
+		}
+	}
+	for _, data := range []string{
+		head + "COPY --from=evil/tool:latest / /\n",
+		head + "COPY --from=" + base + " / /\n",
+		head + "COPY --from=1 /x /x\n",
+		head + "COPY --from=$TOOL /x /x\n",
+		head + "ADD --from=evil/tool:latest / /\n",
+		head + "RUN --mount=type=bind,from=evil/tool:latest,target=/t true\n",
+		head + "RUN --mount=from=evil/tool:latest,target=/t true\n",
+		head + "ADD https://example.test/x.tar /dst\n",
+		head + "ADD git@example.test:repo.git /dst\n",
+		"FROM " + base + "\nCOPY --from=later /x /x\nFROM " + base + " AS later\n",
+	} {
+		_, err := ValidateDockerfile([]byte(data))
+		code(t, err, "unsupported_configuration")
+	}
+}
+
 func TestSourceNULAndUnrepresentableEnvironmentNamesRefuse(t *testing.T) {
 	for _, field := range []string{"name", "postCreateCommand"} {
 		m := map[string]any{"image": "ubuntu@sha256:" + strings.Repeat("a", 64), field: "bad\x00value"}

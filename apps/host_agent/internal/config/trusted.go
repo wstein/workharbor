@@ -346,6 +346,46 @@ func ValidateSource(m map[string]any) error {
 }
 
 // ValidateDockerfile uses the upstream AST only to reject unsupported capabilities.
+// priorStageSources admits COPY/ADD --from and RUN --mount from= only for an
+// earlier stage, so every external image enters through a digest-pinned FROM
+// and its metadata gate. Remote ADD sources and dynamic flags refuse.
+func priorStageSources(node *parser.Node, aliases map[string]bool, stages int) bool {
+	prior := func(ref string) bool {
+		if index, e := strconv.Atoi(ref); e == nil {
+			return index >= 0 && index < stages-1 && strconv.Itoa(index) == ref
+		}
+		return aliases[strings.ToLower(ref)]
+	}
+	for _, flag := range node.Flags {
+		if strings.Contains(flag, "$") {
+			return false
+		}
+		name, value, _ := strings.Cut(strings.TrimPrefix(flag, "--"), "=")
+		switch strings.ToLower(name) {
+		case "from":
+			if !prior(value) {
+				return false
+			}
+		case "mount":
+			for _, field := range strings.Split(value, ",") {
+				key, ref, _ := strings.Cut(field, "=")
+				if strings.EqualFold(strings.TrimSpace(key), "from") && !prior(ref) {
+					return false
+				}
+			}
+		}
+	}
+	if strings.EqualFold(node.Value, "add") {
+		for argument := node.Next; argument != nil && argument.Next != nil; argument = argument.Next {
+			source := strings.ToLower(argument.Value)
+			if strings.Contains(source, "://") || strings.HasPrefix(source, "git@") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 func ValidateDockerfile(raw []byte) ([]string, error) {
 	if !utf8.Valid(raw) || bytes.IndexByte(raw, 0) >= 0 {
 		return nil, unsupportedConfiguration()
@@ -364,10 +404,15 @@ func ValidateDockerfile(raw []byte) ([]string, error) {
 	seen := map[string]bool{}
 	refs := []string{}
 	from := false
+	stages := 0
 	for _, node := range result.AST.Children {
 		switch strings.ToLower(node.Value) {
 		case "volume", "onbuild":
 			return nil, unsupportedConfiguration()
+		case "copy", "add", "run":
+			if !priorStageSources(node, aliases, stages) {
+				return nil, unsupportedConfiguration()
+			}
 		case "arg":
 			if node.Next == nil {
 				return nil, unsupportedConfiguration()
@@ -379,6 +424,7 @@ func ValidateDockerfile(raw []byte) ([]string, error) {
 			}
 		case "from":
 			from = true
+			stages++
 			if len(node.Flags) > 0 || node.Next == nil {
 				return nil, unsupportedConfiguration()
 			}
