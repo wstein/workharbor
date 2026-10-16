@@ -538,6 +538,171 @@ defmodule WorkHarborWeb.HostTransportTest do
     assert issued.host_id
   end
 
+  # --- issuer rotation: real TLS handshakes with hand-built client chains -------------
+
+  defp chain_outcome(c, chain, key) do
+    opts = [
+      mode: :binary,
+      active: false,
+      verify: :verify_peer,
+      cacerts: c.tls[:cacerts],
+      server_name_indication: ~c"localhost",
+      customize_hostname_check: [match_fun: :public_key.pkix_verify_hostname_match_fun(:https)],
+      alpn_advertised_protocols: ["http/1.1"],
+      certs_keys: [
+        %{cert: chain, key: {:PrivateKeyInfo, :public_key.der_encode(:PrivateKeyInfo, key)}}
+      ]
+    ]
+
+    case :ssl.connect({127, 0, 0, 1}, c.port, opts, 2000) do
+      {:ok, sock} ->
+        try do
+          :ssl.send(sock, "GET /agent/v1/connect HTTP/1.1\r\nHost: localhost:#{c.port}\r\n\r\n")
+
+          case :ssl.recv(sock, 0, 2000) do
+            {:ok, "HTTP/1.1 " <> <<status::binary-size(3), _::binary>>} -> {:admitted, status}
+            {:error, reason} -> {:refused, reason}
+          end
+        after
+          :ssl.close(sock)
+        end
+
+      {:error, reason} ->
+        {:refused, reason}
+    end
+  end
+
+  defp host_leaf(issuer, host \\ Ecto.UUID.generate()) do
+    {csr, key} = HostFixture.csr_with_key()
+    {:ok, der} = Issuer.issue(issuer, csr, host, :enrollment)
+    {der, key}
+  end
+
+  # Re-sign `der` with `signer` after `fun` rewrote its extensions.
+  defp forge(signer, der, fun) do
+    {:OTPCertificate, tbs, _, _} = :public_key.pkix_decode_cert(der, :otp)
+    tbs = put_elem(tbs, 10, fun.(elem(tbs, 10)))
+    :public_key.pkix_sign(tbs, signer.key)
+  end
+
+  defp ext(oid, critical, value), do: {:Extension, oid, critical, value}
+
+  test "a rotated-issuer leaf cannot act as an intermediate for another certificate", c do
+    rotate = rotate_issuer(c)
+    {leaf, leaf_key} = host_leaf(rotate)
+    # Sanity: the plain rotated leaf passes TLS (the application then refuses it as unregistered).
+    assert {:admitted, "401"} = chain_outcome(c, [leaf], leaf_key)
+
+    # The holder of any rotated leaf key signs a certificate with an arbitrary subject.
+    {csr_x, key_x} = HostFixture.csr_with_key()
+    holder = %{rotate | key: leaf_key, subject: Issuer.inspect_certificate(leaf).subject}
+    {:ok, x} = Issuer.issue(holder, csr_x, Ecto.UUID.generate(), :enrollment)
+
+    assert {:refused, reason} = chain_outcome(c, [x, leaf], key_x)
+    assert {:tls_alert, {:handshake_failure, _}} = reason
+  end
+
+  test "rotated-issuer leaves with a wrong profile or signature are refused at TLS", c do
+    rotate = rotate_issuer(c)
+    {leaf, key} = host_leaf(rotate)
+    {:ok, foreign} = Issuer.initialize(Path.join(c.dir, "bad-signer"))
+    base = Issuer.inspect_certificate(leaf)
+    assert {:admitted, "401"} = chain_outcome(c, [leaf], key)
+
+    keep = fn exts, oid -> Enum.filter(exts, &(elem(&1, 1) != oid)) end
+
+    cases = [
+      bad_signature: forge(foreign, leaf, & &1),
+      wrong_eku:
+        forge(
+          rotate,
+          leaf,
+          &(keep.(&1, {2, 5, 29, 37}) ++
+              [ext({2, 5, 29, 37}, false, [{1, 3, 6, 1, 5, 5, 7, 3, 1}])])
+        ),
+      wrong_key_usage:
+        forge(
+          rotate,
+          leaf,
+          &(keep.(&1, {2, 5, 29, 15}) ++ [ext({2, 5, 29, 15}, true, [:keyEncipherment])])
+        ),
+      unknown_critical: forge(rotate, leaf, &(&1 ++ [ext({1, 2, 3, 4, 5}, true, <<5, 0>>)])),
+      ca_flag:
+        forge(
+          rotate,
+          leaf,
+          &(keep.(&1, {2, 5, 29, 19}) ++
+              [ext({2, 5, 29, 19}, true, {:BasicConstraints, true, :asn1_NOVALUE})])
+        )
+    ]
+
+    assert base.subject
+
+    for {name, forged} <- cases do
+      assert {^name, {:refused, {:tls_alert, {:unknown_ca, _}}}} =
+               {name, chain_outcome(c, [forged], key)}
+    end
+  end
+
+  test "an expired previous issuer is refused at TLS", c do
+    old = rotate_issuer(c, 2 * 86400)
+    {leaf, key} = host_leaf(old)
+    assert {:admitted, "401"} = chain_outcome(c, [leaf], key)
+    rotate_issuer(c)
+    assert {:admitted, "401"} = chain_outcome(c, [leaf], key)
+    Application.put_env(:workharbor, :clock, fn -> old.expires_at end)
+    assert {:refused, {:tls_alert, {:unknown_ca, _}}} = chain_outcome(c, [leaf], key)
+  end
+
+  test "a malformed symlinked or unreadable issuer file never changes trust", c do
+    one = rotate_issuer(c)
+    {leaf, key} = host_leaf(one)
+    assert {:admitted, "401"} = chain_outcome(c, [leaf], key)
+    file = Path.join(c.issuer_dir, "issuer.json")
+    valid = File.read!(file)
+    next = rotate_issuer(c)
+    {next_leaf, next_key} = host_leaf(next)
+    good = File.read!(file)
+    assert {:admitted, "401"} = chain_outcome(c, [next_leaf], next_key)
+
+    # Back to the first issuer's file, then try replacements that must all be ignored.
+    File.rm!(file)
+    File.write!(file, valid)
+    File.chmod!(file, 0o600)
+    assert {:admitted, "401"} = chain_outcome(c, [next_leaf], next_key)
+    assert {:admitted, "401"} = chain_outcome(c, [leaf], key)
+    {:ok, third} = Issuer.initialize(Path.join(c.dir, "third"))
+    {third_leaf, third_key} = host_leaf(third)
+    third_file = File.read!(Path.join(c.dir, "third/issuer.json"))
+
+    replace = fn writer ->
+      File.rm!(file)
+      writer.()
+
+      assert {:refused, {:tls_alert, {:unknown_ca, _}}} =
+               chain_outcome(c, [third_leaf], third_key)
+
+      assert {:admitted, "401"} = chain_outcome(c, [leaf], key)
+    end
+
+    replace.(fn -> File.write!(file, "{not json") end)
+    replace.(fn -> File.write!(file, String.replace(third_file, "\"certificate\"", "\"x\"")) end)
+
+    replace.(fn ->
+      target = Path.join(c.dir, "elsewhere.json")
+      File.write!(target, third_file)
+      File.chmod!(target, 0o600)
+      File.ln_s!(target, file)
+    end)
+
+    replace.(fn ->
+      File.write!(file, third_file)
+      File.chmod!(file, 0o000)
+    end)
+
+    assert good != valid
+  end
+
   @tag :peer_negative
   test "genuine TLS rejects foreign issuer and unregistered signed identity", c do
     {csr, key} = HostFixture.csr_with_key()

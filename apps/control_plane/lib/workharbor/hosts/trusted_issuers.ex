@@ -14,68 +14,86 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
 
   def issuers(dir) when is_binary(dir) do
     now = WorkHarbor.Accounts.now()
+    key = {__MODULE__, dir}
+    cached = :persistent_term.get(key, nil)
 
-    :global.trans({__MODULE__, dir}, fn ->
-      state = refresh(dir, :persistent_term.get({__MODULE__, dir}, nil), now)
-      :persistent_term.put({__MODULE__, dir}, state)
-      state.issuers
-    end)
+    state =
+      if cached != nil and cached.stamp != nil and cached.stamp == stamp(dir) do
+        cached
+      else
+        # The lock only serialises refreshes; the hot path above takes none.
+        :global.trans({key, self()}, fn ->
+          latest = refresh(dir, :persistent_term.get(key, nil))
+          :persistent_term.put(key, latest)
+          latest
+        end)
+      end
+
+    live(state.issuers, now)
   end
 
-  defp refresh(dir, cached, now) do
+  defp refresh(dir, cached) do
     stamp = stamp(dir)
     cached = cached || %{stamp: nil, issuers: []}
 
     if stamp != nil and stamp == cached.stamp do
-      %{cached | issuers: live(cached.issuers, now)}
+      cached
     else
       case Issuer.load(dir) do
         {:ok, current} when stamp != nil ->
           previous = Enum.reject(cached.issuers, &(&1.certificate == current.certificate))
-          %{stamp: stamp, issuers: live([current | previous], now)}
+          %{stamp: stamp, issuers: [current | previous]}
 
         _ ->
-          %{cached | issuers: live(cached.issuers, now)}
+          # Unreadable, malformed, unsafe or invalid replacement: trust is unchanged.
+          cached
       end
     end
   end
 
   defp live(issuers, now), do: Enum.filter(issuers, &(&1.expires_at > now))
 
+  # Content digest, not mtime/inode: same-second replacements must not be missed.
   defp stamp(dir) do
-    case File.stat(Path.join(dir, "issuer.json"), time: :posix) do
-      {:ok, s} -> {s.inode, s.size, s.mtime, s.ctime}
+    case File.read(Path.join(dir, "issuer.json")) do
+      {:ok, bytes} when byte_size(bytes) <= 16_384 -> :crypto.hash(:sha256, bytes)
       _ -> nil
     end
   end
 
-  @doc "ssl verify_fun: the static root verifies normally; rotated issuers are checked here."
-  def verify(cert, {:bad_cert, :unknown_ca} = event, dir) do
-    if trusted?(cert, dir), do: {:valid, dir}, else: {:fail, event}
+  @doc """
+  ssl verify_fun. The static boot root verifies normally. For an unknown CA, ssl calls this
+  with the TOP certificate of the chain and a valid result makes it the trust anchor, with no
+  CA, key-usage or path-length checks. So the anchor is accepted only as either a set member
+  (DER equality; the chain carries the issuer) or a complete end-entity leaf of a member, and
+  the latter admits single-certificate chains only: every later event fails.
+  """
+  def verify(cert, {:bad_cert, :unknown_ca} = event, dir) when is_binary(dir) do
+    case anchor(cert, dir) do
+      nil -> {:fail, event}
+      kind -> {:valid, {dir, kind}}
+    end
   end
 
-  def verify(_cert, {:bad_cert, _} = event, _dir), do: {:fail, event}
-  def verify(_cert, {:extension, _}, dir), do: {:unknown, dir}
-  def verify(_cert, :valid, dir), do: {:valid, dir}
-  def verify(_cert, :valid_peer, dir), do: {:valid, dir}
+  def verify(_cert, {:bad_cert, _} = event, _state), do: {:fail, event}
+  def verify(_cert, _event, {_dir, :leaf}), do: {:fail, :leaf_anchor_cannot_issue}
+  def verify(_cert, {:extension, _}, state), do: {:unknown, state}
+  def verify(_cert, :valid, state), do: {:valid, state}
+  def verify(_cert, :valid_peer, state), do: {:valid, state}
 
-  defp trusted?(cert, dir) do
+  defp anchor(cert, dir) do
     der = :public_key.pkix_encode(:OTPCertificate, cert, :otp)
-    info = Issuer.inspect_certificate(der)
     now = WorkHarbor.Accounts.now()
+    issuers = issuers(dir)
 
-    Enum.any?(issuers(dir), fn issuer ->
-      issuer.certificate == der or
-        (info.issuer == issuer.subject and info.not_before <= now and now < info.not_after and
-           now < issuer.expires_at and
-           :public_key.pkix_verify(
-             der,
-             {{:ECPoint, issuer.public}, {:namedCurve, {1, 3, 101, 112}}}
-           ))
-    end)
+    cond do
+      Enum.any?(issuers, &(&1.certificate == der)) -> :member
+      Enum.any?(issuers, &Issuer.valid_leaf_profile?(der, &1, now)) -> :leaf
+      true -> nil
+    end
   rescue
-    _ -> false
+    _ -> nil
   catch
-    _ -> false
+    _ -> nil
   end
 end

@@ -204,6 +204,16 @@ defmodule WorkHarbor.Hosts.Issuer do
   end
 
   def valid_leaf?(der, issuer, host, now) do
+    valid_leaf_profile?(der, issuer, now) and inspect_certificate(der).subject == subject(host)
+  rescue
+    _ -> false
+  catch
+    _ -> false
+  end
+
+  # Everything valid_leaf?/4 requires except the host match: usable to decide that a
+  # certificate is an ordinary end-entity leaf of this issuer.
+  def valid_leaf_profile?(der, issuer, now) do
     info = inspect_certificate(der)
 
     root = inspect_certificate(issuer.certificate)
@@ -214,7 +224,7 @@ defmodule WorkHarbor.Hosts.Issuer do
       info.basic_present and not info.unknown_critical and not info.ca and
       info.usage == [:digitalSignature] and
       info.eku == [{1, 3, 6, 1, 5, 5, 7, 3, 2}] and
-      info.not_after - info.not_before == @day and info.subject == subject(host) and
+      info.not_after - info.not_before == @day and
       info.issuer == issuer.subject and info.not_before <= now and
       now < info.not_after and
       now < issuer.expires_at and info.not_after <= issuer.expires_at and
