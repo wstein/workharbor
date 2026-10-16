@@ -190,12 +190,12 @@ Rate limit: token bucket, capacity3, one token per5s, measured on monotonic rece
 (not previous commit); first heartbeat after hello free. Heartbeat arriving with no token
 is refused without a heartbeat write and closes the connection (audited once as
 `host_heartbeat_refused`).
-Connection audit rows, each exactly once per transition: `host_connected` (hello),
+Connection audit rows, each exactly once per transition: `host_connected` (authenticated socket open),
 `host_connection_replaced` (new connection supersedes a live one, written in the
 replacement transaction; the superseded close writes none), `host_connection_unknown`
 (stale, disconnect, identity invalid or other close), `host_heartbeat_refused` (rate
 limit), `host_connection_reset` (control-plane restart). Accepted heartbeats update
-last_seen/lease on the connection row and write no audit row.
+hosts last_seen/lease, set the slot to connected and write no audit row.
 Without authenticated heartbeat for>=30s mark unknown and close stale socket.
 Only transport reconnect uses bounded1/2/4/8/16/30s backoff then30s maximum; no blind
 provider resends or command-history resets. Health requires authenticated hello
