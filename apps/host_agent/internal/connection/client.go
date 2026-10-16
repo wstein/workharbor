@@ -256,7 +256,16 @@ func ack(ctx context.Context, in <-chan incomingMessage, kind string) error {
 		return nil
 	}
 }
-func session(ctx context.Context, state *identity.State, onEvent func(Event)) error {
+
+// Seams for tests; production values are Renew and session.
+var (
+	renewFn   = Renew
+	sessionFn = session
+	// renewRetry bounds a session on a credential whose renewal is due but failed.
+	renewRetry = 30 * time.Second
+)
+
+func session(ctx context.Context, state *identity.State, limit time.Time, onEvent func(Event)) error {
 	expires, e := identity.Expires(state)
 	if e != nil {
 		return ErrTransport
@@ -265,6 +274,9 @@ func session(ctx context.Context, state *identity.State, onEvent func(Event)) er
 	deadline := expires.Add(-6 * time.Hour)
 	if !deadline.After(time.Now()) {
 		deadline = expires
+	}
+	if !limit.IsZero() && limit.Before(deadline) {
+		deadline = limit
 	}
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
@@ -344,19 +356,24 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 		if e != nil || state.Active == nil {
 			return ErrTransport
 		}
+		var limit time.Time
 		expires, e := identity.Expires(state)
 		if (state.Pending != nil && state.Pending.Certificate != "") || (e == nil && time.Until(expires) <= 6*time.Hour) {
 			// A failed renewal keeps the active credential in use while session
 			// still accepts it; the next attempt retries renewal.
-			if Renew(ctx, dir) == nil {
+			if renewFn(ctx, dir) == nil {
 				if state, e = identity.Load(dir); e != nil || state.Active == nil {
 					return ErrTransport
 				}
+			} else {
+				// Stay connected on the still-valid credential, but end the
+				// session in time to retry renewal long before expiry.
+				limit = time.Now().Add(renewRetry)
 			}
 			e = nil
 		}
 		if e == nil {
-			e = session(ctx, state, func(event Event) { attempt = 0; emit(onEvent, event.Kind, event.HostID) })
+			e = sessionFn(ctx, state, limit, func(event Event) { attempt = 0; emit(onEvent, event.Kind, event.HostID) })
 		}
 		if ctx.Err() != nil {
 			return nil
