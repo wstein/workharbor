@@ -1,7 +1,7 @@
 # 0011: Read-only Spec Kit dashboard
 
 Date: 2026-10-13
-Status: Proposed; nothing is implemented
+Status: Accepted 2026-10-16 (owner decision H69:a); nothing is implemented
 Supersedes in part: the first increment of
 [ADR 0006](0006-optional-ai-execution.md#read-only-spec-kit-view-first)
 

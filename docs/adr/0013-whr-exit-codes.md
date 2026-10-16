@@ -1,7 +1,7 @@
 # 0013-whr-exit-codes: A fresh `whr` exit-code table
 
 Date: 2026-10-14
-Status: Proposed; owner decision H15:b recorded 2026-10-13
+Status: Accepted 2026-10-16 (owner decision H69:a); owner decision H15:b recorded 2026-10-13
 
 ## Context
 

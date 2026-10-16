@@ -51,7 +51,7 @@ the proposed loading and prompt trust policy for issue #81; it does not change
 these accepted ports or approve runtime integration.
 
 ## CLI contracts
-- [`cli/exit-codes.json`](cli/exit-codes.json): frozen `whr` exit-code table, proposed in [ADR 0013](../docs/adr/0013-whr-exit-codes.md) (H15:b).
+- [`cli/exit-codes.json`](cli/exit-codes.json): frozen `whr` exit-code table, accepted in [ADR 0013](../docs/adr/0013-whr-exit-codes.md) (H15:b).
 
 ## Agent session interface
 [agent-session-v1.md](agent-session-v1.md) with its

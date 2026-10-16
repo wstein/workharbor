@@ -24,11 +24,11 @@
 - [Development methodology](adr/0005-development.md)
 - [Optional execution integration (proposed)](adr/0006-optional-ai-execution.md)
 - [Explicit CI acceptance (proposed)](adr/0007-explicit-ci-acceptance.md)
-- [In-container AI agents, wave one (proposed)](adr/0009-in-container-ai-agents.md)
-- [Go product code and whr CLI layout (proposed)](adr/0010-go-whr-cli-layout.md)
-- [Read-only Spec Kit dashboard (proposed)](adr/0011-readonly-spec-dashboard.md)
-- [Persistent workspace console (proposed)](adr/0012-persistent-workspace-console.md)
-- [Fresh whr exit-code table (proposed)](adr/0013-whr-exit-codes.md)
+- [In-container AI agents, wave one](adr/0009-in-container-ai-agents.md)
+- [Go product code and whr CLI layout](adr/0010-go-whr-cli-layout.md)
+- [Read-only Spec Kit dashboard](adr/0011-readonly-spec-dashboard.md)
+- [Persistent workspace console](adr/0012-persistent-workspace-console.md)
+- [Fresh whr exit-code table](adr/0013-whr-exit-codes.md)
 
 ## Background and references
 

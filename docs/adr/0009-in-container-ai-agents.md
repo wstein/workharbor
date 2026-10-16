@@ -1,7 +1,7 @@
 # 0009-in-container-ai-agents: AI agents run inside the workspace container in wave one
 
 Date: 2026-10-13
-Status: Proposed; owner decision H7:a/H9:a recorded 2026-10-13
+Status: Accepted 2026-10-16 (owner decision H69:a); owner decision H7:a/H9:a recorded 2026-10-13
 
 ## Context
 

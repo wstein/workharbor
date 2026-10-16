@@ -1,7 +1,7 @@
 # 0012-persistent-workspace-console: The console is a reattachable workspace session
 
 Date: 2026-10-13
-Status: Proposed; owner decisions H18:a and H22:a recorded 2026-10-13
+Status: Accepted 2026-10-16 (owner decision H69:a); owner decisions H18:a and H22:a recorded 2026-10-13
 
 ## Context
 
