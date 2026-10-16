@@ -52,7 +52,8 @@ module:
 - `go mod download`
 - `go vet ./...` (plus `go vet -tags docker_integration` on the Docker provider
   package in `host_agent`, compile-only)
-- `go build ./...`
+- `go build -o <tmp>/ ./...` for `whr` and `host_agent`; plain `go build ./...` for
+  `api_client`
 - `go test -json -count=1 ./...` with required test IDs from
   `docs/development/ci-acceptance.json`; missing or incomplete outcomes fail.
 
