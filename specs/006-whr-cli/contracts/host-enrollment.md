@@ -166,6 +166,11 @@ ack/local crash recovers via saved new key. First staging/activation after old e
 fails and requires explicit owner newcode recovery. Preserve all state and report
 failure; never claim success from a local write alone.
 
+`workharbor-agent` exit codes (the agent's own table, separate from the `whr` table
+in ADR 0013): 0 normal stop; 1 any other failure; 66 active identity expired with
+no issued pending certificate, owner newcode recovery required (state preserved).
+A service manager must not restart on 66 (systemd: `RestartPreventExitStatus=66`).
+
 Installed Linux path /var/lib/workharbor/identity/identity.json, service-owned0600
 in0700 directory outside workspaces/Git/containerenv. Atomic writes require
 restrictive create, file fsync, rename and parent fsync. Reject symlinks, unsafe
