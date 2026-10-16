@@ -245,12 +245,12 @@ product dashboard work or live dispatch.
 Implementation revisions (rebound after the pre-publication history rewrite): `cc2b1de` freezes the T002 tests,
 `fcc51f3` adds `scripts/provider_profiles.py`, `26bc628` and `0ee58e9` add `scripts/test_profile_fixtures.py`. The
 earlier recorded revision `96873a7` is not an ancestor of main and predates the rewrite; its evidence is superseded.
-Against baseline `a8de039` the implementation adds exactly three new scripts: T002 owns `scripts/provider_profiles.py`
+The files added by the T002/T003 commits `cc2b1de` through `0ee58e9` (`cc2b1de^..0ee58e9`) are exactly three new scripts: T002 owns `scripts/provider_profiles.py`
 and `scripts/test_provider_profiles.py`; T003 owns `scripts/test_profile_fixtures.py`. Intervening commits also changed
 unrelated design documents (ADR 0006, architecture, product, paper) and this file; those are outside T002/T003 scope.
-Existing executable modules, acceptance policy and Features 001-004 are unchanged by the implementation.
+Later commits on main changed other existing modules and policy; this note makes no unchanged-since-baseline claim.
 
-- T002: `<supported-python-3.11+> -I -B scripts/test_provider_profiles.py T002Tests -v`: four required methods
+- T002: `<supported-python-3.11+> -I -B scripts/test_provider_profiles.py T002Tests -v`: four required methods at the pre-rewrite run (T002Tests now has five)
   PASS within the approved 180-second envelope. Covers seven frozen canonical vectors, strict JSON/types, inclusive
   input limits, confined artifact paths and all 15 action recipes; no policy/authority decision is implemented.
 - T003: `<supported-python-3.11+> -I -B scripts/test_profile_fixtures.py T003Tests -v`: three required methods
@@ -258,10 +258,10 @@ Existing executable modules, acceptance policy and Features 001-004 are unchange
   live ports/network/credential/fallback access and Git-metadata escape rejection with an external disposable index
   unchanged. These controlled fixture probes are not an OS sandbox or live-provider verification.
 - Vector provenance: V01-V07 are parsed from `contracts/task-acceptance.md` at test time, not copied. The 15-row
-  action table in `test_canonical_actions` is a literal transcription, re-compared by hand against the table in
-  `contracts/cli-and-host.md` (class, boundary, operation, capability and package action); no automatic comparison
-  against the contract text exists yet and none was added here.
-- Independent review of the pre-rewrite revision: CLEAR; re-review of the rebound revisions is required. Reviewer reran all seven methods and adversarial JSON/path/Git
+  action table in `test_canonical_actions` is a literal transcription; `T002Tests.test_contract_action_table` now parses
+  the table in `contracts/cli-and-host.md` at test time and fails if its shape or any row (class, boundary, operation,
+  capability, package action) differs from that transcription.
+- Independent review of the pre-rewrite revision: CLEAR; re-review of the rebound revisions is required. Reviewer reran all seven methods of that revision (T002/T003 counts then) and adversarial JSON/path/Git
   probes. Repository validation and `git diff --check` PASS.
 - Full macOS repository acceptance and pristine required Linux CI are integration handoff gates; results remain
   pending until recorded in the PR. T002/T003 stay unchecked: T001's marker is open and full macOS/Linux acceptance is pending, so these results are
