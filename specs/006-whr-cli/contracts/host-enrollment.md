@@ -76,9 +76,12 @@ issued before rotation keep working until their own NotAfter or the previous iss
 expiry, whichever is first. Every issuer that signs an enrollment or renewal is observed (added to the set) at
 that moment, so rotations between handshakes lose none. A failing issuer file (missing,
 unreadable, symlinked, oversized, malformed) is retried after a 5 s backoff; handshakes
-inside it reuse the cached set without locking or reloading. The set is process-local: after a restart only the then-current
-issuer is trusted, so rotate by file replacement while running and renew hosts before
-restarting. Expiry of the previous issuer ends its leaves (no grace). Tests: real TLS
+inside it reuse the cached set without locking or reloading. A replaced issuer stays trusted at TLS only for the maximum leaf lifetime (24h) plus a 1h
+margin, counted from when this process first observes the replacement (not from its
+NotBefore or NotAfter); after that it is dropped even if its certificate is still valid.
+The current issuer is unaffected. The set is process-local: a restart during the window
+drops previous issuers early, which fails closed, and hosts reconnect after renewal under
+the then-current issuer. Expiry of the previous issuer ends its leaves (no grace). Tests: real TLS
 handshakes in HostTransportTest.
 
 ## Closed wire and decoding
