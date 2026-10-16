@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"github.com/wstein/workharbor-nxt/apps/host_agent/internal/config"
 	"io"
 	"os"
@@ -107,11 +106,11 @@ func openNativePort(ctx context.Context, o nativeOptions) (*nativePort, error) {
 	if e != nil || !strings.HasPrefix(strings.TrimSpace(string(version)), "Docker version 29.8.2,") {
 		return nil, fail("tool_unavailable")
 	}
-	var pins struct{ Buildx map[string]string }
-	if json.Unmarshal(toolPins, &pins) != nil {
+	buildx, ok := toolPin("buildx")
+	if !ok {
 		return nil, fail("tool_unavailable")
 	}
-	if e = verifyRegistryTool(ctx, o.BuildxPath, pins.Buildx["linux_"+runtime.GOARCH+"_sha256"], pins.Buildx["version"], root, true); e != nil {
+	if e = verifyRegistryTool(ctx, o.BuildxPath, buildx["linux_"+runtime.GOARCH+"_sha256"], buildx["version"], root, true); e != nil {
 		return nil, e
 	}
 	// Docker's plugin lookup is confined to the private config, with pinned bytes.
@@ -121,7 +120,7 @@ func openNativePort(ctx context.Context, o nativeOptions) (*nativePort, error) {
 	}
 	raw, e := os.ReadFile(o.BuildxPath)
 	sum := sha256.Sum256(raw)
-	if e != nil || hex.EncodeToString(sum[:]) != pins.Buildx["linux_"+runtime.GOARCH+"_sha256"] {
+	if e != nil || hex.EncodeToString(sum[:]) != buildx["linux_"+runtime.GOARCH+"_sha256"] {
 		return nil, fail("tool_unavailable")
 	}
 	plugin := filepath.Join(plugins, "docker-buildx")
