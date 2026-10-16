@@ -86,10 +86,11 @@ class ApplicationChecksTests(unittest.TestCase):
                 path.write_bytes(content)
                 with self.subTest(content=content), self.assertRaises(ValueError): self.apps.read_events(path)
 
-    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None):
+    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None, python=(3, 14, 8)):
+        # The default python is an opaque fixture interpreter version, not a pin.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)/'source'; root.mkdir()
-            (root/'.tool-versions').write_text('erlang 29.1.1\nelixir 1.20.4-otp-29\ngolang 1.27.2\nnodejs 26.11.1\npython 3.14.8\n')
+            (root/'.tool-versions').write_text('erlang 29.1.1\nelixir 1.20.4-otp-29\ngolang 1.27.2\nnodejs 26.11.1\npython 3.14\n')
             observed = []
             def execute(argv, cwd, *, env, output_path):
                 observed.append((argv, cwd, env))
@@ -115,7 +116,7 @@ class ApplicationChecksTests(unittest.TestCase):
                 return 0
             def which(name): return None if name == missing else '/fixture/bin/' + name
             with mock.patch.object(self.apps.shutil, 'which', side_effect=which), \
-                    mock.patch.object(self.apps.sys, 'version_info', (3, 14, 8)):
+                    mock.patch.object(self.apps.sys, 'version_info', python):
                 self.apps.check_applications(root, self.inventory, execute)
             return observed, root
 
@@ -171,6 +172,18 @@ class ApplicationChecksTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.exercise(fail=lambda argv: Path(argv[0]).name == 'npm' and 'ci' in argv)
 
+    def test_python_pin_is_a_minimum_version(self):
+        self.exercise(python=(3, 15, 0))
+        self.exercise(python=(3, 100, 0))  # fails under string comparison
+        with self.assertRaisesRegex(ValueError, 'or newer'): self.exercise(python=(3, 13, 9))
+
+    def test_python_pin_format_is_validated(self):
+        for value in ('3', '3.14rc1'):
+            with self.subTest(value=value), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root/'.tool-versions').write_text('erlang 29.1.1\nelixir 1.20.4-otp-29\ngolang 1.27.2\nnodejs 26.11.1\npython ' + value + '\n')
+                with self.assertRaises(ValueError): self.apps.tool_pins(root)
+
     def test_ci_and_local_share_the_application_gate(self):
         root = Path(__file__).resolve().parents[1]
         make = (root/'Makefile').read_text()
@@ -178,8 +191,9 @@ class ApplicationChecksTests(unittest.TestCase):
         self.assertIn('--applications-only', make)
         self.assertIn('python3 -I -B scripts/check_ci.py', workflow)
         self.assertIn('  bootstrap:', workflow)  # Preserve the inherited required-check identity.
-        for version in ('29.1.1', '1.20.4', '1.27.2', '26.11.1', '3.14.8'):
+        for version in ('29.1.1', '1.20.4', '1.27.2', '26.11.1'):
             self.assertIn(version, workflow)
+        self.assertIn("python-version: '3.14'\n", workflow)
         self.assertNotIn('continue-on-error', workflow)
 
     def test_npm_configs_are_distinct_private_empty_files_at_invocation(self):

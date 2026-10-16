@@ -121,7 +121,9 @@ def tool_pins(root):
     except (OSError, ValueError) as error:
         raise ValueError('Invalid .tool-versions') from error
     if (len(rows) != len(pins) or set(pins) != {'erlang', 'elixir', 'golang', 'nodejs', 'python'}
-            or any(not re.fullmatch(r'\d+\.\d+\.\d+(?:-otp-\d+)?', value) for value in pins.values())):
+            or any(not re.fullmatch(r'\d+\.\d+\.\d+(?:-otp-\d+)?', value)
+                   for name, value in pins.items() if name != 'python')
+            or not re.fullmatch(r'\d+\.\d+(?:\.\d+)?', pins['python'])):
         raise ValueError('Incomplete or invalid pinned tool versions')
     return pins
 
@@ -131,8 +133,10 @@ def check_applications(root, inventory, run):
     root = Path(root).resolve()
     validate_inventory(inventory)
     pins = tool_pins(root)
-    if '.'.join(map(str, sys.version_info[:3])) != pins['python']:
-        raise ValueError('Python does not match .tool-versions')
+    # The harness is development tooling: .tool-versions names a minimum CPython series.
+    floor = tuple(map(int, pins['python'].split('.')))
+    if sys.version_info[:len(floor)] < floor:
+        raise ValueError('Python ' + pins['python'] + ' or newer required by .tool-versions')
     tools = {}
     for name in ('go', 'gofmt', 'mix', 'elixir', 'erl', 'node', 'npm'):
         tools[name] = shutil.which(name)
