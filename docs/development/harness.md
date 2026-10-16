@@ -63,7 +63,8 @@ budgets remain 600 and 1200 seconds, respectively; utility commands retain 300 s
 
 Schema 2 adds an explicit `application_tests` inventory. Fixed repository code runs
 `gofmt -l`, `go mod download`, `go vet`, `go build` and uncached `go test -json` for
-all three Go modules. The `application_tests` inventory in the manifest is the
+all three Go modules, plus `go vet -tags docker_integration ./internal/providers/docker/`
+in the host agent so the build-tagged acceptance files compile. The `application_tests` inventory in the manifest is the
 authoritative list of required identities per module; any other test outcome must
 still pass. Package skips qualify only for an explicit `[no test files]` event,
 never for a skipped test. Phoenix runs locked dependency acquisition, format,
