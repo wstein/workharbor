@@ -151,7 +151,7 @@ func savedPendingDir(t *testing.T) (string, *identity.State, identity.Response) 
 	return dir, state, response
 }
 
-func TestExpiryWatchdogCancelsBlockedIO(t *testing.T) {
+func TestWatchValidityCancelsOnInvalidIdentity(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var valid atomic.Bool
