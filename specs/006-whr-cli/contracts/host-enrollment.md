@@ -48,13 +48,31 @@ boolean activation, no HTTP/redirect, demo secret, debug or reloader. Existing
 HTTPS allowlist ip/port/certfile/keyfile/http_1_options/http_2_options may gain only
 thousand_island_options containing exactly one transport_options keyword list,
 which contains exactly cacerts=[one validated internal issuer DER<=4096bytes],
-verify=:verify_peer and fail_if_no_peer_cert=false as one complete optional-peer
-profile. Locked Bandit1.12.5 requires this nested placement; top-level peer aliases
+verify=:verify_peer, fail_if_no_peer_cert=false and verify_fun={TrustedIssuers.verify/3,
+absolute issuer_dir} as one complete optional-peer profile. Locked Bandit1.12.5 requires this nested placement; top-level peer aliases
 are invalid. Reject partial, duplicate, malformed or different values, any other
 nested key, preexisting ThousandIsland options in identity_config and all generic
 handler, transport, ALPN, plug or arbitrary overrides. Client roots are loaded from validated native
 issuer state, never token-selected input. No HTTP2 re-enable/dependency clearance
 is claimed. Existing owner-only profile remains valid when identity is inactive.
+
+## Issuer rotation (H75:b, #113)
+
+Rotation replaces the issuer state file; no restart. The trusted client-CA set is the
+current issuer plus every earlier issuer this process has seen that has not expired
+(expires_at>now). Per handshake the listener's verify_fun refreshes the set when the
+file's stat changes, so cacerts need not be reloaded: a chain ending at an unknown CA is
+accepted only if the presented root equals a set member or the leaf's issuer name matches
+a member, the leaf is within its validity and the member's Ed25519 signature verifies.
+Every other bad_cert, unknown critical extension and the boot cacerts path keep the
+standard verify_peer result. A replacement that fails Issuer.load is ignored and trust
+neither widens nor shrinks. The application admits a leaf (identity lookup, fingerprint,
+status) against whichever set member passes the full leaf profile, so certificates
+issued before rotation keep working until their own NotAfter or the previous issuer's
+expiry, whichever is first. The set is process-local: after a restart only the then-current
+issuer is trusted, so rotate by file replacement while running and renew hosts before
+restarting. Expiry of the previous issuer ends its leaves (no grace). Tests: real TLS
+handshakes in HostTransportTest.
 
 ## Closed wire and decoding
 
