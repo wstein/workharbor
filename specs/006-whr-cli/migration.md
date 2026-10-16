@@ -23,8 +23,9 @@ confined offline environment. Independently review cases including nested duplic
 keys, malformed UTF-8, boolean/integer distinctions, large integers, floats,
 non-finite values, supplementary-plane key ordering and path attacks.
 Write failing Go tests first. Compare byte-for-byte rather than parsed equality.
-Go tests use checked-in vectors, never runtime Python; an independent Python job
-reproduces the frozen vectors. Retain the existing Python tests. A changed vector
+Go tests use checked-in vectors, never runtime Python. The vectors are frozen and
+no longer reproduced from a Python runtime (H58:a, #102); provenance stays in Git
+history (introduced in commit `0a94cd2`). Retain the other Python tests. A changed vector
 requires reviewed decision/evidence, not regeneration to fit Go output.
 Review parity and product dependency boundaries before switching callers.
 Record each retained, ported or deliberately replaced behavior. Do not claim
@@ -60,11 +61,10 @@ normalization or filesystem security claim is introduced.
 
 Vectors distinguish actual `source_expected` from normative `product_expected`.
 Deliberate domain restrictions retain source successes rather than fabricating
-oracle failures. Original source snapshots are full-hash/Git-blob checked before
-only allowlisted AST closures execute. Portable reproduction requires the pinned
-CPython release and explicit settings, not an author's platform-specific binary
-hash. Each CLI run emits its actual executable digest/build/platform as evidence.
-No source-linked resources or Git objects are fetched.
+oracle failures. Original source snapshots were full-hash/Git-blob checked before
+only allowlisted AST closures executed. The generator and snapshots were retired
+(H58:a, #102); `e82167b` is the last main commit that still contains
+`scripts/generate_go_vectors.py`.
 
 ## Retained serializer and path differences
 
@@ -119,6 +119,5 @@ resolution, provider behavior or caller switch is introduced.
 
 T004's narrow paths are the two Go primitive directories, required Go test IDs in
 `docs/development/ci-acceptance.json`, this migration inventory, Feature 006 status
-in `tasks.md` and the pilot execution record. Frozen vectors, schema, generator,
-source snapshots and manifest pins remain unchanged; Feature 001 task markers
-remain unchanged. Independent Python reproduction and Go tests remain separate.
+in `tasks.md` and the pilot execution record. Frozen vectors and schema remain unchanged; Feature 001 task markers
+remain unchanged.
