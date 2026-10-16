@@ -168,7 +168,9 @@ failure; never claim success from a local write alone.
 
 `workharbor-agent` exit codes (the agent's own table, separate from the `whr` table
 in ADR 0013): 0 normal stop; 1 any other failure; 66 active identity expired with
-no issued pending certificate, owner newcode recovery required (state preserved).
+no issued pending certificate, an expired pending certificate, or a definitive
+activation refusal (HTTP 400/401/403) after that expiry; owner newcode recovery
+required (state preserved). Transport errors, 5xx and timeouts keep retrying.
 A service manager must not restart on 66 (systemd: `RestartPreventExitStatus=66`).
 
 Installed Linux path /var/lib/workharbor/identity/identity.json, service-owned0600
