@@ -115,9 +115,11 @@ defmodule WorkHarbor.Hosts do
     end
   end
 
+  # {:error, :unauthorized_host} is a definitive refusal; {:error, :unavailable} is a
+  # transient server fault (issuer or database) that callers must not report as one.
   def resolve_identity(cert, mode)
       when is_binary(cert) and byte_size(cert) <= 4096 and mode in [:active, :activation] do
-    with {:ok, issuer} <- issuer(),
+    with {:issuer, {:ok, issuer}} <- {:issuer, issuer()},
          identity when is_map(identity) <-
            one("SELECT * FROM host_identities WHERE fingerprint=?", [fingerprint(cert)]),
          true <-
@@ -134,12 +136,11 @@ defmodule WorkHarbor.Hosts do
          issuer_expires_at: issuer.expires_at
        }}
     else
+      {:issuer, _} -> {:error, :unavailable}
       _ -> {:error, :unauthorized_host}
     end
   rescue
-    _ -> {:error, :unauthorized_host}
-  catch
-    _ -> {:error, :unauthorized_host}
+    _ in [Exqlite.Error, DBConnection.ConnectionError] -> {:error, :unavailable}
   end
 
   def resolve_identity(_, _), do: {:error, :unauthorized_host}
@@ -193,11 +194,16 @@ defmodule WorkHarbor.Hosts do
   def activate(%Peer{} = peer) do
     result =
       transaction(fn ->
-        if not current_peer?(peer, :activation), do: Repo.rollback(:unauthorized_host)
+        case resolve_identity(peer.certificate, :activation) do
+          {:ok, current} when current === peer -> :ok
+          {:error, :unavailable} -> Repo.rollback(:persistence_failed)
+          _ -> Repo.rollback(:unauthorized_host)
+        end
+
         row = one("SELECT * FROM host_identities WHERE id=?", [peer.identity_id])
 
         if row["status"] == "active" do
-          if is_nil(row["predecessor_id"]), do: Repo.rollback(:unauthorized_host)
+          if is_nil(row["predecessor_id"]), do: Repo.rollback(:predecessor_missing)
         else
           old =
             one("SELECT * FROM host_identities WHERE id=? AND host_id=? AND status='active'", [
@@ -205,8 +211,8 @@ defmodule WorkHarbor.Hosts do
               peer.host_id
             ])
 
-          if is_nil(old) or old["expires_at"] <= Accounts.now(),
-            do: Repo.rollback(:unauthorized_host)
+          if is_nil(old), do: Repo.rollback(:predecessor_missing)
+          if old["expires_at"] <= Accounts.now(), do: Repo.rollback(:predecessor_expired)
 
           sql("UPDATE host_identities SET status='retired' WHERE id=?", [old["id"]])
 

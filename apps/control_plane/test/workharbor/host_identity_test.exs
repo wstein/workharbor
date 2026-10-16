@@ -192,6 +192,22 @@ defmodule WorkHarbor.HostIdentityTest do
     assert {:error, :unauthorized_host} = Hosts.activate(replacement)
   end
 
+  test "an unavailable issuer or database is transient, never an unauthorized host", c do
+    {:ok, issued} = Hosts.issue_enrollment(c.principal, nil)
+    {csr, _} = HostFixture.csr()
+    {:ok, enrolled} = Hosts.redeem(issued.code, csr)
+    old = Base.decode64!(enrolled["certificate"])
+    {:ok, peer} = Hosts.resolve_identity(old, :active)
+    assert {:error, :unauthorized_host} = Hosts.resolve_identity(<<1, 2, 3>>, :active)
+
+    Application.put_env(:workharbor, :host_identity, issuer_dir: Path.join(c.dir, "missing"))
+    assert {:error, :unavailable} = Hosts.resolve_identity(old, :active)
+    assert {:error, :persistence_failed} = Hosts.activate(peer)
+
+    assert {:error, :persistence_failed} =
+             Hosts.transaction(fn -> raise DBConnection.ConnectionError, "busy" end)
+  end
+
   test "CSR signature corruption and enrollment names cannot issue identity", c do
     {:ok, issued} = Hosts.issue_enrollment(c.principal, nil)
     {csr, _} = HostFixture.csr()

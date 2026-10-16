@@ -34,7 +34,7 @@ defmodule WorkHarborWeb.AgentIngress do
         authenticated(conn)
     end
   rescue
-    _ -> Security.deny(conn, 400, :invalid_request)
+    _ -> unavailable(conn, :host_service_unavailable)
   end
 
   defp mixed_credentials?(conn),
@@ -52,6 +52,7 @@ defmodule WorkHarborWeb.AgentIngress do
 
     case Hosts.resolve_identity(cert, mode) do
       {:ok, peer} -> dispatch(conn, peer)
+      {:error, :unavailable} -> unavailable(conn, :host_service_unavailable)
       _ -> Security.deny(conn, 401, :unauthorized_host)
     end
   end
@@ -68,6 +69,13 @@ defmodule WorkHarborWeb.AgentIngress do
     end)
   end
 
+  @doc false
+  # Final refusals carry their own code; every other activation error is a retryable 503.
+  def activation_failure(:unauthorized_host), do: {401, :unauthorized_host}
+  def activation_failure(:predecessor_expired), do: {400, :identity_predecessor_expired}
+  def activation_failure(:predecessor_missing), do: {400, :identity_predecessor_missing}
+  def activation_failure(_), do: {503, :host_service_unavailable}
+
   defp dispatch(%{request_path: "/agent/v1/identity/renew"} = conn, peer) do
     parsed(conn, ~w(schema_version csr), fn conn, body ->
       with {:ok, csr} <- der(body["csr"]), {:ok, response} <- Hosts.renew(peer, csr) do
@@ -80,8 +88,8 @@ defmodule WorkHarborWeb.AgentIngress do
 
   defp dispatch(%{request_path: "/agent/v1/identity/activate"} = conn, peer) do
     parsed(conn, ~w(schema_version), fn conn, _ ->
-      with :ok <- Hosts.activate(peer),
-           {:ok, issuer} <- Hosts.issuer(),
+      with {:activate, :ok} <- {:activate, Hosts.activate(peer)},
+           {:issuer, {:ok, issuer}} <- {:issuer, Hosts.issuer()},
            true <- Hosts.current_peer?(peer) do
         json(conn, %{
           "schema_version" => 1,
@@ -93,7 +101,15 @@ defmodule WorkHarborWeb.AgentIngress do
           "expires_at" => peer.expires_at
         })
       else
-        _ -> refuse_body(conn, :identity_activation_failed)
+        {:activate, {:error, reason}} ->
+          {status, code} = activation_failure(reason)
+          Security.deny(conn, status, code)
+
+        {:issuer, _} ->
+          unavailable(conn, :host_service_unavailable)
+
+        _ ->
+          refuse_body(conn, :identity_activation_failed)
       end
     end)
   end
@@ -131,12 +147,16 @@ defmodule WorkHarborWeb.AgentIngress do
           refuse_body(conn, :invalid_request)
 
         {:error, _} ->
-          refuse_body(conn, :invalid_request)
+          unavailable(conn, :request_read_failed)
       end
     else
       refuse_body(conn, :invalid_request)
     end
   end
+
+  # A retryable server or read fault, never a refusal of the caller's identity.
+  defp unavailable(conn, code),
+    do: conn |> put_resp_header("connection", "close") |> Security.deny(503, code)
 
   defp refuse_body(conn, code),
     do: conn |> put_resp_header("connection", "close") |> Security.deny(400, code)

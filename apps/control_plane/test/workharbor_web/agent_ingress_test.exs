@@ -6,6 +6,17 @@ defmodule WorkHarborWeb.AgentIngressTest do
   import Plug.Test
   alias WorkHarborWeb.AgentIngress
 
+  defmodule FaultAdapter do
+    @moduledoc false
+    def read_req_body(state, _opts), do: {:error, state.fault}
+    def send_resp(state, _status, _headers, body), do: {:ok, body, state}
+  end
+
+  defp faulty(fault) do
+    c = request(:post, "/agent/v1/enroll", "{}")
+    %{c | adapter: {FaultAdapter, %{fault: fault}}}
+  end
+
   defp request(method, path, body \\ "") do
     c = conn(method, "https://localhost" <> path, body)
 
@@ -79,5 +90,41 @@ defmodule WorkHarborWeb.AgentIngressTest do
       )
 
     assert elem(result.adapter, 1).req_body == ""
+  end
+
+  test "request read failure is a retryable 503, not a 400 refusal" do
+    result = AgentIngress.call(faulty(:timeout), [])
+    assert result.status == 503
+    assert Jason.decode!(result.resp_body) == %{"error" => %{"code" => "request_read_failed"}}
+  end
+
+  test "an unexpected server exception is a retryable 503, not a 400 refusal" do
+    defmodule RaisingAdapter do
+      @moduledoc false
+      def read_req_body(_, _), do: raise("boom")
+      def send_resp(state, _status, _headers, body), do: {:ok, body, state}
+    end
+
+    c = request(:post, "/agent/v1/enroll", "{}")
+    result = AgentIngress.call(%{c | adapter: {RaisingAdapter, nil}}, [])
+    assert result.status == 503
+
+    assert Jason.decode!(result.resp_body) == %{
+             "error" => %{"code" => "host_service_unavailable"}
+           }
+  end
+
+  test "activation failures: only final refusals have refusal codes, the rest are 503" do
+    assert AgentIngress.activation_failure(:unauthorized_host) == {401, :unauthorized_host}
+
+    assert AgentIngress.activation_failure(:predecessor_expired) ==
+             {400, :identity_predecessor_expired}
+
+    assert AgentIngress.activation_failure(:predecessor_missing) ==
+             {400, :identity_predecessor_missing}
+
+    for transient <- [:persistence_failed, :nested_transaction, :unavailable, :other] do
+      assert AgentIngress.activation_failure(transient) == {503, :host_service_unavailable}
+    end
   end
 end
