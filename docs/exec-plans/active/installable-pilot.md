@@ -1806,3 +1806,93 @@ evidence. No active guest or owned native check remains; resource windows were
 released. T009 still requires actual whole-root budget/domain, daemon/tool actor,
 36+36 Docker and141 Linux evidence and independent whole-WI acceptance before
 T010 may start. This checkpoint changes no acceptance criterion or runtime guard.
+
+## Pilot PR split and independent review — 2026-10-16
+
+The pilot left PR #83 for its own PR. Its commits were rebased from `f02250f`
+onto `origin/main` `641177e`, without merge commits. Commits that `main`
+already carried were dropped, and the out-of-scope orchestrator adapter
+proposal moved to its own branch. Every commit ID cited as evidence above
+predates this rewrite: it is historical and does not cover the current head.
+An owner rebase merge rewrites the IDs again, so match commits by subject.
+
+| Cited before | After rebase | Subject |
+| --- | --- | --- |
+| `4d06962` | `0dd3b60` | docs(spec006): distinguish lifecycle retries from agent input |
+| `c597fa6` | `c340f05` | docs(pilot): plan installable workspace and CLI work items |
+| `602ae81` | `1275096` | docs(pilot): require terminal safety before attachment acceptance |
+| `3dd0b78` | `1370c53` | feat(pilot): scaffold pinned Phoenix and Go applications |
+| `0c2c135` | `e566c99` | docs(pilot): separate internal acceptance from signed release |
+| `d3d84c8` | `e85bb1d` | fix(whr): return documented usage exit for unsupported commands |
+| `bc18034` | `3e34360` | ci(pilot): enforce explicit Go and Phoenix acceptance |
+| `191c62b` | `5c16378` | test(migration): freeze selected Python wire and path contracts |
+| `6abb741` | `3c249ef` | feat(migration): port strict JSON and lexical path primitives |
+| `f51d6fe` | `d9bddce` | docs(pilot): record accepted owner persistence contract |
+| `1189c81` | `586e83f` | feat(owner): persist scoped durable operation intent |
+| `5b28644` | `3149bc7` | docs(auth): consolidate accepted browser security contract |
+| `65af90c` | `79c9b24` | feat(auth): enforce scoped owner and browser authentication |
+| `ef399f5` | `70e090e` | fix(test): reuse loaded authentication migration module |
+| `5d81ae5` | `7b77c9b` | docs(protocol): consolidate accepted host validation contract |
+| `e10c699` | `e582db1` | feat(protocol): validate scoped immutable host messages |
+| `ac89bf7` | `a59d396` | test(security): pin HTTP1-only authenticated transport contract |
+| `c88f339` | `a215669` | fix(security): enforce HTTP1-only authenticated listener profile |
+| `e99c170` | `b4c7757` | docs(hosts): freeze reviewed enrollment and liveness contract |
+| `e42fe27` | `b2b4bae` | feat(hosts): enroll and connect authenticated host identities |
+| `64541c1` | `627a9db` | fix(hosts): prove atomic identity persistence recovery |
+| `7b041e4` | `c2a496f` | docs(hosts): record accepted enrollment transport evidence |
+| `5de4a8e` | `3e2fb65` | docs(provider): consolidate T009 trust and Docker contract |
+| `21c5a92` | `46dd171` | docs(provider): record reviewed seed ownership and native evidence |
+| `ad3cb18` | `a483ae9` | feat(trust): persist exact revision and initial storage binding |
+| `405f936` | moved to `docs/orchestrator-adapters` | docs: propose external orchestrator adapter boundary |
+| `9a5be15` | `d0c53fa` | feat(config): resolve and freeze approved container inputs |
+| `c606a79` | `80126d3` | feat(storage): publish initial project data atomically |
+| `1a38e97` | `7340c84` | fix(config): check every ARG and canonical stage name |
+| `ce1ce97` | `2c1605a` | fix(storage): resolve complete initial symlink chains |
+| `2042586` | `1793bd1` | feat(provider): implement trusted Docker workspace primitives |
+| `ac70adb` | `ed77c22` | fix(ci): retain schema-valid provider test identities |
+| `0d435d6` | `a465d3c` | fix(provider): preserve official result and config boundaries |
+| `1d4bfa3` | `5241769` | test(provider): prove bounded real refusal coverage |
+| `06b5c7e` | `e759847` | fix(test): require exact source symlink refusal diagnostic |
+| `befe43a` | `d4c42ed` | fix(ci): isolate npm configs in distinct private files |
+| `90ea176` | `f6c71a6` | test(provider): require failed build to reach Docker |
+| `832dd63` | `283c1fd` | docs(pilot): record T009 canonical and runtime block |
+| `5d919ec` | `d2bee51` | docs(pilot): record bounded T009 fixture evidence |
+| `20102b7` | `340d043` | docs(pilot): correct T009 entry-policy provenance |
+
+Independent static review of the rebased pilot (five reviewers, one per area)
+found one high and six medium defects. These are fixed on this branch, each
+with a test that fails without the fix where code changed:
+
+- Registry admission decoded the embedded tool pins into string maps, so
+  every registry image refused as `tool_unavailable`.
+- A link chain could leave ProjectsPath and re-enter by name, resolving to a
+  sibling of data once copied.
+- COPY/ADD `--from`, RUN `--mount from=` and remote ADD bypassed the
+  digest-pinned FROM gate.
+- A failed renewal disconnected a host whose active certificate was still
+  valid; a failed reload after renewal crashed the agent.
+- The harness guide and ADR 0007 stated T002-era test counts.
+- No gate compiled the `docker_integration` acceptance files.
+
+Deferred for owner decision or a follow-up work item, not fixed here:
+
+- Docker CLI and Node binaries are trusted on their version string. The Node
+  pins hash release archives, not the binary, and the Docker CLI has no pin;
+  binary pins need owner-verified values.
+- Renewal paths in `connection.Run` have no Go unit test, and
+  `TestExpiryWatchdogCancelsBlockedIO` exercises only a stub callback.
+- An expired active credential without a pending one retries forever instead
+  of reporting owner newcode recovery.
+- `identity.Prepare` does not fsync the parent after `Mkdir`. The server CA
+  file has no owner/mode check. The exclusive-link temp name removal is not synced.
+- The JSONC companion check does not refuse unlisted files or writable roots.
+- `read_configuration` reads config and CLI output without size or deadline
+  bounds. The driver accepts `exec -u root` in every phase. Gateway
+  state-changing calls are not serialized. seccomp `unconfined` passes the
+  engine check.
+- Control plane: PubSub subscriptions are never removed; an old connection
+  closes before the replacement commits; heartbeats have no rate floor;
+  in-transaction denial audits roll back; a new enrollment code leaves earlier
+  codes valid; one test name overstates its coverage.
+- Fix-up commits remain separate review history rather than squashed, and some
+  evidence prose lost spaces between numbers and words.
