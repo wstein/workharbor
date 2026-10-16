@@ -980,7 +980,13 @@
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/missing_fish",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/missing_nu",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/symlink",
-      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/bin_is_file"
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/bin_is_file",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/missing_bin",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/nil_entries",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/short_digest",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/long_digest",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/short_revision",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/workspaceshell/TestDescriptionRefusals/long_revision"
     ],
     "api_client": [
       "github.com/wstein/workharbor-nxt/apps/api_client/wirejson/TestFrozenJSONVectors",
