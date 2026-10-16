@@ -6,6 +6,11 @@ defmodule WorkHarbor.HostConnections do
   alias WorkHarbor.{Repo, Hosts, Accounts}
   alias WorkHarbor.HostConnections.Protocol
   alias WorkHarbor.Hosts.Peer
+  # Contract cadence is 10 s. Each heartbeat costs a transaction and an undeletable audit
+  # row, so arrivals are limited by a token bucket (capacity 3, one token per 5 s) measured
+  # on receive time, not on the previous commit; the first heartbeat after hello is free.
+  @heartbeat_refill_ms 5000
+  @heartbeat_capacity 3
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   def open(peer, socket), do: call(__MODULE__, {:open, peer, socket})
   def receive_hello(ref, message), do: peer_call(ref, {:hello, message})
@@ -116,6 +121,8 @@ defmodule WorkHarbor.HostConnections do
             negotiated: false,
             opened: mono,
             seen: nil,
+            hb_arrived: nil,
+            hb_tokens: 0,
             lease: nil,
             expiry: expiry,
             expiry_timer: expiry_timer
@@ -213,44 +220,9 @@ defmodule WorkHarbor.HostConnections do
   end
 
   defp peer_message(state, ref, entry, {:heartbeat, message}) do
-    with true <- entry.negotiated,
-         {:ok, %{"kind" => "heartbeat"}} <-
-           Protocol.validate(message, entry.peer.owner_id, entry.peer.host_id) do
-      case Hosts.transaction(fn ->
-             current_slot!(entry)
-             if not Hosts.current_peer?(entry.peer), do: Repo.rollback(:unauthorized_host)
-             now = DateTime.from_unix!(Accounts.now()) |> DateTime.to_iso8601()
-             lease = DateTime.from_unix!(Accounts.now() + 30) |> DateTime.to_iso8601()
-
-             Hosts.sql("UPDATE hosts SET last_seen=?,lease_expires_at=? WHERE id=?", [
-               now,
-               lease,
-               entry.peer.host_id
-             ])
-
-             Hosts.sql(
-               "UPDATE host_connection_slots SET state='connected' WHERE host_id=? AND connection_id=?",
-               [entry.peer.host_id, entry.id]
-             )
-
-             Hosts.audit(
-               entry.peer.owner_id,
-               entry.peer.host_id,
-               "host_heartbeat",
-               "host_heartbeat",
-               "authenticated"
-             )
-           end) do
-        {:ok, _} ->
-          entry = %{entry | seen: monotonic(), lease: make_ref()}
-          Process.send_after(self(), {:stale, ref, entry.lease}, 30000)
-          {:reply, {:ok, ack(entry, "heartbeat_ack")}, put_entry(state, ref, entry)}
-
-        _ ->
-          {:reply, {:error, :persistence_failed}, close(state, ref, :persistence_failed)}
-      end
-    else
-      _ -> {:reply, {:error, :invalid_connection_message}, close(state, ref, :invalid_message)}
+    case take_heartbeat_token(entry, monotonic()) do
+      {:ok, entry} -> heartbeat(state, ref, entry, message)
+      :limited -> {:reply, {:error, :heartbeat_too_fast}, close(state, ref, :heartbeat_too_fast)}
     end
   end
 
@@ -428,6 +400,63 @@ defmodule WorkHarbor.HostConnections do
 
   defp fresh?(entry),
     do: entry.negotiated and not is_nil(entry.seen) and not stale?(entry) and valid_entry?(entry)
+
+  defp heartbeat(state, ref, entry, message) do
+    with true <- entry.negotiated,
+         {:ok, %{"kind" => "heartbeat"}} <-
+           Protocol.validate(message, entry.peer.owner_id, entry.peer.host_id) do
+      case Hosts.transaction(fn ->
+             current_slot!(entry)
+             if not Hosts.current_peer?(entry.peer), do: Repo.rollback(:unauthorized_host)
+             now = DateTime.from_unix!(Accounts.now()) |> DateTime.to_iso8601()
+             lease = DateTime.from_unix!(Accounts.now() + 30) |> DateTime.to_iso8601()
+
+             Hosts.sql("UPDATE hosts SET last_seen=?,lease_expires_at=? WHERE id=?", [
+               now,
+               lease,
+               entry.peer.host_id
+             ])
+
+             Hosts.sql(
+               "UPDATE host_connection_slots SET state='connected' WHERE host_id=? AND connection_id=?",
+               [entry.peer.host_id, entry.id]
+             )
+
+             Hosts.audit(
+               entry.peer.owner_id,
+               entry.peer.host_id,
+               "host_heartbeat",
+               "host_heartbeat",
+               "authenticated"
+             )
+           end) do
+        {:ok, _} ->
+          entry = %{entry | seen: monotonic(), lease: make_ref()}
+          Process.send_after(self(), {:stale, ref, entry.lease}, 30000)
+          {:reply, {:ok, ack(entry, "heartbeat_ack")}, put_entry(state, ref, entry)}
+
+        _ ->
+          {:reply, {:error, :persistence_failed}, close(state, ref, :persistence_failed)}
+      end
+    else
+      _ -> {:reply, {:error, :invalid_connection_message}, close(state, ref, :invalid_message)}
+    end
+  end
+
+  defp take_heartbeat_token(%{hb_arrived: nil} = entry, now),
+    do: {:ok, %{entry | hb_arrived: now, hb_tokens: @heartbeat_capacity * @heartbeat_refill_ms}}
+
+  defp take_heartbeat_token(entry, now) do
+    tokens =
+      min(
+        @heartbeat_capacity * @heartbeat_refill_ms,
+        entry.hb_tokens + max(0, now - entry.hb_arrived)
+      )
+
+    if tokens >= @heartbeat_refill_ms,
+      do: {:ok, %{entry | hb_arrived: now, hb_tokens: tokens - @heartbeat_refill_ms}},
+      else: :limited
+  end
 
   defp stale?(entry), do: monotonic() - (entry.seen || entry.opened) >= 30000
 

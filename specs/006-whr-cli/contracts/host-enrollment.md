@@ -186,6 +186,10 @@ clock jumps on idle sockets. No message at/after wall expiry is admitted before
 watchdog close. Agent mirrors expiry and stops expired active/pending use.
 
 Heartbeat immediately after hello then every10s; acknowledge each heartbeat.
+Rate limit: token bucket, capacity3, one token per5s, measured on monotonic receive time
+(not previous commit); first heartbeat after hello free. Heartbeat arriving with no token
+is refused without a heartbeat write and closes the connection (slot/unknown audit as for
+any close).
 Without authenticated heartbeat for>=30s mark unknown and close stale socket.
 Only transport reconnect uses bounded1/2/4/8/16/30s backoff then30s maximum; no blind
 provider resends or command-history resets. Health requires authenticated hello
