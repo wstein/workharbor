@@ -190,6 +190,9 @@ def check_applications(root, inventory, run):
                 raise ValueError('Unformatted Go source: ' + module)
             execute([tools['go'], 'mod', 'download'], cwd)
             execute([tools['go'], 'vet', './...'], cwd)
+            if module == 'host_agent':
+                # Compile the real-Docker acceptance entrypoints without running them.
+                execute([tools['go'], 'vet', '-tags', 'docker_integration', './internal/providers/docker/'], cwd)
             output = cache/('build-' + module)
             output.mkdir()
             argv = ([tools['go'], 'build', './...'] if module == 'api_client' else
