@@ -33,7 +33,11 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) == 3 && args[0] == "run" && args[1] == "--identity-dir" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		e := runConnection(ctx, args[2], nil)
+		e := runConnection(ctx, args[2], func(ev connection.Event) {
+			if ev.Kind == "activation_forbidden" {
+				fmt.Fprintln(errOut, "workharbor-agent: activation forbidden by the control plane; check its deployment (retrying)")
+			}
+		})
 		if errors.Is(e, connection.ErrRecoveryRequired) {
 			// 66 is the agent exit code for an unrecoverable expired identity
 			// (specs/006-whr-cli/contracts/host-enrollment.md).

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"encoding/pem"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -242,11 +243,11 @@ func TestSessionEndsBlockedReadAtValidityDeadline(t *testing.T) {
 	}
 }
 
-func refuse(status int) http.HandlerFunc {
+func refuse(status int, code string) http.HandlerFunc {
 	return func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(status)
-		_, _ = w.Write([]byte(`{"error":{"code":"unauthorized_host"}}`))
+		_, _ = w.Write([]byte(`{"error":{"code":"` + code + `"}}`))
 	}
 }
 
@@ -264,8 +265,12 @@ func runResult(t *testing.T, dir string) error {
 }
 
 func TestRunEndsWithRecoveryErrorWhenActivationRefusedAfterExpiry(t *testing.T) {
-	for _, status := range []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden} {
-		srv, activations := loopbackAgent(t, refuse(status), handshake(nil))
+	for _, refusal := range []struct {
+		status int
+		code   string
+	}{{401, "unauthorized_host"}, {400, "identity_predecessor_expired"}, {400, "identity_predecessor_missing"}} {
+		status := refusal.status
+		srv, activations := loopbackAgent(t, refuse(status, refusal.code), handshake(nil))
 		dir, before, _ := loopbackDirAt(t, srv, true, 0)
 		if e := runResult(t, dir); e != ErrRecoveryRequired {
 			t.Fatalf("status %d: Run = %v, want ErrRecoveryRequired", status, e)
@@ -295,7 +300,19 @@ func TestRunEndsWithRecoveryErrorForExpiredPendingAfterActiveExpiry(t *testing.T
 }
 
 func TestRunKeepsRetryingTransientActivationFailureAfterExpiry(t *testing.T) {
-	for name, handler := range map[string]http.HandlerFunc{"5xx": nil, "503": refuse(http.StatusServiceUnavailable)} {
+	for name, handler := range map[string]http.HandlerFunc{
+		"500":                   nil,
+		"503":                   refuse(503, "host_service_unavailable"),
+		"503 read":              refuse(503, "request_read_failed"),
+		"403 scheme layer":      refuse(403, "forbidden"),
+		"400 unknown code":      refuse(400, "something_new"),
+		"400 invalid_request":   refuse(400, "invalid_request"),
+		"400 activation_failed": refuse(400, "identity_activation_failed"),
+		"401 unknown code":      refuse(401, "something_new"),
+		"401 with predecessor":  refuse(401, "identity_predecessor_expired"),
+		"400 with unauthorized": refuse(400, "unauthorized_host"),
+		"400 empty non-json":    func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(400) },
+	} {
 		srv, activations := loopbackAgent(t, handler, handshake(nil))
 		dir, _, _ := loopbackDirAt(t, srv, true, 0)
 		ctx, cancel := context.WithCancel(context.Background())
@@ -319,7 +336,7 @@ func TestRunKeepsRetryingTransientActivationFailureAfterExpiry(t *testing.T) {
 }
 
 func TestRunKeepsValidIdentityConnectedWhenActivationRefusedBeforeExpiry(t *testing.T) {
-	srv, activations := loopbackAgent(t, refuse(http.StatusUnauthorized), handshake(nil))
+	srv, activations := loopbackAgent(t, refuse(401, "unauthorized_host"), handshake(nil))
 	dir, before, _ := loopbackDir(t, srv)
 	if e := runUntilConnected(t, dir); e != nil {
 		t.Fatal(e)
@@ -329,5 +346,63 @@ func TestRunKeepsValidIdentityConnectedWhenActivationRefusedBeforeExpiry(t *test
 	}
 	if after, e := identity.Load(dir); e != nil || after.Active.IdentityID != before.Active.IdentityID {
 		t.Fatalf("refusal changed the active identity: %v", e)
+	}
+}
+
+func TestTransportOnlyKeepsStagingAndEnrollmentRefusalsRetryable(t *testing.T) {
+	for _, in := range []error{errRefused, errForbidden, fmt.Errorf("wrapped: %w", errRefused)} {
+		if got := transportOnly(in); got != ErrTransport {
+			t.Fatalf("transportOnly(%v) = %v, want ErrTransport", in, got)
+		}
+	}
+	if got := transportOnly(ErrTransport); got != ErrTransport {
+		t.Fatalf("transportOnly(ErrTransport) = %v", got)
+	}
+	// End to end: a final-looking activation refusal on the staging endpoint is ErrTransport.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/agent/v1/identity/renew", refuse(401, "unauthorized_host"))
+	srv := httptest.NewTLSServer(mux)
+	defer srv.Close()
+	dir, _, _ := loopbackDirAt(t, srv, false, 0)
+	state, e := identity.Load(dir)
+	if e != nil {
+		t.Fatal(e)
+	}
+	state.Pending.Certificate, state.Pending.IssuerCertificate, state.Pending.IdentityID = "", "", ""
+	if e = identity.Save(dir, state); e != nil {
+		t.Fatal(e)
+	}
+	if e = Renew(context.Background(), dir); e != ErrTransport {
+		t.Fatalf("Renew staging refusal = %v, want ErrTransport", e)
+	}
+}
+
+func TestRunReportsForbiddenActivationAndRetries(t *testing.T) {
+	srv, activations := loopbackAgent(t, refuse(403, "forbidden"), handshake(nil))
+	dir, _, _ := loopbackDirAt(t, srv, true, 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	var forbidden atomic.Int32
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, dir, func(ev Event) {
+			if ev.Kind == "activation_forbidden" {
+				forbidden.Add(1)
+			}
+		})
+	}()
+	deadline := time.After(15 * time.Second)
+	for activations.Load() < 2 {
+		select {
+		case e := <-done:
+			t.Fatalf("Run ended (%v) on a 403", e)
+		case <-deadline:
+			t.Fatal("403 not retried")
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+	cancel()
+	<-done
+	if forbidden.Load() == 0 {
+		t.Fatal("403 was not reported")
 	}
 }
