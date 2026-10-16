@@ -84,11 +84,12 @@ in the CI acceptance manifest when implemented):
 A change to the contract file or these tests needs a new ADR that supersedes this
 table, not a silent edit.
 
-## Owner confirmation requested
+## Owner confirmation
 
-The 64-79 range, the 74 internal catch-all and the accepted passthrough overlap.
+Confirmed (H15:b, H69:a): the 64-79 range, the 74 internal catch-all and the accepted passthrough overlap.
 
 ## Consequences
 
-Release documentation publishes this table (FR-018). Nothing is implemented and no
-check has run for this ADR; the tests above are a plan only.
+Release documentation publishes this table (FR-018). Only the scaffold's usage exit 64
+exists (`apps/whr/cmd/whr/main.go`); the table and the tests above are not
+implemented.
