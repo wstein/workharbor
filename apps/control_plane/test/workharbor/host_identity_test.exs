@@ -67,6 +67,16 @@ defmodule WorkHarbor.HostIdentityTest do
     refute inspect(Repo.all(WorkHarbor.Foundation.AuditEvent)) =~ issued.code
   end
 
+  test "issuing a code revokes the host's earlier unconsumed codes", c do
+    {:ok, first} = Hosts.issue_enrollment(c.principal, nil)
+    {:ok, second} = Hosts.issue_enrollment(c.principal, first.host_id)
+    {csr, _} = HostFixture.csr()
+    assert {:error, :invalid_enrollment} = Hosts.redeem(first.code, csr)
+    assert {:ok, enrolled} = Hosts.redeem(second.code, csr)
+    assert enrolled["host_id"] == first.host_id
+    assert {:ok, _} = Hosts.resolve_identity(Base.decode64!(enrolled["certificate"]), :active)
+  end
+
   test "enrollment exact expiry issues no identities", c do
     now = Accounts.now()
     Application.put_env(:workharbor, :clock, fn -> now end)

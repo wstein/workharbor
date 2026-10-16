@@ -40,6 +40,11 @@ defmodule WorkHarbor.Hosts do
         now = Accounts.now()
 
         sql(
+          "UPDATE host_enrollments SET revoked_at=? WHERE host_id=? AND consumed_at IS NULL AND revoked_at IS NULL",
+          [now, host.id]
+        )
+
+        sql(
           "INSERT INTO host_enrollments(id,host_id,owner_id,code_hash,issued_at,expires_at) VALUES(?,?,?,?,?,?)",
           [Ecto.UUID.generate(), host.id, host.owner_id, digest(code), now, now + 300]
         )
