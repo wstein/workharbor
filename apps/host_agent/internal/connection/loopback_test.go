@@ -179,6 +179,8 @@ func TestRunReturnsTransportWhenReloadFailsAfterRenewal(t *testing.T) {
 	renewFn = func(context.Context, string) error {
 		return os.WriteFile(filepath.Join(dir, "identity.json"), []byte("{"), 0600)
 	}
+	// The server is never contacted: renewFn is stubbed. It stays only because
+	// loopbackDir needs a server certificate to build a valid identity fixture.
 	srv, _ := loopbackAgent(t, nil, handshake(nil))
 	dir, _, _ = loopbackDir(t, srv)
 	done := make(chan error, 1)
@@ -216,6 +218,8 @@ func TestSessionEndsBlockedReadAtValidityDeadline(t *testing.T) {
 	if time.Since(start) < time.Second {
 		t.Fatalf("session ended early: %v", time.Since(start))
 	}
+	// This proves the socket is closed, not that session called CloseNow: coder/websocket
+	// also closes the connection when its context is cancelled.
 	select {
 	case <-closed:
 	case <-time.After(5 * time.Second):
