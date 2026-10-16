@@ -388,6 +388,21 @@ func TestSeedActualSymlinkChainsNeverEscapeDataOrRemainIndeterminate(t *testing.
 	}
 }
 
+func TestSeedLinkChainLeavingAndReenteringSourceRefused(t *testing.T) {
+	s, b, source := fixture(t)
+	os.Mkdir(filepath.Join(source.ProjectsPath, "s"), 0755)
+	os.Symlink("..", filepath.Join(source.ProjectsPath, "s/up"))
+	// Resolves back to binary in the source, but to a sibling of data once copied.
+	parent := filepath.Base(filepath.Dir(source.ProjectsPath))
+	reentry := "s/up/../../" + parent + "/" + filepath.Base(source.ProjectsPath) + "/binary"
+	os.Symlink(reentry, filepath.Join(source.ProjectsPath, "reentry"))
+	_, e := s.Seed(context.Background(), b, source, allow)
+	assertCode(t, e, "invalid_seed")
+	if _, e = os.Lstat(filepath.Join(s.Root, b.StorageID)); !os.IsNotExist(e) {
+		t.Fatal("re-entering link published")
+	}
+}
+
 func TestSeedFullyResolvedContainedLinkChainKeepsOriginalLinkBytes(t *testing.T) {
 	s, b, source := fixture(t)
 	os.Symlink("dir/link", filepath.Join(source.ProjectsPath, "chain"))

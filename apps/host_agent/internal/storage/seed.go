@@ -265,6 +265,61 @@ func syncDir(path string) error {
 	}
 	return e
 }
+
+// resolvesWithin follows link from dir component by component, relative to
+// root, as the copied tree will resolve it. Every step, including steps
+// through intermediate links, must stay inside root: a chain that climbs out
+// and re-enters by name resolves elsewhere once copied. Dangling targets and
+// cycles are refused.
+func resolvesWithin(root, dir, link string) bool {
+	hops := 0
+	var walk func(stack []string, target string) ([]string, bool)
+	walk = func(stack []string, target string) ([]string, bool) {
+		if filepath.IsAbs(target) {
+			return nil, false
+		}
+		for _, part := range strings.Split(filepath.ToSlash(target), "/") {
+			switch part {
+			case "", ".":
+				continue
+			case "..":
+				if len(stack) == 0 {
+					return nil, false
+				}
+				stack = stack[:len(stack)-1]
+				continue
+			}
+			next := append(append([]string(nil), stack...), part)
+			path := filepath.Join(append([]string{root}, next...)...)
+			info, e := os.Lstat(path)
+			if e != nil {
+				return nil, false
+			}
+			if info.Mode()&os.ModeSymlink == 0 {
+				stack = next
+				continue
+			}
+			if hops++; hops > 40 {
+				return nil, false
+			}
+			inner, e := os.Readlink(path)
+			if e != nil {
+				return nil, false
+			}
+			var ok bool
+			if stack, ok = walk(stack, inner); !ok {
+				return nil, false
+			}
+		}
+		return stack, true
+	}
+	start := []string{}
+	if dir != "." {
+		start = strings.Split(filepath.ToSlash(dir), "/")
+	}
+	_, ok := walk(start, link)
+	return ok
+}
 func copyData(ctx context.Context, source, dest string, b Binding, point func(string) error) error {
 	physicalSource, evalErr := filepath.EvalSymlinks(source)
 	if evalErr != nil {
@@ -343,7 +398,8 @@ func copyData(ctx context.Context, source, dest string, b Binding, point func(st
 			// project subtree. Dangling and cyclic inputs are deliberately refused.
 			actual, resolveErr := filepath.EvalSymlinks(path)
 			actualRelative, relativeErr := filepath.Rel(physicalSource, actual)
-			if resolveErr != nil || relativeErr != nil || !filepath.IsLocal(actualRelative) {
+			if resolveErr != nil || relativeErr != nil || !filepath.IsLocal(actualRelative) ||
+				!resolvesWithin(physicalSource, filepath.Dir(rel), link) {
 				return failure("invalid_seed")
 			}
 			if os.Symlink(link, target) != nil || os.Lchown(target, int(b.DataUID), int(b.DataGID)) != nil {
