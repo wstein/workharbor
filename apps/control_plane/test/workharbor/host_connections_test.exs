@@ -95,6 +95,46 @@ defmodule WorkHarbor.HostConnectionsTest do
     {operation, binding}
   end
 
+  test "first heartbeat after hello passes and a catch-up burst within capacity stays connected",
+       c do
+    ref = connect(c)
+    Agent.update(c.mono, fn _ -> 10_000 end)
+
+    for _ <- 1..3 do
+      assert {:ok, %{"kind" => "heartbeat_ack"}} =
+               HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    end
+
+    refute_received {:host_connection_close, _}
+  end
+
+  test "sustained heartbeat burst beyond capacity closes without a heartbeat write", c do
+    ref = connect(c)
+
+    count = fn ->
+      Repo.query!("SELECT count(*) FROM audit_events WHERE event='host_heartbeat'").rows
+    end
+
+    for _ <- 1..3 do
+      assert {:ok, _} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    end
+
+    before = count.()
+    assert {:error, :heartbeat_too_fast} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert_receive {:host_connection_close, :heartbeat_too_fast}
+    assert count.() == before
+  end
+
+  test "tokens refill at one per five seconds measured from arrival", c do
+    ref = connect(c)
+
+    for _ <- 1..3, do: assert({:ok, _} = HostConnections.heartbeat(ref, message(c, "heartbeat")))
+
+    Agent.update(c.mono, fn _ -> 5000 end)
+    assert {:ok, _} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert {:error, :heartbeat_too_fast} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+  end
+
   test "authenticated heartbeat becomes stale exactly30seconds without changing history", c do
     ref = connect(c)
     {operation, binding} = runtime(c)
@@ -234,6 +274,7 @@ defmodule WorkHarbor.HostConnectionsTest do
     next = connect(c)
     send(c.server, {:stale, elem(ref, 1), old_lease})
     assert {:ok, "connected"} = HostConnections.host_state(c.peer.host_id)
+    Agent.update(c.mono, fn _ -> 35000 end)
     assert {:ok, _} = HostConnections.heartbeat(next, message(c, "heartbeat"))
   end
 
@@ -285,6 +326,7 @@ defmodule WorkHarbor.HostConnectionsTest do
       "CREATE TRIGGER fail_liveness BEFORE UPDATE ON host_connection_slots BEGIN SELECT RAISE(ABORT,'SECRET_SENTINEL'); END"
     )
 
+    Agent.update(c.mono, fn _ -> 5000 end)
     assert {:error, :persistence_failed} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
 
     assert {:ok, %{observed_state: "unknown"}} =
