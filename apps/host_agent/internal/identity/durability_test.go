@@ -276,7 +276,18 @@ func TestInitialPossessionDurabilityFailureNeverReportsSuccess(t *testing.T) {
 	for _, stage := range []string{"create", "write", "file_sync", "file_close", "link", "parent_open", "parent_sync", "parent_close"} {
 		t.Run(stage, func(t *testing.T) {
 			dir := filepath.Join(physicalTemp(t), "identity")
+			real := identityFiles
 			reset := failFiles(t, stage)
+			if faulty := identityFiles.openDir; strings.HasPrefix(stage, "parent_") {
+				// Aim the fault at the identity directory's own sync; the parent
+				// sync after Mkdir has its own tests in hardening_test.go.
+				identityFiles.openDir = func(p string) (durableFile, error) {
+					if p != dir {
+						return real.openDir(p)
+					}
+					return faulty(p)
+				}
+			}
 			s, e := Prepare(dir, "https://localhost:8443", "")
 			reset()
 			if s != nil || !errors.Is(e, ErrIdentity) {

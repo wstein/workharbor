@@ -77,6 +77,11 @@ func Prepare(dir, endpoint, serverCA string) (*State, error) {
 	if e := os.Mkdir(dir, 0700); e != nil && !os.IsExist(e) {
 		return nil, ErrIdentity
 	}
+	// Sync even when the directory already exists: a retry after a failed sync
+	// must not report success for an entry that may not be durable.
+	if syncDir(filepath.Dir(dir)) != nil {
+		return nil, ErrIdentity
+	}
 	if e := privatePath(dir, true); e != nil {
 		return nil, e
 	}
@@ -162,6 +167,16 @@ func save(dir string, state *State, exclusive bool) error {
 	if e != nil {
 		return ErrIdentity
 	}
+	if exclusive {
+		// Drop the second name before the directory fsync so one sync makes the
+		// link and the removal durable; a crash cannot leave a second key copy.
+		if identityFiles.remove(temporary) != nil {
+			return ErrIdentity
+		}
+	}
+	return syncDir(dir)
+}
+func syncDir(dir string) error {
 	parent, e := identityFiles.openDir(dir)
 	if e != nil {
 		return ErrIdentity
@@ -172,6 +187,10 @@ func save(dir string, state *State, exclusive bool) error {
 		return ErrIdentity
 	}
 	return nil
+}
+
+func caPathOK(path string) bool {
+	return filepath.IsAbs(path) && filepath.Clean(path) == path
 }
 func privatePath(path string, directory bool) error {
 	if noSymlinkAncestors(path, false) != nil {
