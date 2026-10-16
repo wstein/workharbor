@@ -87,10 +87,19 @@ defmodule WorkHarbor.HostConnections do
       id = Ecto.UUID.generate()
       ref = make_ref()
       mono = monotonic()
-      replacing? = Map.has_key?(state.hosts, peer.host_id)
 
       case Hosts.transaction(fn ->
              if not Hosts.current_peer?(peer), do: Repo.rollback(:unauthorized_host)
+
+             # A cleanly closed slot has no connection_id, so a remaining one means a live or
+             # unreleased connection is being superseded, even if its close write failed.
+             replacing? =
+               not is_nil(
+                 Hosts.one(
+                   "SELECT host_id FROM host_connection_slots WHERE host_id=? AND connection_id IS NOT NULL",
+                   [peer.host_id]
+                 )
+               )
 
              Hosts.sql(
                "INSERT INTO host_connection_slots(host_id,owner_id,connection_id,state) VALUES(?,?,?,'unknown') ON CONFLICT(host_id) DO UPDATE SET connection_id=excluded.connection_id,state='unknown'",
@@ -363,7 +372,7 @@ defmodule WorkHarbor.HostConnections do
           Hosts.transaction(fn ->
             changed =
               Hosts.sql(
-                "UPDATE host_connection_slots SET state='unknown' WHERE host_id=? AND connection_id=?",
+                "UPDATE host_connection_slots SET state='unknown',connection_id=NULL WHERE host_id=? AND connection_id=?",
                 [entry.peer.host_id, entry.id]
               )
 
