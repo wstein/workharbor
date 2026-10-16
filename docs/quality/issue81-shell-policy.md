@@ -20,7 +20,9 @@ after correcting share-only XDG fallback idempotence and requiring snippet-local
 interactive guards. Independent implementation review found no code/security
 findings at `c3ce22af433941b2899cb268f6925aabbfc8215b`; commit-message corrections
 produced the identical source tree at `036e8e02345b7d307904659e1432deb496a0dd36`.
-Final exact-head review/check evidence belongs to the PR handoff.
+Both SHAs are pre-rebase; the review of the current rebased head is recorded on
+PR [#83](https://github.com/wstein/workharbor/pull/83). Final exact-head
+review/check evidence belongs to the PR handoff.
 
 ## Executed evidence
 
