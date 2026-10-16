@@ -152,11 +152,6 @@ network services or real feature execution are used by these fixtures.
 
 ## Frozen migration vectors
 
-Feature 006 T003 adds `test_go_vectors.GoVectorTests` as required Python controls
-without changing runner behavior or retained-failure policy. The tests reproduce
-all frozen cases offline and reject source/tool/schema drift, malformed/oversized
-fixtures, incorrect byte hashes and unsafe candidate destinations.
-See [the migration contract](../../contracts/migration/README.md) for the standalone
-`python3.14 -I -B scripts/generate_go_vectors.py` verification and explicit external
-candidate procedure. No accepted fixtures are automatically regenerated, and no
-Python dependency enters product code. Independent Go parity is T004.
+The Feature 006 migration vectors are frozen contracts read directly by Go tests.
+The Python generator and its controls were retired (H58:a, #102); see the
+[migration contract](../../contracts/migration/README.md).
