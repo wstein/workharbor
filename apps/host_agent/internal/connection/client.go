@@ -28,9 +28,40 @@ var ErrTransport = errors.New("host_transport_unavailable")
 // newcode enrollment can restore the host.
 var ErrRecoveryRequired = errors.New("host_identity_expired_owner_newcode_recovery_required")
 
-// errRefused marks a definitive server refusal (HTTP 400, 401 or 403, the
-// control plane's activation refusals), as opposed to transport, 5xx or timeout failures.
+// errRefused marks a final activation refusal: only the body codes the control plane
+// sends for a real refusal (see finalRefusal). Everything else, including unknown 4xx
+// codes and every 5xx (the control plane answers 503 host_service_unavailable and
+// request_read_failed for transient faults), is ErrTransport and retries.
 var errRefused = errors.New("host_request_refused")
+
+// errForbidden marks a 403 from the security/scheme layer. It signals a deployment
+// fault that a newcode cannot fix, so it is never final; Run reports it and retries.
+var errForbidden = errors.New("host_request_forbidden")
+
+// finalRefusal is the allowlist of activation refusals, from hosts.ex and
+// agent_ingress.ex: 401 unauthorized_host (revoked or unknown host/fingerprint, not an
+// activation-state identity), 400 identity_predecessor_expired, 400 identity_predecessor_missing.
+func finalRefusal(status int, code string) bool {
+	switch {
+	case status == http.StatusUnauthorized:
+		return code == "unauthorized_host"
+	case status == http.StatusBadRequest:
+		return code == "identity_predecessor_expired" || code == "identity_predecessor_missing"
+	}
+	return false
+}
+
+func errorCode(raw []byte) string {
+	var body struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(raw, &body) != nil {
+		return ""
+	}
+	return body.Error.Code
+}
 
 func client(state *identity.State, pending bool) (*http.Client, error) {
 	cfg, e := identity.TLSConfig(state, pending)
@@ -97,9 +128,15 @@ func post(ctx context.Context, c *http.Client, endpoint, path string, body any) 
 		return nil, ErrTransport
 	}
 	defer response.Body.Close()
-	switch response.StatusCode {
-	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
-		return nil, errRefused
+	if response.StatusCode == http.StatusForbidden {
+		return nil, errForbidden
+	}
+	if response.StatusCode == http.StatusBadRequest || response.StatusCode == http.StatusUnauthorized {
+		body, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+		if finalRefusal(response.StatusCode, errorCode(body)) {
+			return nil, errRefused
+		}
+		return nil, ErrTransport
 	}
 	media, _, e := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if e != nil || media != "application/json" || response.StatusCode != 200 || response.ProtoMajor != 1 {
@@ -144,7 +181,7 @@ func Enroll(ctx context.Context, dir, code string) error {
 
 // transportOnly hides a refusal outside activation, which is never terminal.
 func transportOnly(e error) error {
-	if errors.Is(e, errRefused) {
+	if errors.Is(e, errRefused) || errors.Is(e, errForbidden) {
 		return ErrTransport
 	}
 	return e
@@ -398,6 +435,10 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 				if state, e = identity.Load(dir); e != nil || state.Active == nil {
 					return ErrTransport
 				}
+			} else if errors.Is(renewErr, errForbidden) {
+				// Not a newcode matter: report the deployment fault and keep retrying.
+				emit(onEvent, "activation_forbidden", state.HostID)
+				limit = time.Now().Add(renewRetry)
 			} else if identity.Expired(state) && errors.Is(renewErr, errRefused) {
 				// The server definitively refused activation after the predecessor
 				// expired: only an owner newcode can restore the host.
