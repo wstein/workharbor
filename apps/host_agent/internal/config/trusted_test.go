@@ -195,3 +195,22 @@ func TestDockerfileEveryReservedARGDeclarationRefuses(t *testing.T) {
 		}
 	}
 }
+
+func TestIsGitTransportMirrorsBuildKit(t *testing.T) {
+	for source, want := range map[string]bool{
+		"foo://x":                      false,
+		"HTTPS://x":                    true,
+		"http://x":                     true,
+		"ssh://x":                      true,
+		"git://x":                      true,
+		"user@h:p":                     true,
+		"a-b_c@host-1.example:p?q=1#f": true,
+		"user@h":                       false,
+		"local.tar":                    false,
+		"dir/user@h:p":                 false,
+	} {
+		if got := isGitTransport(source); got != want {
+			t.Errorf("isGitTransport(%q) = %v, want %v", source, got, want)
+		}
+	}
+}

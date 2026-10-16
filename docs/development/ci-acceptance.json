@@ -590,6 +590,7 @@
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestDescriptorOriginAliasesNeverNormalize",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestApprovalRequiresExactOwnerReferenceAndCompleteSet",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestSourceImageAndDockerfileClosedMatrix",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestIsGitTransportMirrorsBuildKit",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestUnsupportedSourceRefusesEveryEffectClass/initializeCommand",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestUnsupportedSourceRefusesEveryEffectClass/postAttachCommand",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/config/TestUnsupportedSourceRefusesEveryEffectClass/features",
