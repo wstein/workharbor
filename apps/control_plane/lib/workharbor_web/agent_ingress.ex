@@ -76,6 +76,12 @@ defmodule WorkHarborWeb.AgentIngress do
   def activation_failure(:predecessor_missing), do: {400, :identity_predecessor_missing}
   def activation_failure(_), do: {503, :host_service_unavailable}
 
+  @doc false
+  # After a successful activation the new identity must resolve as current: an
+  # unavailable database or issuer is retryable, a genuine mismatch is not final either.
+  def confirmation_failure({:error, :unavailable}), do: {503, :host_service_unavailable}
+  def confirmation_failure(_), do: {400, :identity_activation_failed}
+
   defp dispatch(%{request_path: "/agent/v1/identity/renew"} = conn, peer) do
     parsed(conn, ~w(schema_version csr), fn conn, body ->
       with {:ok, csr} <- der(body["csr"]), {:ok, response} <- Hosts.renew(peer, csr) do
@@ -90,7 +96,8 @@ defmodule WorkHarborWeb.AgentIngress do
     parsed(conn, ~w(schema_version), fn conn, _ ->
       with {:activate, :ok} <- {:activate, Hosts.activate(peer)},
            {:issuer, {:ok, issuer}} <- {:issuer, Hosts.issuer()},
-           true <- Hosts.current_peer?(peer) do
+           {:confirm, {:ok, current}} when current === peer <-
+             {:confirm, Hosts.resolve_identity(peer.certificate, :active)} do
         json(conn, %{
           "schema_version" => 1,
           "owner_id" => peer.owner_id,
@@ -108,8 +115,9 @@ defmodule WorkHarborWeb.AgentIngress do
         {:issuer, _} ->
           unavailable(conn, :host_service_unavailable)
 
-        _ ->
-          refuse_body(conn, :identity_activation_failed)
+        {:confirm, result} ->
+          {status, code} = confirmation_failure(result)
+          Security.deny(conn, status, code)
       end
     end)
   end
