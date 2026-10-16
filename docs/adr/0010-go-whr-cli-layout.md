@@ -1,7 +1,7 @@
 # 0010: Go product code, whr CLI layout
 
 Date: 2026-10-13
-Status: Proposed for owner review and merge
+Status: Accepted 2026-10-16 (owner decision H69:a)
 Amends: [ADR 0001](0001-stack.md) (does not supersede it)
 
 ## Context
