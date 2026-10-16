@@ -89,6 +89,12 @@ func TestActivationRejectsIncompleteOrMismatchedIssuedIdentity(t *testing.T) {
 
 func savedPending(t *testing.T) (*identity.State, identity.Response) {
 	t.Helper()
+	_, state, response := savedPendingDir(t)
+	return state, response
+}
+
+func savedPendingDir(t *testing.T) (string, *identity.State, identity.Response) {
+	t.Helper()
 	temp, e := filepath.EvalSymlinks(t.TempDir())
 	if e != nil {
 		t.Fatal(e)
@@ -142,7 +148,7 @@ func savedPending(t *testing.T) (*identity.State, identity.Response) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	return state, response
+	return dir, state, response
 }
 
 func TestExpiryWatchdogCancelsBlockedIO(t *testing.T) {
@@ -187,5 +193,45 @@ func TestAcknowledgementSequenceFailsClosed(t *testing.T) {
 				t.Fatal("ack sequence boundary changed")
 			}
 		})
+	}
+}
+
+func TestRunRetriesFailedRenewalWhileConnected(t *testing.T) {
+	dir, state, _ := savedPendingDir(t)
+	expires, e := identity.Expires(state)
+	if e != nil {
+		t.Fatal(e)
+	}
+	oldRenew, oldSession := renewFn, sessionFn
+	defer func() { renewFn, sessionFn = oldRenew, oldSession }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var renews atomic.Int32
+	renewFn = func(context.Context, string) error {
+		if renews.Add(1) == 1 {
+			return ErrTransport
+		}
+		cancel()
+		return nil
+	}
+	var limit time.Time
+	sessionFn = func(_ context.Context, _ *identity.State, l time.Time, _ func(Event)) error {
+		if limit.IsZero() {
+			limit = l
+		}
+		return ErrTransport
+	}
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, dir, nil) }()
+	select {
+	case <-done:
+	case <-time.After(10 * time.Second):
+		t.Fatal("renewal was not retried")
+	}
+	if renews.Load() != 2 {
+		t.Fatalf("renewals = %d, want retry after failure", renews.Load())
+	}
+	if limit.IsZero() || !limit.Before(expires) || time.Until(limit) > renewRetry {
+		t.Fatalf("session after failed renewal not bounded to the retry time: %v", limit)
 	}
 }
