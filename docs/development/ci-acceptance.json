@@ -1167,6 +1167,7 @@
       "WorkHarborWeb.AgentIngressTest/test request read failure is a retryable 503, not a 400 refusal",
       "WorkHarborWeb.AgentIngressTest/test an unexpected server exception is a retryable 503, not a 400 refusal",
       "WorkHarborWeb.AgentIngressTest/test activation failures: only final refusals have refusal codes, the rest are 503",
+      "WorkHarborWeb.AgentIngressTest/test post-activation confirmation: unavailable is 503, a genuine mismatch stays 400",
       "WorkHarborWeb.HostAPITest/test explicit owner host endpoints issue revoke and confirm offboarding",
       "WorkHarborWeb.HostAPITest/test dashboard cannot mint host enrollment or revoke even known host",
       "WorkHarborWeb.HostAPITest/test identity startup loads explicit initialized signer and never replaces missing state",

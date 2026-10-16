@@ -51,6 +51,9 @@ func finalRefusal(status int, code string) bool {
 	return false
 }
 
+// IsFinalRefusal reports whether err is a final (allowlisted) activation refusal.
+func IsFinalRefusal(err error) bool { return errors.Is(err, errRefused) }
+
 func errorCode(raw []byte) string {
 	var body struct {
 		Error struct {
