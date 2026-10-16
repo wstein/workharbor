@@ -3,7 +3,6 @@ package config
 
 import (
 	"bytes"
-	"github.com/moby/buildkit/util/gitutil"
 	"github.com/tonistiigi/go-csvvalue"
 	"net"
 	"reflect"
@@ -347,6 +346,22 @@ func ValidateSource(m map[string]any) error {
 	return nil
 }
 
+var (
+	gitProtoRegexp  = regexp.MustCompile(`^[a-zA-Z0-9]+://`)
+	gitSSHRegexp    = regexp.MustCompile(`^([a-zA-Z0-9-_]+)@([a-zA-Z0-9-.]+):(.*?)(?:\?(.*?))?(?:#(.*))?$`)
+	gitProtocolsSet = map[string]bool{"http": true, "https": true, "ssh": true, "git": true}
+)
+
+// isGitTransport mirrors github.com/moby/buildkit v0.34.0 util/gitutil
+// IsGitTransport and util/sshutil IsImplicitSSHTransport (copied, not imported,
+// to keep moby imports at the parser boundary).
+func isGitTransport(remote string) bool {
+	if proto := gitProtoRegexp.FindString(remote); proto != "" {
+		return gitProtocolsSet[strings.ToLower(strings.TrimSuffix(proto, "://"))]
+	}
+	return gitSSHRegexp.MatchString(remote)
+}
+
 // ValidateDockerfile uses the upstream AST only to reject unsupported capabilities.
 // priorStageSources admits COPY/ADD --from and RUN --mount from= only for an
 // earlier stage, so every external image enters through a digest-pinned FROM
@@ -382,7 +397,7 @@ func priorStageSources(node *parser.Node, aliases map[string]bool, stages int) b
 	if strings.EqualFold(node.Value, "add") {
 		for argument := node.Next; argument != nil && argument.Next != nil; argument = argument.Next {
 			source := argument.Value
-			if strings.Contains(source, "://") || gitutil.IsGitTransport(source) {
+			if strings.Contains(source, "://") || isGitTransport(source) {
 				return false
 			}
 		}
