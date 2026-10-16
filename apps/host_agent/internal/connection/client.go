@@ -265,19 +265,25 @@ var (
 	renewRetry = 30 * time.Second
 )
 
-func session(ctx context.Context, state *identity.State, limit time.Time, onEvent func(Event)) error {
-	expires, e := identity.Expires(state)
-	if e != nil {
-		return ErrTransport
-	}
-	// End an idle socket at actual expiry, or at renewal time, independently of IO.
+// sessionDeadline ends an idle socket at renewal time (six hours before expiry),
+// or at actual expiry when renewal is already due, and never later than limit.
+func sessionDeadline(now, expires, limit time.Time) time.Time {
 	deadline := expires.Add(-6 * time.Hour)
-	if !deadline.After(time.Now()) {
+	if !deadline.After(now) {
 		deadline = expires
 	}
 	if !limit.IsZero() && limit.Before(deadline) {
 		deadline = limit
 	}
+	return deadline
+}
+
+func session(ctx context.Context, state *identity.State, limit time.Time, onEvent func(Event)) error {
+	expires, e := identity.Expires(state)
+	if e != nil {
+		return ErrTransport
+	}
+	deadline := sessionDeadline(time.Now(), expires, limit)
 	ctx, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
 	c, e := client(state, false)
