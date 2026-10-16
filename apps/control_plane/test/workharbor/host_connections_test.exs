@@ -169,6 +169,35 @@ defmodule WorkHarbor.HostConnectionsTest do
     assert Repo.get!(WorkHarbor.Foundation.Operation, operation.id).status == "queued"
   end
 
+  test "repeated reconnects keep one topic subscription and release it on close", c do
+    topic = "host: " <> c.peer.host_id
+
+    subscriptions = fn ->
+      Registry.lookup(WorkHarbor.PubSub, topic) |> Enum.count(&(elem(&1, 0) == c.server))
+    end
+
+    refs = for _ <- 1..4, do: connect(c)
+    assert subscriptions.() == 1
+    assert :ok = HostConnections.disconnect(List.last(refs))
+    assert subscriptions.() == 0
+  end
+
+  test "failed replacement keeps the existing socket open and admitted", c do
+    ref = connect(c)
+
+    Hosts.sql(
+      "CREATE TRIGGER deny_slot_update BEFORE UPDATE OF connection_id ON host_connection_slots WHEN new.connection_id IS NOT old.connection_id BEGIN SELECT RAISE(ABORT,'denied'); END"
+    )
+
+    assert {:error, :unauthorized_host} = HostConnections.open(c.peer, self())
+    refute_receive {:host_connection_close, _}, 50
+
+    assert {:ok, %{"kind" => "heartbeat_ack"}} =
+             HostConnections.heartbeat(ref, message(c, "heartbeat"))
+
+    assert {:ok, "connected"} = HostConnections.host_state(c.peer.host_id)
+  end
+
   test "reconnect and replaced socket cannot refresh old runtime annotation", c do
     ref = connect(c)
     {operation, binding} = runtime(c)

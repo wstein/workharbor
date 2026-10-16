@@ -1149,6 +1149,8 @@
       "WorkHarbor.HostIdentityTest/test denied host actions keep their authorization_denied audit",
       "WorkHarbor.HostIdentityTest/test denial inside the transaction keeps its audit when authorization changes after the pre-check",
       "WorkHarbor.ConfigTrustTest/test denial inside the transaction keeps its audit when authorization changes after the pre-check",
+      "WorkHarbor.HostConnectionsTest/test repeated reconnects keep one topic subscription and release it on close",
+      "WorkHarbor.HostConnectionsTest/test failed replacement keeps the existing socket open and admitted",
       "WorkHarbor.HostConnectionsTest/test reconnect and replaced socket cannot refresh old runtime annotation",
       "WorkHarbor.HostConnectionsTest/test revocation and open socket certificate expiry fence existing connections",
       "WorkHarbor.HostConnectionsTest/test closed connection messages reject malformed scope fields versions and bounds",

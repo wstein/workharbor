@@ -84,12 +84,6 @@ defmodule WorkHarbor.HostConnections do
   @impl true
   def handle_call({:open, %Peer{} = peer, socket}, _, state) when is_pid(socket) do
     if Hosts.current_peer?(peer) do
-      state =
-        case state.hosts[peer.host_id] do
-          nil -> state
-          old -> close(state, old, :replaced)
-        end
-
       id = Ecto.UUID.generate()
       ref = make_ref()
       mono = monotonic()
@@ -105,6 +99,13 @@ defmodule WorkHarbor.HostConnections do
              Hosts.audit(peer.owner_id, peer.host_id, "host_connected", "host_connect", "unknown")
            end) do
         {:ok, _} ->
+          # The replacement is committed; only now release the old socket and its topic entry.
+          state =
+            case state.hosts[peer.host_id] do
+              nil -> state
+              old -> close(state, old, :replaced)
+            end
+
           Phoenix.PubSub.subscribe(WorkHarbor.PubSub, "host: " <> peer.host_id)
           monitor = Process.monitor(socket)
 
@@ -343,6 +344,7 @@ defmodule WorkHarbor.HostConnections do
       entry ->
         Process.demonitor(entry.monitor, [:flush])
         Process.cancel_timer(entry.expiry_timer)
+        Phoenix.PubSub.unsubscribe(WorkHarbor.PubSub, "host: " <> entry.peer.host_id)
 
         result =
           Hosts.transaction(fn ->
