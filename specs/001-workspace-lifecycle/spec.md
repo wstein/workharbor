@@ -81,6 +81,15 @@ host: UI displays unknown/stale state, then converges after authenticated reconn
   observations unknown, require authenticated host reconnect, and reject revoked
   credentials. Backup secrets remain outside Git and workspace environments.
 
+## Resource-selection scope addition (2026-10-16)
+
+Feature 006 [US1a and FR-039–FR-042](../006-whr-cli/spec.md) propose CPU/memory
+selection at creation, identical CLI/browser validation, durable desired values and
+separate observed enforcement. This is not implemented or covered by prior task
+completion evidence. The accepted provider subset remains unchanged until its
+contracts and affected plan/tasks are reconciled and reviewed; no arbitrary
+`hostRequirements` or raw provider arguments are admitted by this proposal.
+
 ## Boundaries
 Image and Dockerfile devcontainers are the initial tested matrix. Compose,
 Features, nested containers, privileged configs and extra mounts must be explicitly
