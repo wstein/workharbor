@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection"
 	"github.com/wstein/workharbor-nxt/apps/host_agent/internal/providers/docker"
@@ -14,6 +15,9 @@ import (
 	"syscall"
 	"time"
 )
+
+// runConnection is a seam for tests.
+var runConnection = connection.Run
 
 func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
 
@@ -29,7 +33,13 @@ func run(args []string, out, errOut io.Writer) int {
 	if len(args) == 3 && args[0] == "run" && args[1] == "--identity-dir" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		if connection.Run(ctx, args[2], nil) != nil {
+		e := runConnection(ctx, args[2], nil)
+		if errors.Is(e, connection.ErrRecoveryRequired) {
+			// 66 unauthenticated covers an expired credential (ADR 0013).
+			fmt.Fprintln(errOut, "workharbor-agent: host identity expired; owner newcode recovery required")
+			return 66
+		}
+		if e != nil {
 			fmt.Fprintln(errOut, "workharbor-agent: host_transport_unavailable")
 			return 1
 		}

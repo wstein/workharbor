@@ -23,6 +23,11 @@ import (
 
 var ErrTransport = errors.New("host_transport_unavailable")
 
+// ErrRecoveryRequired ends Run when the active credential has expired and no issued
+// pending credential remains to activate. All state is preserved; only an owner
+// newcode enrollment can restore the host.
+var ErrRecoveryRequired = errors.New("host_identity_expired_owner_newcode_recovery_required")
+
 func client(state *identity.State, pending bool) (*http.Client, error) {
 	cfg, e := identity.TLSConfig(state, pending)
 	if e != nil {
@@ -361,6 +366,10 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 		state, e := identity.Load(dir)
 		if e != nil || state.Active == nil {
 			return ErrTransport
+		}
+		if identity.Expired(state) && (state.Pending == nil || state.Pending.Certificate == "") {
+			// Staging a replacement needs a valid predecessor, so retrying is futile.
+			return ErrRecoveryRequired
 		}
 		var limit time.Time
 		expires, e := identity.Expires(state)
