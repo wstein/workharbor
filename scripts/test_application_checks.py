@@ -142,6 +142,7 @@ class ApplicationChecksTests(unittest.TestCase):
         self.assertIn(['assets.build'], commands)
         self.assertEqual(3, commands.count(['test', '-json', '-count=1', './...']))
         self.assertEqual(3, commands.count(['vet', './...']))
+        self.assertIn(['vet', '-tags', 'docker_integration', './internal/providers/docker/'], commands)
         self.assertIn(['build', './...'], commands)
         self.assertEqual(2, sum(argv[:2] == ['build', '-o'] for argv in commands))
         for _, _, env in observed:
