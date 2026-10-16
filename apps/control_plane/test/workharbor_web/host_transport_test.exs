@@ -609,7 +609,8 @@ defmodule WorkHarborWeb.HostTransportTest do
     Application.delete_env(:workharbor, :clock)
     assert {"staged\n", 0} = invoke(c, "stage_only", input)
     wait(fn -> System.system_time(:second) >= expiry end, 400)
-    assert {"fixture_failed\n", 1} = invoke(c, "renew", input)
+    # The REAL server body must be classified final by the Go agent.
+    assert {"refused_final\n", 0} = invoke(c, "renew", input)
     pending = state(input)
 
     assert Hosts.one("SELECT status FROM host_identities WHERE id=?", [

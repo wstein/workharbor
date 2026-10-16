@@ -203,6 +203,10 @@ func run() error {
 		return nil
 	case "renew":
 		if e = connection.Renew(ctx, in.Dir); e != nil {
+			if connection.IsFinalRefusal(e) {
+				fmt.Println("refused_final")
+				return nil
+			}
 			return e
 		}
 		fmt.Println("renewed")
