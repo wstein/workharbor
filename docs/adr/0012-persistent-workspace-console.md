@@ -30,4 +30,5 @@ the plan's next revision. The persistent console-session state model (entity and
 end events: stop, rebuild, deletion, explicit close) is follow-up work for the
 spec that uses it; the existing Session entity and migration naming refers to the
 single-use grant. Retained output, host-disconnect state and CLI behavior belong to
-the specs that use the console. Nothing is implemented or verified.
+the specs that use the console. No persistent console is implemented or verified; only the shell policy in
+`apps/host_agent/internal/workspaceshell` exists.

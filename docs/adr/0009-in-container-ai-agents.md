@@ -20,8 +20,10 @@ superseded non-goal wording is in [product](../product.md).
   remain proposed and keep every approval and evidence gate stated there.
 - Interop uses a small in-container agent session interface (list, attach,
   status, send input, stop). Owner decision H16:b: it becomes its own versioned
-  contract under `contracts/`, tracked as [#71](https://github.com/wstein/workharbor-nxt/issues/71). That future
-  contract, not this ADR, defines the interface details. It is exposed to the
+  contract under `contracts/`, tracked as [#71](https://github.com/wstein/workharbor-nxt/issues/71). The v1 design
+  baseline is [contracts/agent-session-v1.md](../../contracts/agent-session-v1.md)
+  (proposed; not implemented or verified). That contract, not this ADR, defines the
+  interface details. It is exposed to the
   owner through existing authorized workspace access, never as raw host shell
   access.
 - Owner decision H18:a: the workspace console is a reattachable
@@ -66,8 +68,9 @@ Recorded 2026-10-15 as input for the credential design; nothing here is decided.
 scope. Constitution v1.1.0 (2026-10-14, [#75](https://github.com/wstein/workharbor-nxt/issues/75))
 allows in-container agents (Principle I) and keeps control-plane orchestration
 outside wave one.
-The session interface contract ([#71](https://github.com/wstein/workharbor-nxt/issues/71)) and its wire format,
-authorization binding and failure behavior are undesigned and belong to a
-feature spec. Credential handling for agent
+The session interface contract ([#71](https://github.com/wstein/workharbor-nxt/issues/71)) has a v1 design baseline
+with wire format, per-operation grants and errors at
+[contracts/agent-session-v1.md](../../contracts/agent-session-v1.md) (proposed; not
+implemented or verified). Credential handling for agent
 subscriptions is open; see the open question above. The session interface and
 agent integration are not implemented or verified.
