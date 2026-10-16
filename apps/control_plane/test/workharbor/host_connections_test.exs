@@ -157,9 +157,28 @@ defmodule WorkHarbor.HostConnectionsTest do
 
     assert audits(c) == before
     assert {:ok, "connected"} = HostConnections.host_state(c.peer.host_id)
+
+    assert %{"state" => "connected"} =
+             Hosts.one("SELECT state FROM host_connection_slots WHERE host_id=?", [c.peer.host_id])
+
     now = hb.()
     assert now["last_seen"] > stale["last_seen"]
     assert now["lease_expires_at"] > stale["lease_expires_at"]
+  end
+
+  test "clean close then reopen or restart audits no replacement or reset", c do
+    ref = connect(c)
+    assert :ok = HostConnections.disconnect(ref)
+    assert {:ok, _} = HostConnections.open(c.peer, self())
+
+    assert audits(c) == ["host_connected", "host_connection_unknown", "host_connected"]
+
+    ref2 = connect(c)
+    assert :ok = HostConnections.disconnect(ref2)
+    before = audits(c)
+    :ok = stop_supervised(HostConnections)
+    start_supervised!({HostConnections, repo: c.repo})
+    assert audits(c) == before
   end
 
   test "reopen after a failed close write audits the superseded connection once", c do
