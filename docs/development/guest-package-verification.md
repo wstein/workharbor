@@ -40,11 +40,13 @@ deleted per the exec plan. Never continue with an unverified tool.
 5. Confirm apt verified signatures: `apt-get update` must report no
    `NO_PUBKEY`, `not signed` or `KEYEXPIRED` warnings for the Docker source; record
    `signature_status` as `verified` only when `apt-cache policy docker-ce` shows the
-   candidate from the signed source and `dpkg -s docker-ce` reports the pinned
-   version. No other trust path is accepted.
+   candidate from the signed source and `dpkg -s docker-ce` reports the resolved
+   apt version string from step 4. No other trust path is accepted.
 6. Check the installed version: `docker version --format '{{.Server.Version}}'` and
    `docker version --format '{{.Client.Version}}'` must both equal the pinned
-   Engine version; record `dpkg-query -W -f='${Version}\n' docker-ce docker-ce-cli containerd.io`.
+   Engine version, and the dpkg versions of `docker-ce` and `docker-ce-cli` must equal
+   the full apt version string resolved in step 4 (for example
+   `5:29.8.2-1~ubuntu.24.04~noble`, not `29.8.2`); record `dpkg-query -W -f='${Version}\n' docker-ce docker-ce-cli containerd.io`.
 
 Fingerprint provenance (two agreeing sources, checked 2026-10-16): the archived
 Docker docs line "9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88"
@@ -66,8 +68,9 @@ served at <https://download.docker.com/linux/ubuntu/gpg>.
 3. `SHASUMS256.txt` is only a cross-check. No digest of the file is pinned. When
    present, the line whose filename field is exactly the archive name (exact field
    match, not a substring) must agree with the pinned digest; disagreement fails.
-   Record `shasums_digest_status` as `matched`, `mismatch` or `not-pinned` (no
-   SHASUMS line available to compare). Verifying `SHASUMS256.txt.asc` against the
+   Record `shasums_digest_status` as `matched`, `mismatch`,
+   `unavailable` (the file downloaded but has no line for the exact archive name) or
+   `download-failed` (the file could not be downloaded). Verifying `SHASUMS256.txt.asc` against the
    Node release keys is optional evidence and does not gate the result; record
    `node.signature_status` as `checked` (verified) or `not-checked`, or `failed`
    if a check was attempted and failed.
@@ -93,15 +96,16 @@ T009 acceptance record. No secrets, no raw environment.
 | `docker.apt_source` | Repository URL and suite |
 | `docker.gpg_fingerprint` | Full fingerprint observed |
 | `docker.gpg_fingerprint_match` | `true` only if equal to the pinned value |
-| `docker.package_versions` | `docker-ce`, `docker-ce-cli` dpkg versions (pinned) and `containerd.io` (evidence only) |
+| `docker.resolved_apt_version` | Full apt version string resolved in step 4 from the pinned Engine version |
+| `docker.package_versions` | `docker-ce`, `docker-ce-cli` dpkg versions (must equal `docker.resolved_apt_version`) and `containerd.io` (evidence only) |
 | `docker.server_version`, `docker.client_version` | From `docker version` |
 | `docker.signature_status` | `verified` or `failed` |
 | `node.archive_name`, `node.archive_sha256` | As downloaded |
 | `node.archive_sha256_match` | `true` only if equal to the pinned digest |
-| `node.shasums_digest_status` | `matched`, `mismatch` or `not-pinned` (cross-check only) |
+| `node.shasums_digest_status` | `matched`, `mismatch`, `unavailable` or `download-failed` (cross-check only) |
 | `node.signature_status` | `checked`, `not-checked` or `failed` (optional evidence) |
 | `node.reported_version` | Output of `node --version` |
-| `result` | `pass` only when `docker.gpg_fingerprint_match` is `true`, `docker.signature_status` is `verified`, the `docker-ce` and `docker-ce-cli` versions plus `docker.server_version` and `docker.client_version` equal the pinned Engine version, `node.archive_sha256_match` is `true`, and `node.reported_version` equals `v` plus the pinned Node version. `node.shasums_digest_status` of `matched` or `not-pinned` and `node.signature_status` of `checked` or `not-checked` allow pass; `mismatch` or `failed`, an archive digest mismatch or a version mismatch fail |
+| `result` | `pass` only when `docker.gpg_fingerprint_match` is `true`, `docker.signature_status` is `verified`, the `docker-ce` and `docker-ce-cli` dpkg versions equal `docker.resolved_apt_version`, and `docker.server_version` and `docker.client_version` equal the pinned Engine version, `node.archive_sha256_match` is `true`, and `node.reported_version` equals `v` plus the pinned Node version. `node.shasums_digest_status` of `matched`, `unavailable` or `download-failed` and `node.signature_status` of `checked` or `not-checked` allow pass; `mismatch` or `failed`, an archive digest mismatch or a version mismatch fail |
 
 A record with `result` other than `pass`,
 cannot support acceptance of the H50:b guarantee.
