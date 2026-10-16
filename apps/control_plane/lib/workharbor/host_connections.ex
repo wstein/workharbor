@@ -6,8 +6,8 @@ defmodule WorkHarbor.HostConnections do
   alias WorkHarbor.{Repo, Hosts, Accounts}
   alias WorkHarbor.HostConnections.Protocol
   alias WorkHarbor.Hosts.Peer
-  # Contract cadence is 10 s. Each heartbeat costs a transaction and an undeletable audit
-  # row, so arrivals are limited by a token bucket (capacity 3, one token per 5 s) measured
+  # Contract cadence is 10 s. Each heartbeat costs a transaction (no audit row; only liveness
+  # transitions are audited), so arrivals are limited by a token bucket (capacity 3, one token per 5 s) measured
   # on receive time, not on the previous commit; the first heartbeat after hello is free.
   @heartbeat_refill_ms 5000
   @heartbeat_capacity 3
@@ -87,6 +87,7 @@ defmodule WorkHarbor.HostConnections do
       id = Ecto.UUID.generate()
       ref = make_ref()
       mono = monotonic()
+      replacing? = Map.has_key?(state.hosts, peer.host_id)
 
       case Hosts.transaction(fn ->
              if not Hosts.current_peer?(peer), do: Repo.rollback(:unauthorized_host)
@@ -95,6 +96,18 @@ defmodule WorkHarbor.HostConnections do
                "INSERT INTO host_connection_slots(host_id,owner_id,connection_id,state) VALUES(?,?,?,'unknown') ON CONFLICT(host_id) DO UPDATE SET connection_id=excluded.connection_id,state='unknown'",
                [peer.host_id, peer.owner_id, id]
              )
+
+             # The old connection's close no longer matches the slot, so the replacement itself
+             # is the one audited transition for it.
+             if replacing?,
+               do:
+                 Hosts.audit(
+                   peer.owner_id,
+                   peer.host_id,
+                   "host_connection_replaced",
+                   "host_replace",
+                   "unknown"
+                 )
 
              Hosts.audit(peer.owner_id, peer.host_id, "host_connected", "host_connect", "unknown")
            end) do
@@ -359,7 +372,10 @@ defmodule WorkHarbor.HostConnections do
                 Hosts.audit(
                   entry.peer.owner_id,
                   entry.peer.host_id,
-                  "host_connection_unknown",
+                  if(reason == :heartbeat_too_fast,
+                    do: "host_heartbeat_refused",
+                    else: "host_connection_unknown"
+                  ),
                   "host_disconnect",
                   "unknown"
                 )
@@ -422,14 +438,6 @@ defmodule WorkHarbor.HostConnections do
              Hosts.sql(
                "UPDATE host_connection_slots SET state='connected' WHERE host_id=? AND connection_id=?",
                [entry.peer.host_id, entry.id]
-             )
-
-             Hosts.audit(
-               entry.peer.owner_id,
-               entry.peer.host_id,
-               "host_heartbeat",
-               "host_heartbeat",
-               "authenticated"
              )
            end) do
         {:ok, _} ->
