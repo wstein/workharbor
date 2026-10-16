@@ -132,6 +132,7 @@ defmodule WorkHarborWeb.HostTransportTest do
 
     %{
       dir: dir,
+      issuer_dir: issuer_dir,
       repo: repo,
       principal: principal,
       token: token,
@@ -468,6 +469,73 @@ defmodule WorkHarborWeb.HostTransportTest do
           assert protocols == ["h2"]
       end
     end
+  end
+
+  # Replace the issuer state file as an operator would, without touching the listener.
+  defp rotate_issuer(c, age_seconds \\ 0) do
+    previous = Application.get_env(:workharbor, :clock)
+    fresh = Path.join(c.dir, "rotated-#{Ecto.UUID.generate()}")
+    Application.put_env(:workharbor, :clock, fn -> System.system_time(:second) - age_seconds end)
+
+    try do
+      {:ok, issuer} = Issuer.initialize(fresh)
+      File.rename!(Path.join(fresh, "issuer.json"), Path.join(c.issuer_dir, "issuer.json"))
+      issuer
+    after
+      if previous,
+        do: Application.put_env(:workharbor, :clock, previous),
+        else: Application.delete_env(:workharbor, :clock)
+    end
+  end
+
+  test "listener trusts a newly rotated issuer without a restart", c do
+    {csr, key} = HostFixture.csr_with_key()
+    path = input(c, "")
+
+    probe = fn issuer ->
+      {:ok, certificate} = Issuer.issue(issuer, csr, Ecto.UUID.generate(), :enrollment)
+
+      values =
+        path
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.merge(%{
+          "Certificate" => Base.encode64(certificate),
+          "PrivateKey" => Base.encode64(:public_key.der_encode(:PrivateKeyInfo, key)),
+          "IssuerCertificate" => Base.encode64(issuer.certificate)
+        })
+
+      File.write!(path, Jason.encode!(values))
+      invoke(c, "probe_cert", path)
+    end
+
+    {:ok, boot} = Hosts.issuer()
+    assert {"server_refused\n", 0} = probe.(boot)
+    rotated = rotate_issuer(c)
+    refute rotated.certificate == boot.certificate
+    # Past the TLS layer: only the unregistered identity is refused by the application.
+    assert {"server_refused\n", 0} = probe.(rotated)
+    assert {"server_refused\n", 0} = probe.(boot)
+    other = Path.join(c.dir, "foreign-issuer")
+    {:ok, foreign} = Issuer.initialize(other)
+    assert {"server_tls_unknown_ca\n", 0} = probe.(foreign)
+  end
+
+  test "previous issuer stays trusted until it expires", c do
+    # B is two days old so the later issuer C outlives it by the required day.
+    rotate_issuer(c, 2 * 86400)
+    {issued, input} = enroll(c)
+    {:ok, b} = Hosts.issuer()
+    assert {"connected\n", 0} = invoke(c, "once", input)
+    rotate_issuer(c)
+    assert {:ok, current} = Hosts.issuer()
+    refute current.certificate == b.certificate
+    assert {"connected\n", 0} = invoke(c, "once", input)
+
+    Application.put_env(:workharbor, :clock, fn -> b.expires_at end)
+    {out, _} = invoke(c, "once", input)
+    refute out == "connected\n"
+    assert issued.host_id
   end
 
   @tag :peer_negative

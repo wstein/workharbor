@@ -119,13 +119,17 @@ defmodule WorkHarbor.Hosts do
   # transient server fault (issuer or database) that callers must not report as one.
   def resolve_identity(cert, mode)
       when is_binary(cert) and byte_size(cert) <= 4096 and mode in [:active, :activation] do
-    with {:issuer, {:ok, issuer}} <- {:issuer, issuer()},
+    with {:issuer, {:ok, issuers}} <- {:issuer, trusted_issuers()},
          identity when is_map(identity) <-
            one("SELECT * FROM host_identities WHERE fingerprint=?", [fingerprint(cert)]),
          true <-
            identity["certificate"] == cert and allowed_status?(identity, mode) and
              not_revoked?(identity["host_id"]),
-         true <- Issuer.valid_leaf?(cert, issuer, identity["host_id"], Accounts.now()) do
+         issuer when is_map(issuer) <-
+           Enum.find(
+             issuers,
+             &Issuer.valid_leaf?(cert, &1, identity["host_id"], Accounts.now())
+           ) do
       {:ok,
        %Peer{
          owner_id: identity["owner_id"],
@@ -295,6 +299,20 @@ defmodule WorkHarbor.Hosts do
         host = scoped_host!(principal.owner_id, host_id)
         %{host_id: host.id, owner_id: host.owner_id, revoked: revoked?(host.id)}
       end)
+    end
+  end
+
+  # Current issuer first, then earlier unexpired issuers kept after rotation.
+  defp trusted_issuers do
+    case Application.get_env(:workharbor, :host_identity, [])[:issuer_dir] do
+      path when is_binary(path) ->
+        case Issuer.load(path) do
+          {:ok, _} -> {:ok, WorkHarbor.Hosts.TrustedIssuers.issuers(path)}
+          error -> error
+        end
+
+      _ ->
+        {:error, :issuer_unavailable}
     end
   end
 
