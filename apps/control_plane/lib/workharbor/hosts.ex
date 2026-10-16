@@ -320,8 +320,16 @@ defmodule WorkHarbor.Hosts do
     config = Application.get_env(:workharbor, :host_identity, [])
 
     case config[:issuer_dir] do
-      path when is_binary(path) -> Issuer.load(path)
-      _ -> {:error, :issuer_unavailable}
+      path when is_binary(path) ->
+        with {:ok, _} = loaded <- Issuer.load(path) do
+          # Remember every issuer that signs, so rotations without a handshake in between
+          # cannot lose one from the trusted set.
+          WorkHarbor.Hosts.TrustedIssuers.issuers(path)
+          loaded
+        end
+
+      _ ->
+        {:error, :issuer_unavailable}
     end
   end
 

@@ -8,22 +8,27 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
   earlier issuer seen by this process that has not yet expired, so certificates issued
   before the rotation keep working for their remaining validity. A replacement that fails
   `Issuer.load/1` never widens or shrinks trust. The set is process-local: after a restart
-  only the then-current issuer is known.
+  only the then-current issuer is known. An issuer is remembered once observed here;
+  `Hosts.issuer/0` observes every issuer that signs an enrollment or renewal.
   """
   alias WorkHarbor.Hosts.Issuer
+
+  # A failing file is retried after this long; trust is unchanged meanwhile.
+  @backoff_ms 5_000
 
   def issuers(dir) when is_binary(dir) do
     now = WorkHarbor.Accounts.now()
     key = {__MODULE__, dir}
     cached = :persistent_term.get(key, nil)
+    stamp = stamp(dir)
 
     state =
-      if cached != nil and cached.stamp != nil and cached.stamp == stamp(dir) do
+      if fresh?(cached, stamp) do
         cached
       else
         # The lock only serialises refreshes; the hot path above takes none.
         :global.trans({key, self()}, fn ->
-          latest = refresh(dir, :persistent_term.get(key, nil))
+          latest = refresh(dir, :persistent_term.get(key, nil), stamp)
           :persistent_term.put(key, latest)
           latest
         end)
@@ -32,21 +37,31 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
     live(state.issuers, now)
   end
 
-  defp refresh(dir, cached) do
-    stamp = stamp(dir)
-    cached = cached || %{stamp: nil, issuers: []}
+  defp fresh?(nil, _), do: false
 
-    if stamp != nil and stamp == cached.stamp do
+  defp fresh?(cached, stamp) do
+    (stamp != nil and cached.stamp == stamp) or
+      case cached.failed do
+        {^stamp, until} -> until > System.monotonic_time(:millisecond)
+        _ -> false
+      end
+  end
+
+  defp refresh(dir, cached, stamp) do
+    cached = cached || %{stamp: nil, issuers: [], failed: nil}
+
+    if fresh?(cached, stamp) do
       cached
     else
-      case Issuer.load(dir) do
-        {:ok, current} when stamp != nil ->
+      case if(stamp, do: Issuer.load(dir)) do
+        {:ok, current} ->
           previous = Enum.reject(cached.issuers, &(&1.certificate == current.certificate))
-          %{stamp: stamp, issuers: [current | previous]}
+          %{stamp: stamp, issuers: [current | previous], failed: nil}
 
         _ ->
-          # Unreadable, malformed, unsafe or invalid replacement: trust is unchanged.
-          cached
+          # Unreadable, malformed, unsafe or invalid replacement: trust is unchanged and the
+          # failure is remembered so unauthenticated handshakes cannot queue on the lock.
+          %{cached | failed: {stamp, System.monotonic_time(:millisecond) + @backoff_ms}}
       end
     end
   end
