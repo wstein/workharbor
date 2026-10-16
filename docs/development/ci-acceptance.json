@@ -79,6 +79,7 @@
     "test_profile_fixtures.T003Tests.test_no_live_ports",
     "test_provider_profiles.T002Tests.test_canonical_actions",
     "test_provider_profiles.T002Tests.test_canonical_identity",
+    "test_provider_profiles.T002Tests.test_contract_action_table",
     "test_provider_profiles.T002Tests.test_input_limits",
     "test_provider_profiles.T002Tests.test_strict_json",
     "test_single_task.SingleTaskAcceptanceTests.test_acceptance_does_not_reuse_old_success",
