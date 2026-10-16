@@ -63,9 +63,11 @@ Recorded 2026-10-15 as input for the credential design; nothing here is decided.
 ## Consequences
 
 [Product](../product.md) and [architecture](../architecture.md) state the wave-one
-scope. The constitution still lists AI orchestration as excluded; its amendment or
-scoped exception needs owner action under its governance and is not made here.
+scope. Constitution v1.1.0 (2026-10-14, [#75](https://github.com/wstein/workharbor-nxt/issues/75))
+allows in-container agents (Principle I) and keeps control-plane orchestration
+outside wave one.
 The session interface contract ([#71](https://github.com/wstein/workharbor-nxt/issues/71)) and its wire format,
 authorization binding and failure behavior are undesigned and belong to a
 feature spec. Credential handling for agent
-subscriptions is open; see the open question above. Nothing is implemented or verified.
+subscriptions is open; see the open question above. The session interface and
+agent integration are not implemented or verified.
