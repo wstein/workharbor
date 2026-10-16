@@ -114,6 +114,15 @@ defmodule WorkHarborWeb.AgentIngressTest do
            }
   end
 
+  test "post-activation confirmation: unavailable is 503, a genuine mismatch stays 400" do
+    assert AgentIngress.confirmation_failure({:error, :unavailable}) ==
+             {503, :host_service_unavailable}
+
+    for other <- [{:error, :unauthorized_host}, {:ok, :stale}] do
+      assert AgentIngress.confirmation_failure(other) == {400, :identity_activation_failed}
+    end
+  end
+
   test "activation failures: only final refusals have refusal codes, the rest are 503" do
     assert AgentIngress.activation_failure(:unauthorized_host) == {401, :unauthorized_host}
 
