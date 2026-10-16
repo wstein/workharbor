@@ -16,6 +16,10 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
   # A failing file is retried after this long; trust is unchanged meanwhile.
   @backoff_ms 5_000
 
+  # H76:a. A replaced issuer stays trusted for the maximum leaf lifetime plus this margin
+  # (seconds), counted from when this process first observed the replacement.
+  @retired_margin 3_600
+
   def issuers(dir) when is_binary(dir) do
     now = WorkHarbor.Accounts.now()
     key = {__MODULE__, dir}
@@ -28,7 +32,7 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
       else
         # The lock only serialises refreshes; the hot path above takes none.
         :global.trans({key, self()}, fn ->
-          latest = refresh(dir, :persistent_term.get(key, nil), stamp)
+          latest = refresh(dir, :persistent_term.get(key, nil), stamp, now)
           :persistent_term.put(key, latest)
           latest
         end)
@@ -47,7 +51,7 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
       end
   end
 
-  defp refresh(dir, cached, stamp) do
+  defp refresh(dir, cached, stamp, now) do
     cached = cached || %{stamp: nil, issuers: [], failed: nil}
 
     if fresh?(cached, stamp) do
@@ -55,8 +59,16 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
     else
       case if(stamp, do: Issuer.load(dir)) do
         {:ok, current} ->
-          previous = Enum.reject(cached.issuers, &(&1.certificate == current.certificate))
-          %{stamp: stamp, issuers: [current | previous], failed: nil}
+          previous =
+            cached.issuers
+            |> Enum.reject(&(&1.certificate == current.certificate))
+            |> Enum.map(&Map.put_new(&1, :retired_at, now))
+
+          %{
+            stamp: stamp,
+            issuers: live([Map.delete(current, :retired_at) | previous], now),
+            failed: nil
+          }
 
         _ ->
           # Unreadable, malformed, unsafe or invalid replacement: trust is unchanged and the
@@ -66,7 +78,13 @@ defmodule WorkHarbor.Hosts.TrustedIssuers do
     end
   end
 
-  defp live(issuers, now), do: Enum.filter(issuers, &(&1.expires_at > now))
+  defp live(issuers, now) do
+    window = Issuer.leaf_lifetime() + @retired_margin
+
+    Enum.filter(issuers, fn issuer ->
+      issuer.expires_at > now and now < Map.get(issuer, :retired_at, now) + window
+    end)
+  end
 
   # Content digest, not mtime/inode: same-second replacements must not be missed.
   defp stamp(dir) do

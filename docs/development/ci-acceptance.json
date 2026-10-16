@@ -1192,6 +1192,7 @@
       "WorkHarborWeb.HostTransportTest/test a malformed symlinked or unreadable issuer file never changes trust",
       "WorkHarbor.TrustedIssuersTest/test issuing remembers every issuer even when no handshake separates rotations",
       "WorkHarbor.TrustedIssuersTest/test a failing issuer file keeps trust and is retried only after a backoff",
+      "WorkHarbor.TrustedIssuersTest/test a replaced issuer stays trusted for a leaf lifetime plus margin from observation",
       "WorkHarborWeb.HostTransportTest/test genuine pending identity has only activation authority and rotation revocation close live WSS",
       "WorkHarborWeb.HostTransportTest/test genuine WSS enforces exact wire scope version JSON types and message budgets",
       "WorkHarborWeb.HostTransportTest/test genuine idle client socket is forced closed at certificate expiry",

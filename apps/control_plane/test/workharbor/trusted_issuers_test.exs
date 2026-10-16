@@ -68,4 +68,37 @@ defmodule WorkHarbor.TrustedIssuersTest do
     assert certificates(c.dir) == [second.certificate, c.first.certificate]
     assert %{failed: nil} = :persistent_term.get(key)
   end
+
+  test "a replaced issuer stays trusted for a leaf lifetime plus margin from observation", c do
+    window = Issuer.leaf_lifetime() + 3_600
+    now = System.system_time(:second)
+    previous = Application.get_env(:workharbor, :clock)
+
+    on_exit(fn ->
+      if previous,
+        do: Application.put_env(:workharbor, :clock, previous),
+        else: Application.delete_env(:workharbor, :clock)
+    end)
+
+    at = fn t -> Application.put_env(:workharbor, :clock, fn -> t end) end
+
+    # The first issuer is very old (30 days), so a window measured from its notBefore
+    # would already be over.
+    at.(now - 30 * 86400)
+    fresh = Path.join(c.base, "old")
+    {:ok, old} = Issuer.initialize(fresh)
+    File.rename!(Path.join(fresh, "issuer.json"), Path.join(c.dir, "issuer.json"))
+    at.(now)
+    assert certificates(c.dir) == [old.certificate]
+
+    current = rotate(c)
+    assert certificates(c.dir) == [current.certificate, old.certificate]
+    at.(now + window - 1)
+    assert certificates(c.dir) == [current.certificate, old.certificate]
+    at.(now + window)
+    assert certificates(c.dir) == [current.certificate]
+    # Dropped for good, and the current issuer is unaffected by its own age.
+    at.(now + 4 * window)
+    assert certificates(c.dir) == [current.certificate]
+  end
 end

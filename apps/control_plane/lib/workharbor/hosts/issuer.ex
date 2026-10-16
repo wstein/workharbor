@@ -23,6 +23,9 @@ defmodule WorkHarbor.Hosts.Issuer do
 
   @ed {1, 3, 101, 112}
   @day 86400
+  # Fixed leaf lifetime (seconds); also bounds how long a replaced issuer's leaves can live.
+  def leaf_lifetime, do: @day
+
   def initialize(dir) do
     path = Path.join(dir, "issuer.json")
 
