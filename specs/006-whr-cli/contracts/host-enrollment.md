@@ -168,9 +168,19 @@ failure; never claim success from a local write alone.
 
 `workharbor-agent` exit codes (the agent's own table, separate from the `whr` table
 in ADR 0013): 0 normal stop; 1 any other failure; 66 active identity expired with
-no issued pending certificate, an expired pending certificate, or a definitive
-activation refusal (HTTP 400/401/403) after that expiry; owner newcode recovery
-required (state preserved). Transport errors, 5xx and timeouts keep retrying.
+no issued pending certificate, an expired pending certificate, or a final activation
+refusal after that expiry; owner newcode recovery required (state preserved).
+
+Activation responses: final refusals are exactly 401 `unauthorized_host` (revoked or
+unknown host/fingerprint, or the certificate not valid for activation), 400
+`identity_predecessor_expired` and 400 `identity_predecessor_missing`. The control plane
+answers retryable faults (busy or failed database, unavailable issuer, request read
+failure, unexpected exception) with 503 and the stable codes `host_service_unavailable`
+or `request_read_failed`, never 400/401. The agent treats only the three final pairs as
+final; every other response, including unknown 4xx codes, 5xx, timeouts and transport
+errors, retries with backoff. A 403 from the security/scheme layer (mixed credentials,
+authority or scheme mismatch) is a deployment fault that a newcode cannot fix: the agent
+reports `activation forbidden` and retries. Refusals of enrollment or staging are never final.
 A service manager must not restart on 66 (systemd: `RestartPreventExitStatus=66`).
 
 Installed Linux path /var/lib/workharbor/identity/identity.json, service-owned0600
