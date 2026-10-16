@@ -37,7 +37,10 @@ or background services implicitly.
 
 ## CI and explicit acceptance
 
-Run `make check PYTHON=python3.14` with Python 3.14.8 in a pristine isolated
+The Python harness is development tooling only and is not a product dependency.
+It supports CPython 3.14 or newer; `.tool-versions` pins the `3.14` series floor and
+`scripts/application_checks.py` rejects older interpreters. Run
+`make check PYTHON=python3` with a supported interpreter in a pristine isolated
 checkout and install the remaining `.tool-versions` pins first.
 Local and CI acceptance both use `scripts/check_ci.py` and
 [ci-acceptance.json](ci-acceptance.json), as proposed by
