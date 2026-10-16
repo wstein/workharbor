@@ -91,6 +91,12 @@ func TestDescriptionRefusals(t *testing.T) {
 		"missing nu":       func(d *ToolboxDescription) { delete(d.Entries, "share/nushell/vendor/autoload/bdock-shell.nu") },
 		"symlink":          func(d *ToolboxDescription) { d.Entries["share/shell/init.bash"] = EntryKind("symlink") },
 		"bin is file":      func(d *ToolboxDescription) { d.Entries["bin"] = RegularFile },
+		"missing bin":      func(d *ToolboxDescription) { delete(d.Entries, "bin") },
+		"nil entries":      func(d *ToolboxDescription) { d.Entries = nil },
+		"short digest":     func(d *ToolboxDescription) { d.ArtifactDigest = "sha256:" + strings.Repeat("a", 63) },
+		"long digest":      func(d *ToolboxDescription) { d.ArtifactDigest = "sha256:" + strings.Repeat("a", 65) },
+		"short revision":   func(d *ToolboxDescription) { d.SourceRevision = strings.Repeat("b", 39) },
+		"long revision":    func(d *ToolboxDescription) { d.SourceRevision = strings.Repeat("b", 41) },
 	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -103,7 +109,7 @@ func TestDescriptionRefusals(t *testing.T) {
 			if !errors.As(err, &e) || e.Code != "unsupported_attachment" {
 				t.Fatalf("got %v", err)
 			}
-			if !reflect.DeepEqual(p, Plan{}) || !reflect.DeepEqual(d.Entries, before) || env["BDOCK_STARSHIP"] != "1" {
+			if !reflect.DeepEqual(p, Plan{}) || !reflect.DeepEqual(copyEntries(d.Entries), before) || env["BDOCK_STARSHIP"] != "1" {
 				t.Fatal("partial output or mutation")
 			}
 		})
@@ -150,6 +156,10 @@ func TestBashSnippetSurrogate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Fatalf("required acceptance test needs bash on PATH: %v", err)
+	}
 	dir := t.TempDir()
 	script := filepath.Join(dir, "init.bash")
 	marker := filepath.Join(dir, "loaded")
@@ -163,7 +173,7 @@ func TestBashSnippetSurrogate(t *testing.T) {
 		if interactive {
 			args[2] = "-ic"
 		}
-		cmd := exec.Command("/bin/bash", args...)
+		cmd := exec.Command(bash, args...)
 		cmd.Env = []string{"PATH=" + p.Environment["PATH"], "BDOCK_STARSHIP=" + p.Environment["BDOCK_STARSHIP"], "LOAD_MARKER=" + marker, "PROMPT_MARKER=" + prompt}
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("bash %t: %v %s", interactive, err, out)
