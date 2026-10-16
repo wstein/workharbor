@@ -35,7 +35,8 @@ func run(args []string, out, errOut io.Writer) int {
 		defer stop()
 		e := runConnection(ctx, args[2], nil)
 		if errors.Is(e, connection.ErrRecoveryRequired) {
-			// 66 unauthenticated covers an expired credential (ADR 0013).
+			// 66 is the agent exit code for an unrecoverable expired identity
+			// (specs/006-whr-cli/contracts/host-enrollment.md).
 			fmt.Fprintln(errOut, "workharbor-agent: host identity expired; owner newcode recovery required")
 			return 66
 		}
