@@ -18,6 +18,7 @@ type durableFiles struct {
 	openDir    func(string) (durableFile, error)
 	rename     func(string, string) error
 	link       func(string, string) error
+	remove     func(string) error
 }
 
 var identityFiles = durableFiles{
@@ -25,4 +26,5 @@ var identityFiles = durableFiles{
 	openDir:    func(dir string) (durableFile, error) { return os.Open(dir) },
 	rename:     os.Rename,
 	link:       os.Link,
+	remove:     os.Remove,
 }
