@@ -61,15 +61,22 @@ is claimed. Existing owner-only profile remains valid when identity is inactive.
 Rotation replaces the issuer state file; no restart. The trusted client-CA set is the
 current issuer plus every earlier issuer this process has seen that has not expired
 (expires_at>now). Per handshake the listener's verify_fun refreshes the set when the
-file's stat changes, so cacerts need not be reloaded: a chain ending at an unknown CA is
-accepted only if the presented root equals a set member or the leaf's issuer name matches
-a member, the leaf is within its validity and the member's Ed25519 signature verifies.
+file's content digest changes, so cacerts need not be reloaded. For an unknown-CA
+chain ssl hands verify_fun the TOP certificate and treats an accepted one as the trust
+anchor without CA, keyUsage or path-length checks, so it is accepted only if (a) it equals
+a set member's DER (the chain carries the issuer), or (b) it is a complete end-entity
+leaf of a member (leaf profile minus host match: not CA, digitalSignature, clientAuth,
+24h validity, no unknown critical extension, member signature) and the chain is that
+single certificate: every later verify_fun event fails, so a leaf can never issue.
 Every other bad_cert, unknown critical extension and the boot cacerts path keep the
-standard verify_peer result. A replacement that fails Issuer.load is ignored and trust
-neither widens nor shrinks. The application admits a leaf (identity lookup, fingerprint,
+standard verify_peer result. A replacement that is malformed, symlinked, unreadable or otherwise fails Issuer.load
+is ignored and trust neither widens nor shrinks. The application admits a leaf (identity lookup, fingerprint,
 status) against whichever set member passes the full leaf profile, so certificates
 issued before rotation keep working until their own NotAfter or the previous issuer's
-expiry, whichever is first. The set is process-local: after a restart only the then-current
+expiry, whichever is first. Every issuer that signs an enrollment or renewal is observed (added to the set) at
+that moment, so rotations between handshakes lose none. A failing issuer file (missing,
+unreadable, symlinked, oversized, malformed) is retried after a 5 s backoff; handshakes
+inside it reuse the cached set without locking or reloading. The set is process-local: after a restart only the then-current
 issuer is trusted, so rotate by file replacement while running and renew hosts before
 restarting. Expiry of the previous issuer ends its leaves (no grace). Tests: real TLS
 handshakes in HostTransportTest.
