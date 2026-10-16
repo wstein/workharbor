@@ -63,12 +63,12 @@ budgets remain 600 and 1200 seconds, respectively; utility commands retain 300 s
 
 Schema 2 adds an explicit `application_tests` inventory. Fixed repository code runs
 `gofmt -l`, `go mod download`, `go vet`, `go build` and uncached `go test -json` for
-all three Go modules. The two command refusal tests are required. The API client
-currently has documentation only and no required tests; any new test outcome must
+all three Go modules. The `application_tests` inventory in the manifest is the
+authoritative list of required identities per module; any other test outcome must
 still pass. Package skips qualify only for an explicit `[no test files]` event,
 never for a skipped test. Phoenix runs locked dependency acquisition, format,
 warnings-as-errors compile, asset tool installation/build and warnings-as-errors
-tests. All five existing ExUnit tests are required. The test-only formatter records
+tests, with required ExUnit identities listed in the same inventory. The test-only formatter records
 actual test outcomes alongside the ordinary CLI formatter; missing IDs, skipped or
 excluded tests, duplicate outcomes and incomplete streams fail. New green tests
 are collected without requiring new manifest entries. Thirteen required Python controls
