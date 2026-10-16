@@ -59,17 +59,18 @@ served at <https://download.docker.com/linux/ubuntu/gpg>.
    `xz-utils` in the guest. Download that archive and `checksums_url`
    (`SHASUMS256.txt`) named in tool-pins.json under `node`, into a new empty
    directory. Treat both as untrusted.
-2. Verify `SHASUMS256.txt` itself: its SHA256 must equal the digest pinned for it.
-   TODO(owner): tool-pins.json pins archive digests (`linux_arm64_sha256`,
-   `linux_amd64_sha256`) but no digest for the SHASUMS256 file; add a
-   `checksums_sha256` field (as crane has) in a follow-up pin amendment, or
-   explicitly accept the archive digest alone. Until then record
-   `shasums_digest_status` as `not-pinned`.
-3. Compute the archive SHA256 and require it to equal the pinned archive digest for
-   the guest architecture, and to equal the SHASUMS256 line whose filename field is
-   exactly the archive name (exact field match, not a substring).
-   Optionally verify the detached `SHASUMS256.txt.sig`/`.asc` against the Node release
-   keys when the owner pins those keys; record `signature_status` accordingly.
+2. Trust anchor (owner decision H71:b): the pinned per-architecture archive
+   SHA256 in tool-pins.json (`linux_arm64_sha256`, `linux_amd64_sha256`). Compute
+   the archive SHA256 and require it to equal the pinned digest BEFORE extraction;
+   a mismatch aborts and fails the record.
+3. `SHASUMS256.txt` is only a cross-check. No digest of the file is pinned. When
+   present, the line whose filename field is exactly the archive name (exact field
+   match, not a substring) must agree with the pinned digest; disagreement fails.
+   Record `shasums_digest_status` as `matched`, `mismatch` or `not-pinned` (no
+   SHASUMS line available to compare). Verifying `SHASUMS256.txt.asc` against the
+   Node release keys is optional evidence and does not gate the result; record
+   `node.signature_status` as `checked` (verified) or `not-checked`, or `failed`
+   if a check was attempted and failed.
 4. Extract only after the digest passes, into a new directory; install under
    `/opt/node-<version>` and prepend its `bin` to PATH.
 5. Run the extracted binary by absolute path: `<node>/bin/node --version` must print
@@ -97,10 +98,10 @@ T009 acceptance record. No secrets, no raw environment.
 | `docker.signature_status` | `verified` or `failed` |
 | `node.archive_name`, `node.archive_sha256` | As downloaded |
 | `node.archive_sha256_match` | `true` only if equal to the pinned digest |
-| `node.shasums_sha256`, `node.shasums_digest_status` | Observed digest; `matched`, `mismatch` or `not-pinned` |
-| `node.signature_status` | `verified`, `not-checked` or `failed` |
+| `node.shasums_digest_status` | `matched`, `mismatch` or `not-pinned` (cross-check only) |
+| `node.signature_status` | `checked`, `not-checked` or `failed` (optional evidence) |
 | `node.reported_version` | Output of `node --version` |
-| `result` | `pass` only when `docker.gpg_fingerprint_match` is `true`, `docker.signature_status` is `verified`, the `docker-ce` and `docker-ce-cli` versions plus `docker.server_version` and `docker.client_version` equal the pinned Engine version, `node.archive_sha256_match` is `true`, `node.reported_version` equals `v` plus the pinned Node version, and `node.shasums_digest_status` is `matched` (`not-pinned` does not pass) |
+| `result` | `pass` only when `docker.gpg_fingerprint_match` is `true`, `docker.signature_status` is `verified`, the `docker-ce` and `docker-ce-cli` versions plus `docker.server_version` and `docker.client_version` equal the pinned Engine version, `node.archive_sha256_match` is `true`, and `node.reported_version` equals `v` plus the pinned Node version. `node.shasums_digest_status` of `matched` or `not-pinned` and `node.signature_status` of `checked` or `not-checked` allow pass; `mismatch` or `failed`, an archive digest mismatch or a version mismatch fail |
 
 A record with `result` other than `pass`,
 cannot support acceptance of the H50:b guarantee.
