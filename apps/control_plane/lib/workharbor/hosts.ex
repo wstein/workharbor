@@ -13,7 +13,7 @@ defmodule WorkHarbor.Hosts do
   alias WorkHarbor.Hosts.{Issuer, Peer}
 
   def issue_enrollment(principal, host_id) do
-    with :ok <- Accounts.authorize(principal, :host_enrollment_issue) do
+    with_authorization(principal, :host_enrollment_issue, fn ->
       transaction(fn ->
         authorize!(principal, :host_enrollment_issue)
 
@@ -55,7 +55,7 @@ defmodule WorkHarbor.Hosts do
 
         %{host_id: host.id, owner_id: host.owner_id, code: code, expires_at: now + 300}
       end)
-    end
+    end)
   end
 
   def redeem(code, csr) do
@@ -241,7 +241,7 @@ defmodule WorkHarbor.Hosts do
   def activate(_), do: {:error, :unauthorized_host}
 
   def revoke(principal, host_id) do
-    with :ok <- Accounts.authorize(principal, :host_revoke) do
+    with_authorization(principal, :host_revoke, fn ->
       result =
         transaction(fn ->
           authorize!(principal, :host_revoke)
@@ -280,7 +280,7 @@ defmodule WorkHarbor.Hosts do
         do: Phoenix.PubSub.broadcast(WorkHarbor.PubSub, "host: " <> host_id, :identity_changed)
 
       normalize_ok(result)
-    end
+    end)
   end
 
   def status(principal, host_id) do
@@ -376,8 +376,19 @@ defmodule WorkHarbor.Hosts do
     Repo.get_by(Host, id: id, owner_id: owner) || Repo.rollback(:not_found)
   end
 
+  # The in-transaction check rolls back its own denial audit, so the denial is
+  # surfaced as a marker and audited here, after the rollback (authentication.md section 4).
   defp authorize!(p, action),
-    do: if(Accounts.authorize(p, action) != :ok, do: Repo.rollback(:forbidden))
+    do: if(Accounts.authorize(p, action) != :ok, do: Repo.rollback({:denied, action}))
+
+  defp with_authorization(principal, action, fun) do
+    with :ok <- Accounts.authorize(principal, action) do
+      case fun.() do
+        {:error, {:denied, ^action}} -> Accounts.deny(principal, action)
+        result -> result
+      end
+    end
+  end
 
   defp channel(%{kind: "cli_owner"}), do: "cli"
   defp channel(_), do: "browser"

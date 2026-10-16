@@ -25,46 +25,49 @@ defmodule WorkHarbor.ConfigTrust do
   def approve(%Principal{} = principal, descriptor) do
     with :ok <- Accounts.authorize(principal, :config_approve),
          {:ok, normalized, bytes, digest} <- normalize(descriptor) do
-      transaction(fn ->
-        authorize!(principal, :config_approve)
+      result =
+        transaction(fn ->
+          authorize!(principal, :config_approve)
 
-        case Repo.get_by(Approval, [owner_id: principal.owner_id, descriptor_sha256: digest],
-               log: false
-             ) do
-          nil ->
-            approval =
+          case Repo.get_by(Approval, [owner_id: principal.owner_id, descriptor_sha256: digest],
+                 log: false
+               ) do
+            nil ->
+              approval =
+                Repo.insert!(
+                  %Approval{
+                    owner_id: principal.owner_id,
+                    descriptor: normalized,
+                    descriptor_bytes: bytes,
+                    descriptor_sha256: digest,
+                    approved_at: Accounts.now()
+                  },
+                  log: false
+                )
+
               Repo.insert!(
-                %Approval{
+                %AuditEvent{
                   owner_id: principal.owner_id,
-                  descriptor: normalized,
-                  descriptor_bytes: bytes,
-                  descriptor_sha256: digest,
-                  approved_at: Accounts.now()
+                  event: "revision_approved",
+                  action: "config_approve",
+                  channel: channel(principal),
+                  outcome: "recorded",
+                  code: "ok",
+                  metadata: %{"approval_id" => approval.id}
                 },
                 log: false
               )
 
-            Repo.insert!(
-              %AuditEvent{
-                owner_id: principal.owner_id,
-                event: "revision_approved",
-                action: "config_approve",
-                channel: channel(principal),
-                outcome: "recorded",
-                code: "ok",
-                metadata: %{"approval_id" => approval.id}
-              },
-              log: false
-            )
+              {:ok, approval}
 
-            {:ok, approval}
+            approval ->
+              if approval.descriptor_bytes == bytes and approval.descriptor == normalized,
+                do: {:ok, approval},
+                else: Repo.rollback(:trust_conflict)
+          end
+        end)
 
-          approval ->
-            if approval.descriptor_bytes == bytes and approval.descriptor == normalized,
-              do: {:ok, approval},
-              else: Repo.rollback(:trust_conflict)
-        end
-      end)
+      with {:error, {:denied, action}} <- result, do: Accounts.deny(principal, action)
     end
   end
 
@@ -109,7 +112,7 @@ defmodule WorkHarbor.ConfigTrust do
   end
 
   defp authorize!(principal, action) do
-    if Accounts.authorize(principal, action) != :ok, do: Repo.rollback(:forbidden)
+    if Accounts.authorize(principal, action) != :ok, do: Repo.rollback({:denied, action})
   end
 
   defp channel(%Principal{kind: "owner_browser"}), do: "browser"
