@@ -115,6 +115,26 @@ defmodule WorkHarbor.HostIdentityTest do
     assert WorkHarbor.FoundationDatabase.count("host_identities") == 1
   end
 
+  test "denied host actions keep their authorization_denied audit", c do
+    {:ok, token, _} = Accounts.login(c.principal.owner_id, c.secret, "dashboard")
+    {:ok, dashboard} = Accounts.authenticate(token)
+
+    denied = fn action ->
+      Repo.query!(
+        "SELECT count(*) FROM audit_events WHERE event='authorization_denied' AND action=?",
+        [action],
+        log: false
+      ).rows
+    end
+
+    assert denied.("host_enrollment_issue") == [[0]]
+    assert {:error, :forbidden} = Hosts.issue_enrollment(dashboard, nil)
+    assert denied.("host_enrollment_issue") == [[1]]
+    assert denied.("host_revoke") == [[0]]
+    assert {:error, :forbidden} = Hosts.revoke(dashboard, Ecto.UUID.generate())
+    assert denied.("host_revoke") == [[1]]
+  end
+
   test "explicit host actions reject dashboard and cross owner before mutation", c do
     {:ok, token, _} = Accounts.login(c.principal.owner_id, c.secret, "dashboard")
     {:ok, dashboard} = Accounts.authenticate(token)
