@@ -91,7 +91,12 @@ func handshake(closed chan<- struct{}) func(*websocket.Conn) {
 // pointed at the loopback server.
 func loopbackDir(t *testing.T, srv *httptest.Server) (string, *identity.State, identity.Response) {
 	t.Helper()
-	dir, state, response := savedPendingDir(t)
+	return loopbackDirAt(t, srv, false, 0)
+}
+
+func loopbackDirAt(t *testing.T, srv *httptest.Server, expired bool, pendingAge time.Duration) (string, *identity.State, identity.Response) {
+	t.Helper()
+	dir, state, response := savedDirAt(t, expired, true, pendingAge)
 	ca := filepath.Join(filepath.Dir(dir), "server-ca.pem")
 	block := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: srv.Certificate().Raw})
 	if e := os.WriteFile(ca, block, 0600); e != nil {
@@ -234,5 +239,95 @@ func TestSessionEndsBlockedReadAtValidityDeadline(t *testing.T) {
 	case <-closed:
 	case <-time.After(5 * time.Second):
 		t.Fatal("socket was not closed at the deadline")
+	}
+}
+
+func refuse(status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(`{"error":{"code":"unauthorized_host"}}`))
+	}
+}
+
+func runResult(t *testing.T, dir string) error {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- Run(context.Background(), dir, nil) }()
+	select {
+	case e := <-done:
+		return e
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run kept retrying")
+	}
+	return nil
+}
+
+func TestRunEndsWithRecoveryErrorWhenActivationRefusedAfterExpiry(t *testing.T) {
+	for _, status := range []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden} {
+		srv, activations := loopbackAgent(t, refuse(status), handshake(nil))
+		dir, before, _ := loopbackDirAt(t, srv, true, 0)
+		if e := runResult(t, dir); e != ErrRecoveryRequired {
+			t.Fatalf("status %d: Run = %v, want ErrRecoveryRequired", status, e)
+		}
+		if activations.Load() != 1 {
+			t.Fatalf("status %d: activations = %d, want 1", status, activations.Load())
+		}
+		if after, e := identity.Load(dir); e != nil || after.Active.IdentityID != before.Active.IdentityID || after.Pending == nil {
+			t.Fatalf("state not preserved: %v", e)
+		}
+	}
+}
+
+func TestRunEndsWithRecoveryErrorForExpiredPendingAfterActiveExpiry(t *testing.T) {
+	srv, activations := loopbackAgent(t, nil, handshake(nil))
+	dir, _, _ := loopbackDirAt(t, srv, true, 30*time.Hour)
+	state, e := identity.Load(dir)
+	if e != nil || !identity.Expired(state) || !identity.PendingExpired(state) {
+		t.Fatalf("fixture must have expired active and pending: %v", e)
+	}
+	if e := runResult(t, dir); e != ErrRecoveryRequired {
+		t.Fatalf("Run = %v, want ErrRecoveryRequired", e)
+	}
+	if activations.Load() != 0 {
+		t.Fatalf("activation attempted for an expired pending credential: %d", activations.Load())
+	}
+}
+
+func TestRunKeepsRetryingTransientActivationFailureAfterExpiry(t *testing.T) {
+	for name, handler := range map[string]http.HandlerFunc{"5xx": nil, "503": refuse(http.StatusServiceUnavailable)} {
+		srv, activations := loopbackAgent(t, handler, handshake(nil))
+		dir, _, _ := loopbackDirAt(t, srv, true, 0)
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan error, 1)
+		go func() { done <- Run(ctx, dir, nil) }()
+		deadline := time.After(15 * time.Second)
+		for activations.Load() < 2 {
+			select {
+			case e := <-done:
+				t.Fatalf("%s: Run ended (%v) on a transient failure", name, e)
+			case <-deadline:
+				t.Fatalf("%s: activation not retried", name)
+			case <-time.After(50 * time.Millisecond):
+			}
+		}
+		cancel()
+		if e := <-done; e != nil {
+			t.Fatalf("%s: Run = %v after cancel", name, e)
+		}
+	}
+}
+
+func TestRunKeepsValidIdentityConnectedWhenActivationRefusedBeforeExpiry(t *testing.T) {
+	srv, activations := loopbackAgent(t, refuse(http.StatusUnauthorized), handshake(nil))
+	dir, before, _ := loopbackDir(t, srv)
+	if e := runUntilConnected(t, dir); e != nil {
+		t.Fatal(e)
+	}
+	if activations.Load() == 0 {
+		t.Fatal("activation was not attempted")
+	}
+	if after, e := identity.Load(dir); e != nil || after.Active.IdentityID != before.Active.IdentityID {
+		t.Fatalf("refusal changed the active identity: %v", e)
 	}
 }

@@ -28,6 +28,10 @@ var ErrTransport = errors.New("host_transport_unavailable")
 // newcode enrollment can restore the host.
 var ErrRecoveryRequired = errors.New("host_identity_expired_owner_newcode_recovery_required")
 
+// errRefused marks a definitive server refusal (HTTP 400, 401 or 403, the
+// control plane's activation refusals), as opposed to transport, 5xx or timeout failures.
+var errRefused = errors.New("host_request_refused")
+
 func client(state *identity.State, pending bool) (*http.Client, error) {
 	cfg, e := identity.TLSConfig(state, pending)
 	if e != nil {
@@ -93,6 +97,10 @@ func post(ctx context.Context, c *http.Client, endpoint, path string, body any) 
 		return nil, ErrTransport
 	}
 	defer response.Body.Close()
+	switch response.StatusCode {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden:
+		return nil, errRefused
+	}
 	media, _, e := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if e != nil || media != "application/json" || response.StatusCode != 200 || response.ProtoMajor != 1 {
 		return nil, ErrTransport
@@ -122,7 +130,7 @@ func Enroll(ctx context.Context, dir, code string) error {
 	defer c.CloseIdleConnections()
 	raw, e := post(ctx, c, state.Endpoint, "/agent/v1/enroll", map[string]any{"schema_version": 1, "code": code, "csr": state.Pending.CSR})
 	if e != nil {
-		return e
+		return transportOnly(e)
 	}
 	r, e := decodeIdentityResponse(raw)
 	if e != nil {
@@ -132,6 +140,14 @@ func Enroll(ctx context.Context, dir, code string) error {
 		return ErrTransport
 	}
 	return nil
+}
+
+// transportOnly hides a refusal outside activation, which is never terminal.
+func transportOnly(e error) error {
+	if errors.Is(e, errRefused) {
+		return ErrTransport
+	}
+	return e
 }
 func Renew(ctx context.Context, dir string) error {
 	state, e := identity.Load(dir)
@@ -151,7 +167,7 @@ func Renew(ctx context.Context, dir string) error {
 		defer c.CloseIdleConnections()
 		raw, e := post(ctx, c, state.Endpoint, "/agent/v1/identity/renew", map[string]any{"schema_version": 1, "csr": state.Pending.CSR})
 		if e != nil {
-			return e
+			return transportOnly(e)
 		}
 		r, e := decodeIdentityResponse(raw)
 		if e != nil {
@@ -168,7 +184,7 @@ func Renew(ctx context.Context, dir string) error {
 	defer c.CloseIdleConnections()
 	raw, e := post(ctx, c, state.Endpoint, "/agent/v1/identity/activate", map[string]any{"schema_version": 1})
 	if e != nil {
-		return e
+		return e // errRefused stays distinguishable for Run
 	}
 	if !activationMatches(raw, state) {
 		return ErrTransport
@@ -367,8 +383,9 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 		if e != nil || state.Active == nil {
 			return ErrTransport
 		}
-		if identity.Expired(state) && (state.Pending == nil || state.Pending.Certificate == "") {
-			// Staging a replacement needs a valid predecessor, so retrying is futile.
+		if identity.Expired(state) && (state.Pending == nil || state.Pending.Certificate == "" || identity.PendingExpired(state)) {
+			// Staging needs a valid predecessor and activation a valid pending
+			// credential, so retrying is futile.
 			return ErrRecoveryRequired
 		}
 		var limit time.Time
@@ -376,10 +393,15 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 		if (state.Pending != nil && state.Pending.Certificate != "") || (e == nil && time.Until(expires) <= 6*time.Hour) {
 			// A failed renewal keeps the active credential in use while session
 			// still accepts it; the next attempt retries renewal.
-			if renewFn(ctx, dir) == nil {
+			renewErr := renewFn(ctx, dir)
+			if renewErr == nil {
 				if state, e = identity.Load(dir); e != nil || state.Active == nil {
 					return ErrTransport
 				}
+			} else if identity.Expired(state) && errors.Is(renewErr, errRefused) {
+				// The server definitively refused activation after the predecessor
+				// expired: only an owner newcode can restore the host.
+				return ErrRecoveryRequired
 			} else {
 				// Stay connected on the still-valid credential, but end the
 				// session in time to retry renewal long before expiry.

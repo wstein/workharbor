@@ -108,6 +108,12 @@ func savedExpiredDir(t *testing.T, pending bool) (string, *identity.State) {
 
 func savedDir(t *testing.T, expired, pending bool) (string, *identity.State, identity.Response) {
 	t.Helper()
+	return savedDirAt(t, expired, pending, 0)
+}
+
+// savedDirAt issues the pending credential pendingAge in the past (its leaf lasts 24h).
+func savedDirAt(t *testing.T, expired, pending bool, pendingAge time.Duration) (string, *identity.State, identity.Response) {
+	t.Helper()
 	temp, e := filepath.EvalSymlinks(t.TempDir())
 	if e != nil {
 		t.Fatal(e)
@@ -158,6 +164,12 @@ func savedDir(t *testing.T, expired, pending bool) (string, *identity.State, ide
 		}
 		response = sign(state.Pending.CSR, "44444444-4444-4444-8444-444444444444", now)
 		if e = identity.AcceptPending(dir, state, response); e != nil {
+			t.Fatal(e)
+		}
+	}
+	if pendingAge > 0 {
+		state.Pending.Certificate = sign(state.Pending.CSR, state.Pending.IdentityID, now.Add(-pendingAge)).Certificate
+		if e = identity.Save(dir, state); e != nil {
 			t.Fatal(e)
 		}
 	}
