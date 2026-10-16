@@ -28,6 +28,7 @@ def observation(sample=1, task='004/T001', categories=('documentation',), *, ret
         sample=sample, task=task, categories=categories,
         package_digest='a' * 64, source_revision='b' * 40,
         runtime_revision='sha256:' + 'c' * 64,
+        # 'version:3.14.8' is an opaque fixture string, not a Python pin.
         tool_revisions={'python': 'version:3.14.8', 'git': 'd' * 40},
         started_at=intervals[0].started_at, ended_at=intervals[-1].ended_at,
         active_administration_seconds=60, intervals=tuple(intervals),
