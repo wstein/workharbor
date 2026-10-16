@@ -63,3 +63,21 @@ live verification.
 
 These marks record specification quality only. Revised scope awaits human spec
 review before planning; earlier H13:a does not approve this addition.
+
+## Initialization revision validation (2026-10-16)
+
+- [x] US0 covers wizard defaults, reuse, preview/cancel, unattended parity, explicit
+  overwrite, stale previews, failed writes, shell separation, console lifetime and pins.
+- [x] FR-043–FR-050 define local-only scope, exact user-visible flags, preserved existing
+  settings, supported starters and future bundle selection without claiming attachment.
+  Existing bundle declarations remain unchanged; new manifests receive an empty list.
+- [x] SC-014/SC-015 distinguish file outcomes from real shell/console verification.
+- [x] Feature 007 and ADR 0012 identify proposed integration while retaining accepted
+  policy/lifetime rules; the agent-session protocol remains independent of herdr.
+- [x] No unresolved clarification markers. Selected products/commands are user-requested
+  behavior; internal schema/backend design remains for planning, not invented here.
+
+The Specify template's scenarios, requirements, entities, success criteria and
+assumptions were reviewed for this revision; before/after hooks are empty in
+`.specify/extensions.yml`. Existing plan/tasks and historical approval pins remain
+unchanged. This revision is ready for human spec review, not implementation.

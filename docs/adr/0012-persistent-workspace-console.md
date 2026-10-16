@@ -32,3 +32,15 @@ spec that uses it; the existing Session entity and migration naming refers to th
 single-use grant. Retained output, host-disconnect state and CLI behavior belong to
 the specs that use the console. No persistent console is implemented or verified; only the shell policy in
 `apps/host_agent/internal/workspaceshell` exists.
+
+## Proposed backend selection (2026-10-16; pending human spec review)
+
+Feature 006 [FR-048](../../specs/006-whr-cli/spec.md) proposes herdr as the default
+backend for the human persistent console, with an explicit plain alternative.
+Both must implement this ADR's lifetime/access rules and the spec's one-console,
+retained-output and status semantics. herdr selection does not grant native-agent
+launch/configuration or assume an agent-session protocol. Backend and human-shell
+preferences affect new sessions only; reattachment keeps existing state. Missing
+backend capabilities refuse explicitly. This proposed integration is not implemented
+or authorized by the earlier accepted lifetime decision; its design/plan and real
+runtime acceptance remain separate prerequisites.

@@ -3,7 +3,7 @@
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
-**Status**: Resource-selection revision proposed for owner review (2026-10-16); not implemented.
+**Status**: Workspace initialization and resource-selection revision proposed for owner review (2026-10-16); not implemented.
 Earlier scope status: Revised after review; awaiting independent re-review. Owner approval for planning (H13:a, 2026-10-13)
 covers this revised text only once that re-review is CLEAR for its exact head. Not implemented. Owner decisions
 are recorded below; implementation prerequisites are listed under "Prerequisites".
@@ -80,6 +80,17 @@ Implementation MUST NOT start before all of the following exist:
 - A reconciliation of Feature 001's terminal cleanup rule with the console persistence model of FR-007a, recorded
   in the Feature 001 spec or an ADR.
 
+### Local workspace initialization (owner request, 2026-10-16)
+
+`ws init` gains the local wizard specified in US0 and FR-043–FR-050. The owner
+requested separate human/agent shells, file preview, existing devcontainer reuse,
+unattended equivalents, fish and herdr defaults, workspace/project/directory
+inputs, starter templates, shared shortcuts and later optional bundle selection.
+This revision specifies those outcomes; it does not implement them. It requires
+human spec review and reconciliation/review of affected plans, task scope,
+configuration schema and launcher/console contracts before implementation. No
+previous implementation approval or completed task implicitly covers this scope.
+
 ### Workspace creation resources (owner request, 2026-10-16)
 
 `ws create` gains CPU and memory selection under FR-039–FR-042. This is proposed
@@ -90,6 +101,57 @@ Existing approvals and completion evidence retain their original source/scope;
 this revision does not expand them or authorize runtime operations.
 
 ## User Scenarios & Testing *(mandatory)*
+
+### User Story 0 - Initialize workspace configuration locally (Priority: P1)
+
+An owner runs `whr ws init` in a local directory, answers a short wizard, reviews
+its proposed files and writes a configuration repository ready for later revision
+resolution and trusted creation. It works before sign-in and without a host.
+
+**Why this priority**: Owners can prepare a repeatable workspace without manually
+learning every configuration field or replacing an existing project environment.
+**Independent Test**: Initialize empty and existing configuration directories,
+compare interactive and unattended results, cancel and inject write failures,
+then validate shell/session preferences without provisioning a workspace.
+
+**Acceptance Scenarios**:
+
+1. **Given** a terminal and no existing configuration, **When** `whr ws init` runs,
+   **Then** it asks for workspace name, optional project repository, starting
+   directory, existing devcontainer or starter, human shell, terminal mode and
+   shortcuts; it offers fish, herdr and enabled shortcuts as defaults for missing
+   settings, and shows bash as the fixed WorkHarbor agent-command shell policy.
+2. **Given** an existing `.devcontainer` and WorkHarbor settings, **When** init runs,
+   **Then** it retains existing explicit values, asks only for missing settings,
+   and offers explicit edits; it never replaces the selected environment implicitly.
+3. **Given** the chosen answers, **When** review opens, **Then** every proposed file
+   is listed with its contents or diff, and the owner can go back, write or cancel;
+   cancellation and pre-write validation failure leave original bytes unchanged.
+4. **Given** complete equivalent flags and `--non-interactive --yes`, **When** init
+   runs in a new directory, **Then** it produces the same configuration as the
+   wizard without prompts; missing required values yield needs-human and the
+   missing flag names. `--json` and nonterminal use never prompt.
+5. **Given** existing files that need edits, **When** unattended init lacks explicit
+   per-file overwrite permission, **Then** it refuses without changing any files;
+   a file changed since preview also refuses before any write.
+6. **Given** fish for humans, **When** a new human shell or console starts after
+   trusted creation, **Then** it runs fish; WorkHarbor-controlled noninteractive
+   agent commands use bash and existing script interpreters remain unchanged.
+   No agent-native tool is installed, configured, authenticated or launched.
+7. **Given** herdr console mode, **When** its owner disconnects and reattaches,
+   **Then** the same console survives with the same shell/environment and a fresh
+   grant; stop/rebuild/runtime removal/explicit close terminate it. A fresh `shell`
+   still ends on disconnect. Missing selected capabilities refuse explicitly.
+8. **Given** a project repository, **When** a revision is resolved for creation,
+   **Then** the generated project declaration must become a pinned project commit
+   and the exact config/submodule revisions are presented for separate owner trust;
+   a generated URL or floating branch never constitutes a pin or approval.
+9. **Given** an injected failure while writing several files, **When** init exits,
+   **Then** it restores original files and removes newly generated files, or reports
+   partial failure with exact remaining paths and recovery steps if restoration fails;
+   it never reports a partially written configuration as successful.
+
+---
 
 ### User Story 1 - Sign in and manage workspace lifecycle from a terminal (Priority: P1)
 
@@ -104,7 +166,7 @@ audit records and observed state with the browser view.
 
 **Acceptance Scenarios**:
 
-1. **Given** no client profile, **When** any owner command runs, **Then** it fails with the authentication code
+1. **Given** no client profile, **When** any owner API command runs, **Then** it fails with the authentication code
    and points to `whr auth login`; no request carries an owner credential.
 2. **Given** `whr auth login <endpoint>`, **When** the endpoint's server identity cannot be verified, **Then** login
    stops before sending any credential; **Given** a verified endpoint, **Then** the owner authenticates through a
@@ -342,18 +404,27 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - Host commands on an unsupported host platform fail with an unsupported-platform error before any change.
 - Unknown flag or argument: usage error with a short hint, no side effects.
 
+- Init on a nonterminal never prompts; JSON mode also suppresses prompts on a terminal.
+- Existing explicit shell/session choices survive init; new defaults fill missing fields only.
+- Previewed files change, a target path escapes through a symlink, or rollback fails:
+  refuse/restore as FR-046 specifies and report partial failure honestly.
+- A selected shell/herdr is unavailable, a starting directory is missing, or bundle
+  attachment is unimplemented: report the specific missing capability without substitution.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 **Command surface**
 
-- **FR-001**: `whr` MUST provide `auth` (`login`, `status`, `logout`), `ws` (`ls`, `show`, `create`, `start`,
+- **FR-001**: `whr` MUST provide `auth` (`login`, `status`, `logout`), `ws` (`init`, `ls`, `show`, `create`, `start`,
   `stop`, `rebuild`, `rm`), `op` (`show`, `wait`), `open`, `shell`, `console`, `ssh`, `agent` (`ls`, `attach`,
   `status`, `send`, `stop`), `setup`, `doctor`, `offboard host`, `service` (`install`, `uninstall`, `status`),
   `version` and shell completion. Bare `whr` and `--help` print help; `--version` equals `version`.
-- **FR-002**: Every workspace command MUST act through the same owner-authenticated application operations as the
+- **FR-002**: Every remote workspace command MUST act through the same owner-authenticated application operations as the
   browser, with identical authorization, idempotency, trust, audit and confirmation rules.
+  `ws init` is a local configuration-authoring exception: it requires no client
+  profile, owner API request, host enrollment or provisioning operation.
 - **FR-003**: Every workspace lifecycle mutation (`ws create`, `start`, `stop`, `rebuild`, `rm`) MUST send an idempotency key: the caller's, or else one the CLI generates and
   reports before sending. The CLI MUST reuse that key for its own bounded retries, report the durable operation
   identifier, and fail as a conflict when a key is reused with a changed payload.
@@ -432,6 +503,79 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   the browser MUST distinguish desired limits from observed enforcement with its
   observation time, and label absent/stale evidence unknown. Stop/start and rebuild
   MUST retain the values. Resizing existing workspaces is outside this revision.
+
+**Local workspace initialization**
+
+- **FR-043**: `ws init [directory]` MUST author local configuration only. It MUST NOT
+  create/start a workspace, build or attach artifacts, run repository hooks, fetch
+  project code, install tools, change account login shells, commit/push Git changes
+  or grant execution trust. It MUST show next steps to commit configuration, resolve
+  and pin project revisions, then use `ws create` with separate owner trust.
+- **FR-044**: With terminal input and diagnostics, absent unattended/JSON mode,
+  init MUST start a wizard with back/review/cancel. Offer workspace name, optional
+  project URL, workspace-relative starting directory, reuse of an existing
+  devcontainer or a small supported starter catalog, human shell (`fish`, `bash`,
+  `zsh`, `nu`), persistent console mode (`herdr`, `plain`) and shared shortcuts
+  (`on`, `off`). Existing explicit settings take precedence over wizard defaults;
+  prompt only for missing values unless the owner requests edits. Validate names,
+  credential-free URLs and paths; reject traversal and symlink escapes. Starting
+  directory defaults to the workspace root and must exist in the runtime before
+  spawning; never silently launch in a different directory.
+- **FR-045**: Every wizard choice MUST have a flag: `--name`, `--project-url`,
+  `--start-dir`, mutually exclusive `--devcontainer`/`--template`, `--human-shell`,
+  `--console-mode`, and `--shortcuts`. `--non-interactive`, nonterminal input or
+  diagnostics, and `--json` MUST suppress all prompts. Missing required inputs
+  after existing settings and documented defaults yield needs-human with the
+  relevant flags. `--yes` confirms writing new files only; it never approves trust,
+  destruction or overwriting. The same inputs MUST generate equivalent configuration
+  across wizard and unattended modes. Prompts/previews go to stderr under FR-014;
+  JSON results/errors follow FR-015 with no raw prompt text on stdout.
+- **FR-046**: Before writing, init MUST validate the full proposal and show every
+  proposed file and contents/diff. `--dry-run` MUST return the proposal without any
+  writes. Existing-file edits require explicit confirmation of each affected path;
+  unattended use requires repeatable `--overwrite <relative-path>` for each such
+  file plus `--yes`. Preserve unrelated fields/files, detect changed bytes since
+  preview, and refuse unsafe paths before writing. Cancel/pre-write refusal MUST
+  make no changes. Write failures MUST restore the prior state; failed restoration
+  MUST return partial failure and exact remaining paths/recovery guidance. A rerun
+  with identical settings MUST be a no-op. No hidden bootstrap side effects.
+- **FR-047**: Default missing human-shell preference to fish, and retain bash for
+  WorkHarbor-controlled noninteractive agent command execution. These are separate
+  policies: human preferences MUST NOT change script shebangs, hook interpreters,
+  native agent settings or noninteractive command behavior. Do not redirect bash
+  startup into fish or rely on `$SHELL` to enforce command execution. Report external
+  agent executor shell choice as unmanaged unless independently established; `whr`
+  MUST NOT configure native agents to make that claim. Apply human-shell policy to
+  new `shell` and `console` sessions; existing console reattachment retains the old
+  shell/environment until explicit close/new session. Validate executable availability
+  at trusted creation/session launch; missing/unknown support MUST refuse with
+  remediation, never silently substitute or install a shell.
+- **FR-048**: Default missing console mode to herdr, with explicit plain mode.
+  Either mode MUST preserve FR-007a's one owner-scoped persistent console, bounded
+  output tail, grant/attachment limits and end events. herdr is an in-container
+  human-console backend, not an agent launcher or an assumed agent-session protocol.
+  Backend availability/version compatibility MUST be established before launch;
+  otherwise refuse with remediation to supply it through a separately approved
+  environment or explicitly select plain. `whr shell` remains a fresh shell ending
+  with its attachment. No backend may expose host sessions/sockets or widen access.
+- **FR-049**: Reuse existing devcontainer contents by default. Starters MUST use
+  only admitted capabilities and immutable image inputs, preserve language-image
+  choice, and expose their supported/unsupported status. Init MUST NOT execute a
+  template to validate it or claim runtime compatibility from static validation.
+  Optional project URLs are desired inputs only: no fetching during init. The
+  separate resolver MUST pin the exact project commits before creation and trust;
+  unresolved declarations MUST NOT be presented as creation-ready. Default shortcuts
+  on when missing, with a complete off option under Feature 007; absent toolbox
+  means unavailable, not active. BundleDock-managed Starship stays disabled.
+- **FR-050**: Optional bundle selection is a later capability. Until a separately
+  reviewed resolver/attachment contract and runtime evidence exist, init MUST emit
+  an empty bundle list for new manifests and label selection unavailable. Preserve
+  existing bundle declarations unchanged without claiming attachment support; refuse
+  requested bundle edits until that capability is reviewed. It MUST NOT offer
+  actionable selections or fabricate attachment success. Later selection MUST offer an explicit
+  none option and record immutable artifact/source identities subject to independent
+  trust/attachment verification. CPU/memory and host selection belong to `ws create`,
+  not this local wizard.
 
 **Authentication and owner API**
 
@@ -534,6 +678,10 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 
 ### Key Entities
 
+- **Initialization proposal**: target directory, workspace/project declarations,
+  devcontainer source, starting directory, human-shell and console preferences,
+  shortcuts policy, proposed file changes and explicit write permissions; no credentials.
+
 - **Workspace resource selection**: desired CPU thousandths and memory bytes,
   value origins, selected host/profile, and separately timestamped observed limits.
 
@@ -597,10 +745,21 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   identity, same-key changed limits conflict, and restart/rebuild retain limits.
   Missing real enforcement evidence remains unverified rather than a passing claim.
 
+- **SC-014**: Every US0 case passes: wizard/flag parity, preservation of existing
+  configuration, no-op rerun, zero changes on cancel/refusal/dry-run, and truthful
+  recovery after injected write/restore failures. No init path provisions, runs
+  hooks, fetches projects or grants trust.
+- **SC-015**: On supported real environments, every offered human shell works for
+  new sessions while noninteractive agent commands retain their declared interpreter;
+  unsupported environments refuse. Both console modes pass FR-007a reconnect/end
+  cases without duplicate consoles, and changed preferences never alter a live console.
+  Unmanaged native-agent execution is explicitly identified, not claimed verified.
+
 ## Assumptions
 
-- The CLI talks to the control plane's owner API over TLS for every workspace, access, agent and operation
-  command; it never contacts a host agent or provider directly. Host commands (`setup`, `doctor`, `service`,
+- The CLI talks to the control plane's owner API over TLS for every remote workspace, access, agent and operation
+  command; local `ws init` authors configuration without API access or sign-in.
+  Remote commands never contact a host agent or provider directly. Host commands (`setup`, `doctor`, `service`,
   `offboard`) run on the host itself with local privileges.
 - Linux Docker is the first supported host platform; Apple container and other providers follow the product
   sequence. The initial client platform matrix is settled in planning and published per FR-026.
@@ -608,6 +767,10 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - The size of the retained console output tail and the CLI's automatic retry bounds are planning decisions.
 - Legacy `whr` behavior is reference only; no legacy code or binary is a dependency.
 - Development scripts of Features 003–005 keep their own exit codes and are not the product CLI.
-- The session interface is comparable to herdr in purpose only; no herdr protocol, behavior or dependency is
-  assumed. Its wire format belongs to the contract of issue #71.
+- The agent session interface assumes no herdr protocol or dependency; its wire
+  format belongs to the contract of issue #71. FR-048 separately proposes herdr as
+  the default human-console backend, subject to reviewed integration and availability.
+- Init's starter catalog and configuration schema are planning deliverables. Existing
+  manifests remain at their accepted schema until separately reviewed changes; this
+  specification adds no unrecognized fields to examples or accepted provider inputs.
 - The dashboard reads Spec Kit artifacts at an identified Git revision.
