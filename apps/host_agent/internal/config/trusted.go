@@ -3,6 +3,8 @@ package config
 
 import (
 	"bytes"
+	"github.com/moby/buildkit/util/gitutil"
+	"github.com/tonistiigi/go-csvvalue"
 	"net"
 	"reflect"
 	"regexp"
@@ -357,19 +359,21 @@ func priorStageSources(node *parser.Node, aliases map[string]bool, stages int) b
 		return aliases[strings.ToLower(ref)]
 	}
 	for _, flag := range node.Flags {
-		if strings.Contains(flag, "$") {
-			return false
-		}
 		name, value, _ := strings.Cut(strings.TrimPrefix(flag, "--"), "=")
-		switch strings.ToLower(name) {
+		switch strings.ToLower(strings.TrimSpace(name)) {
 		case "from":
-			if !prior(value) {
+			if strings.Contains(value, "$") || !prior(value) {
 				return false
 			}
 		case "mount":
-			for _, field := range strings.Split(value, ",") {
+			// BuildKit parses mount options as CSV, so quoted fields count.
+			fields, e := csvvalue.Fields(value, nil)
+			if e != nil {
+				return false
+			}
+			for _, field := range fields {
 				key, ref, _ := strings.Cut(field, "=")
-				if strings.EqualFold(strings.TrimSpace(key), "from") && !prior(ref) {
+				if strings.EqualFold(strings.TrimSpace(key), "from") && (strings.Contains(ref, "$") || !prior(ref)) {
 					return false
 				}
 			}
@@ -377,8 +381,8 @@ func priorStageSources(node *parser.Node, aliases map[string]bool, stages int) b
 	}
 	if strings.EqualFold(node.Value, "add") {
 		for argument := node.Next; argument != nil && argument.Next != nil; argument = argument.Next {
-			source := strings.ToLower(argument.Value)
-			if strings.Contains(source, "://") || strings.HasPrefix(source, "git@") {
+			source := argument.Value
+			if strings.Contains(source, "://") || gitutil.IsGitTransport(source) {
 				return false
 			}
 		}

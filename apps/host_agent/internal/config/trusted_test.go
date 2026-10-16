@@ -121,6 +121,8 @@ func TestDockerfileExternalStageSourcesRefuseBeforeBuild(t *testing.T) {
 		head + "RUN --mount=type=bind,from=tool,target=/t true\n",
 		head + "RUN --mount=type=cache,target=/c true\n",
 		head + "ADD local.tar /dst\n",
+		head + "ARG U=vscode\nCOPY --chown=$U:$U a /a\n",
+		head + "ARG X=y\nRUN --mount=type=cache,target=/root/${X} true\n",
 	} {
 		if _, err := ValidateDockerfile([]byte(data)); err != nil {
 			t.Fatalf("prior-stage source refused: %q %v", data, err)
@@ -136,6 +138,11 @@ func TestDockerfileExternalStageSourcesRefuseBeforeBuild(t *testing.T) {
 		head + "RUN --mount=from=evil/tool:latest,target=/t true\n",
 		head + "ADD https://example.test/x.tar /dst\n",
 		head + "ADD git@example.test:repo.git /dst\n",
+		head + "ADD user@example.test:repo.git /dst\n",
+		head + "ADD ssh://example.test/repo.git /dst\n",
+		head + "RUN --mount='type=bind,\"from=evil/tool:latest\",target=/t' true\n",
+		head + "RUN --mount=type=bind,\" From =evil/tool:latest\",target=/t true\n",
+		head + "RUN --mount=type=bind,from=$TOOL,target=/t true\n",
 		"FROM " + base + "\nCOPY --from=later /x /x\nFROM " + base + " AS later\n",
 	} {
 		_, err := ValidateDockerfile([]byte(data))
