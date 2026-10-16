@@ -578,6 +578,7 @@
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestSessionEndsBlockedReadAtValidityDeadline",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestRunEndsWithRecoveryErrorForExpiredIdentityWithoutPending",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestRunAttemptsActivationOfPendingAfterActiveExpiry",
+      "github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection/TestExpiredCountsAnExpiredIssuerWithValidLeaf",
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestRunReportsOwnerNewcodeRecoveryForExpiredIdentity",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/identity/TestAtomicIdentityPersistenceFailuresAndRestartTransitions",
       "github.com/wstein/workharbor-nxt/apps/host_agent/internal/identity/TestInitialPossessionDurabilityFailureNeverReportsSuccess",

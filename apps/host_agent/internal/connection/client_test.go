@@ -317,3 +317,26 @@ func TestRunAttemptsActivationOfPendingAfterActiveExpiry(t *testing.T) {
 		t.Fatalf("activation attempts = %d, want 1", renews.Load())
 	}
 }
+
+func TestExpiredCountsAnExpiredIssuerWithValidLeaf(t *testing.T) {
+	// Load cannot produce this pairing (a leaf may not outlive its issuer), so
+	// build the in-memory state directly to pin the issuer check.
+	_, state, _ := savedDir(t, false, false)
+	if identity.Expired(state) {
+		t.Fatal("fixture must start valid")
+	}
+	pub, key, e := ed25519.GenerateKey(rand.Reader)
+	if e != nil {
+		t.Fatal(e)
+	}
+	past := time.Now().Add(-2 * time.Hour)
+	tpl := &x509.Certificate{SerialNumber: big.NewInt(9), Subject: pkix.Name{CommonName: "old"}, NotBefore: past.Add(-time.Hour), NotAfter: past}
+	der, e := x509.CreateCertificate(rand.Reader, tpl, tpl, pub, key)
+	if e != nil {
+		t.Fatal(e)
+	}
+	state.Active.IssuerCertificate = base64.StdEncoding.EncodeToString(der)
+	if !identity.Expired(state) {
+		t.Fatal("expired issuer with valid leaf not reported expired")
+	}
+}
