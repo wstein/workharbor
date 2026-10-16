@@ -682,7 +682,8 @@ defmodule WorkHarborWeb.HostTransportTest do
       assert {:refused, {:tls_alert, {:unknown_ca, _}}} =
                chain_outcome(c, [third_leaf], third_key)
 
-      assert {:admitted, "401"} = chain_outcome(c, [leaf], key)
+      # TLS trust is unchanged; the application reports the unusable issuer as unavailable.
+      assert {:admitted, "503"} = chain_outcome(c, [leaf], key)
     end
 
     replace.(fn -> File.write!(file, "{not json") end)
@@ -701,6 +702,22 @@ defmodule WorkHarborWeb.HostTransportTest do
     end)
 
     assert good != valid
+  end
+
+  test "activation of a pending identity from a replaced issuer returns that issuer", c do
+    {issued, input} = enroll(c)
+    assert {"staged\n", 0} = invoke(c, "stage_only", input)
+    pending = state(input)["pending"]
+    {:ok, before} = Hosts.issuer()
+    rotate_issuer(c)
+    # Observed replacement: the first issuer is now a previous, still-trusted one.
+    {:ok, current} = Hosts.issuer()
+    refute current.certificate == before.certificate
+    assert {:ok, %{certificate: cert}} = Hosts.issuer_for(Base.decode64!(pending["certificate"]))
+    assert cert == before.certificate
+    assert {"renewed\n", 0} = invoke(c, "renew", input)
+    assert state(input)["active"]["identity_id"] != nil
+    assert {:ok, %{revoked: false}} = Hosts.status(c.principal, issued.host_id)
   end
 
   @tag :peer_negative

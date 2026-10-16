@@ -316,6 +316,18 @@ defmodule WorkHarbor.Hosts do
     end
   end
 
+  # The trusted issuer that signed `cert`: after a rotation a still-trusted leaf chains to a
+  # previous issuer, whose certificate (not the current one) is what the host must receive.
+  def issuer_for(cert) when is_binary(cert) do
+    with {:ok, issuers} <- trusted_issuers(),
+         issuer when is_map(issuer) <-
+           Enum.find(issuers, &Issuer.valid_leaf_profile?(cert, &1, Accounts.now())) do
+      {:ok, issuer}
+    else
+      _ -> {:error, :issuer_unavailable}
+    end
+  end
+
   def issuer do
     config = Application.get_env(:workharbor, :host_identity, [])
 
