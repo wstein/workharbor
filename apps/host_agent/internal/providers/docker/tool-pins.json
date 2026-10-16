@@ -30,6 +30,7 @@
   },
   "docker_engine": {
     "version": "29.8.2",
+    "apt_gpg_fingerprint": "9DC858229FC7DD38854AE2D88D81803C0EBFCD88",
     "guest_package_verification": "docs/development/guest-package-verification.md (procedure written, not yet exercised)"
   },
   "atomic_filesystem": {
