@@ -1,7 +1,6 @@
 # Selected Python migration contracts
 
-T003 candidate; independent implementation review is pending. T004 Go ports and
-caller changes are absent. Authority: [ADR 0010](../../docs/adr/0010-go-whr-cli-layout.md)
+Authority: [ADR 0010](../../docs/adr/0010-go-whr-cli-layout.md)
 and the [migration inventory](../../specs/006-whr-cli/migration.md).
 
 The selected JSON profile can identify normalized integer-only lifecycle request
@@ -26,7 +25,7 @@ U+10000; UTF-16 key ordering would give a different result.
 - **4300 decimal digits** applies to parsed integers and direct
   `canonical_bytes`/`canonical_digest` integers. The minus sign does not count;
   zero has one digit and `-0` canonicalizes to `0`. No machine-width bound applies.
-  The runner fixes CPython's otherwise configurable integer-string limit to 4300.
+  The frozen vectors were produced with CPython's integer-string limit fixed to 4300.
   Larger integers are `invalid-json`.
 - **128 containers** is a deliberate product restriction for parsing,
   canonicalization and digest. Scalars have depth zero; each object/array adds
@@ -54,53 +53,15 @@ path-length bound. Do not normalize, expand, case-fold or percent-decode names.
 This POSIX-shaped lexical contract proves no symlink safety, containment, Git-entry
 type, provider capability or owner trust. Runtime validation remains separate.
 
-## Offline reproduction and review
+## Frozen vectors and provenance
 
-From the repository root with the pinned CPython 3.14.8:
-
-```sh
-python3.14 -I -B scripts/generate_go_vectors.py
-python3.14 -I -B -m unittest discover -s tests -p test_go_vectors.py -v
-python3.14 -I -B scripts/generate_go_vectors.py --candidate /private/tmp/proposed-workharbor-vectors.json
-```
-
-Default verification reads only and compares the complete reproduced fixture file
-byte-for-byte, including its frozen SHA-256. Candidate mode explicitly writes a
-new external file, refuses every path within the accepted checkout (including
-symlink aliases), and refuses an existing destination. It never updates accepted
-fixtures, their manifest hashes or source snapshots. Candidate generation checks
-source/tool/schema pins but intentionally does not require the current fixture
-file hash: a reviewed proposal may change cases or expectations. Strict schema,
-source/product distinction and oracle reproduction still apply. Adoption is a
-separate reviewed edit, followed by new exact-revision verification.
-
-The generator neither fetches Git history nor accesses source-linked resources.
-It checks complete original snapshot SHA-256 and Git blob identities, then compiles
-only the allowlisted AST definitions/imports recorded in [manifest](manifest.json).
-JSON's closure imports only `json` and `hashlib`; paths import no modules.
-Everything else in the mirrored original sources is inert provenance and never
-executed. Full snapshots support offline shallow-checkout reproduction. The
-original WorkHarbor sources and snapshots retain [EUPL-1.2](../../LICENSE);
-mirrors are byte-identical, so license/provenance is recorded here and in the
-manifest rather than inserting new bytes into their headers.
-
-The manifest pins CPython release identity, oracle/tool/schema/vector digests and
-settings. It records the observed exact `.tool-versions` release pin, not an
-unverified upstream source-archive digest. Each CLI run emits its actual executable
-SHA-256, build, platform and path as execution evidence. Those platform-specific
-values never enter vectors or act as portable preconditions: macOS and Linux
-executables may differ. Both use CPython 3.14.8, digit limit 4300 and recursion
-limit 1000. Settings are explicitly established, verified and restored; no exact
-source recursion-failure threshold is claimed portable. Cross-platform reproduction
-is required evidence when exercised, not claimed from this macOS run.
-
-Fixture processing uses bounded regular-file reads (8 MiB documents, 512 KiB
-source snapshots), at most 256 cases, schema depth 64, native constructor depth
-32, a 2 MiB aggregate native-construction budget, expanded byte values at most
-2 MiB, and a 30-second standalone command deadline. The schema permits compact
-nested containers up to 256, decimal spellings up to 5001 characters and powers
-up to exponent 5000.
-These bounds permit the selected negative cases without arbitrary execution.
+The vectors are frozen contracts, no longer reproduced from a Python runtime.
+The Python generator, oracle snapshots and CPython 3.14.8 pin were retired
+(owner decision H58:a, issue #102). Go tests read [vectors.json](vectors.json)
+directly. Provenance (generator, source snapshots, runtime pins) stays in Git
+history; the vectors were introduced in commit `0a94cd2`. A changed vector needs a
+reviewed decision, not regeneration to fit an implementation. [manifest.json](manifest.json)
+records only the SHA-256 of the vectors and schema.
 
 ## Vector format and independent anchors
 
@@ -120,7 +81,7 @@ operation rather than failing during fixture construction. Unsupported native
 float, tuple, bytes and nonstring-key cases reach the source validator as such.
 
 An independent Sol reviewer checked these anchors before initial freezing; tests
-hard-code them separately from generator results:
+hard-code them separately from the frozen vectors:
 
 | Input | Canonical hex | SHA-256 |
 | --- | --- | --- |

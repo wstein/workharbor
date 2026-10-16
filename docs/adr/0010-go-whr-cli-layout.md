@@ -19,8 +19,8 @@ Owner decision H10:a/H11:a, 2026-10-13.
 2. The Python harness stays development tooling. It is never a product dependency
    and is not rewritten wholesale.
 3. Ports from Python to Go are selective. Each port is gated by frozen behavior
-   vectors for the ported behavior and its output semantics, captured from Python as
-   the oracle until the vectors are accepted. Go must reproduce them; a vector change
+   vectors for the ported behavior and its output semantics, captured from Python once and then frozen
+   (the generator is retired, H58:a; provenance is in Git history). Go must reproduce them; a vector change
    needs a reviewed decision, not a silent Go-side edit. Vectors do not define `whr`
    exit codes: those come only from the separate exit-code ADR (H15:b, fresh table).
 4. Layout: each Go component is its own module under `apps/`, consistent with
@@ -50,8 +50,8 @@ the reviewed acceptance manifest and run by the same repository-owned runner as
 - `go vet ./...`
 - `go build ./...`
 - `go test ./...` with required test IDs listed in
-  `docs/development/ci-acceptance.json` (an extension of its schema) and behavior
-  vectors checked against the Python oracle.
+  `docs/development/ci-acceptance.json` (an extension of its schema) and frozen behavior
+  vectors.
 
 Until a Go module exists, none of these checks run and none is reported as passing.
 `docs/development/ci-acceptance.json` and `scripts/check_ci.py` are intentionally
