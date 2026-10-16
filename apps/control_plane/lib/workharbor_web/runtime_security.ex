@@ -9,7 +9,7 @@ defmodule WorkHarborWeb.RuntimeSecurity do
     "4XBsLMaWd4lPmLPEtg7KgIs8803lJErmCoNVLqsywrCNiiRCgTgMU4U5WdOI+TAl"
   ]
   @https_keys ~w(ip port certfile keyfile http_1_options http_2_options)a
-  @peer_keys ~w(cacerts verify fail_if_no_peer_cert)a
+  @peer_keys ~w(cacerts verify fail_if_no_peer_cert verify_fun)a
 
   def identity_config(config, nil), do: {:ok, config}
 
@@ -17,6 +17,7 @@ defmodule WorkHarborWeb.RuntimeSecurity do
     with true <- Keyword.keyword?(opts) and Keyword.keys(opts) == [:issuer_dir],
          {:ok, issuer} <- WorkHarbor.Hosts.Issuer.load(opts[:issuer_dir]) do
       tls = Keyword.get(config, :https, [])
+      _ = WorkHarbor.Hosts.TrustedIssuers.issuers(opts[:issuer_dir])
 
       if Keyword.has_key?(tls, :thousand_island_options) or
            Enum.any?(@peer_keys, &Keyword.has_key?(tls, &1)),
@@ -32,7 +33,8 @@ defmodule WorkHarborWeb.RuntimeSecurity do
                transport_options: [
                  cacerts: [issuer.certificate],
                  verify: :verify_peer,
-                 fail_if_no_peer_cert: false
+                 fail_if_no_peer_cert: false,
+                 verify_fun: {&WorkHarbor.Hosts.TrustedIssuers.verify/3, opts[:issuer_dir]}
                ]
              ]
            ]
@@ -96,6 +98,7 @@ defmodule WorkHarborWeb.RuntimeSecurity do
         values when is_list(values) ->
           Keyword.keyword?(values) and Enum.sort(Keyword.keys(values)) == Enum.sort(@peer_keys) and
             values[:verify] == :verify_peer and values[:fail_if_no_peer_cert] == false and
+            verify_fun?(values[:verify_fun]) and
             case values[:cacerts] do
               [der] when is_binary(der) -> WorkHarbor.Hosts.Issuer.valid_issuer?(der)
               _ -> false
@@ -105,6 +108,11 @@ defmodule WorkHarborWeb.RuntimeSecurity do
           false
       end
   end
+
+  defp verify_fun?({fun, dir}) when is_function(fun, 3) and is_binary(dir),
+    do: fun == (&WorkHarbor.Hosts.TrustedIssuers.verify/3) and Path.type(dir) == :absolute
+
+  defp verify_fun?(_), do: false
 
   defp regular?(p), do: is_binary(p) and Path.type(p) == :absolute and File.regular?(p)
 

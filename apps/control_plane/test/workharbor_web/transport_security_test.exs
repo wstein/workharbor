@@ -107,7 +107,13 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     on_exit(fn -> File.rm_rf!(dir) end)
     {:ok, issuer} = WorkHarbor.Hosts.Issuer.initialize(dir)
     cfg = independent(c)
-    trio = [cacerts: [issuer.certificate], verify: :verify_peer, fail_if_no_peer_cert: false]
+
+    trio = [
+      cacerts: [issuer.certificate],
+      verify: :verify_peer,
+      fail_if_no_peer_cert: false,
+      verify_fun: {&WorkHarbor.Hosts.TrustedIssuers.verify/3, dir}
+    ]
 
     valid =
       Keyword.update!(cfg, :https, &(&1 ++ [thousand_island_options: [transport_options: trio]]))
@@ -117,6 +123,9 @@ defmodule WorkHarborWeb.TransportSecurityTest do
 
     for options <- [
           Keyword.delete(trio, :cacerts),
+          Keyword.delete(trio, :verify_fun),
+          Keyword.put(trio, :verify_fun, {fn _, _, s -> {:valid, s} end, dir}),
+          Keyword.put(trio, :verify_fun, {&WorkHarbor.Hosts.TrustedIssuers.verify/3, "relative"}),
           Keyword.put(trio, :verify, :verify_none),
           Keyword.put(trio, :cacerts, c.cacerts),
           trio ++ [verify: :verify_peer],
