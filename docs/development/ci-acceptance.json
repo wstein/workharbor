@@ -1144,6 +1144,7 @@
       "WorkHarbor.HostConnectionsTest/test first heartbeat after hello passes and a catch-up burst within capacity stays connected",
       "WorkHarbor.HostConnectionsTest/test sustained heartbeat burst beyond capacity closes with one refusal audit",
       "WorkHarbor.HostConnectionsTest/test steady heartbeats add no audit rows and still renew host last_seen and lease",
+      "WorkHarbor.HostConnectionsTest/test clean close then reopen or restart audits no replacement or reset",
       "WorkHarbor.HostConnectionsTest/test reopen after a failed close write audits the superseded connection once",
       "WorkHarbor.HostConnectionsTest/test each liveness transition adds exactly one audit row",
       "WorkHarbor.HostConnectionsTest/test tokens refill at one per five seconds measured from arrival",
