@@ -204,8 +204,10 @@ provider compatibility; exact installed version and real Docker evidence must
 pass before acceptance. Owner decision H50:b: the host agent does not hash the Node
 or Docker CLI binaries. Each is verified by exact installed version plus guest
 package verification (package signature/checksum at guest install, recorded in the
-runtime preparation evidence); no guest verification procedure is documented yet, so
-it is a required runtime prerequisite, not an established guarantee. The Node
+runtime preparation evidence). The procedure and evidence fields are in
+[guest package verification](../../../docs/development/guest-package-verification.md);
+it is a required runtime prerequisite, written but not yet exercised, not an
+established guarantee. The Node
 `linux_*_sha256` values in tool-pins.json are release-archive digests, not binary
 hashes. Docker Engine29.8.2 is the initial intended provider pin;
 its verified guest package/install remains a separate runtime prerequisite.
