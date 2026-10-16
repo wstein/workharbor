@@ -95,6 +95,19 @@ func savedPending(t *testing.T) (*identity.State, identity.Response) {
 
 func savedPendingDir(t *testing.T) (string, *identity.State, identity.Response) {
 	t.Helper()
+	return savedDir(t, false, true)
+}
+
+// savedExpiredDir returns an identity whose active credential ended an hour ago,
+// with or without an issued pending credential.
+func savedExpiredDir(t *testing.T, pending bool) (string, *identity.State) {
+	t.Helper()
+	dir, state, _ := savedDir(t, true, pending)
+	return dir, state
+}
+
+func savedDir(t *testing.T, expired, pending bool) (string, *identity.State, identity.Response) {
+	t.Helper()
 	temp, e := filepath.EvalSymlinks(t.TempDir())
 	if e != nil {
 		t.Fatal(e)
@@ -109,7 +122,7 @@ func savedPendingDir(t *testing.T) (string, *identity.State, identity.Response) 
 		t.Fatal(e)
 	}
 	now := time.Now().Truncate(time.Second).Add(-time.Second)
-	root := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "WorkHarbor client issuer"}, NotBefore: now, NotAfter: now.Add(5 * 365 * 24 * time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	root := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "WorkHarbor client issuer"}, NotBefore: now.Add(-48 * time.Hour), NotAfter: now.Add(-48*time.Hour + 5*365*24*time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
 	ca, e := x509.CreateCertificate(rand.Reader, root, root, pub, key)
 	if e != nil {
 		t.Fatal(e)
@@ -118,7 +131,7 @@ func savedPendingDir(t *testing.T) (string, *identity.State, identity.Response) 
 	if e != nil {
 		t.Fatal(e)
 	}
-	sign := func(csr64, id string) identity.Response {
+	sign := func(csr64, id string, now time.Time) identity.Response {
 		csrDER, e := base64.StdEncoding.DecodeString(csr64)
 		if e != nil {
 			t.Fatal(e)
@@ -134,15 +147,26 @@ func savedPendingDir(t *testing.T) (string, *identity.State, identity.Response) 
 		}
 		return identity.Response{SchemaVersion: 1, OwnerID: owner, HostID: host, IdentityID: id, Certificate: base64.StdEncoding.EncodeToString(der), IssuerCertificate: base64.StdEncoding.EncodeToString(ca), ExpiresAt: leaf.NotAfter.Unix()}
 	}
-	if e = identity.AcceptEnrollment(dir, state, sign(state.Pending.CSR, "33333333-3333-4333-8333-333333333333")); e != nil {
+	activeCSR := state.Pending.CSR
+	if e = identity.AcceptEnrollment(dir, state, sign(activeCSR, "33333333-3333-4333-8333-333333333333", now)); e != nil {
 		t.Fatal(e)
 	}
-	if e = identity.PrepareRenewal(dir, state); e != nil {
-		t.Fatal(e)
+	var response identity.Response
+	if pending {
+		if e = identity.PrepareRenewal(dir, state); e != nil {
+			t.Fatal(e)
+		}
+		response = sign(state.Pending.CSR, "44444444-4444-4444-8444-444444444444", now)
+		if e = identity.AcceptPending(dir, state, response); e != nil {
+			t.Fatal(e)
+		}
 	}
-	response := sign(state.Pending.CSR, "44444444-4444-4444-8444-444444444444")
-	if e = identity.AcceptPending(dir, state, response); e != nil {
-		t.Fatal(e)
+	if expired {
+		// Same key, certificate valid from 25h to 1h ago: loadable but past its end.
+		state.Active.Certificate = sign(activeCSR, "33333333-3333-4333-8333-333333333333", now.Add(-24*time.Hour)).Certificate
+		if e = identity.Save(dir, state); e != nil {
+			t.Fatal(e)
+		}
 	}
 	state, e = identity.Load(dir)
 	if e != nil {
@@ -233,5 +257,63 @@ func TestRunRetriesFailedRenewalWhileConnected(t *testing.T) {
 	}
 	if limit.IsZero() || !limit.Before(expires) || time.Until(limit) > renewRetry {
 		t.Fatalf("session after failed renewal not bounded to the retry time: %v", limit)
+	}
+}
+
+func TestRunEndsWithRecoveryErrorForExpiredIdentityWithoutPending(t *testing.T) {
+	dir, state := savedExpiredDir(t, false)
+	if !identity.Expired(state) || state.Pending != nil {
+		t.Fatal("fixture must be expired without pending")
+	}
+	oldRenew, oldSession := renewFn, sessionFn
+	defer func() { renewFn, sessionFn = oldRenew, oldSession }()
+	var calls atomic.Int32
+	renewFn = func(context.Context, string) error { calls.Add(1); return ErrTransport }
+	sessionFn = func(context.Context, *identity.State, time.Time, func(Event)) error {
+		calls.Add(1)
+		return ErrTransport
+	}
+	done := make(chan error, 1)
+	go func() { done <- Run(context.Background(), dir, nil) }()
+	select {
+	case e := <-done:
+		if e != ErrRecoveryRequired {
+			t.Fatalf("Run = %v, want ErrRecoveryRequired", e)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run kept retrying an unrecoverable identity")
+	}
+	if calls.Load() != 0 {
+		t.Fatalf("renewal or session attempted: %d", calls.Load())
+	}
+	if after, e := identity.Load(dir); e != nil || after.Active.IdentityID != state.Active.IdentityID {
+		t.Fatalf("state not preserved: %v", e)
+	}
+}
+
+func TestRunAttemptsActivationOfPendingAfterActiveExpiry(t *testing.T) {
+	dir, state := savedExpiredDir(t, true)
+	if !identity.Expired(state) || state.Pending == nil || state.Pending.Certificate == "" {
+		t.Fatal("fixture must be expired with an issued pending credential")
+	}
+	oldRenew, oldSession := renewFn, sessionFn
+	defer func() { renewFn, sessionFn = oldRenew, oldSession }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var renews atomic.Int32
+	renewFn = func(context.Context, string) error { renews.Add(1); cancel(); return ErrTransport }
+	sessionFn = func(context.Context, *identity.State, time.Time, func(Event)) error { return ErrTransport }
+	done := make(chan error, 1)
+	go func() { done <- Run(ctx, dir, nil) }()
+	select {
+	case e := <-done:
+		if e == ErrRecoveryRequired {
+			t.Fatal("pending credential was abandoned for recovery")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Run did not return")
+	}
+	if renews.Load() != 1 {
+		t.Fatalf("activation attempts = %d, want 1", renews.Load())
 	}
 }

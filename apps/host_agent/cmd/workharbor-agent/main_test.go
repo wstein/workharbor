@@ -4,6 +4,8 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"github.com/wstein/workharbor-nxt/apps/host_agent/internal/connection"
 	"strings"
 	"testing"
 )
@@ -34,5 +36,16 @@ func TestPrivateDockerProxyModeRejectsMalformedLifetimeAndSocket(t *testing.T) {
 		if code != 1 || out.Len() != 0 || diagnostic.String() != "workharbor-agent: provider_driver_unavailable\n" {
 			t.Fatal("private helper accepted or disclosed args", code, out.String(), diagnostic.String())
 		}
+	}
+}
+
+func TestRunReportsOwnerNewcodeRecoveryForExpiredIdentity(t *testing.T) {
+	old := runConnection
+	defer func() { runConnection = old }()
+	runConnection = func(context.Context, string, func(connection.Event)) error { return connection.ErrRecoveryRequired }
+	var out, errOut bytes.Buffer
+	code := run([]string{"run", "--identity-dir", "/any"}, &out, &errOut)
+	if code != 66 || out.Len() != 0 || errOut.String() != "workharbor-agent: host identity expired; owner newcode recovery required\n" {
+		t.Fatalf("unexpected recovery refusal: %d %q %q", code, out.String(), errOut.String())
 	}
 }

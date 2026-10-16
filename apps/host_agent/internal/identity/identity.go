@@ -505,6 +505,21 @@ func Expires(s *State) (time.Time, error) {
 	return c.NotAfter, nil
 }
 
+// Expired reports whether a loaded active credential, or its issuer, is past its
+// validity end. Load accepts such state so that recovery can preserve it.
+func Expired(s *State) bool {
+	if s == nil || s.Active == nil {
+		return false
+	}
+	now := time.Now()
+	for _, v := range []string{s.Active.Certificate, s.Active.IssuerCertificate} {
+		if c, e := certificate(v); e != nil || !now.Before(c.NotAfter) {
+			return true
+		}
+	}
+	return false
+}
+
 func noSymlinkAncestors(path string, missingFinal bool) error {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return ErrIdentity
