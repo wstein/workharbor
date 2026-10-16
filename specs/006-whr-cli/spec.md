@@ -3,7 +3,8 @@
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
-**Status**: Revised after review; awaiting independent re-review. Owner approval for planning (H13:a, 2026-10-13)
+**Status**: Resource-selection revision proposed for owner review (2026-10-16); not implemented.
+Earlier scope status: Revised after review; awaiting independent re-review. Owner approval for planning (H13:a, 2026-10-13)
 covers this revised text only once that re-review is CLEAR for its exact head. Not implemented. Owner decisions
 are recorded below; implementation prerequisites are listed under "Prerequisites".
 **Input**: Specify the product CLI `whr` for workspace lifecycle plus host and operations commands (`ws`, `open`,
@@ -79,6 +80,15 @@ Implementation MUST NOT start before all of the following exist:
 - A reconciliation of Feature 001's terminal cleanup rule with the console persistence model of FR-007a, recorded
   in the Feature 001 spec or an ADR.
 
+### Workspace creation resources (owner request, 2026-10-16)
+
+`ws create` gains CPU and memory selection under FR-039–FR-042. This is proposed
+product scope, not a claim that the accepted persistence, owner API or Docker
+provider contracts already accept or enforce resource fields. Before implementation,
+reconcile and review those contracts, the browser path and the affected plan/tasks.
+Existing approvals and completion evidence retain their original source/scope;
+this revision does not expand them or authorize runtime operations.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Sign in and manage workspace lifecycle from a terminal (Priority: P1)
@@ -127,6 +137,37 @@ audit records and observed state with the browser view.
 13. **Given** a long-running operation, **When** the owner interrupts the CLI or `--timeout` elapses, **Then** the
     operation is neither cancelled nor reported complete; the CLI exits with the interrupted or timeout code and
     the operation identifier, and `whr op wait <id>` resumes waiting.
+
+### User Story 1a - Choose workspace CPU and memory (Priority: P1)
+
+The owner chooses runtime CPU and memory limits while creating a workspace, sees
+exact effective values and host support, and can inspect the same values later.
+
+**Why this priority**: Owners need predictable workspace limits without changing
+project images or manually editing provider arguments.
+**Independent Test**: Create through CLI and browser with supported limits, omitted
+values, invalid values and an unsupported host; inspect desired and observed limits,
+retry a lost response, then stop/start and rebuild the supported workspace.
+
+**Acceptance Scenarios**:
+
+1. **Given** an interactive create on a supported host, **When** resource selection
+   opens, **Then** CPU and memory show the defaults and accept explicit values;
+   the final summary shows effective limits and their origin before submission.
+2. **Given** `--cpus 2 --memory 4GiB`, **When** create succeeds, **Then** inspect shows
+   desired limits of two CPU equivalents and 4 GiB, with observed enforcement or
+   an explicit unknown state; the browser reports the same effective limits.
+3. **Given** omitted resource flags in unattended mode, **When** create runs, **Then**
+   it uses and reports explicit host-profile defaults; absent defaults refuse with
+   the needs-human code and guidance to supply both values, without provisioning.
+4. **Given** zero, negative, malformed, excessive-precision or out-of-range values,
+   **When** create is requested, **Then** it refuses before hooks or provider mutation;
+   an unsupported limit capability also refuses rather than silently ignoring it.
+5. **Given** a submitted creation request, **When** its response is lost, **Then** a
+   same-key retry retains the frozen resource values despite profile changes;
+   changing either limit with that key yields conflict.
+6. **Given** a created workspace, **When** stop/start or rebuild occurs, **Then** the
+   recorded limits persist; this feature provides no implicit live resize.
 
 ---
 
@@ -363,6 +404,35 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - **FR-013**: Unattended or answer-file modes MUST NOT approve trust, destructive deletion or offboarding; such
   refusals MUST exit with the needs-human code.
 
+**Workspace creation resources**
+
+- **FR-039**: `ws create` MUST accept `--cpus <value>` and `--memory <size>` and offer
+  the same choices interactively when input and diagnostics are terminals and
+  unattended/JSON mode is not selected. CPU is a positive base-10 number of CPU
+  equivalents with at most three fractional digits; memory is a positive whole
+  number suffixed `MiB` or `GiB`. Reject signs, exponent notation, nonfinite values,
+  missing units and overflow. Canonical values are integer thousandths of a CPU
+  and integer bytes, so equivalent spellings have identical request identity.
+- **FR-040**: Effective values MUST resolve independently per field from explicit
+  flags, then the selected host's explicit default resource profile. Show both
+  effective values, their origins and host support before submission; unattended
+  output MUST also report them. Missing defaults in unattended mode yield needs-human;
+  interactive callers MUST supply the missing values. Never interpret omission as
+  unlimited resources. These are runtime limits, not guaranteed reservations or
+  build-process limits, and do not change the selected language image.
+- **FR-041**: The owner API and provider MUST validate both effective limits against
+  the selected host's supported range and enforcement capabilities before hooks or
+  provider mutation. Unsupported or unavailable capability evidence MUST refuse
+  without silent fallback, clamping or dropping a limit. Resource limits are not
+  Dev Container `hostRequirements`; this revision does not admit that field or raw
+  provider arguments. Browser creation MUST use the same validation/default rules.
+- **FR-042**: Freeze normalized limits in the creation payload before the first
+  submission and include them in idempotency conflict detection, durable desired
+  state and audit. Retries MUST reuse them, not recompute defaults. `ws show` and
+  the browser MUST distinguish desired limits from observed enforcement with its
+  observation time, and label absent/stale evidence unknown. Stop/start and rebuild
+  MUST retain the values. Resizing existing workspaces is outside this revision.
+
 **Authentication and owner API**
 
 - **FR-035**: `whr auth login` MUST select a control-plane endpoint, verify its server identity before sending any
@@ -464,6 +534,9 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 
 ### Key Entities
 
+- **Workspace resource selection**: desired CPU thousandths and memory bytes,
+  value origins, selected host/profile, and separately timestamped observed limits.
+
 - **Client profile**: endpoint, verified server identity, owner identity, credential scope, expiry and local
   credential location for one owner.
 - **Operation reference**: durable operation identifier, idempotency key (caller- or CLI-generated) and status.
@@ -517,6 +590,12 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   assigns.
 - **SC-011**: A lost-response test (drop the reply to a workspace lifecycle mutation) yields exactly one operation, retrievable
   with `whr op show --key`. A lost `agent send` response reports unknown delivery without an automatic resend.
+
+- **SC-013**: Every US1a case passes for CLI and browser: accepted limits agree in
+  desired state and observed enforcement on a supported real host, invalid/unsupported
+  requests produce zero hooks/provider mutations, equivalent values share request
+  identity, same-key changed limits conflict, and restart/rebuild retain limits.
+  Missing real enforcement evidence remains unverified rather than a passing claim.
 
 ## Assumptions
 

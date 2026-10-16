@@ -50,3 +50,16 @@ live verification.
 - Implementation prerequisites: documentation reconciliation (#66, #68), ADR 0001 amendment (#67), exit-code ADR
   (#70), session interface contract (#71) and the Feature 001 terminal-cleanup reconciliation for the console
   model.
+
+## Resource-selection revision validation (2026-10-16)
+
+- [x] US1a covers explicit/default limits, invalid/unsupported values, lost-response
+  identity and restart/rebuild retention; FR-039–FR-042 define units and precedence.
+- [x] SC-013 separates desired values from real-host enforcement evidence.
+- [x] Existing accepted API/provider contracts and implementation approvals are not
+  silently expanded; affected contracts and plans require reconciliation/review.
+- [x] No unresolved clarification markers; host ranges/defaults are explicit inputs,
+  not invented universal capacities or guarantees.
+
+These marks record specification quality only. Revised scope awaits human spec
+review before planning; earlier H13:a does not approve this addition.
