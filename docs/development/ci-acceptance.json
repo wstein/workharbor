@@ -1184,6 +1184,8 @@
       "WorkHarborWeb.HostTransportTest/test genuine activation crash recovers pending after retired predecessor expiry",
       "WorkHarborWeb.HostTransportTest/test genuine optional client TLS preserves owner HTTP1 and rejects H2 and owner as host",
       "WorkHarborWeb.HostTransportTest/test genuine TLS rejects foreign issuer and unregistered signed identity",
+      "WorkHarborWeb.HostTransportTest/test listener trusts a newly rotated issuer without a restart",
+      "WorkHarborWeb.HostTransportTest/test previous issuer stays trusted until it expires",
       "WorkHarborWeb.HostTransportTest/test genuine pending identity has only activation authority and rotation revocation close live WSS",
       "WorkHarborWeb.HostTransportTest/test genuine WSS enforces exact wire scope version JSON types and message budgets",
       "WorkHarborWeb.HostTransportTest/test genuine idle client socket is forced closed at certificate expiry",
