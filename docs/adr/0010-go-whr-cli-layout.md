@@ -40,23 +40,24 @@ This ADR amends rather than supersedes ADR 0001: the Elixir control plane and Go
 host agent decisions stay intact, and only the set of Go components grows, so the
 consequences rule's superseding ADR is not needed.
 
-## Go CI acceptance plan (not yet implemented, not claimed passing)
+## Go CI acceptance plan (landed in b37fafe)
 
 Per [ADR 0007](0007-explicit-ci-acceptance.md) Go checks must be named explicitly in
 the reviewed acceptance manifest and run by the same repository-owned runner as
-`make check`. The plan, once Go code exists:
+`make check`. Commit b37fafe ("enforce explicit Go and Phoenix acceptance") landed
+the manifest and runner extension. `scripts/application_checks.py` runs, in each Go
+module:
 
-- In each Go module, `gofmt -l .` reports no files.
-- `go vet ./...`
+- `gofmt -l .` must report no files.
+- `go mod download`
+- `go vet ./...` (plus `go vet -tags docker_integration` on the Docker provider
+  package in `host_agent`, compile-only)
 - `go build ./...`
-- `go test ./...` with required test IDs listed in
-  `docs/development/ci-acceptance.json` (an extension of its schema) and frozen behavior
-  vectors.
+- `go test -json -count=1 ./...` with required test IDs from
+  `docs/development/ci-acceptance.json`; missing or incomplete outcomes fail.
 
-Until a Go module exists, none of these checks run and none is reported as passing.
-`docs/development/ci-acceptance.json` and `scripts/check_ci.py` are intentionally
-unchanged here; the manifest and runner extension is follow-up work requiring owner
-PR review and merge under ADR 0007. Real-host/browser evidence remains separate.
+Passing results are reported only by an actual run. Real-host/browser evidence
+remains separate.
 
 ## Consequences
 
