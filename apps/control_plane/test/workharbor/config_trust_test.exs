@@ -21,6 +21,18 @@ defmodule WorkHarbor.ConfigTrustTest do
     %{owner: owner, secret: secret, principal: principal}
   end
 
+  test "denial inside the transaction keeps its audit when authorization changes after the pre-check",
+       ctx do
+    expire_after_precheck(ctx.principal, :config_approve)
+    assert {:error, :forbidden} = ConfigTrust.approve(ctx.principal, DB.config())
+
+    assert WorkHarbor.Repo.query!(
+             "SELECT count(*) FROM audit_events WHERE event='authorization_denied' AND action='config_approve'",
+             [],
+             log: false
+           ).rows == [[1]]
+  end
+
   test "exact approval repeats without a second approval or audit", ctx do
     descriptor = DB.config()
     assert {:ok, first} = ConfigTrust.approve(ctx.principal, descriptor)
@@ -185,5 +197,32 @@ defmodule WorkHarbor.ConfigTrustTest do
     assert Enum.all?(results, &match?({:ok, _}, &1))
     assert results |> Enum.map(fn {:ok, row} -> row.id end) |> Enum.uniq() |> length() == 1
     assert DB.count("revision_trust_approvals") == 1
+  end
+
+  # Counts clock reads of one pre-check, then expires the credential right after it, so only
+  # the in-transaction check can deny.
+  defp expire_after_precheck(principal, action) do
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    real = Application.get_env(:workharbor, :clock)
+    now = WorkHarbor.Accounts.now()
+
+    Application.put_env(:workharbor, :clock, fn ->
+      Agent.update(counter, &(&1 + 1))
+      now
+    end)
+
+    :ok = WorkHarbor.Accounts.authorize(principal, action)
+    reads = Agent.get(counter, & &1)
+    Agent.update(counter, fn _ -> 0 end)
+
+    Application.put_env(:workharbor, :clock, fn ->
+      if Agent.get_and_update(counter, &{&1 + 1, &1 + 1}) > reads, do: now + 10_000_000, else: now
+    end)
+
+    on_exit(fn ->
+      if real,
+        do: Application.put_env(:workharbor, :clock, real),
+        else: Application.delete_env(:workharbor, :clock)
+    end)
   end
 end
