@@ -1101,6 +1101,8 @@
       "WorkHarbor.HostConnectionsTest/test authenticated heartbeat becomes stale exactly30seconds without changing history",
       "WorkHarbor.HostIdentityTest/test issuing a code revokes the host's earlier unconsumed codes",
       "WorkHarbor.HostIdentityTest/test denied host actions keep their authorization_denied audit",
+      "WorkHarbor.HostIdentityTest/test denial inside the transaction keeps its audit when authorization changes after the pre-check",
+      "WorkHarbor.ConfigTrustTest/test denial inside the transaction keeps its audit when authorization changes after the pre-check",
       "WorkHarbor.HostConnectionsTest/test reconnect and replaced socket cannot refresh old runtime annotation",
       "WorkHarbor.HostConnectionsTest/test revocation and open socket certificate expiry fence existing connections",
       "WorkHarbor.HostConnectionsTest/test closed connection messages reject malformed scope fields versions and bounds",

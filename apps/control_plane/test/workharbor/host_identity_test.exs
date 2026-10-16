@@ -135,6 +135,18 @@ defmodule WorkHarbor.HostIdentityTest do
     assert denied.("host_revoke") == [[1]]
   end
 
+  test "denial inside the transaction keeps its audit when authorization changes after the pre-check",
+       c do
+    expire_after_precheck(c.principal, :host_revoke)
+    assert {:error, :forbidden} = Hosts.revoke(c.principal, Ecto.UUID.generate())
+
+    assert Repo.query!(
+             "SELECT count(*) FROM audit_events WHERE event='authorization_denied' AND action='host_revoke'",
+             [],
+             log: false
+           ).rows == [[1]]
+  end
+
   test "explicit host actions reject dashboard and cross owner before mutation", c do
     {:ok, token, _} = Accounts.login(c.principal.owner_id, c.secret, "dashboard")
     {:ok, dashboard} = Accounts.authenticate(token)
@@ -511,5 +523,32 @@ defmodule WorkHarbor.HostIdentityTest do
 
       assert File.ls!(dir) == ["issuer.json"]
     end
+  end
+
+  # Counts clock reads of one pre-check, then expires the credential right after it, so only
+  # the in-transaction check can deny.
+  defp expire_after_precheck(principal, action) do
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+    real = Application.get_env(:workharbor, :clock)
+    now = WorkHarbor.Accounts.now()
+
+    Application.put_env(:workharbor, :clock, fn ->
+      Agent.update(counter, &(&1 + 1))
+      now
+    end)
+
+    :ok = WorkHarbor.Accounts.authorize(principal, action)
+    reads = Agent.get(counter, & &1)
+    Agent.update(counter, fn _ -> 0 end)
+
+    Application.put_env(:workharbor, :clock, fn ->
+      if Agent.get_and_update(counter, &{&1 + 1, &1 + 1}) > reads, do: now + 10_000_000, else: now
+    end)
+
+    on_exit(fn ->
+      if real,
+        do: Application.put_env(:workharbor, :clock, real),
+        else: Application.delete_env(:workharbor, :clock)
+    end)
   end
 end
