@@ -76,3 +76,20 @@ func TestRegistryExplicitCABundleIntegrityAndPhysicalPath(t *testing.T) {
 		})
 	}
 }
+
+func TestEmbeddedToolPinsDecodeRegistryTools(t *testing.T) {
+	for _, name := range []string{"buildx", "crane"} {
+		pin, ok := toolPin(name)
+		if !ok || pin["version"] == "" {
+			t.Fatalf("%s pin unavailable", name)
+		}
+		for _, arch := range []string{"amd64", "arm64"} {
+			if len(pin["linux_"+arch+"_sha256"]) != 64 {
+				t.Fatalf("%s %s digest missing", name, arch)
+			}
+		}
+	}
+	if _, ok := toolPin("missing"); ok {
+		t.Fatal("unknown pin admitted")
+	}
+}

@@ -22,6 +22,28 @@ import (
 //go:embed tool-pins.json
 var toolPins []byte
 
+// toolPin returns the string fields of one embedded tool pin. Pins also carry
+// non-string fields, such as crane's metadata_input_limit_bytes, which a
+// map[string]string decode rejects.
+func toolPin(name string) (map[string]string, bool) {
+	var all map[string]json.RawMessage
+	if json.Unmarshal(toolPins, &all) != nil {
+		return nil, false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(all[name], &fields) != nil || len(fields) == 0 {
+		return nil, false
+	}
+	pin := map[string]string{}
+	for key, raw := range fields {
+		var value string
+		if json.Unmarshal(raw, &value) == nil {
+			pin[key] = value
+		}
+	}
+	return pin, true
+}
+
 type registrySelection struct {
 	Reference, ConfigID string
 	ConfigSize          int64
@@ -261,8 +283,9 @@ func (r Registry) Inspect(ctx context.Context, ref string) (AdmittedImage, error
 	if runtime.GOOS != "linux" || runtime.GOARCH != r.Architecture {
 		return AdmittedImage{}, fail("tool_unavailable")
 	}
-	var pins struct{ Buildx, Crane map[string]string }
-	if json.Unmarshal(toolPins, &pins) != nil {
+	buildx, okBuildx := toolPin("buildx")
+	crane, okCrane := toolPin("crane")
+	if !okBuildx || !okCrane {
 		return AdmittedImage{}, fail("tool_unavailable")
 	}
 	stage, e := registryPrivate(r.PrivateDirectory)
@@ -273,10 +296,10 @@ func (r Registry) Inspect(ctx context.Context, ref string) (AdmittedImage, error
 	if _, e = r.readEnvironment(stage, r.BuildxPath); e != nil {
 		return AdmittedImage{}, e
 	}
-	if e = verifyRegistryTool(ctx, r.BuildxPath, pins.Buildx["linux_"+r.Architecture+"_sha256"], pins.Buildx["version"], stage, true); e != nil {
+	if e = verifyRegistryTool(ctx, r.BuildxPath, buildx["linux_"+r.Architecture+"_sha256"], buildx["version"], stage, true); e != nil {
 		return AdmittedImage{}, e
 	}
-	if e = verifyRegistryTool(ctx, r.CranePath, pins.Crane["linux_"+r.Architecture+"_sha256"], pins.Crane["version"], stage, false); e != nil {
+	if e = verifyRegistryTool(ctx, r.CranePath, crane["linux_"+r.Architecture+"_sha256"], crane["version"], stage, false); e != nil {
 		return AdmittedImage{}, e
 	}
 	manifest := func(ref string) ([]byte, error) {
