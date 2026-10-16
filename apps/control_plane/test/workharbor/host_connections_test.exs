@@ -130,10 +130,23 @@ defmodule WorkHarbor.HostConnectionsTest do
     refute "host_heartbeat" in audits(c)
   end
 
-  test "steady heartbeats add no audit rows and still renew the connection row", c do
+  test "steady heartbeats add no audit rows and still renew host last_seen and lease", c do
     ref = connect(c)
     before = audits(c)
     assert before == ["host_connected"]
+
+    hb = fn ->
+      Hosts.one("SELECT last_seen,lease_expires_at FROM hosts WHERE id=?", [c.peer.host_id])
+    end
+
+    Hosts.sql(
+      "UPDATE hosts SET last_seen='2000-01-01T00:00:00Z',lease_expires_at='2000-01-01T00:00:00Z' WHERE id=?",
+      [c.peer.host_id]
+    )
+
+    Hosts.sql("UPDATE host_connection_slots SET state='unknown' WHERE host_id=?", [c.peer.host_id])
+
+    stale = hb.()
 
     for i <- 1..5 do
       Agent.update(c.mono, fn _ -> i * 10_000 end)
@@ -144,6 +157,23 @@ defmodule WorkHarbor.HostConnectionsTest do
 
     assert audits(c) == before
     assert {:ok, "connected"} = HostConnections.host_state(c.peer.host_id)
+    now = hb.()
+    assert now["last_seen"] > stale["last_seen"]
+    assert now["lease_expires_at"] > stale["lease_expires_at"]
+  end
+
+  test "reopen after a failed close write audits the superseded connection once", c do
+    ref = connect(c)
+
+    Hosts.sql(
+      "CREATE TRIGGER fail_close BEFORE UPDATE ON host_connection_slots BEGIN SELECT RAISE(ABORT,'denied'); END"
+    )
+
+    assert {:error, :persistence_failed} = HostConnections.disconnect(ref)
+    Hosts.sql("DROP TRIGGER fail_close")
+    before = audits(c)
+    assert {:ok, _} = HostConnections.open(c.peer, self())
+    assert audits(c) -- before == ["host_connection_replaced", "host_connected"]
   end
 
   test "each liveness transition adds exactly one audit row", c do
