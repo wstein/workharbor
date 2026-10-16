@@ -1860,8 +1860,9 @@ An owner rebase merge rewrites the IDs again, so match commits by subject.
 | `20102b7` | `340d043` | docs(pilot): correct T009 entry-policy provenance |
 
 Independent static review of the rebased pilot (five reviewers, one per area)
-found one high and six medium defects. These are fixed on this branch, each
-with a test that fails without the fix where code changed:
+found one high and six medium defects. These were fixed on this branch.
+Tests were added where code changed. Only some were shown to fail without the
+fix, and the renewal fix lacked a test until the second review round:
 
 - Registry admission decoded the embedded tool pins into string maps, so
   every registry image refused as `tool_unavailable`.
@@ -1870,17 +1871,28 @@ with a test that fails without the fix where code changed:
 - COPY/ADD `--from`, RUN `--mount from=` and remote ADD bypassed the
   digest-pinned FROM gate.
 - A failed renewal disconnected a host whose active certificate was still
-  valid; a failed reload after renewal crashed the agent.
+  valid; a failed reload after renewal crashed the agent. The first fix kept
+  the session open until actual expiry, so renewal was never retried in time;
+  the second round bounds that session to the next retry (see below).
 - The harness guide and ADR 0007 stated T002-era test counts.
 - No gate compiled the `docker_integration` acceptance files.
+
+A second independent review of `340d043..02683fe` was NOT CLEAR. Follow-up
+commits on `pilot/review-fixes` fix: failed renewal retried while connected
+(`TestRunRetriesFailedRenewalWhileConnected`); Dockerfile mount options parsed
+as CSV and git sources detected as BuildKit does; the `$` refusal limited to
+`--from` and mount `from=` so `--chown=$U:$U` and ARG cache targets work again
+(extended `TestDockerfileExternalStageSourcesRefuseBeforeBuild`); and this
+record. These need a fresh independent review of their exact head.
 
 Deferred for owner decision or a follow-up work item, not fixed here:
 
 - Docker CLI and Node binaries are trusted on their version string. The Node
   pins hash release archives, not the binary, and the Docker CLI has no pin;
   binary pins need owner-verified values.
-- Renewal paths in `connection.Run` have no Go unit test, and
-  `TestExpiryWatchdogCancelsBlockedIO` exercises only a stub callback.
+- `TestExpiryWatchdogCancelsBlockedIO` exercises only a stub callback.
+  `connection.Run` renewal retry is covered through test seams, not a loopback
+  renewal endpoint.
 - An expired active credential without a pending one retries forever instead
   of reporting owner newcode recovery.
 - `identity.Prepare` does not fsync the parent after `Mkdir`. The server CA
