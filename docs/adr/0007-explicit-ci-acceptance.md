@@ -98,7 +98,8 @@ acceptance. Schema 2 retains all existing Python required IDs and retained-outco
 semantics and adds typed application required test identities, with fixed argv in
 `scripts/application_checks.py`. Go JSON events and a test-only ExUnit formatter
 prove each required case actually passed; all other discovered test failures/skips
-remain blockers. The doc-only API client has no fabricated required test.
+remain blockers. At T002 the doc-only API client had no fabricated required test;
+later tasks add required identities only for tests that exist.
 
 The application gate performs pinned bootstrap/locked dependency acquisition from a
 fresh checkout, then Go format/vet/build/tests and Phoenix format/compile/assets/tests.
