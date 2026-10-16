@@ -13,6 +13,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"math/big"
 	"net/url"
 	"os"
@@ -72,6 +73,9 @@ func Prepare(dir, endpoint, serverCA string) (*State, error) {
 	if _, e := os.Lstat(filepath.Join(dir, "identity.json")); e == nil {
 		return nil, ErrIdentity
 	} else if !os.IsNotExist(e) {
+		return nil, ErrIdentity
+	}
+	if serverCA != "" && !caPathOK(serverCA) {
 		return nil, ErrIdentity
 	}
 	if e := os.Mkdir(dir, 0700); e != nil && !os.IsExist(e) {
@@ -189,6 +193,7 @@ func syncDir(dir string) error {
 	return nil
 }
 
+// caPathOK requires an absolute, already-clean server CA path.
 func caPathOK(path string) bool {
 	return filepath.IsAbs(path) && filepath.Clean(path) == path
 }
@@ -297,6 +302,9 @@ func material(m *Material, host string, now time.Time) (*x509.Certificate, error
 }
 func validate(s *State) error {
 	if s == nil || s.SchemaVersion != 1 || !endpointOK(s.Endpoint) {
+		return ErrIdentity
+	}
+	if s.ServerCAFile != "" && !caPathOK(s.ServerCAFile) {
 		return ErrIdentity
 	}
 	if s.Active == nil {
@@ -454,11 +462,7 @@ func TLSConfig(s *State, pending bool) (*tls.Config, error) {
 		if noSymlinkAncestors(s.ServerCAFile, false) != nil {
 			return nil, ErrIdentity
 		}
-		info, e := os.Lstat(s.ServerCAFile)
-		if e != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() > 32768 {
-			return nil, ErrIdentity
-		}
-		bytes, e := os.ReadFile(s.ServerCAFile)
+		bytes, e := readCA(s.ServerCAFile)
 		if e != nil {
 			return nil, ErrIdentity
 		}
@@ -566,4 +570,27 @@ func exactKeys(m map[string]any, keys []string) bool {
 		}
 	}
 	return true
+}
+
+// readCA opens the CA without following symlinks and checks the open file, so
+// no stat-then-open race can swap it. Ancestor-directory ownership is not
+// checked (known limitation, out of scope for #86).
+func readCA(path string) ([]byte, error) {
+	f, e := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC|syscall.O_NONBLOCK, 0)
+	if e != nil {
+		return nil, ErrIdentity
+	}
+	defer f.Close()
+	info, e := f.Stat()
+	if e != nil || !info.Mode().IsRegular() || info.Size() > 32768 || info.Mode().Perm()&0022 != 0 {
+		return nil, ErrIdentity
+	}
+	if unix, ok := info.Sys().(*syscall.Stat_t); !ok || (unix.Uid != 0 && unix.Uid != uint32(os.Geteuid())) {
+		return nil, ErrIdentity
+	}
+	data, e := io.ReadAll(io.LimitReader(f, 32769))
+	if e != nil || len(data) > 32768 {
+		return nil, ErrIdentity
+	}
+	return data, nil
 }
