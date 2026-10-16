@@ -15,6 +15,24 @@ import provider_profiles as profiles
 
 
 class T002Tests(unittest.TestCase):
+    CANONICAL_ROWS = {
+        'begin': ('execution', 'entry', 'begin', ('bridge.begin',), 'entry'),
+        'inspect': ('observation', None, 'inspect', ('bridge.inspect',), None),
+        'verify': ('execution', 'completion', 'verify', ('bridge.verify',), 'completion'),
+        'complete': ('execution', 'completion', 'complete', ('bridge.complete',), 'completion'),
+        'record-commit': ('execution', 'completion', 'record-commit', ('bridge.record-commit',), 'completion'),
+        'resume': ('execution', 'resume', 'resume', ('bridge.resume',), 'resume'),
+        'rework': ('execution', 'entry', 'rework', ('bridge.rework',), 'entry'),
+        'status': ('observation', None, None, ('ledger.read',), None),
+        'lookup': ('observation', None, None, ('bridge.lookup',), None),
+        'transfer': ('execution', 'eligibility', None, ('claim.fenced-transfer',), None),
+        'ready': ('execution', 'eligibility', None, (), 'ready'),
+        'publish': ('execution', 'handoff', None, (), 'handoff'),
+        'final-labels': ('execution', 'handoff', None, (), 'handoff'),
+        'provider-execute': ('execution', 'provider', None, ('provider.execution',), None),
+        'safe-stop': ('safety', None, None, ('runtime.safe-stop',), None),
+    }
+
     def rejected(self, callback, *args, **kwargs):
         with self.assertRaises(profiles.ProfileError) as caught:
             callback(*args, **kwargs)
@@ -125,26 +143,59 @@ class T002Tests(unittest.TestCase):
             (root / 'large').write_bytes(b'x' * 1048577)
             self.rejected(profiles.read_artifact, root, 'large')
 
+    def test_contract_action_table(self):
+        # Parse the contract's action table at test time and compare it with the
+        # frozen rows; any shape change in the contract fails loudly.
+        import re
+        text = (_SCRIPT_DIR.parent / 'specs/005-provider-aware-orchestration/contracts/cli-and-host.md').read_text()
+        header = '| Action | Class / guard boundary | Required capability and delegation |'
+        self.assertEqual(1, text.count(header))
+        lines = text[text.index(header):].split('\n')
+        self.assertEqual('| --- | --- | --- |', lines[1])
+        body = []
+        for line in lines[2:]:
+            if not line.startswith('|'):
+                break
+            body.append(line)
+        self.assertEqual(15, len(body))
+        vocab = re.search(r'guard --operation accepts only ([a-z, /-]+) and maps', text.replace('\n', ' '))
+        self.assertIsNotNone(vocab)
+        guard_ops = tuple(re.findall(r'[a-z]+(?:-[a-z]+)*', vocab.group(1)))
+        self.assertEqual(7, len(guard_ops))
+        parsed = {}
+        for line in body:
+            cells = [cell.strip() for cell in line.strip().strip('|').split(' | ')]
+            self.assertEqual(3, len(cells), line)
+            action, klass, delegation = cells
+            self.assertRegex(action, r'^[a-z][a-z-]*$')
+            self.assertNotIn(action, parsed)
+            match = re.fullmatch(r'(Execution|Observation|Safety)(?: / ([a-z]+))?', klass)
+            self.assertIsNotNone(match, klass)
+            # Contract: guard operations map one-to-one to the same action token.
+            operation = action if action in guard_ops and 'existing guard' in delegation else None
+            guard = re.search(r'existing guard (\w[\w-]*)', delegation)
+            if guard and guard.group(1) in guard_ops:
+                self.assertEqual(action, guard.group(1))
+            package = re.search(r'\bG\(([a-z]+),\s*([^)]+)\)', delegation)
+            if package:
+                mode = package.group(2).strip()
+                self.assertTrue(mode == 'm' or mode == 'owner-authorized rework', mode)
+                self.assertEqual('owner-authorized rework' if mode != 'm' else 'implement',
+                                 profiles.action_requirements(action, 'implement').package_mode)
+                self.assertEqual(package.group(1), profiles.action_spec(action).package_action)
+            # status adds bridge.status only when a guard ID is retained (separate test).
+            caps = re.sub(r'bridge\.status when a guard ID is retained', '', delegation)
+            caps = re.sub(r'\bG\([^)]*\)', '', caps)
+            # Any dotted lowercase token is a capability; unknown ones fail the comparison.
+            caps = tuple(re.findall(r'\b[a-z]+\.[a-z][a-z.-]*[a-z]\b', caps))
+            parsed[action] = (match.group(1).lower(), match.group(2), operation, caps,
+                              package.group(1) if package else None)
+        self.assertEqual(self.CANONICAL_ROWS, parsed)
+
     def test_canonical_actions(self):
         # Independently freeze literals from the accepted table; G is deferred,
         # never copied or treated as an authorization/capability observation.
-        rows = {
-            'begin': ('execution', 'entry', 'begin', ('bridge.begin',), 'entry'),
-            'inspect': ('observation', None, 'inspect', ('bridge.inspect',), None),
-            'verify': ('execution', 'completion', 'verify', ('bridge.verify',), 'completion'),
-            'complete': ('execution', 'completion', 'complete', ('bridge.complete',), 'completion'),
-            'record-commit': ('execution', 'completion', 'record-commit', ('bridge.record-commit',), 'completion'),
-            'resume': ('execution', 'resume', 'resume', ('bridge.resume',), 'resume'),
-            'rework': ('execution', 'entry', 'rework', ('bridge.rework',), 'entry'),
-            'status': ('observation', None, None, ('ledger.read',), None),
-            'lookup': ('observation', None, None, ('bridge.lookup',), None),
-            'transfer': ('execution', 'eligibility', None, ('claim.fenced-transfer',), None),
-            'ready': ('execution', 'eligibility', None, (), 'ready'),
-            'publish': ('execution', 'handoff', None, (), 'handoff'),
-            'final-labels': ('execution', 'handoff', None, (), 'handoff'),
-            'provider-execute': ('execution', 'provider', None, ('provider.execution',), None),
-            'safe-stop': ('safety', None, None, ('runtime.safe-stop',), None),
-        }
+        rows = self.CANONICAL_ROWS
         self.assertEqual(set(rows), set(profiles.ACTIONS))
         with self.assertRaises(TypeError):
             profiles.ACTIONS['begin'] = profiles.ACTIONS['inspect']
