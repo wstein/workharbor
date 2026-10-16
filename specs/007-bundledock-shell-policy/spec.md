@@ -50,3 +50,20 @@ A unit-tested plan does not prove a mount exists, digest integrity, execution tr
 actual vendor autoload, shell startup ordering or prompt rendering. Native Docker
 and all-four-shell acceptance are future integration gates, recorded as unverified.
 This slice does not establish full issue-81 integration or its remaining evidence.
+
+## Proposed launcher integration (owner request, 2026-10-16)
+
+Feature 006 [US0 and FR-043–FR-050](../006-whr-cli/spec.md) proposes a local init
+wizard with fish as the missing human-shell default, bash for WorkHarbor-controlled
+noninteractive agent commands, herdr as the missing human-console default and a
+shared-shortcuts toggle. Human shell selection does not change agent interpreters,
+script shebangs or hook execution. Existing explicit choices are retained.
+
+This is future launcher scope, not an expansion of this pure policy port or its
+implementation approvals. Apply prepared environment before new-shell autoload;
+validate the selected executable and backend before spawn. With shortcuts off,
+FR-005 remains the complete opt-out. Missing attachments cannot be reported active.
+Starship remains disabled without an enablement option. Console reattachment retains
+its old environment; preference changes require explicit close/new session.
+Runtime shell/backend/attachment acceptance remains unverified and requires reviewed
+integration scope; unit-tested preparation alone does not satisfy Feature 006 SC-015.
