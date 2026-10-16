@@ -206,7 +206,14 @@ func TestSessionEndsBlockedReadAtValidityDeadline(t *testing.T) {
 	// The credential is valid for hours; only the limit can end the idle socket.
 	start := time.Now()
 	done := make(chan error, 1)
-	go func() { done <- session(context.Background(), state, start.Add(1500*time.Millisecond), nil) }()
+	var connected atomic.Int32
+	go func() {
+		done <- session(context.Background(), state, start.Add(1500*time.Millisecond), func(e Event) {
+			if e.Kind == "connected" {
+				connected.Add(1)
+			}
+		})
+	}()
 	select {
 	case e = <-done:
 		if e != ErrTransport {
@@ -217,6 +224,9 @@ func TestSessionEndsBlockedReadAtValidityDeadline(t *testing.T) {
 	}
 	if time.Since(start) < time.Second {
 		t.Fatalf("session ended early: %v", time.Since(start))
+	}
+	if connected.Load() == 0 {
+		t.Fatal("connected was not emitted before the deadline ended the read")
 	}
 	// This proves the socket is closed, not that session called CloseNow: coder/websocket
 	// also closes the connection when its context is cancelled.
