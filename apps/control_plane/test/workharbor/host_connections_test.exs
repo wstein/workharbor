@@ -108,21 +108,62 @@ defmodule WorkHarbor.HostConnectionsTest do
     refute_received {:host_connection_close, _}
   end
 
-  test "sustained heartbeat burst beyond capacity closes without a heartbeat write", c do
-    ref = connect(c)
+  defp audits(c) do
+    Repo.query!(
+      "SELECT event FROM audit_events WHERE host_id=? AND (event LIKE 'host_conn%' OR event LIKE 'host_heartbeat%') ORDER BY rowid",
+      [c.peer.host_id]
+    ).rows
+    |> List.flatten()
+  end
 
-    count = fn ->
-      Repo.query!("SELECT count(*) FROM audit_events WHERE event='host_heartbeat'").rows
-    end
+  test "sustained heartbeat burst beyond capacity closes with one refusal audit", c do
+    ref = connect(c)
 
     for _ <- 1..3 do
       assert {:ok, _} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
     end
 
-    before = count.()
+    before = audits(c)
     assert {:error, :heartbeat_too_fast} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
     assert_receive {:host_connection_close, :heartbeat_too_fast}
-    assert count.() == before
+    assert audits(c) -- before == ["host_heartbeat_refused"]
+    refute "host_heartbeat" in audits(c)
+  end
+
+  test "steady heartbeats add no audit rows and still renew the connection row", c do
+    ref = connect(c)
+    before = audits(c)
+    assert before == ["host_connected"]
+
+    for i <- 1..5 do
+      Agent.update(c.mono, fn _ -> i * 10_000 end)
+
+      assert {:ok, %{"kind" => "heartbeat_ack"}} =
+               HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    end
+
+    assert audits(c) == before
+    assert {:ok, "connected"} = HostConnections.host_state(c.peer.host_id)
+  end
+
+  test "each liveness transition adds exactly one audit row", c do
+    ref = connect(c)
+    assert audits(c) == ["host_connected"]
+
+    assert {:ok, ref2} = HostConnections.open(c.peer, self())
+    assert audits(c) == ["host_connected", "host_connection_replaced", "host_connected"]
+    assert_receive {:host_connection_close, :replaced}
+    assert {:error, _} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert audits(c) == ["host_connected", "host_connection_replaced", "host_connected"]
+
+    assert :ok = HostConnections.disconnect(ref2)
+
+    assert audits(c) == [
+             "host_connected",
+             "host_connection_replaced",
+             "host_connected",
+             "host_connection_unknown"
+           ]
   end
 
   test "tokens refill at one per five seconds measured from arrival", c do
