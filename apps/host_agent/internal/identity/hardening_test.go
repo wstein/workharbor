@@ -2,9 +2,17 @@
 package identity
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"math/big"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func traceFiles(t *testing.T, log *[]string, failRemove bool) {
@@ -58,6 +66,62 @@ func TestPrepareRefusesWhenTempRemovalFails(t *testing.T) {
 	}
 }
 
+func writeCA(t *testing.T, mode os.FileMode) string {
+	t.Helper()
+	pub, key, _ := ed25519.GenerateKey(rand.Reader)
+	tpl := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "ca"}, NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign}
+	der, e := x509.CreateCertificate(rand.Reader, tpl, tpl, pub, key)
+	if e != nil {
+		t.Fatal(e)
+	}
+	p := filepath.Join(physicalTemp(t), "ca.pem")
+	if e = os.WriteFile(p, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); e != nil {
+		t.Fatal(e)
+	}
+	if e = os.Chmod(p, mode); e != nil {
+		t.Fatal(e)
+	}
+	return p
+}
+
+func TestServerCAPathMustBeAbsoluteAndClean(t *testing.T) {
+	for _, p := range []string{"ca.pem", "./ca.pem", "/tmp/../tmp/ca.pem", "/tmp//ca.pem"} {
+		if _, e := Prepare(filepath.Join(physicalTemp(t), "identity"), "https://localhost:8443", p); e == nil {
+			t.Fatalf("Prepare accepted %q", p)
+		}
+	}
+	dir := filepath.Join(physicalTemp(t), "identity")
+	s, e := Prepare(dir, "https://localhost:8443", writeCA(t, 0600))
+	if e != nil {
+		t.Fatal(e)
+	}
+	s.ServerCAFile = "relative.pem"
+	if validate(s) == nil || Save(dir, s) == nil {
+		t.Fatal("validate accepted relative CA path")
+	}
+}
+
+func TestServerCAFileRefusesWritableAndSymlinkAndAcceptsPrivate(t *testing.T) {
+	for _, mode := range []os.FileMode{0620, 0602, 0666} {
+		s := &State{ServerCAFile: writeCA(t, mode)}
+		if _, e := TLSConfig(s, false); e == nil {
+			t.Fatalf("accepted CA mode %o", mode)
+		}
+	}
+	for _, mode := range []os.FileMode{0600, 0644} {
+		if _, e := TLSConfig(&State{ServerCAFile: writeCA(t, mode)}, false); e != nil {
+			t.Fatalf("refused CA mode %o", mode)
+		}
+	}
+	link := filepath.Join(physicalTemp(t), "link.pem")
+	if e := os.Symlink(writeCA(t, 0600), link); e != nil {
+		t.Fatal(e)
+	}
+	if _, e := TLSConfig(&State{ServerCAFile: link}, false); e == nil {
+		t.Fatal("accepted symlink CA")
+	}
+}
+
 func TestPrepareRefusesWhenParentSyncAfterMkdirFails(t *testing.T) {
 	for _, stage := range []string{"parent_open", "parent_sync", "parent_close"} {
 		dir := filepath.Join(physicalTemp(t), "identity")
@@ -88,5 +152,22 @@ func TestPrepareRetrySyncsParentWhenDirectoryAlreadyExists(t *testing.T) {
 	}
 	if len(log) == 0 || log[0] != "opendir:"+filepath.Dir(dir) {
 		t.Fatalf("retry skipped parent sync: %v", log)
+	}
+}
+
+func TestServerCAFifoRefusedWithoutBlocking(t *testing.T) {
+	p := filepath.Join(physicalTemp(t), "ca.fifo")
+	if e := syscall.Mkfifo(p, 0600); e != nil {
+		t.Fatal(e)
+	}
+	done := make(chan error, 1)
+	go func() { _, e := TLSConfig(&State{ServerCAFile: p}, false); done <- e }()
+	select {
+	case e := <-done:
+		if e == nil {
+			t.Fatal("accepted FIFO CA")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("FIFO CA blocked TLS setup")
 	}
 }
