@@ -1190,6 +1190,7 @@
       "WorkHarborWeb.HostTransportTest/test rotated-issuer leaves with a wrong profile or signature are refused at TLS",
       "WorkHarborWeb.HostTransportTest/test an expired previous issuer is refused at TLS",
       "WorkHarborWeb.HostTransportTest/test a malformed symlinked or unreadable issuer file never changes trust",
+      "WorkHarborWeb.HostTransportTest/test activation of a pending identity from a replaced issuer returns that issuer",
       "WorkHarbor.TrustedIssuersTest/test issuing remembers every issuer even when no handshake separates rotations",
       "WorkHarbor.TrustedIssuersTest/test a failing issuer file keeps trust and is retried only after a backoff",
       "WorkHarbor.TrustedIssuersTest/test a replaced issuer stays trusted for a leaf lifetime plus margin from observation",

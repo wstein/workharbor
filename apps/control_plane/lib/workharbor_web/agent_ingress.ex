@@ -95,7 +95,7 @@ defmodule WorkHarborWeb.AgentIngress do
   defp dispatch(%{request_path: "/agent/v1/identity/activate"} = conn, peer) do
     parsed(conn, ~w(schema_version), fn conn, _ ->
       with {:activate, :ok} <- {:activate, Hosts.activate(peer)},
-           {:issuer, {:ok, issuer}} <- {:issuer, Hosts.issuer()},
+           {:issuer, {:ok, issuer}} <- {:issuer, Hosts.issuer_for(peer.certificate)},
            {:confirm, {:ok, current}} when current === peer <-
              {:confirm, Hosts.resolve_identity(peer.certificate, :active)} do
         json(conn, %{
