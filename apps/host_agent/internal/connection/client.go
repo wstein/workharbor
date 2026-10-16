@@ -346,10 +346,14 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 		}
 		expires, e := identity.Expires(state)
 		if (state.Pending != nil && state.Pending.Certificate != "") || (e == nil && time.Until(expires) <= 6*time.Hour) {
-			e = Renew(ctx, dir)
-			if e == nil {
-				state, e = identity.Load(dir)
+			// A failed renewal keeps the active credential in use while session
+			// still accepts it; the next attempt retries renewal.
+			if Renew(ctx, dir) == nil {
+				if state, e = identity.Load(dir); e != nil || state.Active == nil {
+					return ErrTransport
+				}
 			}
+			e = nil
 		}
 		if e == nil {
 			e = session(ctx, state, func(event Event) { attempt = 0; emit(onEvent, event.Kind, event.HostID) })
