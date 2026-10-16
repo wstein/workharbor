@@ -200,8 +200,14 @@ cloud/proxy credentials and credential-helper configuration never pass through.
 No insecure endpoint/source flags or tags/indexes substitute for the selected leaf.
 Unavailable/ambiguous/over-budget raw input refuses before provider effects.
 Node26.11.1 is the repository runtime pin. These selections are not measured
-provider compatibility; exact installed version/hash and real Docker evidence must
-pass before acceptance. Docker Engine29.8.2 is the initial intended provider pin;
+provider compatibility; exact installed version and real Docker evidence must
+pass before acceptance. Owner decision H50:b: the host agent does not hash the Node
+or Docker CLI binaries. Each is verified by exact installed version plus guest
+package verification (package signature/checksum at guest install, recorded in the
+runtime preparation evidence); no guest verification procedure is documented yet, so
+it is a required runtime prerequisite, not an established guarantee. The Node
+`linux_*_sha256` values in tool-pins.json are release-archive digests, not binary
+hashes. Docker Engine29.8.2 is the initial intended provider pin;
 its verified guest package/install remains a separate runtime prerequisite.
 No latest/npx download fallback. Original code retains EUPL-1.2 SPDX; use packages
 independently and preserve dependency license/provenance.
