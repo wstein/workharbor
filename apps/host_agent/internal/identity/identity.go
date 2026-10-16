@@ -520,6 +520,21 @@ func Expired(s *State) bool {
 	return false
 }
 
+// PendingExpired reports whether an issued pending credential, or its issuer, is
+// past its validity end and so can never be activated.
+func PendingExpired(s *State) bool {
+	if s == nil || s.Pending == nil || s.Pending.Certificate == "" {
+		return false
+	}
+	now := time.Now()
+	for _, v := range []string{s.Pending.Certificate, s.Pending.IssuerCertificate} {
+		if c, e := certificate(v); e != nil || !now.Before(c.NotAfter) {
+			return true
+		}
+	}
+	return false
+}
+
 func noSymlinkAncestors(path string, missingFinal bool) error {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return ErrIdentity
