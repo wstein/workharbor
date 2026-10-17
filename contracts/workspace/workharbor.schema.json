@@ -117,7 +117,7 @@
               "type": "string",
               "maxLength": 2048,
               "pattern": "^(https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+|ssh://(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+)$",
-              "description": "Desired input only, never a pin: https without userinfo, or ssh (a user name before @ is admitted for ssh only). No query, fragment, whitespace, control or bidirectional characters; percent escapes must be well formed (checked by validators). whr never fetches it. Stricter than the resolver's origin check by design: scp-like addresses are not accepted here."
+              "description": "Desired input only, never a pin: https without userinfo, or ssh (a user name before @ is admitted for ssh only). No query, fragment, whitespace, control or bidirectional characters; percent escapes must be well formed (checked by validators). whr never fetches it. Stricter than the resolver's origin check by design: scp-like addresses are not accepted here. Ports are 1 to 65535 and the path has no empty component (checked by validators)."
             },
             "path": {
               "type": "string",
