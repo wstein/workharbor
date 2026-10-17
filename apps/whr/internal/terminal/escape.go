@@ -81,7 +81,8 @@ func hex(v uint64, width int) string {
 // appears raw: each becomes a \uXXXX escape (surrogate pairs above the BMP).
 // encoding/json already escapes C0 controls and U+2028/U+2029; this covers DEL,
 // C1, bidirectional and other format characters. Such runes only occur inside
-// JSON strings, so a rune-wise rewrite cannot change the document structure.
+// JSON strings of compact encoding/json output; callers must strip the
+// structural trailing newline of json.Encoder before calling.
 func EscapeJSON(doc []byte) []byte {
 	out := make([]byte, 0, len(doc))
 	for i := 0; i < len(doc); {
