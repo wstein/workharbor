@@ -509,7 +509,16 @@
     "test_check_ci.SourceTests.test_python3_children_use_selected_interpreter_and_path_restores_on_exception",
     "test_application_checks.ApplicationChecksTests.test_pinned_companion_setup_precedes_host_tests_and_refuses_scripts",
     "test_harness.HarnessTests.test_exact_pure_dockerfile_grammar_imports_do_not_grant_docker_access",
-    "test_application_checks.ApplicationChecksTests.test_npm_configs_are_distinct_private_empty_files_at_invocation"
+    "test_application_checks.ApplicationChecksTests.test_npm_configs_are_distinct_private_empty_files_at_invocation",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_workspace_manifest_vectors",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_vector_kinds_cover_raw_byte_and_size_cases",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_schema_version_is_type_exact",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_example_manifests_still_valid",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_version1_rejects_version2_fields",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_version2_defaults_documented",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_version2_has_no_resolver_or_agent_shell_field",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_repository_check_runs_vectors_and_reports_disagreement",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_hostile_bytes"
   ],
   "retained_assertion_failures": [],
   "application_tests": {
