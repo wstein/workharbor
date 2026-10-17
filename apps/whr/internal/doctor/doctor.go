@@ -6,6 +6,16 @@
 // Ports, so the checks are hermetic in tests and read-only in production: they
 // create no file, send nothing over a socket and run no process but the fixed
 // git --version.
+//
+// Redaction (FR-060) decision note: user and host names are replaced only in
+// path-valued evidence, as whole path words (case-insensitive, any non-letter
+// non-digit delimiter), never inside other words, never in messages or
+// remediations, and never when the name is a standard system word such as run,
+// git or docker (see SystemWords). The home directory becomes "~". The
+// system-word skip is a tradeoff against "wherever they occur in a path": it
+// keeps /var/run/docker.sock and /usr/bin/git intact at the price of not
+// hiding a user who is literally called one of those words. The spec wording
+// needs an amendment note from the owner.
 package doctor
 
 import (
