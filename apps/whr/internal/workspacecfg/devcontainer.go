@@ -52,6 +52,8 @@ func CheckDevcontainer(raw []byte) []Finding {
 		code := "devcontainer.syntax"
 		if serr.duplicate {
 			code = "devcontainer.duplicate_key"
+		} else if serr.encoding {
+			code = "devcontainer.encoding"
 		}
 		return fail(code, serr.msg)
 	}

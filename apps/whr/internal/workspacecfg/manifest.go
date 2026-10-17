@@ -76,6 +76,8 @@ func CheckManifest(raw []byte) ManifestResult {
 		code := "manifest.syntax"
 		if serr.duplicate {
 			code = "manifest.duplicate_key"
+		} else if serr.encoding {
+			code = "manifest.encoding"
 		}
 		return fail(code, serr.msg)
 	}
