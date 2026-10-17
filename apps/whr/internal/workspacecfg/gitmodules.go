@@ -19,7 +19,7 @@ type smEntry struct {
 }
 
 var (
-	sectionLine = regexp.MustCompile(`^\[submodule "((?:[^"\\]|\\.)*)"\][ \t]*(?:[#;].*)?$`)
+	sectionLine = regexp.MustCompile(`(?i)^\[submodule[ \t]+"((?:[^"\\]|\\.)*)"[ \t]*\](.*)$`)
 	keyLine     = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9-]*)[ \t]*(?:=(.*))?$`)
 )
 
@@ -61,7 +61,36 @@ func parseGitmodules(blob []byte, c *collector) gitmodulesResult {
 	}
 	var secs []*section
 	var cur *section
-	names := map[string]bool{}
+	byName := map[string]*section{}
+	handleKey := func(n int, text string) *gitmodulesResult {
+		m := keyLine.FindStringSubmatch(text)
+		if m == nil || !strings.Contains(text, "=") {
+			r := bad("line " + strconv.Itoa(n+1) + " is not a key = value pair")
+			return &r
+		}
+		val, ok := parseValue(m[2])
+		if !ok {
+			r := bad("line " + strconv.Itoa(n+1) + " has an unsupported value syntax")
+			return &r
+		}
+		switch key := strings.ToLower(m[1]); key {
+		case "path":
+			if cur.hasPath {
+				c.add("gitmodules.duplicate_field", ".gitmodules", "submodule "+quoteKey(cur.name)+" repeats path", "")
+			} else {
+				cur.path, cur.hasPath = val, true
+			}
+		case "url":
+			if cur.hasURL {
+				c.add("gitmodules.duplicate_field", ".gitmodules", "submodule "+quoteKey(cur.name)+" repeats url", "")
+			} else {
+				cur.url, cur.hasURL = val, true
+			}
+		default:
+			res.extra = append(res.extra, smExtra{cur.name, key, val})
+		}
+		return nil
+	}
 	lines := strings.Split(string(blob), "\n")
 	for n, raw := range lines {
 		line := strings.TrimRight(raw, "\r")
@@ -75,44 +104,28 @@ func parseGitmodules(blob []byte, c *collector) gitmodulesResult {
 				return bad("line " + strconv.Itoa(n+1) + " is not a [submodule \"name\"] header")
 			}
 			name := unescapeSection(m[1])
-			if names[name] {
-				c.add("gitmodules.duplicate_field", ".gitmodules", "duplicate section for submodule "+quoteKey(name), "")
+			// Git merges sections of the same name.
+			if cur = byName[name]; cur == nil {
+				cur = &section{name: name}
+				byName[name] = cur
+				secs = append(secs, cur)
+				if len(secs) > MaxGitmodulesEntries {
+					c.add("gitmodules.too_large", ".gitmodules", ".gitmodules has more than 256 entries", "")
+					return res
+				}
 			}
-			names[name] = true
-			cur = &section{name: name}
-			secs = append(secs, cur)
-			if len(secs) > MaxGitmodulesEntries {
-				c.add("gitmodules.too_large", ".gitmodules", ".gitmodules has more than 256 entries", "")
-				return res
+			// A key may follow the header on the same line.
+			if rest := strings.TrimSpace(m[2]); rest != "" && rest[0] != '#' && rest[0] != ';' {
+				if r := handleKey(n, rest); r != nil {
+					return *r
+				}
 			}
 		default:
 			if cur == nil {
 				return bad("line " + strconv.Itoa(n+1) + " is outside a section")
 			}
-			m := keyLine.FindStringSubmatch(trimmed)
-			if m == nil || !strings.Contains(trimmed, "=") {
-				return bad("line " + strconv.Itoa(n+1) + " is not a key = value pair")
-			}
-			val, ok := parseValue(m[2])
-			if !ok {
-				return bad("line " + strconv.Itoa(n+1) + " has an unsupported value syntax")
-			}
-			key := strings.ToLower(m[1])
-			switch key {
-			case "path":
-				if cur.hasPath {
-					c.add("gitmodules.duplicate_field", ".gitmodules", "submodule "+quoteKey(cur.name)+" repeats path", "")
-				} else {
-					cur.path, cur.hasPath = val, true
-				}
-			case "url":
-				if cur.hasURL {
-					c.add("gitmodules.duplicate_field", ".gitmodules", "submodule "+quoteKey(cur.name)+" repeats url", "")
-				} else {
-					cur.url, cur.hasURL = val, true
-				}
-			default:
-				res.extra = append(res.extra, smExtra{cur.name, key, val})
+			if r := handleKey(n, trimmed); r != nil {
+				return *r
 			}
 		}
 	}
@@ -188,10 +201,8 @@ var (
 // submoduleURLCode classifies a .gitmodules URL: "" when admitted, otherwise
 // the finding code. The URL itself is never echoed.
 func submoduleURLCode(u string) string {
-	if u != "" && !strings.ContainsAny(u, " \t\r\n\x00") {
-		if urlHasCredentials(u) || scpPassword.MatchString(u) {
-			return "submodule.url_credentials"
-		}
+	if u != "" && (urlHasCredentials(u) || scpPassword.MatchString(u)) {
+		return "submodule.url_credentials"
 	}
 	switch {
 	case u == "" || len(u) > maxURL || strings.ContainsFunc(u, func(r rune) bool { return r < 0x21 || r == 0x7f }):
@@ -204,7 +215,7 @@ func submoduleURLCode(u string) string {
 		return "submodule.url_invalid"
 	}
 	if _, userinfo, host, _, ok := urlAuthority(u); ok {
-		if strings.HasPrefix(userinfo, "-") || strings.HasPrefix(host, "-") {
+		if strings.HasPrefix(userinfo, "-") || strings.HasPrefix(host, "-") || !portOK(host) {
 			return "submodule.url_invalid"
 		}
 	} else if i := strings.Index(u, "@"); i >= 0 && strings.HasPrefix(u[i+1:], "-") {
