@@ -159,7 +159,7 @@ func TestValidateRealProjectsFilesAndTreePaths(t *testing.T) {
 	}
 }
 
-func TestValidateRealGitInternalsUnsafe(t *testing.T) {
+func TestValidateGitInternalsUnsafe(t *testing.T) {
 	realGit(t)
 	for name, rel := range map[string]string{"commondir": ".git/commondir", "alternates": ".git/objects/info/alternates"} {
 		dir := repoDir(t, true)
@@ -383,7 +383,7 @@ func TestValidateNoNetwork(t *testing.T) {
 
 // TestValidateGitDeadlineIsListingFailure: Git blocks on a FIFO loose reference
 // and on a FIFO packed-refs; the shared budget ends it and the result is an error.
-func TestValidateGitFailureBlockedGit(t *testing.T) {
+func blockedGit(t *testing.T) {
 	realGit(t)
 	for name, setup := range map[string]func(t *testing.T, dir string){
 		"fifo loose ref": func(t *testing.T, dir string) {
@@ -425,7 +425,7 @@ func TestValidateInterruptedGitIsKilled(t *testing.T) {
 	}
 }
 
-func TestValidateHostileListingsAreBounded(t *testing.T) {
+func hostileListings(t *testing.T) {
 	realGit(t)
 	t.Run("100000 index entries", func(t *testing.T) {
 		dir := repoDir(t, false)

@@ -4,6 +4,7 @@ package workspacecfg
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -117,7 +118,15 @@ func projectURLProblem(u string) string {
 	case !wellFormedPercent(u):
 		return "has a malformed percent escape"
 	}
-	_, userinfo, host, _, _ := urlAuthority(u)
+	_, userinfo, host, rest, _ := urlAuthority(u)
+	if i := strings.LastIndex(host, ":"); i >= 0 {
+		if port, err := strconv.Atoi(host[i+1:]); err != nil || port < 1 || port > 65535 {
+			return "has a port outside 1-65535"
+		}
+	}
+	if strings.Contains(rest, "//") {
+		return "has an empty path component"
+	}
 	if strings.HasPrefix(userinfo, "-") || strings.HasPrefix(host, "-") {
 		return "has a user or host starting with a hyphen"
 	}

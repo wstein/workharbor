@@ -138,6 +138,8 @@ func TestValidateHostileCorpus(t *testing.T) {
 			write(t, d, ".devcontainer/devcontainer.json", strings.Repeat("[", 100000))
 		}, "devcontainer.syntax"},
 	}
+	t.Run("git listings", hostileListings)
+	t.Run("submodule rules", TestValidateSubmoduleRules)
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := validDir(t)

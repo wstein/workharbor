@@ -52,6 +52,7 @@ func (v jvalue) get(key string) (jvalue, bool) {
 // scanError is a failure of the scanner: a syntax error or a repeated key.
 type scanError struct {
 	duplicate bool
+	encoding  bool // a lone surrogate escape: not Unicode text
 	msg       string
 }
 
@@ -87,6 +88,12 @@ type jparser struct {
 	nodes int
 	err   *scanError
 	dup   *scanError
+}
+
+func (p *jparser) failEncoding(msg string) {
+	if p.err == nil {
+		p.err = &scanError{encoding: true, msg: msg}
+	}
 }
 
 func (p *jparser) fail(format string, args ...any) {
@@ -291,11 +298,11 @@ func (p *jparser) str() string {
 							return ""
 						}
 						if r = utf16.DecodeRune(r, lo); r == utf8.RuneError {
-							p.fail("unpaired surrogate")
+							p.failEncoding("a string holds an unpaired surrogate escape")
 							return ""
 						}
 					} else {
-						p.fail("unpaired surrogate")
+						p.failEncoding("a string holds an unpaired surrogate escape")
 						return ""
 					}
 				}

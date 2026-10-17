@@ -272,7 +272,14 @@ func minimalGitDirAt(t *testing.T, dir, name string) {
 	write(t, dir, name+"/objects/info/.keep", "")
 }
 
+// TestValidateGitFailureIsError: a failing, timed-out or unparsable Git is an
+// error, never a warning.
 func TestValidateGitFailureIsError(t *testing.T) {
+	t.Run("injected failures", injectedGitFailures)
+	t.Run("blocked git", blockedGit)
+}
+
+func injectedGitFailures(t *testing.T) {
 	for name, handler := range map[string]func(sub string, c workspacecfg.GitCmd) (workspacecfg.GitOut, error){
 		"rev-parse exit 128": func(sub string, c workspacecfg.GitCmd) (workspacecfg.GitOut, error) {
 			return failing(sub, c, "rev-parse")
