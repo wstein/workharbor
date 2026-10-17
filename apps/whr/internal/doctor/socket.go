@@ -75,7 +75,7 @@ func classify(err error) string {
 // dockerSocket resolves DOCKER_HOST: a unix path, or a reason it cannot be dialed.
 func (r *run) dockerSocket() (path string, remote bool, ok bool) {
 	h := r.dockerHost
-	if rest, found := strings.CutPrefix(h, "unix://"); found {
+	if rest, found := cutUnix(h); found {
 		if filepath.IsAbs(rest) {
 			return rest, false, true
 		}
@@ -93,7 +93,7 @@ func (r *run) socket() Check {
 		switch {
 		case ok:
 			paths, source = []candidate{{p, "$DOCKER_HOST"}}, "DOCKER_HOST"
-		case remote && !strings.HasPrefix(r.dockerHost, "unix:"):
+		case remote && !isUnixHost(r.dockerHost):
 			scheme := dockerScheme(r.dockerHost)
 			return unknown(id, reasonRemoteNotChecked, "DOCKER_HOST names a remote daemon, which is not checked.",
 				"Unset DOCKER_HOST to check a local socket, or verify the remote daemon with its own tools.", map[string]any{"scheme": scheme})
@@ -149,3 +149,13 @@ func dockerScheme(h string) string {
 	}
 	return "other"
 }
+
+// cutUnix strips a case-insensitive unix:// scheme.
+func cutUnix(h string) (string, bool) {
+	if len(h) >= 7 && strings.EqualFold(h[:7], "unix://") {
+		return h[7:], true
+	}
+	return h, false
+}
+
+func isUnixHost(h string) bool { return len(h) >= 5 && strings.EqualFold(h[:5], "unix:") }

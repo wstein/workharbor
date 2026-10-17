@@ -660,6 +660,11 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorSocketEvidenceHasNoEnvironmentValues",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorVerdictAndCounts",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorVerdictTable",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorRedactionTable",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorExecutableEvidence",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorCheckedPathConstant",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorDockerHostUnixCase",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorDockerHostMalformedUnix",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorVersionEvidenceUntouched",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorDaemonJSONReadBound"
     ],

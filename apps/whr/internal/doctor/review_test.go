@@ -398,3 +398,85 @@ func TestDoctorDaemonJSONReadBound(t *testing.T) {
 		t.Errorf("daemon.json read bound %d, want 65536", got)
 	}
 }
+
+// Redaction table: delimiters, case, system components, executable directory.
+func TestDoctorRedactionTable(t *testing.T) {
+	cases := []struct{ user, host, in, want string }{
+		{"vscode", "box", "/tmp/vscode.data", "/tmp/<user>.data"},
+		{"werner", "box", "/srv/werner.data", "/srv/<user>.data"},
+		{"werner", "box", "/srv/Werner", "/srv/<user>"},
+		{"werner", "box", "/srv/WERNER/x", "/srv/<user>/x"},
+		{"werner", "box", "/srv/x@werner", "/srv/x@<user>"},
+		{"werner", "box", "/srv/werner+x", "/srv/<user>+x"},
+		{"werner", "box", "/srv/a werner b", "/srv/a <user> b"},
+		{"werner", "box", "/srv/box.local", "/srv/<host>.local"},
+		{"werner", "box", "/srv/my_werner_x", "/srv/my_<user>_x"},
+		{"werner", "box", "/srv/wernerx/xwerner", "/srv/wernerx/xwerner"},
+		{"werner", "box", "/srv/werner1", "/srv/werner1"},
+		// system path components are never names
+		{"git", "docker", "/srv/my-git-repo", "/srv/my-git-repo"},
+		{"run", "run", "/var/run/docker.sock", "/var/run/docker.sock"},
+		{"docker", "bin", "/usr/bin/docker.sock", "/usr/bin/docker.sock"},
+		{"ROOT", "opt", "/root/opt", "/root/opt"},
+	}
+	for _, c := range cases {
+		if got := doctor.NewRedactor("/h", c.user, c.host).String(c.in); got != c.want {
+			t.Errorf("user %q host %q: %q -> %q, want %q", c.user, c.host, c.in, got, c.want)
+		}
+	}
+}
+
+// The git executable keeps its final component; its directories are redacted.
+func TestDoctorExecutableEvidence(t *testing.T) {
+	w := healthy()
+	w.user, w.gitPath = "werner", "/srv/werner/bin/git"
+	if g := statusOf(run(w), "git.version"); g.Evidence["executable"] != "/srv/<user>/bin/git" {
+		t.Errorf("executable: %v", g.Evidence)
+	}
+	w = healthy()
+	w.user, w.gitPath = "werner", "/srv/bin/werner"
+	if g := statusOf(run(w), "git.version"); g.Evidence["executable"] != "/srv/bin/werner" {
+		t.Errorf("final component altered: %v", g.Evidence)
+	}
+	w = healthy()
+	w.user, w.gitPath = "alice", "/home/alice/.local/bin/git"
+	if g := statusOf(run(w), "git.version"); g.Evidence["executable"] != "~/.local/bin/git" {
+		t.Errorf("home executable: %v", g.Evidence)
+	}
+}
+
+// The daemon.json path is a constant, never redacted.
+func TestDoctorCheckedPathConstant(t *testing.T) {
+	w := healthy()
+	w.user, w.host = "daemon", "json"
+	w.files["/etc/docker/daemon.json"] = []byte(`{"data-root":"/x"}`)
+	if g := statusOf(run(w), "disk.container_storage"); g.Evidence["checked"] != "/etc/docker/daemon.json" {
+		t.Errorf("checked: %v", g.Evidence)
+	}
+}
+
+// A malformed unix value is not a remote daemon, whatever its case.
+func TestDoctorDockerHostMalformedUnix(t *testing.T) {
+	for _, h := range []string{"UNIX:rel", "unix:/x", "Unix://rel.sock"} {
+		w := healthy()
+		w.env["DOCKER_HOST"] = h
+		if g := statusOf(run(w), "container.socket"); g.Status != doctor.StatusUnknown || g.Reason != "not_measurable" {
+			t.Errorf("%s: %+v", h, g)
+		}
+	}
+}
+
+// DOCKER_HOST scheme matching is case-insensitive for unix as for the others.
+func TestDoctorDockerHostUnixCase(t *testing.T) {
+	for _, h := range []string{"UNIX:///custom/d.sock", "Unix:///custom/d.sock"} {
+		w := healthy()
+		w.env["DOCKER_HOST"] = h
+		w.sockets = map[string]error{"/custom/d.sock": nil}
+		if g := statusOf(run(w), "container.socket"); g.Status != doctor.StatusPass {
+			t.Errorf("%s: %+v", h, g)
+		}
+		if g := statusOf(run(w), "disk.container_storage"); g.Status != doctor.StatusPass {
+			t.Errorf("%s storage: %+v", h, g)
+		}
+	}
+}
