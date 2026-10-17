@@ -81,3 +81,18 @@ The Specify template's scenarios, requirements, entities, success criteria and
 assumptions were reviewed for this revision; before/after hooks are empty in
 `.specify/extensions.yml`. Existing plan/tasks and historical approval pins remain
 unchanged. This revision is ready for human spec review, not implementation.
+
+## Amendment H77 (2026-10-16/17) review state
+
+- [ ] Independent review CLEAR for the exact head of the H77 amendment (spec FR-051–FR-063, US7–US8, SC-016–SC-021,
+  plan, tasks T025–T034, ADR 0014 and the `commands.json`, `output.schema.json`, `doctor-checks.json`,
+  `validate-findings.json`, `resources-vectors.json`, `workharbor.schema.json` (version 2), `vectors.json` and
+  `starters.json` contracts). Unchecked: no approval is claimed.
+- [ ] Explicit owner approval of the amendment text for that head, evidenced by a tracker or PR link. Werner's chat
+  decisions of 2026-10-16/17 are decision H77 itself, not text approval.
+- [ ] The owner's human review of the plan, task scope, configuration schema (manifest version 2) and launcher contracts
+  required by the 2026-10-16 initialization and resource revisions. This reconciliation is the input to that review, not
+  the review.
+- Requirements-quality notes: the findings catalogue and limits are owner-confirmed values (chat 2026-10-17); the
+  starters are listed as unsupported; `setup --dry-run` is excluded with a stated reason (FR-061); owner-API commands are
+  specified and blocked, not removed; FR-051–FR-063 continue the numbering after the 2026-10-16 revisions.
