@@ -81,9 +81,9 @@ func (w *Writer) Failure(command string, err *exitcode.Error) exitcode.Code {
 	if w.Color {
 		prefix = "\x1b[1;31mwhr:\x1b[0m"
 	}
-	fmt.Fprintf(w.Err, "%s %s\n", prefix, terminal.Escape(err.Message))
+	fmt.Fprintf(w.Err, "%s %s\n", prefix, terminal.Escape(clip(err.Message)))
 	if err.Remediation != "" {
-		fmt.Fprintf(w.Err, "  hint: %s\n", terminal.Escape(err.Remediation))
+		fmt.Fprintf(w.Err, "  hint: %s\n", terminal.Escape(clip(err.Remediation)))
 	}
 	return code
 }

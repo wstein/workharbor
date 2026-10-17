@@ -10,6 +10,8 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/terminal"
 )
 
 // Build metadata. A release build overrides them with -ldflags -X; a plain
@@ -78,7 +80,8 @@ func vcsRevision() string {
 	return ""
 }
 
-// Human renders the result for a terminal; every value is build-controlled.
+// Human renders the result for a terminal. Linker-injected fields are escaped
+// like any other text (FR-022).
 func (r Result) Human() string {
 	names := make([]string, 0, len(r.ContractVersions))
 	for n := range r.ContractVersions {
@@ -90,5 +93,6 @@ func (r Result) Human() string {
 		parts = append(parts, fmt.Sprintf("%s=%d", n, r.ContractVersions[n]))
 	}
 	return fmt.Sprintf("whr %s\nrevision: %s\nbuild date: %s\nplatform: %s/%s\ncontracts: %s\n",
-		r.Version, r.Revision, r.BuildDate, r.ClientPlatform.OS, r.ClientPlatform.Arch, strings.Join(parts, " "))
+		terminal.Escape(r.Version), terminal.Escape(r.Revision), terminal.Escape(r.BuildDate),
+		terminal.Escape(r.ClientPlatform.OS), terminal.Escape(r.ClientPlatform.Arch), strings.Join(parts, " "))
 }
