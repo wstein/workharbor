@@ -1,0 +1,1166 @@
+{
+ "schema_version": 1,
+ "contract": "workspace-git-vectors",
+ "decision": "H77",
+ "status": "proposed",
+ "description": "Vectors for the pure Git-state analysis of whr validate (committed .gitmodules blob and tree/index listings). Owned by T026. A tree or index entry is the string 'MODE SHA PATH'; a SHA of one hex character stands for 40 repetitions of it. 'tree' is the HEAD tree (or the index when head is false), 'index' defaults to 'tree'; 'gitmodules' is the blob text, 'bytes_hex' raw bytes; generate_bytes pads the template to 'total' bytes with newlines; generate_entries adds N submodules projects/sNNN (with their gitlinks when with_gitlinks). expect_codes is the sorted set of distinct finding codes. Messages never echo URL credentials (canary 'CANARY').",
+ "cases": [
+  {
+   "id": "empty-repository",
+   "tree": [],
+   "expect_codes": []
+  },
+  {
+   "id": "pinned-https",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "pinned-ssh",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://git@f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "pinned-ssh-port",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://f.example:2222/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "pinned-scp-like",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git@f.example:o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "pinned-scp-like-absolute-path",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git@f.example:/srv/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "pinned-sha256-object-id",
+   "tree": [
+    "160000 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "unlisted-gitlink",
+   "tree": [
+    "160000 a projects/app"
+   ],
+   "expect_codes": [
+    "submodule.unlisted"
+   ],
+   "note": "gitlink without .gitmodules entry (no .gitmodules at all)"
+  },
+  {
+   "id": "unlisted-gitlink-other-entry",
+   "tree": [
+    "160000 a projects/app",
+    "160000 b projects/b",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.unlisted"
+   ]
+  },
+  {
+   "id": "not-pinned-entry",
+   "tree": [
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.not_pinned"
+   ],
+   "note": "the resolver rejects an entry without a gitlink"
+  },
+  {
+   "id": "outside-projects",
+   "tree": [
+    "160000 a other/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = other/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-prefix-only",
+   "tree": [
+    "160000 a projectsx/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projectsx/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-is-projects-itself",
+   "tree": [
+    "160000 a projects",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "path-not-canonical",
+   "tree": [
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/../x\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.not_pinned",
+    "submodule.outside_projects"
+   ]
+  },
+  {
+   "id": "path-dot-git-case",
+   "tree": [
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/.GIT/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.not_pinned",
+    "submodule.outside_projects"
+   ]
+  },
+  {
+   "id": "custom-projects-path",
+   "projects_path": "repos",
+   "tree": [
+    "160000 a repos/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = repos/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "nested-submodules",
+   "tree": [
+    "160000 a projects/a",
+    "160000 b projects/a/b",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"a\"]\n\tpath = projects/a\n\turl = https://f.example/o/a.git\n[submodule \"b\"]\n\tpath = projects/a/b\n\turl = https://f.example/o/b.git\n",
+   "expect_codes": [
+    "submodule.nested",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "overlapping-same-path",
+   "tree": [
+    "160000 a projects/a",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"a\"]\n\tpath = projects/a\n\turl = https://f.example/o/a.git\n[submodule \"b\"]\n\tpath = projects/a\n\turl = https://f.example/o/b.git\n",
+   "expect_codes": [
+    "submodule.nested",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "gitlink-below-gitlink",
+   "tree": [
+    "160000 a projects/a",
+    "160000 b projects/a/b",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"a\"]\n\tpath = projects/a\n\turl = https://f.example/o/a.git\n",
+   "expect_codes": [
+    "submodule.nested",
+    "submodule.pinned",
+    "submodule.unlisted"
+   ]
+  },
+  {
+   "id": "url-http",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = http://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-file",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = file:///srv/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-ext",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ext::sh -c touch% /tmp/x\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-ext-nospace",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ext::sh\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-relative-dotdot",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ../app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-relative-dot",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ./app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-absolute-path",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = /srv/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-empty",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = \n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-git-scheme",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-query",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git?x=1\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-bad-percent",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/a%zz\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-space",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/a b\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-dash-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://-oProxyCommand=x/o/app\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-dash-user",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://-oProxyCommand@f.example/o/app\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-scp-dash-user",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = -oProxyCommand@f.example:o/app\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-https-user-password",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://user:CANARYpw@f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ],
+   "note": "value never echoed; the only url code"
+  },
+  {
+   "id": "url-https-token",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://CANARYtok@f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ]
+  },
+  {
+   "id": "url-ssh-password",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://git:CANARYpw@f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ]
+  },
+  {
+   "id": "url-scp-password",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git:CANARYpw@f.example:o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ]
+  },
+  {
+   "id": "url-http-credentials",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = http://u:CANARYpw@f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ]
+  },
+  {
+   "id": "update-command",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tupdate = !touch /tmp/x\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.update_command"
+   ]
+  },
+  {
+   "id": "update-command-quoted",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tupdate = \"!touch /tmp/x\"\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.update_command"
+   ]
+  },
+  {
+   "id": "update-checkout",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tupdate = checkout\n",
+   "expect_codes": [
+    "gitmodules.unsupported_key",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "unsupported-branch",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tbranch = main\n",
+   "expect_codes": [
+    "gitmodules.unsupported_key",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "unsupported-shallow",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tshallow = true\n",
+   "expect_codes": [
+    "gitmodules.unsupported_key",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "unsupported-ignore",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tignore = all\n",
+   "expect_codes": [
+    "gitmodules.unsupported_key",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "unsupported-fetchrecurse",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tfetchRecurseSubmodules = true\n",
+   "expect_codes": [
+    "gitmodules.unsupported_key",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "duplicate-path",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\tpath = projects/other\n",
+   "expect_codes": [
+    "gitmodules.duplicate_field",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "duplicate-url",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n\turl = https://f.example/o/x.git\n",
+   "expect_codes": [
+    "gitmodules.duplicate_field",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "duplicate-section",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.duplicate_field",
+    "submodule.nested",
+    "submodule.pinned"
+   ],
+   "note": "the same name twice lists the same path twice, which overlaps"
+  },
+  {
+   "id": "keys-are-case-insensitive",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tPATH = projects/app\n\tURL = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "comments-and-inline-comments",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "# top\n; semi\n[submodule \"app\"] # trailing\n\tpath = projects/app ; inline\n\turl = https://f.example/o/app.git # inline\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "quoted-values",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = \"projects/app\"\n\turl = \"https://f.example/o/app.git\"\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "crlf",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\r\n\tpath = projects/app\r\n\turl = https://f.example/o/app.git\r\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "section-name-escapes",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"a\\\"b\\\\c\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "empty-gitmodules-with-gitlink",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "",
+   "expect_codes": [
+    "submodule.unlisted"
+   ]
+  },
+  {
+   "id": "empty-gitmodules",
+   "tree": [
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "",
+   "expect_codes": []
+  },
+  {
+   "id": "syntax-other-section",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[core]\n\tfoo = 1\n[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-key-before-section",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "path = x\n[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-bare-key",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-unterminated-quote",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = \"projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-unterminated-header",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"\n\tpath = projects/app\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-header-without-name",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-continuation",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/ap\\\np.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-missing-path",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-missing-url",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-unknown-escape",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/\\qapp\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-nul",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "bytes_hex": "5b7375626d6f64756c652022617070225d0a0970617468203d2070726f6a656374732f6170700a0975726c203d2068747470733a2f2f662e6578616d706c652f6f2f6170702e6769740a00",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-invalid-utf8",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "bytes_hex": "5b7375626d6f64756c652022617070225d0a0970617468203d2070726f6a656374732f6170700a0975726c203d2068747470733a2f2f662e6578616d706c652f6f2f6170702e6769740aff",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "syntax-garbage-line",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\t= x\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "too-large-bytes",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "generate_bytes": {
+    "total": 65537,
+    "template": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+    "padding": "newline"
+   },
+   "expect_codes": [
+    "gitmodules.too_large"
+   ]
+  },
+  {
+   "id": "max-size-ok",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "generate_bytes": {
+    "total": 65536,
+    "template": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+    "padding": "newline"
+   },
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "entries-256-ok",
+   "generate_entries": {
+    "count": 256,
+    "with_gitlinks": true
+   },
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "entries-257-too-large",
+   "generate_entries": {
+    "count": 257,
+    "with_gitlinks": true
+   },
+   "expect_codes": [
+    "gitmodules.too_large"
+   ]
+  },
+  {
+   "id": "gitmodules-mode-100644",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "gitmodules-mode-100755",
+   "tree": [
+    "160000 a projects/app",
+    "100755 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "gitmodules-mode-120000",
+   "tree": [
+    "160000 a projects/app",
+    "120000 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.unsafe"
+   ]
+  },
+  {
+   "id": "gitmodules-mode-160000",
+   "tree": [
+    "160000 a projects/app",
+    "160000 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.unsafe"
+   ]
+  },
+  {
+   "id": "gitmodules-mode-040000",
+   "tree": [
+    "160000 a projects/app",
+    "040000 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.unsafe"
+   ]
+  },
+  {
+   "id": "gitmodules-staged-differs",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "index": [
+    "160000 a projects/app",
+    "100644 c .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.uncommitted_change",
+    "submodule.pinned"
+   ],
+   "note": "the committed blob is read; the index differs"
+  },
+  {
+   "id": "gitmodules-staged-only",
+   "tree": [],
+   "index": [
+    "100644 c .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.uncommitted_change"
+   ],
+   "note": "staged .gitmodules with a HEAD that does not list it: the committed side has no entries"
+  },
+  {
+   "id": "gitlink-staged-new",
+   "tree": [
+    "100644 b .gitmodules"
+   ],
+   "index": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.not_committed",
+    "submodule.not_pinned"
+   ],
+   "note": "entry without a committed gitlink is also not_pinned"
+  },
+  {
+   "id": "gitlink-staged-update",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "index": [
+    "160000 d projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.not_committed",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "gitlink-staged-removal",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "index": [
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "",
+   "expect_codes": [
+    "submodule.not_committed",
+    "submodule.unlisted"
+   ]
+  },
+  {
+   "id": "unborn-head-staged-submodule",
+   "head": false,
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "git.head_missing",
+    "submodule.pinned"
+   ],
+   "note": "FR-054: HEAD unborn, .gitmodules from the index"
+  },
+  {
+   "id": "unborn-head-staged-unlisted",
+   "head": false,
+   "tree": [
+    "160000 a projects/app"
+   ],
+   "expect_codes": [
+    "git.head_missing",
+    "submodule.unlisted"
+   ]
+  },
+  {
+   "id": "unborn-head-empty",
+   "head": false,
+   "tree": [],
+   "expect_codes": [
+    "git.head_missing"
+   ]
+  },
+  {
+   "id": "tree-path-0",
+   "tree": [
+    "100644 a a/.git/x"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-1",
+   "tree": [
+    "100644 a .git/config"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-2",
+   "tree": [
+    "100644 a a/.GIT/b"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-3",
+   "tree": [
+    "100644 a a/.Git"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-4",
+   "tree": [
+    "100644 a x/./y"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-5",
+   "tree": [
+    "100644 a a//b"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-6",
+   "tree": [
+    "100644 a a/../b"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-7",
+   "tree": [
+    "100644 a .git "
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-8",
+   "tree": [
+    "100644 a a/.git./b"
+   ],
+   "expect_codes": [
+    "git.tree_path_invalid"
+   ]
+  },
+  {
+   "id": "tree-path-ok-lookalikes",
+   "tree": [
+    "100644 a .gitignore",
+    "100644 a a.git",
+    "100644 a .github/x",
+    "100644 a ..foo"
+   ],
+   "expect_codes": []
+  },
+  {
+   "id": "projects-regular-file",
+   "tree": [
+    "100644 a projects/README.md"
+   ],
+   "expect_codes": [
+    "projects.not_a_submodule"
+   ]
+  },
+  {
+   "id": "projects-executable-file",
+   "tree": [
+    "100755 a projects/run.sh"
+   ],
+   "expect_codes": [
+    "projects.not_a_submodule"
+   ]
+  },
+  {
+   "id": "projects-nested-file",
+   "tree": [
+    "100644 a projects/sub/x"
+   ],
+   "expect_codes": [
+    "projects.not_a_submodule"
+   ]
+  },
+  {
+   "id": "projects-gitkeep-ok",
+   "tree": [
+    "100644 a projects/.gitkeep"
+   ],
+   "expect_codes": []
+  },
+  {
+   "id": "projects-nested-gitkeep-warns",
+   "tree": [
+    "100644 a projects/sub/.gitkeep"
+   ],
+   "expect_codes": [
+    "projects.not_a_submodule"
+   ]
+  },
+  {
+   "id": "projects-symlink-not-reported",
+   "tree": [
+    "120000 a projects/link"
+   ],
+   "expect_codes": []
+  },
+  {
+   "id": "file-outside-projects-ok",
+   "tree": [
+    "100644 a README.md",
+    "100644 a workharbor.json"
+   ],
+   "expect_codes": []
+  }
+ ]
+}
