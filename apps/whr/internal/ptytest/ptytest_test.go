@@ -453,6 +453,20 @@ func TestLargeOutputIsMatchedLinearly(t *testing.T) {
 	}
 }
 
+// TestUnterminatedSequenceFloodIsMatchedLinearly: a never-terminated OSC, DCS,
+// APC or CSI must not be rescanned from its start on every chunk.
+func TestUnterminatedSequenceFloodIsMatchedLinearly(t *testing.T) {
+	for _, seq := range []string{"\x1b]0;", "\x1bP", "\x1b_", "\x1b[1;", "\x1b[?"} {
+		s := ptytest.StartFunc(t, "floodseq", ptytest.Options{
+			Args: []string{hex.EncodeToString([]byte(seq)), strconv.Itoa(4 << 20)}, Timeout: 120 * time.Second})
+		s.Expect("END")
+		s.ExpectExit(0)
+		if w, out := s.Work(), len(s.Transcript()); w > uint64(6*out) {
+			t.Fatalf("%q: work %d bytes for %d bytes of output: not linear", seq, w, out)
+		}
+	}
+}
+
 func TestFailureMessagesAreBounded(t *testing.T) {
 	f := newFakeTB(t)
 	f.run(func() {

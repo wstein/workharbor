@@ -35,6 +35,7 @@ var fixtures = map[string]func(args []string) int{
 	"colored":      fixtureColored,
 	"redraw":       fixtureRedraw,
 	"winch-wide":   fixtureWinchWide,
+	"floodseq":     fixtureFloodSeq,
 	"late":         fixtureLate,
 	"flood":        fixtureFlood,
 	"emit":         fixtureEmit,
@@ -236,5 +237,25 @@ func fixtureWinchWide([]string) int {
 	fmt.Println("ready")
 	<-ch
 	fmt.Println(strings.Repeat("w", 100))
+	return 0
+}
+
+// fixtureFloodSeq writes the hex-decoded args[0] (an unterminated escape
+// sequence), args[1] bytes of filler, then END.
+func fixtureFloodSeq(args []string) int {
+	b, _ := hex.DecodeString(args[0])
+	n, _ := strconv.Atoi(args[1])
+	w := bufio.NewWriterSize(os.Stdout, 1<<16)
+	w.Write(b)
+	filler := "x"
+	if len(b) > 1 && b[1] == '[' {
+		filler = "1" // digits keep a CSI unterminated
+	}
+	chunk := strings.Repeat(filler, 1024)
+	for written := 0; written < n; written += len(chunk) {
+		w.WriteString(chunk)
+	}
+	w.WriteString("\nEND\n")
+	w.Flush()
 	return 0
 }

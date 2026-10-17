@@ -54,9 +54,20 @@ func next(b []byte) token {
 	return token{kind: tokText, n: n, r: r}
 }
 
+// incomplete is the token for a sequence cut off by the end of b. Beyond
+// maxSeq bytes it is dropped instead of waiting, so a program that never
+// terminates one cannot make every later chunk rescan it (quadratic work);
+// the rest of that sequence is then treated as text.
+func incomplete(b []byte) token {
+	if len(b) >= maxSeq {
+		return token{kind: tokOther, n: len(b)}
+	}
+	return token{kind: tokIncomplete, n: len(b)}
+}
+
 func escape(b []byte) token {
 	if len(b) < 2 {
-		return token{kind: tokIncomplete, n: 1}
+		return incomplete(b)
 	}
 	switch b[1] {
 	case '[':
@@ -68,7 +79,7 @@ func escape(b []byte) token {
 			i++
 		}
 		if i >= len(b) {
-			return token{kind: tokIncomplete, n: len(b)}
+			return incomplete(b)
 		}
 		if b[i] < 0x40 || b[i] > 0x7e {
 			return token{kind: tokOther, n: i} // malformed: drop the prefix
@@ -82,21 +93,21 @@ func escape(b []byte) token {
 			}
 			if b[i] == 0x1b {
 				if i+1 >= len(b) {
-					return token{kind: tokIncomplete, n: len(b)}
+					return incomplete(b)
 				}
 				if b[i+1] == '\\' {
 					return token{kind: tokOther, n: i + 2}
 				}
 			}
 		}
-		return token{kind: tokIncomplete, n: len(b)}
+		return incomplete(b)
 	}
 	i := 1
 	for i < len(b) && b[i] >= 0x20 && b[i] <= 0x2f { // intermediates
 		i++
 	}
 	if i >= len(b) {
-		return token{kind: tokIncomplete, n: len(b)}
+		return incomplete(b)
 	}
 	if i == 1 {
 		return token{kind: tokESC, n: 2, final: b[1]}
