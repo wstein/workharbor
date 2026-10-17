@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -19,7 +20,7 @@ type smEntry struct {
 }
 
 var (
-	sectionLine = regexp.MustCompile(`(?i)^\[submodule[ \t]+"((?:[^"\\]|\\.)*)"[ \t]*\](.*)$`)
+	sectionLine = regexp.MustCompile(`(?i)^\[submodule[ \t]+"((?:[^"\\]|\\.)*)"\](.*)$`)
 	keyLine     = regexp.MustCompile(`^([A-Za-z][A-Za-z0-9-]*)[ \t]*(?:=(.*))?$`)
 )
 
@@ -104,6 +105,9 @@ func parseGitmodules(blob []byte, c *collector) gitmodulesResult {
 				return bad("line " + strconv.Itoa(n+1) + " is not a [submodule \"name\"] header")
 			}
 			name := unescapeSection(m[1])
+			if name == "" {
+				return bad("line " + strconv.Itoa(n+1) + " has an empty submodule name")
+			}
 			// Git merges sections of the same name.
 			if cur = byName[name]; cur == nil {
 				cur = &section{name: name}
@@ -150,13 +154,23 @@ func unescapeSection(s string) string {
 	return b.String()
 }
 
-// parseValue reads the right-hand side of `key = value`: optional quotes,
-// the escapes \\ \" \n \t \b, and a trailing # or ; comment outside quotes.
-// A backslash continuation or any other escape is unsupported.
+// parseValue reads the right-hand side of `key = value` as Git does: optional
+// quotes, the escapes \\ \" \n \t \b, and a trailing # or ; comment outside
+// quotes. Whitespace outside quotes is dropped at both ends, whitespace inside
+// quotes (and from an escape) is kept. A backslash continuation or any other
+// escape is unsupported.
 func parseValue(rhs string) (string, bool) {
 	s := strings.TrimLeft(rhs, " \t")
 	var b strings.Builder
 	inQuote := false
+	keep := 0 // bytes of b that trailing-whitespace trimming must not touch
+	finish := func() string {
+		v := b.String()
+		if t := strings.TrimRight(v, " \t"); len(t) > keep {
+			return t
+		}
+		return v[:keep]
+	}
 	for i := 0; i < len(s); i++ {
 		ch := s[i]
 		switch {
@@ -177,31 +191,41 @@ func parseValue(rhs string) (string, bool) {
 			default:
 				return "", false
 			}
+			keep = b.Len()
 		case ch == '"':
 			inQuote = !inQuote
 		case !inQuote && (ch == '#' || ch == ';'):
-			return strings.TrimRight(b.String(), " \t"), true
+			return finish(), true
 		default:
 			b.WriteByte(ch)
+			if inQuote {
+				keep = b.Len()
+			}
 		}
 	}
 	if inQuote {
 		return "", false
 	}
-	return strings.TrimRight(b.String(), " \t"), true
+	return finish(), true
 }
 
 var (
 	httpsSubmodule = regexp.MustCompile(`^https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$`)
 	sshSubmodule   = regexp.MustCompile(`^ssh://(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$`)
 	scpSubmodule   = regexp.MustCompile(`^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$`)
-	scpPassword    = regexp.MustCompile(`^[^@/:\s]+:[^@/\s]*@[^/:\s]+:`)
+	scpPassword    = regexp.MustCompile(`^[^@/:\s]+:[^@/]*@[^/:\s]+:`)
+	// hostNamePattern is the resolver's host rule (validOrigin in the host agent):
+	// dot-separated labels of letters, digits and inner hyphens, none empty.
+	hostNamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*$`)
 )
 
 // submoduleURLCode classifies a .gitmodules URL: "" when admitted, otherwise
-// the finding code. The URL itself is never echoed.
+// the finding code. The URL itself is never echoed. Credentials are classified
+// first and on the URL without leading whitespace, so that a quoted value with
+// leading space or a password with whitespace is still a credential finding.
 func submoduleURLCode(u string) string {
-	if u != "" && (urlHasCredentials(u) || scpPassword.MatchString(u)) {
+	if t := strings.TrimLeftFunc(u, func(r rune) bool { return r < 0x21 || r == 0x7f || unicode.IsSpace(r) }); t != "" &&
+		(urlHasCredentials(t) || scpPassword.MatchString(t)) {
 		return "submodule.url_credentials"
 	}
 	switch {
@@ -215,11 +239,19 @@ func submoduleURLCode(u string) string {
 		return "submodule.url_invalid"
 	}
 	if _, userinfo, host, _, ok := urlAuthority(u); ok {
-		if strings.HasPrefix(userinfo, "-") || strings.HasPrefix(host, "-") || !portOK(host) {
+		name := host
+		if i := strings.LastIndex(host, ":"); i >= 0 {
+			name = host[:i]
+		}
+		if strings.HasPrefix(userinfo, "-") || strings.HasPrefix(host, "-") || !portOK(host) || !hostNamePattern.MatchString(name) {
 			return "submodule.url_invalid"
 		}
-	} else if i := strings.Index(u, "@"); i >= 0 && strings.HasPrefix(u[i+1:], "-") {
-		return "submodule.url_invalid"
+	} else if i := strings.Index(u, "@"); i >= 0 {
+		rest := u[i+1:]
+		name, _, _ := strings.Cut(rest, ":")
+		if strings.HasPrefix(rest, "-") || !hostNamePattern.MatchString(name) {
+			return "submodule.url_invalid"
+		}
 	}
 	return ""
 }

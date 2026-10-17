@@ -1274,10 +1274,11 @@
     "160000 a projects/app",
     "100644 b .gitmodules"
    ],
-   "gitmodules": "[submodule   \"app\"  ]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "gitmodules": "[submodule   \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
    "expect_codes": [
     "submodule.pinned"
-   ]
+   ],
+   "note": "spaces between the keyword and the name are allowed; Git refuses any after the closing quote"
   },
   {
    "id": "key-on-header-line",
@@ -1290,6 +1291,247 @@
     "submodule.pinned"
    ],
    "note": "Git reads a key after the header on the same line"
+  },
+  {
+   "id": "section-header-space-before-bracket",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\" ]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ],
+   "note": "real Git: bad config line"
+  },
+  {
+   "id": "section-header-tab-before-bracket",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"\t]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ]
+  },
+  {
+   "id": "section-empty-name",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ],
+   "note": "an empty subsection is refused"
+  },
+  {
+   "id": "path-quoted-trailing-space",
+   "tree": [
+    "160000 a projects/app ",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = \"projects/app \"\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ],
+   "note": "whitespace inside quotes is part of the value"
+  },
+  {
+   "id": "path-unquoted-trailing-space",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app  \n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ],
+   "note": "trailing whitespace outside quotes is dropped"
+  },
+  {
+   "id": "value-escaped-quote",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = \"https://f.example/o/a\\\"b\"\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ],
+   "note": "\\\" is a quote character in the value"
+  },
+  {
+   "id": "url-https-leading-dot-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://.h/o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-https-trailing-hyphen-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://h-/o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-https-empty-label-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://h..x/o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-https-label-leading-hyphen",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://a.-b.c/o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-https-trailing-dot-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://h./o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-ssh-trailing-hyphen-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://git@h-/o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-scp-leading-dot-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git@.h:o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-scp-empty-label-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git@h..x:o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-scp-trailing-hyphen-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git@h-:o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-host-labels-ok",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://a-b.c1.example/o/a\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "url-scp-password-whitespace",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = u:p w@h:o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ],
+   "note": "the credential check outranks the shape check"
+  },
+  {
+   "id": "url-scp-empty-password",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = u:@h:path\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ]
+  },
+  {
+   "id": "url-quoted-leading-space-credentials",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = \" https://u:CANARYpw@h/o/a\"\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ],
+   "note": "credentials are classified before the shape check"
+  },
+  {
+   "id": "url-quoted-leading-space-plain",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = \" https://h/o/a\"\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
   }
  ]
 }
