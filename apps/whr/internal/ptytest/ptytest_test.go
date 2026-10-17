@@ -428,28 +428,28 @@ func TestExpectHandlesSplitSequencesAndRunes(t *testing.T) {
 	s.ExpectExit(0)
 }
 
-// largeOutputBudget is well above the ~0.5 s an idle machine needs and far
-// below the minutes the former quadratic matcher needed; it leaves room for
-// -race with GOMAXPROCS=1 on a loaded CI runner.
-const largeOutputBudget = 10 * time.Second
-
-func TestLargeOutputIsMatchedQuickly(t *testing.T) {
-	start := time.Now()
-	s := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(10 << 20)}, Timeout: 60 * time.Second})
-	s.Expect("END")
-	s.ExpectExit(0)
-	if d := time.Since(start); d > largeOutputBudget {
-		t.Fatalf("10 MiB took %v", d)
-	}
-	if n := len(s.Transcript()); n < 10<<20 {
-		t.Fatalf("transcript has %d bytes", n)
-	}
-	start = time.Now()
-	r := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(10 << 20)}, Timeout: 60 * time.Second})
-	r.ExpectScreen("END")
-	r.ExpectExit(0)
-	if d := time.Since(start); d > largeOutputBudget {
-		t.Fatalf("ExpectScreen on 10 MiB took %v", d)
+// TestLargeOutputIsMatchedLinearly checks the work done, not the wall clock:
+// every byte is projected once, drawn once and searched a bounded number of
+// times, so work stays within a constant factor of the output size.
+func TestLargeOutputIsMatchedLinearly(t *testing.T) {
+	for _, mib := range []int{1, 4, 10} {
+		size := mib << 20
+		s := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(size)}, Timeout: 120 * time.Second})
+		s.Expect("END")
+		s.ExpectExit(0)
+		out := len(s.Transcript())
+		if out < size {
+			t.Fatalf("transcript has %d bytes, want >= %d", out, size)
+		}
+		if w := s.Work(); w > uint64(6*out) {
+			t.Fatalf("%d MiB: work %d bytes for %d bytes of output: not linear", mib, w, out)
+		}
+		r := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(size)}, Timeout: 120 * time.Second})
+		r.ExpectScreen("END")
+		r.ExpectExit(0)
+		if w := r.Work(); w > uint64(6*len(r.Transcript())) {
+			t.Fatalf("%d MiB ExpectScreen: work %d for %d bytes", mib, w, len(r.Transcript()))
+		}
 	}
 }
 
@@ -582,4 +582,52 @@ func TestResizeChangesScreenWidth(t *testing.T) {
 	if got := s.Screen(); got != "ready\n"+strings.Repeat("w", 100) {
 		t.Fatalf("100 columns must fit on a 120 column screen: %q", got)
 	}
+}
+
+// The next three tests fail fast (well under the 90 s binary timeout) when
+// the matching deadline, the exit deadline or the cleanup kill is missing.
+
+func TestPTYExpectDeadlineHonored(t *testing.T) {
+	f := newFakeTB(t)
+	start := time.Now()
+	f.run(func() {
+		s := ptytest.StartFunc(f, "hang", ptytest.Options{Timeout: 300 * time.Millisecond})
+		s.Expect("up")
+		s.Expect("never printed")
+	})
+	f.wantFatal("timed out after 300ms")
+	f.cleanup()
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("deadline ignored: %v", d)
+	}
+}
+
+func TestPTYExpectExitDeadlineHonored(t *testing.T) {
+	f := newFakeTB(t)
+	start := time.Now()
+	f.run(func() {
+		s := ptytest.StartFunc(f, "hang", ptytest.Options{Timeout: 300 * time.Millisecond})
+		s.Expect("up")
+		s.ExpectExit(0)
+	})
+	f.wantFatal("did not exit within 300ms")
+	f.cleanup()
+	if d := time.Since(start); d > 5*time.Second {
+		t.Fatalf("deadline ignored: %v", d)
+	}
+}
+
+func TestPTYCleanupKillsRunningChild(t *testing.T) {
+	f := newFakeTB(t)
+	var pid int
+	f.run(func() {
+		s := ptytest.StartFunc(f, "hang", ptytest.Options{Timeout: 300 * time.Millisecond})
+		pid = s.Pid()
+		s.Expect("up")
+	})
+	if ptytest.ProcessGone(pid) {
+		t.Fatal("child must still run before cleanup")
+	}
+	f.cleanup()
+	waitGone(t, pid) // fails after 5 s if cleanup did not kill it
 }

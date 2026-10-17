@@ -92,7 +92,8 @@ type Session struct {
 	scanned  int    // raw offset projected into plain
 	plain    []byte // visible text not yet consumed by Expect
 	scr      *screen
-	fed      int // raw offset drawn on scr
+	fed      int    // raw offset drawn on scr
+	work     uint64 // bytes projected, drawn and searched; see export_test.go
 
 	groupMu   sync.Mutex
 	groupDead bool // the group was swept when the leader exited
@@ -298,7 +299,9 @@ func (s *Session) advanceLocked() {
 	p, _, n := project(s.buf[s.scanned:])
 	s.plain = append(s.plain, p...)
 	s.scanned += n
-	s.fed += s.scr.feed(s.buf[s.fed:])
+	d := s.scr.feed(s.buf[s.fed:])
+	s.fed += d
+	s.work += uint64(n + d)
 }
 
 // Screen renders the transcript so far as text (see the package comment).
@@ -321,6 +324,7 @@ func (s *Session) ExpectWithin(d time.Duration, substr string) {
 	needle := []byte(substr)
 	from := 0
 	s.expect(d, fmt.Sprintf("%q", substr), func(p []byte) (int, bool) {
+		s.addWork(len(p) - from)
 		i := bytes.Index(p[from:], needle)
 		if i < 0 {
 			// Only bytes that could still start a match need rescanning.
@@ -400,6 +404,9 @@ func (s *Session) ExpectScreenWithin(d time.Duration, substr string) {
 		}
 	}
 }
+
+// addWork counts bytes scanned by a matcher; callers hold s.mu.
+func (s *Session) addWork(n int) { s.work += uint64(max(n, 0)) }
 
 func (s *Session) failOverflow() {
 	s.t.Helper()
