@@ -95,8 +95,9 @@ type Session struct {
 	scanned  int    // raw offset projected into plain
 	plain    []byte // visible text not yet consumed by Expect
 	scr      *screen
-	fed      int    // raw offset drawn on scr
-	work     uint64 // bytes projected, drawn and searched; see export_test.go
+	pskip    skipState // discard state of the visible-text projection
+	fed      int       // raw offset drawn on scr
+	work     uint64    // bytes projected, drawn and searched; see export_test.go
 
 	groupMu   sync.Mutex
 	groupDead bool // the group was swept when the leader exited
@@ -285,6 +286,9 @@ func (s *Session) SendKey(k Key) {
 // Resize changes the window size; the child receives SIGWINCH.
 func (s *Session) Resize(rows, cols int) {
 	s.t.Helper()
+	if rows < 1 || cols < 1 || rows > maxWindow || cols > maxWindow {
+		s.t.Fatalf("ptytest: resize to %dx%d: rows and columns must be 1..%d", rows, cols, maxWindow)
+	}
 	if err := setWinsize(s.master, rows, cols); err != nil {
 		s.t.Fatalf("ptytest: resize: %v", err)
 	}
@@ -302,7 +306,7 @@ func (s *Session) Transcript() []byte {
 
 // advanceLocked projects and draws the output received since the last call.
 func (s *Session) advanceLocked() {
-	p, _, n := project(s.buf[s.scanned:])
+	p, _, n := project(s.buf[s.scanned:], &s.pskip)
 	s.plain = append(s.plain, p...)
 	s.scanned += n
 	d := s.scr.feed(s.buf[s.fed:])

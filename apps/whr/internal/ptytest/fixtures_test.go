@@ -37,6 +37,7 @@ var fixtures = map[string]func(args []string) int{
 	"winch-wide":   fixtureWinchWide,
 	"floodseq":     fixtureFloodSeq,
 	"split":        fixtureSplit,
+	"partialosc":   fixturePartialOSC,
 	"late":         fixtureLate,
 	"flood":        fixtureFlood,
 	"emit":         fixtureEmit,
@@ -256,7 +257,11 @@ func fixtureFloodSeq(args []string) int {
 	for written := 0; written < n; written += len(chunk) {
 		w.WriteString(chunk)
 	}
-	w.WriteString("\nEND\n")
+	end := "\x07" // terminate the sequence so END is visible text
+	if len(b) > 1 && b[1] == '[' {
+		end = "m"
+	}
+	w.WriteString(end + "\nEND\n")
 	w.Flush()
 	return 0
 }
@@ -272,5 +277,12 @@ func fixtureSplit([]string) int {
 	fmt.Print("xxxxxxxxABC")
 	os.Stdin.Read(make([]byte, 1))
 	fmt.Print("D\r\n")
+	return 0
+}
+
+// fixturePartialOSC starts an operating system command and never ends it.
+func fixturePartialOSC([]string) int {
+	fmt.Print("\x1b]0;" + strings.Repeat("x", 1000))
+	block()
 	return 0
 }

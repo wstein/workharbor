@@ -84,7 +84,7 @@ func TestFeedLeavesIncompleteTailUnconsumed(t *testing.T) {
 }
 
 func TestProjectKeepsTextOnly(t *testing.T) {
-	plain, ends, n := project([]byte("a\x1b[31mb\r\n\x1b]0;t\x07c\td\x00\x7f\u009be"))
+	plain, ends, n := project([]byte("a\x1b[31mb\r\n\x1b]0;t\x07c\td\x00\x7f\u009be"), nil)
 	if string(plain) != "ab\nc\tde" || n != len("a\x1b[31mb\r\n\x1b]0;t\x07c\td\x00\x7f\u009be") {
 		t.Fatalf("plain %q consumed %d", plain, n)
 	}
@@ -92,15 +92,15 @@ func TestProjectKeepsTextOnly(t *testing.T) {
 		t.Fatalf("ends %v", ends)
 	}
 	// An escape sequence is part of the match end only up to the visible byte.
-	plain, _, n = project([]byte("ab\x1b[3"))
+	plain, _, n = project([]byte("ab\x1b[3"), nil)
 	if string(plain) != "ab" || n != 2 {
 		t.Fatalf("truncated tail: %q %d", plain, n)
 	}
-	plain, _, n = project([]byte("a\xe2\x82"))
+	plain, _, n = project([]byte("a\xe2\x82"), nil)
 	if string(plain) != "a" || n != 1 {
 		t.Fatalf("partial rune: %q %d", plain, n)
 	}
-	plain, _, _ = project([]byte("\xe2\x82\xac\xff"))
+	plain, _, _ = project([]byte("\xe2\x82\xac\xff"), nil)
 	if string(plain) != "€\xff" {
 		t.Fatalf("invalid byte kept: %q", plain)
 	}
@@ -194,7 +194,7 @@ func FuzzScreenFeed(f *testing.F) {
 		s.feed(in)
 		_ = s.text()
 		_ = s.tail()
-		project(in)
+		project(in, nil)
 		if s.h > 0 && len(s.rows) > s.h {
 			t.Fatalf("%d rows on a %d row screen", len(s.rows), s.h)
 		}
@@ -226,15 +226,127 @@ func TestUnterminatedSequencesAreCapped(t *testing.T) {
 		if n := s.feed([]byte(prefix + long)); n != len(prefix+long) {
 			t.Errorf("%q: long unterminated sequence not dropped (consumed %d)", prefix, n)
 		}
-		s.feed([]byte("END"))
+		// The dropped sequence still ends where a real one would.
+		end := "\x07"
+		if strings.HasPrefix(prefix, "\x1b[") {
+			end = "m"
+		}
+		s.feed([]byte(end + "END"))
 		if !strings.HasSuffix(s.text(), "END") {
 			t.Errorf("%q: text after the dropped sequence lost: %q", prefix, s.text())
 		}
 		if n := newScreen(0, 0).feed([]byte(prefix + filler + filler)); n != 0 {
 			t.Errorf("%q: a short incomplete sequence must wait (consumed %d)", prefix, n)
 		}
-		if _, _, n := project([]byte(prefix + long)); n != len(prefix+long) {
+		if _, _, n := project([]byte(prefix+long), nil); n != len(prefix+long) {
 			t.Errorf("%q: project kept a long unterminated sequence (%d)", prefix, n)
+		}
+	}
+}
+
+// feedChunks feeds chunks the way a Session does: unconsumed bytes are kept
+// and retried with the next chunk.
+func feedChunks(s *screen, chunks ...string) {
+	var buf []byte
+	for _, c := range chunks {
+		buf = append(buf, c...)
+		buf = buf[s.feed(buf):]
+	}
+}
+
+func projectChunks(chunks ...string) string {
+	var buf, plain []byte
+	var st skipState
+	for _, c := range chunks {
+		buf = append(buf, c...)
+		p, _, n := project(buf, &st)
+		plain = append(plain, p...)
+		buf = buf[n:]
+	}
+	return string(plain)
+}
+
+// TestChunkingNeverChangesTheResult: the screen and the visible text depend
+// on the bytes only, never on where read boundaries fall, including around
+// sequences longer than maxSeq that are dropped.
+func TestChunkingNeverChangesTheResult(t *testing.T) {
+	long := func(n int, f string) string { return strings.Repeat(f, n) }
+	cases := map[string]string{
+		"long OSC with BEL":      "A\x1b]0;" + long(maxSeq+500, "x") + "\x07B",
+		"long OSC with ST":       "A\x1b]0;" + long(maxSeq+500, "x") + "\x1b\\B",
+		"long OSC, ESC inside":   "A\x1b]0;" + long(maxSeq+10, "x") + "\x1bQ" + long(20, "y") + "\x07B",
+		"long DCS with clear":    "A\x1bP" + long(maxSeq, "q") + "\x1b[2J" + long(30, "z") + "\x1b\\B",
+		"long APC":               "A\x1b_" + long(maxSeq+1, "a") + "\x07B",
+		"long CSI cursor":        "AB\x1b[" + long(maxSeq+100, "1") + "HC",
+		"long CSI SGR":           "A\x1b[" + long(maxSeq+5, "1") + ";31mB",
+		"long CSI final at-sign": "AB\x1b[" + long(maxSeq+5, "1") + "@C",
+		"long CSI final tilde":   "AB\x1b[" + long(maxSeq+5, "1") + "~C",
+		"long CSI bad final":     "A\x1b[" + long(maxSeq+5, "1") + "\x80B",
+		"long CSI intermediate":  "A\x1b[" + long(maxSeq, "1") + " qB",
+		"just under the cap":     "A\x1b]0;" + long(maxSeq-10, "x") + "\x07B",
+		"unterminated OSC":       "A\x1b]0;" + long(maxSeq+5, "x") + "TAIL",
+		"short sequences":        "A\x1b[31mB\x1b]0;t\x07C\x1b[2KD\r\nE",
+	}
+	for name, in := range cases {
+		whole := newScreen(80, 24)
+		n := whole.feed([]byte(in))
+		_ = n
+		want, wantPlain := whole.text(), projectChunks(in)
+		var offsets []int
+		for i := 0; i <= len(in); i++ {
+			if i < 12 || i > len(in)-12 || (i > maxSeq-12 && i < maxSeq+16) || i%251 == 0 {
+				offsets = append(offsets, i)
+			}
+		}
+		for _, i := range offsets {
+			s := newScreen(80, 24)
+			feedChunks(s, in[:i], in[i:])
+			if got := s.text(); got != want {
+				t.Fatalf("%s split at %d: screen %q, whole %q", name, i, got, want)
+			}
+			if got := projectChunks(in[:i], in[i:]); got != wantPlain {
+				t.Fatalf("%s split at %d: plain %.60q..., whole %.60q...", name, i, got, wantPlain)
+			}
+		}
+		// Many tiny chunks as well.
+		s := newScreen(80, 24)
+		var parts []string
+		for i := 0; i < len(in); i += 97 {
+			parts = append(parts, in[i:min(i+97, len(in))])
+		}
+		feedChunks(s, parts...)
+		if got := s.text(); got != want {
+			t.Fatalf("%s in 97 byte chunks: %q, whole %q", name, got, want)
+		}
+	}
+	// The visible results themselves, not only their agreement.
+	for in, want := range map[string]string{
+		"A\x1b]0;" + long(maxSeq+500, "x") + "\x07B":          "AB",
+		"A\x1bP" + long(maxSeq, "q") + "\x1b[2J" + "z\x1b\\B": "AB",
+		"AB\x1b[" + long(maxSeq+100, "1") + "HC":              "ABC",
+		"A\x1b[" + long(maxSeq+5, "1") + ";31mB":              "AB",
+	} {
+		if got := draw(80, 24, in); got != want {
+			t.Errorf("%.30q...: got %q want %q", in, got, want)
+		}
+	}
+}
+
+func TestEditsBreakWideCharactersAtTheirEdges(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"delete char on a right half", "\u4e2dab\x1b[2G\x1b[P", " ab"},
+		{"delete the left half", "a\u4e2db\x1b[2G\x1b[P", "a b"},
+		{"delete range ending on a left half", "ab\u4e2dc\x1b[1G\x1b[3P", " c"},
+		{"delete range ending on a right half", "abc\u4e2d\x1b[1G\x1b[4P", ""},
+		{"insert between the halves", "\u4e2dab\x1b[2G\x1b[@", "   ab"},
+		{"erase to start through a left half", "\u4e2dab\x1b[1G\x1b[1K", "  ab"},
+		{"erase to start ending on a right half", "\u4e2dab\x1b[2G\x1b[1K", "  ab"},
+		{"erase to end from a right half", "\u4e2dab\x1b[2G\x1b[K", ""},
+		{"overwrite over the wide pair", "\u4e2d\b\bxy", "xy"},
+		{"orphaned right half renders as a blank", "\u4e2d\bx", " x"},
+	} {
+		if got := draw(0, 0, c.in); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
 		}
 	}
 }
