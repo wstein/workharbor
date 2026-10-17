@@ -75,6 +75,10 @@ func parseStrict(data []byte, jsonc bool) (jvalue, *scanError) {
 	if p.err != nil {
 		return jvalue{}, p.err
 	}
+	// A syntax or depth error outranks a lone surrogate, which outranks a repeated key.
+	if p.enc != nil {
+		return jvalue{}, p.enc
+	}
 	if p.dup != nil {
 		return jvalue{}, p.dup
 	}
@@ -88,11 +92,12 @@ type jparser struct {
 	nodes int
 	err   *scanError
 	dup   *scanError
+	enc   *scanError // first lone surrogate; the parse goes on so that a syntax error can outrank it
 }
 
 func (p *jparser) failEncoding(msg string) {
-	if p.err == nil {
-		p.err = &scanError{encoding: true, msg: msg}
+	if p.enc == nil {
+		p.enc = &scanError{encoding: true, msg: msg}
 	}
 }
 
@@ -299,11 +304,10 @@ func (p *jparser) str() string {
 						}
 						if r = utf16.DecodeRune(r, lo); r == utf8.RuneError {
 							p.failEncoding("a string holds an unpaired surrogate escape")
-							return ""
 						}
 					} else {
 						p.failEncoding("a string holds an unpaired surrogate escape")
-						return ""
+						r = utf8.RuneError
 					}
 				}
 				out = utf8.AppendRune(out, r)

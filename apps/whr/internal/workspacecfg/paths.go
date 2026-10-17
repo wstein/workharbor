@@ -26,17 +26,37 @@ func canonicalPathProblem(p string) string {
 			return "has an empty component"
 		case part == "." || part == "..":
 			return "has a . or .. component"
-		case isDotGit(part):
-			return "has a .git component"
+		case windowsAlias(part):
+			return "has a .git component or a Windows alias of ., .. or .git"
 		}
 	}
 	return ""
 }
 
-// isDotGit reports whether a path component is .git in any case, optionally
-// followed by dots or spaces (ignored by some file systems).
-func isDotGit(component string) bool {
-	return strings.EqualFold(strings.TrimRight(component, ". "), ".git")
+// windowsAlias mirrors _windows_alias in scripts/check_repo.py. After dropping
+// the format characters U+200B to U+200F, U+202A to U+202E, U+206A to U+206F
+// and U+FEFF and folding U+FF0E to a dot and U+00A0 and U+3000 to a space, a
+// component made only of dots and spaces is an alias, and so is one whose text
+// before the first colon (an NTFS stream such as .git::$DATA) is .git or the
+// 8.3 short name GIT~1 once trailing dots and spaces are removed.
+func windowsAlias(component string) bool {
+	folded := strings.Map(func(r rune) rune {
+		switch {
+		case r >= 0x200b && r <= 0x200f, r >= 0x202a && r <= 0x202e, r >= 0x206a && r <= 0x206f, r == 0xfeff:
+			return -1
+		case r == 0xff0e:
+			return '.'
+		case r == 0xa0, r == 0x3000:
+			return ' '
+		}
+		return r
+	}, component)
+	if strings.Trim(folded, ". ") == "" {
+		return true
+	}
+	base, _, _ := strings.Cut(folded, ":")
+	base = strings.TrimRight(base, ". ")
+	return strings.EqualFold(base, ".git") || strings.EqualFold(base, "git~1")
 }
 
 var (

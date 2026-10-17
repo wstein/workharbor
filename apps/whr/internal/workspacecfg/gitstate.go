@@ -64,7 +64,7 @@ func find1(es []TreeEntry, path string) (TreeEntry, bool) {
 // in any case.
 func treePathBad(p string) bool {
 	for _, part := range strings.Split(p, "/") {
-		if part == "" || part == "." || part == ".." || isDotGit(part) {
+		if part == "" || part == "." || part == ".." || windowsAlias(part) {
 			return true
 		}
 	}
