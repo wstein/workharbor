@@ -17,7 +17,7 @@ func (r *run) config() Check {
 	if r.cwd == "" {
 		return unknown(id, reasonNotMeasurable, "The current directory is unknown.", "Run whr doctor from an existing directory.", nil)
 	}
-	if _, err := r.p.Lstat(filepath.Join(r.cwd, "workharbor.json")); err != nil {
+	if _, err := r.lstat(filepath.Join(r.cwd, "workharbor.json")); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return Check{ID: id, Status: StatusSkipped, Reason: reasonPrecondition,
 				Message:     "There is no workharbor.json in the current directory.",

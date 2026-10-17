@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"sync"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ func (f fakeFileInfo) Sys() any           { return nil }
 
 // world is a fully injected machine. The zero value is a healthy Linux host.
 type world struct {
+	mu       sync.Mutex
 	os, arch string
 	env      map[string]string
 	home     string
@@ -39,6 +41,13 @@ type world struct {
 	// dial results by socket path; a missing path is not found.
 	sockets map[string]error
 	dialed  []string
+	// dialDeadlines are the time left on each dial's context at call time.
+	dialDeadlines []time.Duration
+	dialAdvance   time.Duration
+	gitDeadline   time.Duration
+	links         map[string]string
+	block         map[string]chan struct{} // FreeBytes blocks until closed
+	budget        time.Duration
 
 	existing map[string]bool // paths that Lstat finds
 	files    map[string][]byte
@@ -89,8 +98,19 @@ func (w *world) ports() doctor.Ports {
 			}
 			return nil, &fs.PathError{Op: "lstat", Path: p, Err: syscall.ENOENT}
 		},
-		DialUnix: func(_ context.Context, p string) error {
+		Budget: w.budget,
+		Readlink: func(p string) (string, error) {
+			if l, ok := w.links[p]; ok {
+				return l, nil
+			}
+			return "", &fs.PathError{Op: "readlink", Path: p, Err: syscall.ENOENT}
+		},
+		DialUnix: func(ctx context.Context, p string) error {
 			w.dialed = append(w.dialed, p)
+			if d, ok := ctx.Deadline(); ok {
+				w.dialDeadlines = append(w.dialDeadlines, time.Until(d))
+			}
+			w.now = w.now.Add(w.dialAdvance)
 			err, ok := w.sockets[p]
 			if !ok {
 				return &fs.PathError{Op: "connect", Path: p, Err: syscall.ENOENT}
@@ -108,13 +128,22 @@ func (w *world) ports() doctor.Ports {
 		},
 		CanRead: func(p string) error { return w.readable[p] },
 		FindGit: func() (string, error) { return w.gitPath, w.gitErr },
-		GitVersion: func(context.Context, string) (string, error) {
+		GitVersion: func(ctx context.Context, _ string) (string, error) {
 			w.gitRuns++
+			if d, ok := ctx.Deadline(); ok {
+				w.gitDeadline = time.Until(d)
+			}
 			w.now = w.now.Add(w.gitAdvance)
 			return w.gitOut, w.gitRunErr
 		},
 		FreeBytes: func(p string) (uint64, error) {
+			w.mu.Lock()
 			w.freed = append(w.freed, p)
+			ch := w.block[p]
+			w.mu.Unlock()
+			if ch != nil {
+				<-ch
+			}
 			if err := w.freeErr[p]; err != nil {
 				return 0, err
 			}
