@@ -19,6 +19,11 @@ func DoctorHandler(p doctor.Ports) Handler {
 			return Result{}, exitcode.Errorf(exitcode.PathBadArguments, "doctor takes no arguments")
 		}
 		rep := doctor.Run(ctx, p)
+		// An interrupt or deadline during the run is exit 72 or 71, not a
+		// verdict computed from half-finished measurements (FR-063).
+		if err := ctx.Err(); err != nil {
+			return Result{}, err
+		}
 		res := Result{Value: rep, Human: rep.Human()}
 		if rep.Counts.Fail == 0 {
 			return res, nil

@@ -19,21 +19,27 @@ import (
 // the doctor's marker variable it prints the environment it received.
 func TestMain(m *testing.M) {
 	if len(os.Args) == 2 && os.Args[1] == "--version" && os.Getenv("GIT_TERMINAL_PROMPT") == "0" {
-		os.Stdout.WriteString(strings.Join(os.Environ(), "\x01") + "\n")
+		wd, _ := os.Getwd()
+		os.Stdout.WriteString(strings.Join(os.Environ(), "\x01") + "\x02" + wd + "\n")
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
 }
 
-// F1: static text is never redacted; user names like "doc" must not mangle it.
+// F1/N5: static text is byte-identical whatever the user and host are called.
 func TestDoctorRedactionLeavesStaticTextAlone(t *testing.T) {
-	for _, name := range []string{"doc", "run", "the", "docker", "git", "var", "sock", "no", "OrbStack"} {
+	base := healthy()
+	base.user, base.host, base.sockets = "zzqq", "yyqq", nil
+	want := run(base)
+	for _, name := range []string{"doc", "run", "the", "docker", "git", "whr", "OrbStack", "var", "sock", "no", "container", "runtime", "md"} {
 		w := healthy()
 		w.user, w.host, w.sockets = name, name, nil
-		r := run(w)
-		fix := statusOf(r, "container.socket").Remediation
-		if !strings.Contains(fix, "docs/container-runtime.md") || !strings.Contains(fix, "Docker-compatible") {
-			t.Errorf("user %q mangled the remediation: %q", name, fix)
+		got := run(w)
+		for i, c := range got.Checks {
+			if c.Message != want.Checks[i].Message || c.Remediation != want.Checks[i].Remediation {
+				t.Errorf("user %q changed static text of %s:\n%q\n%q", name, c.ID, c.Message+" | "+c.Remediation,
+					want.Checks[i].Message+" | "+want.Checks[i].Remediation)
+			}
 		}
 	}
 	rd := doctor.NewRedactor("/home/u", "doc", "h")
@@ -140,7 +146,11 @@ func TestDoctorGitProcessEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := strings.Split(line, "\x01")
+	envPart, cwd, _ := strings.Cut(line, "\x02")
+	if cwd != string(os.PathSeparator) {
+		t.Errorf("git ran in %q, want the neutral directory", cwd)
+	}
+	got := strings.Split(envPart, "\x01")
 	want := doctor.GitEnv()
 	sort.Strings(got)
 	sort.Strings(want)
@@ -260,5 +270,131 @@ func TestDoctorGitPrerelease(t *testing.T) {
 		if g := statusOf(run(w), "git.version"); g.Status != want {
 			t.Errorf("%s: %+v", out, g)
 		}
+	}
+}
+
+// N6: names are redacted only in path-valued evidence, never in other values.
+func TestDoctorRedactionOnlyInPaths(t *testing.T) {
+	for _, name := range []string{"git", "version", "docker", "free_bytes"} {
+		w := healthy()
+		w.user, w.host = name, name
+		r := run(w)
+		if g := statusOf(r, "git.version"); g.Evidence["version"] != "git version 2.43.0" || g.Evidence["executable"] != "/usr/bin/git" {
+			t.Errorf("user %q corrupted git evidence: %v", name, g.Evidence)
+		}
+		raw, _ := json.Marshal(statusOf(r, "container.socket").Evidence)
+		if !strings.Contains(string(raw), "/var/run/docker.sock") {
+			t.Errorf("user %q corrupted the socket path: %s", name, raw)
+		}
+	}
+	w := healthy()
+	w.user, w.cwd = "alice", "/srv/alice/work"
+	w.free = map[string]uint64{w.cwd: 10 * gib, "/var/lib/docker": 10 * gib}
+	if g := statusOf(run(w), "disk.working_directory"); g.Evidence["path"] != "/srv/<user>/work" {
+		t.Errorf("path not redacted: %v", g.Evidence)
+	}
+}
+
+// N4: DOCKER_HOST text is never echoed; only allowlisted schemes are named.
+func TestDoctorDockerHostSchemeAllowlist(t *testing.T) {
+	for in, want := range map[string]string{
+		"tcp://h:1": "tcp", "TCP://h:1": "tcp", "ssh://u@h": "ssh", "https://h": "https", "npipe:////./pipe/x": "npipe", "fd://3": "fd",
+		"devbox:2375": "other", "tok3n": "other", "tok3n://x": "other", "": "",
+	} {
+		if in == "" {
+			continue
+		}
+		w := healthy()
+		w.env["DOCKER_HOST"] = in
+		g := statusOf(run(w), "container.socket")
+		if g.Status != doctor.StatusUnknown || g.Evidence["scheme"] != want {
+			t.Errorf("%q: %+v", in, g)
+		}
+	}
+}
+
+// N8: real Git prints release candidates with a dot.
+func TestDoctorGitPrereleaseDotted(t *testing.T) {
+	for out, want := range map[string]string{
+		"git version 2.39.5.rc1": doctor.StatusFail, "git version 2.39.6.rc1": doctor.StatusPass,
+		"git version 2.39.5.windows.1": doctor.StatusPass, "git version 2.39.5-1ubuntu": doctor.StatusPass,
+	} {
+		w := healthy()
+		w.gitOut = out
+		if g := statusOf(run(w), "git.version"); g.Status != want {
+			t.Errorf("%s: %+v", out, g)
+		}
+	}
+}
+
+func TestDoctorLowSurvivors(t *testing.T) {
+	// D03: a relative xcode-select link is not trusted.
+	w := healthy()
+	w.os, w.gitPath = "darwin", "/usr/bin/git"
+	w.links = map[string]string{"/var/db/xcode_select_link": "rel/Developer"}
+	w.existing["rel/Developer/usr/bin/git"] = true
+	if g := statusOf(run(w), "git.version"); g.Status != doctor.StatusFail {
+		t.Errorf("relative link: %+v", g)
+	}
+	// D05: ENOTDIR on a candidate means absent.
+	w = healthy()
+	w.sockets = map[string]error{}
+	for _, p := range []string{"/var/run/docker.sock", "/home/alice/.orbstack/run/docker.sock", "/home/alice/.docker/run/docker.sock", "/home/alice/.colima/default/docker.sock", "/home/alice/.rd/docker.sock"} {
+		w.sockets[p] = &os.PathError{Op: "connect", Path: p, Err: syscall.ENOTDIR}
+	}
+	if g := statusOf(run(w), "container.socket"); g.Status != doctor.StatusFail {
+		t.Errorf("ENOTDIR: %+v", g)
+	}
+	// ... also when the long-path lstat says ENOTDIR
+	w = healthy()
+	w.sockets = map[string]error{}
+	w.lstatErr = syscall.ENOTDIR
+	for _, p := range []string{"/var/run/docker.sock", "/home/alice/.orbstack/run/docker.sock", "/home/alice/.docker/run/docker.sock", "/home/alice/.colima/default/docker.sock", "/home/alice/.rd/docker.sock"} {
+		w.sockets[p] = &os.PathError{Op: "connect", Path: p, Err: syscall.EINVAL}
+	}
+	if g := statusOf(run(w), "container.socket"); g.Status != doctor.StatusFail {
+		t.Errorf("EINVAL + ENOTDIR: %+v", g)
+	}
+	// D15: letters beyond ASCII are word characters.
+	rd := doctor.NewRedactor("/h", "alice", "bob")
+	if got := rd.String("/x/alice\u00e9/\u00e9alice"); got != "/x/alice\u00e9/\u00e9alice" {
+		t.Errorf("non-ASCII boundary: %q", got)
+	}
+	// D22: a relative XDG_RUNTIME_DIR is ignored.
+	w = healthy()
+	w.env["XDG_RUNTIME_DIR"] = "rel/dir"
+	w.sockets = nil
+	run(w)
+	for _, p := range w.dialed {
+		if strings.Contains(p, "rel/dir") {
+			t.Errorf("dialed %s", p)
+		}
+	}
+	// D27: both deadline errors are unknown, not a failure.
+	for _, e := range []error{context.DeadlineExceeded, os.ErrDeadlineExceeded} {
+		w = healthy()
+		w.sockets = map[string]error{"/var/run/docker.sock": e}
+		if g := statusOf(run(w), "container.socket"); g.Status != doctor.StatusUnknown {
+			t.Errorf("%v: %+v", e, g)
+		}
+	}
+}
+
+// Non-path evidence is untouched even if it contains a path-like word of the user name.
+func TestDoctorVersionEvidenceUntouched(t *testing.T) {
+	w := healthy()
+	w.user = "alice"
+	w.gitOut = "git version 2.43.0 (build/alice-1)"
+	if g := statusOf(run(w), "git.version"); g.Evidence["version"] != w.gitOut {
+		t.Errorf("version evidence changed: %v", g.Evidence)
+	}
+}
+
+// daemon.json is read with the 64 KiB bound.
+func TestDoctorDaemonJSONReadBound(t *testing.T) {
+	w := healthy()
+	run(w)
+	if got := w.readMax["/etc/docker/daemon.json"]; got != 64<<10 {
+		t.Errorf("daemon.json read bound %d, want 65536", got)
 	}
 }

@@ -48,6 +48,8 @@ type world struct {
 	links         map[string]string
 	block         map[string]chan struct{} // FreeBytes blocks until closed
 	budget        time.Duration
+	readMax       map[string]int64
+	lstatErr      error // returned by Lstat for absent paths instead of ENOENT
 
 	existing map[string]bool // paths that Lstat finds
 	files    map[string][]byte
@@ -96,7 +98,11 @@ func (w *world) ports() doctor.Ports {
 			if w.existing[p] {
 				return fakeFileInfo{name: p}, nil
 			}
-			return nil, &fs.PathError{Op: "lstat", Path: p, Err: syscall.ENOENT}
+			var err error = syscall.ENOENT
+			if w.lstatErr != nil {
+				err = w.lstatErr
+			}
+			return nil, &fs.PathError{Op: "lstat", Path: p, Err: err}
 		},
 		Budget: w.budget,
 		Readlink: func(p string) (string, error) {
@@ -117,7 +123,11 @@ func (w *world) ports() doctor.Ports {
 			}
 			return err
 		},
-		ReadFile: func(p string, _ int64) ([]byte, error) {
+		ReadFile: func(p string, max int64) ([]byte, error) {
+			if w.readMax == nil {
+				w.readMax = map[string]int64{}
+			}
+			w.readMax[p] = max
 			if err := w.readErr[p]; err != nil {
 				return nil, err
 			}

@@ -411,7 +411,7 @@ func TestDoctorRedaction(t *testing.T) {
 	if got := rd.String("/home/ab/lab/x/abx"); got != "~/lab/<host>/abx" {
 		t.Errorf("short names: %q", got)
 	}
-	if got := doctor.NewRedactor("/home/alice", "alice", "devbox").String("/srv/alice-data/devbox.sock"); got != "/srv/<user>-data/<host>.sock" {
+	if got := doctor.NewRedactor("/home/alice", "alice", "devbox").String("/srv/alice-data/devbox/x"); got != "/srv/<user>-data/<host>/x" {
 		t.Errorf("long names: %q", got)
 	}
 }
@@ -458,8 +458,8 @@ func TestDoctorReadOnlyNoNetwork(t *testing.T) {
 			if forbiddenImports[p] {
 				t.Errorf("%s imports %s", n, p)
 			}
-			if p == "os/exec" && n != "git.go" {
-				t.Errorf("%s imports os/exec: only git.go may run a process", n)
+			if p == "os/exec" && n != "git.go" && n != "proc_unix.go" && n != "proc_other.go" {
+				t.Errorf("%s imports os/exec: only the git runner files may run a process", n)
 			}
 		}
 		ast.Inspect(f, func(x ast.Node) bool {

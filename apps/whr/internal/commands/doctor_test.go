@@ -133,3 +133,39 @@ func TestMutatingHostCommandsRefuseUnsupportedPlatform(t *testing.T) {
 		t.Fatal("no mutating host command in the table")
 	}
 }
+
+// N1: an interrupt or deadline during the run is exit 72 or 71, never a verdict.
+func TestDoctorExitCodesOnCancelAndDeadline(t *testing.T) {
+	var out, errOut strings.Builder
+	env := commands.Env{Stdout: &out, Stderr: &errOut}
+	for name, c := range map[string]struct {
+		mk   func() (context.Context, context.CancelFunc)
+		want int
+	}{
+		"cancelled": {func() (context.Context, context.CancelFunc) {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx, cancel
+		}, 72},
+		"deadline": {func() (context.Context, context.CancelFunc) {
+			return context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+		}, 71},
+	} {
+		for _, args := range [][]string{{"doctor"}, {"doctor", "--json"}} {
+			out.Reset()
+			errOut.Reset()
+			ctx, cancel := c.mk()
+			// a healthy machine would have exit 0; a broken one 68
+			for _, p := range []doctor.Ports{fakePorts(), brokenSocket()} {
+				out.Reset()
+				if code := commands.Execute(ctx, args, env, withDoctor(p)); code != c.want {
+					t.Errorf("%s %v: exit %d, want %d (stdout %q)", name, args, code, c.want, out.String())
+				}
+				if strings.Contains(out.String(), `"ok":true`) || strings.Contains(out.String(), "verdict:") {
+					t.Errorf("%s %v: reported a verdict: %q", name, args, out.String())
+				}
+			}
+			cancel()
+		}
+	}
+}
