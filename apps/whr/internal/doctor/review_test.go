@@ -559,6 +559,11 @@ func TestDoctorRedactionFoldingAndBytes(t *testing.T) {
 		{"werner", "box", "/srv/́werner/x", "/srv/́werner/x"},
 		{"werner", "box", "/srv/\xff\xfe/werner/\xc3", "/srv/\xff\xfe/<user>/\xc3"},
 		{"werner", "box", "\xff", "\xff"},
+		{"\u017Fbin", "box", "/usr/sbin/x", "/usr/sbin/x"},
+		{"u\u017Fr", "box", "/usr/sbin/x", "/usr/sbin/x"},
+		{"x", "\u212Aelvin", "/srv/kelvin", "/srv/<host>"},
+		{"İlker", "box", "/srv/ilker", "/srv/ilker"},
+		{"a\ufffdb", "box", "/srv/a\xffb/x", "/srv/a\xffb/x"},
 	}
 	for _, c := range cases {
 		if got := doctor.NewRedactor("/h", c.user, c.host).String(c.in); got != c.want {

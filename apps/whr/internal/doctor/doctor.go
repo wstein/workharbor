@@ -15,7 +15,8 @@
 // system-word skip is a tradeoff against "wherever they occur in a path": it
 // keeps /var/run/docker.sock and /usr/bin/git intact at the price of not
 // hiding a user who is literally called one of those words. The spec wording
-// needs an amendment note from the owner.
+// needs an amendment note from the owner. Names are also not Unicode-normalised:
+// composed and decomposed spellings of the same name (HFS+) do not match each other.
 package doctor
 
 import (
