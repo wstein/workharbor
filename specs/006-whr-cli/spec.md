@@ -225,7 +225,8 @@ then validate shell/session preferences without provisioning a workspace.
 6. **Given** fish for humans, **When** a new human shell or console starts after
    trusted creation, **Then** it runs fish; WorkHarbor-controlled noninteractive
    agent commands use bash and existing script interpreters remain unchanged.
-   No agent-native tool is installed, configured, authenticated or launched.
+   No agent-native tool is installed, authenticated or launched; the only agent-related files init writes are the
+   authored `AGENTS.md` (scenario 10) and `.claude/settings.json` (scenario 11), which hold no credential.
 7. **Given** herdr console mode, **When** its owner disconnects and reattaches,
    **Then** the same console survives with the same shell/environment and a fresh
    grant; stop/rebuild/runtime removal/explicit close terminate it. A fresh `shell`
@@ -250,6 +251,11 @@ then validate shell/session preferences without provisioning a workspace.
    wizard edit without the flag that would be refused is not offered (warning printed);
    every byte outside the markers is preserved; `--no-agents-block` skips the file; a
    rerun is a no-op.
+11. **Given** a workspace without or with an existing `.claude/settings.json`, **When** init runs (on by default,
+   FR-065), **Then** an absent file is created with `{"attribution": {"sessionUrl": false}}`; an existing file is left
+   unchanged with exit 0 unless `--overwrite .claude/settings.json` (plus `--yes` unattended, or the owner's
+   confirmation in the wizard) replaces it; a symbolic link or special file is refused (68); `--dry-run` previews the
+   file; a rerun is a no-op.
 
 ---
 
@@ -1052,7 +1058,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   color of FR-016, the exit codes of ADR 0013 frozen by tests, terminal-text escaping of FR-022, `version` per FR-027,
   `completion` and `help`), then in parallel B `validate`, C local `doctor` and the manifest-schema extension of FR-058
   (checker rules, vectors, `scripts/check_repo.py`), then D1 `workspace init` non-interactive core; independently the
-  resource library of FR-059. Wave 1b: the terminal test harness, the interactive wizard D2, devcontainer reuse D3 and the agent workflow block of FR-064 (T036, after D1 and the wizard D2, which owns the per-path confirmation).
+  resource library of FR-059. Wave 1b: the terminal test harness, the interactive wizard D2, devcontainer reuse D3 and the agent workflow block of FR-064 (T036, after D1 and the wizard D2, which owns the per-path confirmation), and the Claude Code settings default of FR-065 (T037, after D1 and T036).
   Wave 2: `workspace create` wiring and persistence with the owner API, and the starter catalog after provider
   admission. Each part is a work item that can run in its own worktree, branch and pull request (tasks). It needs no
   control plane, login or Docker daemon. `setup --dry-run` is not included (owner decision of 2026-10-16): FR-009
@@ -1063,6 +1069,22 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `op` and `agent`; `host show` and `auth login|status|logout` are blocked on the typed TLS owner client and credential
   storage work item (T011), not on missing endpoints. Registered but unavailable commands exit with the usage code
   (FR-063) until their work items are accepted; they never fake a result or contact an endpoint.
+- **FR-065**: `ws init` MUST propose `.claude/settings.json` in the workspace configuration directory through the
+  proposal model of FR-046 and FR-057, with exactly the bytes `{"attribution": {"sessionUrl": false}}` pretty-printed
+  (2-space indent, trailing newline), as an authored default (owner decision of 2026-10-17), so that Claude Code does
+  not add its claude.ai session link to commits and pull requests made in the workspace. The attribution `commit` and
+  `pr` texts stay at Claude Code's defaults, so the `Co-Authored-By` trailer with the real model name remains. The file
+  holds no credential and is read by Claude Code only when the owner uses it there; writing it is authored configuration
+  and installs, authenticates and launches nothing (scenario 6). It applies to sessions started in the workspace
+  configuration repository; Claude Code's own precedence of settings scopes is unchanged, and `~/.claude/settings.json`
+  is the owner's decision and is never read or written. An absent file is created (`create`); a file whose bytes equal
+  the proposal is `skip_existing`; any other existing regular file is never merged or edited by default but is
+  `left_unchanged` with exit 0 and no warning (the action is the report; as in FR-057(g), a defaults-only run preserves
+  existing content), and `--overwrite .claude/settings.json` (plus `--yes` unattended, per-path confirmation in the
+  wizard) replaces it entirely (`overwrite`) under FR-046; declining that wizard confirmation is not a cancellation (72).
+  A symbolic link or special file at the path, or a `.claude` that is not a directory, is refused (68) as for other
+  written paths. Without `--overwrite`, a file that appears after the preview is a conflict (68) as in FR-057(b).
+  No flag and no schema field is added; T037 uses the `left_unchanged` action added by T036. Exit codes follow FR-063.
 - **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
   credential or provider account (FR-028). No secret is accepted, read, stored or printed by them: a
   `--project-url` with `https` userinfo or any password or token (`ssh://git@host/...` is admitted) and a `.gitmodules`
@@ -1072,14 +1094,14 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   input, `--template` while starters are unsupported, `--devcontainer` or plain `init` (no `--non-interactive`, no `--dry-run`) in wave 1a, a `dir` that is a file, an unavailable command, `--json` where
   unsupported, `--no-agents-block` together with `--overwrite AGENTS.md` 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
-  edited, and a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0) 70, in unattended mode only (needs-human,
+  edited, and a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0) 70, in unattended mode only (needs-human,
   with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72);
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview, pre-existing
   content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a `doctor` run with a failed check, an unsupported platform for a mutating host
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
-  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
+  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` left unchanged (FR-065), while a symbolic link or special file at its path is 68. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
   increment. Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
   `exit_code` in the exit-code table (`conflict` for 68, `needs_human` for 70, and so on).
 
@@ -1291,6 +1313,11 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   would be refused (not offered, warning printed) and one where the flag pre-confirms an edit that would be
   refused (68); the template body free of marker-like lines; and a rerun. Bytes outside the markers are identical, the exit code
   is the one FR-063 lists, and the preview matches what is written.
+- **SC-023**: Init with the Claude Code settings default (FR-065) passes offline on a table of cases: absent file
+  (exact bytes, 0644); existing differing file and existing invalid-JSON file left unchanged (`left_unchanged`, exit 0);
+  identical file (`skip_existing`); `--overwrite .claude/settings.json` (with `--yes` unattended, and a wizard
+  confirmation and decline with T032); `--dry-run` previews the file and writes nothing; a rerun is a no-op; a
+  symbolic-link, FIFO and `.claude`-is-a-file target (68, nothing written); and a file appearing after the preview.
 - **SC-011**: A lost-response test (drop the reply to a workspace lifecycle mutation) yields exactly one operation, retrievable
   with `whr op show --key`. A lost `agent send` response reports unknown delivery without an automatic resend.
 
