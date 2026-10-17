@@ -44,6 +44,7 @@ func runGitVersion(ctx context.Context, gitPath string) (string, error) {
 	cmd.Env = GitEnv()
 	cmd.Dir = string(os.PathSeparator)
 	cmd.WaitDelay = gitWait
+	isolate(cmd)
 	var out limited
 	cmd.Stdout = &out
 	if err := cmd.Run(); err != nil {
@@ -63,7 +64,7 @@ func (l *limited) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-var gitVersionRE = regexp.MustCompile(`^git version (\d+)\.(\d+)(?:\.(\d+))?(-[A-Za-z0-9.]+)?`)
+var gitVersionRE = regexp.MustCompile(`^git version (\d+)\.(\d+)(?:\.(\d+))?(?:[-.](rc\d+))?`)
 
 // parseGit returns the numeric major, minor and patch of a `git --version`
 // line and whether it carries a pre-release suffix such as -rc0.
@@ -111,7 +112,7 @@ func (r *run) git() Check {
 	if r.p.OS == "darwin" && r.macShim(path) {
 		return failed(id, "The Git on PATH is the macOS shim that would open the Command Line Tools installer; it was not run.",
 			"Install Git "+MinGitVersion+" or newer (for example with Homebrew) or finish the Command Line Tools installation yourself, then rerun whr doctor; whr never starts the installer.",
-			map[string]any{"path": path, "minimum": MinGitVersion, "shim": true})
+			map[string]any{"executable": path, "minimum": MinGitVersion, "shim": true})
 	}
 	run := r.b.limit(gitCap) - gitWait
 	if run <= 0 {
@@ -121,13 +122,13 @@ func (r *run) git() Check {
 	defer cancel()
 	line, err := r.p.GitVersion(cctx, path)
 	if err != nil {
-		return unknown(id, reasonNotMeasurable, "git --version did not complete.", "Check that the git on PATH runs, then rerun whr doctor.", map[string]any{"path": path})
+		return unknown(id, reasonNotMeasurable, "git --version did not complete.", "Check that the git on PATH runs, then rerun whr doctor.", map[string]any{"executable": path})
 	}
 	v, pre, ok := parseGit(line)
 	if !ok {
-		return unknown(id, reasonNotMeasurable, "git --version printed an unrecognized line.", "Check that the git on PATH is a regular Git installation.", map[string]any{"path": path})
+		return unknown(id, reasonNotMeasurable, "git --version printed an unrecognized line.", "Check that the git on PATH is a regular Git installation.", map[string]any{"executable": path})
 	}
-	ev := map[string]any{"path": path, "version": line, "minimum": MinGitVersion}
+	ev := map[string]any{"executable": path, "version": line, "minimum": MinGitVersion}
 	if !atLeast(v, pre, minGit) {
 		return failed(id, "Git is older than "+MinGitVersion+".", "Upgrade Git to "+MinGitVersion+" or newer and rerun whr doctor.", ev)
 	}

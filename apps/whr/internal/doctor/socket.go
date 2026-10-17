@@ -94,10 +94,7 @@ func (r *run) socket() Check {
 		case ok:
 			paths, source = []candidate{{p, "$DOCKER_HOST"}}, "DOCKER_HOST"
 		case remote && !strings.HasPrefix(r.dockerHost, "unix:"):
-			scheme, _, _ := strings.Cut(r.dockerHost, ":")
-			if len(scheme) > 12 || scheme == "" {
-				scheme = "other"
-			}
+			scheme := dockerScheme(r.dockerHost)
 			return unknown(id, reasonRemoteNotChecked, "DOCKER_HOST names a remote daemon, which is not checked.",
 				"Unset DOCKER_HOST to check a local socket, or verify the remote daemon with its own tools.", map[string]any{"scheme": scheme})
 		default:
@@ -137,4 +134,18 @@ func (r *run) socket() Check {
 		return unknown(id, reasonNotMeasurable, "A candidate socket neither accepted nor refused a connection, so absence is not proven.", socketFix, ev)
 	}
 	return failed(id, "No Docker-compatible socket accepted a connection.", socketFix, ev)
+}
+
+// dockerScheme names the scheme of DOCKER_HOST only if it is a known one; any
+// other text is an environment value and is never echoed.
+func dockerScheme(h string) string {
+	s, _, ok := strings.Cut(h, "://")
+	if !ok {
+		return "other"
+	}
+	switch s = strings.ToLower(s); s {
+	case "tcp", "ssh", "http", "https", "npipe", "fd", "unix":
+		return s
+	}
+	return "other"
 }

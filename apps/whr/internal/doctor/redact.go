@@ -45,9 +45,9 @@ func replaceHome(s, home string) string {
 	return b.String()
 }
 
-// replaceName replaces name where it is delimited by the ends of the text or
-// by characters that are not letters or digits, so that a user called "doc"
-// never alters "doctor" (FR-060: names in a path, not inside other words).
+// replaceName replaces name where it is a whole path word: delimited by the
+// ends of the text, "/", "-" or "_". A user called "doc" therefore never
+// alters "doctor", and a user called "docker" never alters "docker.sock".
 func replaceName(s, name, repl string) string {
 	if name == "" {
 		return s
@@ -59,7 +59,7 @@ func replaceName(s, name, repl string) string {
 			break
 		}
 		end := i + len(name)
-		if (i > 0 && wordByte(s[i-1])) || (end < len(s) && wordByte(s[end])) {
+		if (i > 0 && !delim(s[i-1])) || (end < len(s) && !delim(s[end])) {
 			b.WriteString(s[:i+1])
 			s = s[i+1:]
 			continue
@@ -72,34 +72,46 @@ func replaceName(s, name, repl string) string {
 	return b.String()
 }
 
-func wordByte(c byte) bool {
-	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= 0x80
-}
+func delim(c byte) bool { return c == '/' || c == '-' || c == '_' }
 
-func (r Redactor) value(v any) any {
+// pathKeys are the evidence keys that hold file system paths; only their
+// values are redacted (FR-060: names "in a path"). executableKeys name paths
+// found through PATH, where only the home directory is replaced.
+var (
+	pathKeys       = map[string]bool{"path": true, "checked": true}
+	executableKeys = map[string]bool{"executable": true}
+)
+
+func (r Redactor) value(key string, v any) any {
 	switch x := v.(type) {
 	case string:
-		return r.String(x)
+		switch {
+		case pathKeys[key]:
+			return r.String(x)
+		case executableKeys[key] && r.home != "":
+			return replaceHome(x, r.home)
+		}
+		return x
 	case []any:
 		out := make([]any, len(x))
 		for i := range x {
-			out[i] = r.value(x[i])
+			out[i] = r.value(key, x[i])
 		}
 		return out
 	case map[string]any:
 		out := make(map[string]any, len(x))
 		for k, e := range x {
-			out[k] = r.value(e)
+			out[k] = r.value(k, e)
 		}
 		return out
 	}
 	return v
 }
 
-// check redacts the evidence values of c.
+// check redacts the path values of the evidence of c.
 func (r Redactor) check(c Check) Check {
 	if c.Evidence != nil {
-		c.Evidence = r.value(c.Evidence).(map[string]any)
+		c.Evidence = r.value("", c.Evidence).(map[string]any)
 	}
 	return c
 }
