@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/doctor"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/output"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/version"
@@ -44,9 +45,12 @@ type Handler func(ctx context.Context, call Call) (Result, error)
 
 // DefaultHandlers returns the handlers of the commands implemented so far.
 // `help` and `completion` are built in. Later work items add their commands
-// here (validate T026, doctor T027, init T030).
+// here (validate T026, init T030).
 func DefaultHandlers() map[string]Handler {
-	return map[string]Handler{"version": versionHandler}
+	return map[string]Handler{
+		"version":     versionHandler,
+		"host.doctor": DoctorHandler(doctor.SystemPorts(nil)),
+	}
 }
 
 func versionHandler(_ context.Context, call Call) (Result, error) {
@@ -156,6 +160,10 @@ func (a *app) run(ctx context.Context, e Entry, args []string) error {
 	}
 	res, err := h(ctx, Call{Entry: e, Args: args})
 	if err != nil {
+		// A handler may fail with data to show, such as a doctor report.
+		if res.Human != "" && !a.jsonMode() {
+			_, _ = io.WriteString(a.env.Stdout, res.Human)
+		}
 		a.exit = w.Failure(e.ID, asError(err))
 		return nil
 	}

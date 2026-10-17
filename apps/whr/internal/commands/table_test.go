@@ -318,12 +318,12 @@ func TestCompletionKnowsBothForms(t *testing.T) {
 	}
 	// Production handlers: unavailable commands are not offered.
 	prod := complete(nil, "")
-	for _, want := range []string{"version", "completion", "help"} {
+	for _, want := range []string{"version", "completion", "help", "doctor", "host"} {
 		if !contains(prod, want) {
 			t.Errorf("production completion lacks %q: %v", want, prod)
 		}
 	}
-	for _, none := range []string{"ls", "workspace", "ws", "host", "setup", "service"} {
+	for _, none := range []string{"ls", "workspace", "ws", "setup", "service"} {
 		if contains(prod, none) {
 			t.Errorf("production completion offers unavailable %q: %v", none, prod)
 		}
@@ -354,7 +354,7 @@ func contains(list []string, s string) bool {
 
 func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 	called := 0
-	spy := commands.DefaultHandlers()
+	spy := baseHandlers()
 	for _, e := range commands.Table() {
 		if _, ok := spy[e.ID]; !ok {
 			continue
@@ -384,8 +384,8 @@ func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 	if called != 0 {
 		t.Fatalf("handlers ran for unavailable commands")
 	}
-	// First-increment commands without a handler yet (validate, doctor, init) refuse the same way.
-	for _, id := range []string{"workspace.validate", "host.doctor", "workspace.init"} {
+	// First-increment commands without a handler yet (validate, init) refuse the same way.
+	for _, id := range []string{"workspace.validate", "workspace.init"} {
 		for _, e := range commands.Table() {
 			if e.ID != id {
 				continue

@@ -93,7 +93,7 @@ func run(t *testing.T, handlers map[string]commands.Handler, args ...string) res
 		IsTerminal: func(io.Writer) bool { return false },
 	}
 	if handlers == nil {
-		handlers = commands.DefaultHandlers()
+		handlers = baseHandlers()
 	}
 	code := commands.Execute(context.Background(), args, env, handlers)
 	return result{code, out.String(), errOut.String()}
@@ -102,7 +102,8 @@ func run(t *testing.T, handlers map[string]commands.Handler, args ...string) res
 // stubHandlers makes every command of the table available with a handler that
 // only reports what it was called with.
 func stubHandlers() map[string]commands.Handler {
-	h := commands.DefaultHandlers()
+	h := baseHandlers()
+	delete(h, "host.doctor") // the stub only reports arguments; doctor has its own tests
 	for _, e := range commands.Table() {
 		id := e.ID
 		if _, ok := h[id]; ok {
