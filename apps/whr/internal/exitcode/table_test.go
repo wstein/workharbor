@@ -3,15 +3,18 @@
 package exitcode_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/output"
 )
 
 type contractFile struct {
@@ -181,5 +184,36 @@ func TestRemoteStatusPassthrough0_1_255(t *testing.T) {
 	lost := exitcode.TransportLost()
 	if lost.Code != 72 || lost.Kind != exitcode.KindCLI {
 		t.Errorf("TransportLost() = %+v, want 72 with kind cli", lost)
+	}
+}
+
+func TestCLIFailureAnnouncedOnStderrAndKindCLI(t *testing.T) {
+	// A CLI failure prints a whr: line in human and JSON mode and is a CLI
+	// status; a remote status prints no whr: line and is marked remote.
+	for _, asJSON := range []bool{false, true} {
+		var out, errOut bytes.Buffer
+		w := &output.Writer{Out: &out, Err: &errOut, JSON: asJSON}
+		code := w.Failure("workspace.ls", exitcode.Errorf(exitcode.PathUnavailableCommand, "not available"))
+		if code != exitcode.Usage {
+			t.Fatalf("json=%v: code %d", asJSON, code)
+		}
+		if !strings.HasPrefix(errOut.String(), "whr: not available\n") {
+			t.Errorf("json=%v: stderr %q lacks the whr: line", asJSON, errOut.String())
+		}
+		if asJSON {
+			var env struct {
+				ExitCode int `json:"exit_code"`
+			}
+			if err := json.Unmarshal(out.Bytes(), &env); err != nil || env.ExitCode != 64 {
+				t.Errorf("envelope %q: %v", out.String(), err)
+			}
+		}
+		if got := exitcode.CLI(code); got.Kind != exitcode.KindCLI {
+			t.Errorf("CLI status kind = %q", got.Kind)
+		}
+	}
+	remote, err := exitcode.Remote(64)
+	if err != nil || remote.Kind != exitcode.KindRemote || remote.Code != 64 {
+		t.Fatalf("Remote(64) = %+v, %v", remote, err)
 	}
 }
