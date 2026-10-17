@@ -7,8 +7,8 @@
 and `doctor`, and a first increment that also implements the `ws init` core and wizard and a pure resource-parsing library) on top of the
 workspace initialization and resource-selection revision, which is proposed for owner review (2026-10-16); not implemented.
 The H77 amendment text is proposed: it needs an independent review CLEAR for its exact head and then explicit owner
-approval of that head, evidenced by a tracker or PR link (WORKFLOW.md). Werner's chat decisions of 2026-10-16/17 are
-the owner decisions recorded below, not approval of this text, and the owner's request for human review of the plan,
+approval of that head, evidenced by a tracker or PR link (WORKFLOW.md). Werner's chat decisions of 2026-10-16/17 (including his chat approval of `tasks.md` from T009 onward, H77 (5)) are
+the owner decisions recorded below, not approval of this text, and merging this amendment needs renewed owner approval of the spec, the plan and the whole `tasks.md` at one exact head, evidenced by a tracker or PR link, before T009 or any of T025 to T035 can start, and the owner's request for human review of the plan,
 task scope, configuration schema and launcher contracts of the initialization revision is not satisfied by
 this document. Earlier scope status: Revised after review; awaiting independent re-review. Owner approval for planning (H13:a, 2026-10-13)
 covers only the pre-amendment revised text, and only once that re-review is CLEAR for its exact head; it does not cover the H77 text or the 2026-10-16 revisions. Not implemented. Owner decisions
@@ -104,7 +104,10 @@ Numbering: the highest decision number recorded in the repository is H76:a, so t
   by id), `/api/v1/auth` (login, status, logout, revoke, dashboard credentials) and the login and owner pages; no
   workspace, operation, session, agent, host-list or dashboard API exists.
 - **H77 (5) - Placement and scope (chat 2026-10-16/17)**: the first-increment work items run on their own branch and
-  pull requests, not in the T001-T024 chain (renewed approval of `tasks.md` from T009 onward is the owner's to give);
+  pull requests, not in the T001-T024 chain (renewed approval of `tasks.md` from T009 onward: given by Werner in chat on
+  2026-10-17, quote "5approved"; per WORKFLOW.md the approval must refer to one exact head with a tracker or PR link,
+  which is to be added when the specification pull request exists, and until then no work item of T009 onward or
+  T025 to T035 may start on the strength of this amendment);
   `setup --dry-run` stays out of the first increment (FR-061); `ADR 0013` gets a superseding ADR for "remote
   unreachable" before owner-API client work, and `init`'s unclassified code stays until then; `doctor` exits 0 with the
   verdict `incomplete` when only skipped or unknown checks remain and runs read-only on macOS. Scope extension of
@@ -113,10 +116,19 @@ Numbering: the highest decision number recorded in the repository is H76:a, so t
   wiring; wave 1b is the interactive wizard and devcontainer reuse; the starter catalog stays unsupported and `ws
   create` wiring comes with the owner API in wave 2 (FR-061). The work items run in separate worktrees, branches and pull
   requests.
+- **H77 (7) - Answers to the open questions (chat 2026-10-17, "1j 2j 3j 4j 5approved")**: (1) `name` and `project` are
+  confirmed in manifest version 2, `name` being the suggested workspace name for `ws create` (its grammar matches the
+  future owner-API name rule) and `project` a desired input only; (2) the exit codes are confirmed: 64 for `--template`,
+  68 for invalid configuration and a failed doctor check, 72 for wizard cancellation, 73 taking precedence over 72 and
+  the original code on an incomplete rollback, and 70 only in unattended mode; (3) the host-agent resolver work item
+  that accepts manifest version 2 is added now (T035); (4) the 5 s value is the per-Git-call deadline and the per-run
+  bound of the hostile corpus, as interpreted in H77 (6); (5) renewed approval of `tasks.md` from T009 onward, recorded
+  under H77 (5). None of this approves the amendment text of a head; that needs an independent review CLEAR for its
+  exact head and the owner's approval with a tracker or PR link.
 - **H77 (6) - Thresholds (owner confirmation, chat 2026-10-17)**: "Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s,
   256 MiB seems to be fine from my side." These are the minimum Git version, the free-disk threshold, the manifest,
   devcontainer and `.gitmodules` size limits, the time bound (applied both to each Git call and to each hostile-corpus
-  run) and the memory bound of FR-054 to FR-060. A change
+  run) and the memory bound of FR-054 to FR-060; the owner confirmed the interpretation of "5 s" (H77 (7)). A change
   needs a spec amendment and a test change.
 
 These decisions are recorded in [ADR 0014](../../docs/adr/0014-whr-command-structure.md) and the contracts
@@ -842,7 +854,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   the manifest, walking each path component without following symbolic links, requiring a regular file (or
   directory) by `fstat` on the opened descriptor, never blocking on a FIFO, socket or device, and reading at most
   64 KiB (manifest), 256 KiB (devcontainer file) and 64 KiB (`.gitmodules`, at most 256 entries) plus
-  bounded depth, key counts and index listing size. It MUST NOT reveal a link target, a file's content beyond a
+  bounded depth, key counts and index listing size, all within one shared 5 second wall-clock budget per run (file reads
+  and every Git call draw on the remaining budget; exhaustion of the Git share is `git.listing_failed`). Before any Git call it
+  checks by `lstat` that `.git/HEAD`, `.git/index` (if present) and `.git/config` are regular files, else `git.unsafe_path`.
+  It MUST NOT reveal a link target, a file's content beyond a
   truncated escaped key, path or redacted URL, or a credential contained in a URL. Git is used only through a fixed,
   read-only invocation with a freshly built environment (no inherited `GIT_*` variables, no system or global
   configuration, no trace output, no optional locks, no pager, no prompts, neutral working directory, empty
@@ -864,7 +879,11 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `--shortcuts`, detection of changes since the preview, restore-or-report-partial rollback, the no-op rerun, preserved
   existing settings, validation with the code of `validate` (FR-054), and reuse of an existing devcontainer at the
   manifest's `devcontainer_path` (default `.devcontainer/devcontainer.json`); without one, unattended init exits
-  needs-human naming what to supply. Wave 1b: the interactive wizard (D2: back, review, cancel; its terminal test
+  needs-human (70) whose remediation names `.devcontainer/devcontainer.json`. By the owner's decision of 2026-10-17 (starters
+  unsupported) US0 scenario 4 ("in a new directory") is accepted in wave 1a only for a directory that already contains a
+  devcontainer file; this narrows the scenario until wave 1b/2, it does not change it. `--non-interactive` without `--yes` and
+  without `--dry-run` exits 70 naming `--yes`; `--devcontainer` in wave 1a exits 64 ("not in this release"). The placeholder file
+  is `<projects_path>/.gitkeep`. Wave 1b: the interactive wizard (D2: back, review, cancel; its terminal test
   harness is its own work item) and `--devcontainer <path>` selection with devcontainer reuse in the wizard (D3).
   Wave 2: `--template` and the starter catalog, which stay listed as unsupported (FR-058) until the provider admits
   them; `--template` refuses with that explanation. The settings, including `--name`, are written to the manifest (FR-058). Because init only authors configuration (FR-043), the runtime parts of FR-047 and FR-048
@@ -888,7 +907,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   where possible; (b) targets are created with exclusive no-follow creation relative to a no-follow-opened target
   directory, so a path created or replaced by another process after the preview is a conflict; existing real
   directories (`.devcontainer`, `projects`) are reused and never removed by rollback; a symbolic link,
-  file or special file at a target path is refused unless the file is named by `--overwrite` and is a regular file;
+  file or special file at a target path is refused unless the file is named by `--overwrite` and is a regular file, except that a regular file whose bytes equal the
+  proposal is `skip_existing` and needs no flag;
   (c) an overwrite writes a temporary file with the deterministic prefix `.whr-init-tmp-` in the same directory with the
   old file's mode, re-checks the identity (`fstat` device and inode) and content hash of the opened target immediately
   before the rename, keeps the old bytes until then and restores them on failure; a change in the remaining window
@@ -898,9 +918,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   run created it, and an incomplete rollback is a partial failure (73) listing the remaining paths and recovery steps,
   taking precedence over the original failure code; (e) SIGINT and SIGTERM trigger the rollback and exit 72; SIGKILL or a
   crash is not rolled back and the next run refuses on the leftover paths with the conflict code; (f) wizard
-  cancellation changes nothing; (g) an existing manifest of `schema_version` 1 is preserved unchanged by default and the settings it cannot hold are
-  reported as not persisted; rewriting it to version 2 needs `--overwrite workharbor.json` and warns that the result is
-  not creation-ready until the resolver accepts version 2 (FR-058); because both versions require `bundles: []`, a manifest
+  cancellation changes nothing; (g) an existing manifest of `schema_version` 1 is preserved unchanged only by a run that uses defaults alone (exit 0 with a
+  not-persisted warning listing `settings_not_persisted` and that the result is not creation-ready); when explicit flags
+  would need the manifest edited, unattended init exits 70 naming `--overwrite workharbor.json`, and rewriting it to version 2
+  with that flag warns that the result is not creation-ready until the resolver accepts version 2 (FR-058); because both versions require `bundles: []`, a manifest
   with bundle declarations is left unchanged and reported (FR-050), never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
   accepted, written or printed.
 - **FR-058**: The settings that FR-044 collects extend the manifest `workharbor.json`, as the owner decided on
@@ -910,7 +931,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (`on`, `off`) and `project` (`url`, `path`), with the defaults of FR-047 to FR-049 when a field is absent (`start_dir`
   `.`, fish, herdr, on); the agent-command shell is fixed to bash by policy and is not a field. Version 2 is
   fail-closed: the host-agent resolver rejects any manifest whose field set is not exactly version 1's until a separate,
-  reviewed resolver change (coordinated with T009) accepts version 2, so an init-authored manifest is not
+  reviewed resolver change (work item T035, after T009) accepts version 2, so an init-authored manifest is not
   creation-ready on its own. The manifest vectors ([`vectors.json`](../../contracts/workspace/vectors.json)) are shared by
   `validate`, `init`, `scripts/check_repo.py` and, after that change, the resolver. The starter catalog
   [`starters.json`](../../contracts/workspace/starters.json) lists starters with an id, kind, immutable digest and status;
@@ -972,7 +993,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   only, 0; unknown flag, invalid or missing flag value, mutually exclusive flags, a traversing or credential-bearing
   input, `--template` while starters are unsupported, a `dir` that is a file, an unavailable command, `--json` where
   unsupported 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
-  (including a missing devcontainer) and a regular file that existed at preview time without `--overwrite` 70 (needs-human, with the flag names);
+  (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
+  edited, and a regular file that existed at preview time without `--overwrite` 70, in unattended mode only (needs-human,
+  with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72);
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview, pre-existing
   content that fails validation, a `doctor` run with a failed check, an unsupported platform for a mutating host
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
@@ -1157,7 +1180,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 - **SC-017**: A hostile corpus for `validate` and `doctor` (FR-055 and the edge case above, including FIFO, sparse
   10 GiB file, symlinks at every path position, invalid UTF-8, duplicate keys, depth bombs, 100,000-entry
   `.gitmodules` and index, credential-bearing URLs, partial-clone repositories, and fsmonitor, hook, filter and
-  update-command repositories) completes within 5 seconds and 256 MiB resident memory per run, executes nothing (no
+  update-command repositories) completes within the single 5 second budget and 256 MiB resident memory per run, including runs whose Git calls hit the deadline, executes nothing (no
   marker file), modifies nothing (tree compared before and after by names, size, mode, inode, mtime and ctime,
   including `.git`), makes no network connection and yields the documented findings and exit codes; every `--json`
   output validates against the schema. Device-node cases and the bounds are verified on a real host only.
@@ -1214,12 +1237,14 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   format belongs to the contract of issue #71. FR-048 separately proposes herdr as
   the default human-console backend, subject to reviewed integration and availability.
 - The first increment (FR-061) runs entirely on the user's machine. `validate` and `doctor` read local files and
-  discover a local socket; `init` writes a local directory and runs no Git command. Thresholds of `doctor` and the
+  discover a local socket; `doctor` reads the machine's state read-only and its thresholds are not host policy; `init` writes a local directory and runs no Git command. Thresholds of `doctor` and the
   limits of FR-055 are owner-confirmed values (H77 (6), 2026-10-17).
 - The `provider_admission` of a configuration is decided only by the host agent's resolver at trust time (Feature
   006 T009); `validate` mirrors a subset as warnings and is not an authority.
 - Existing version 1 manifests and the examples keep their accepted schema. The proposed manifest `schema_version` 2
-  (FR-058) adds fields only for new manifests authored by `init`; the resolver rejects it until a separate reviewed
-  change, and no accepted provider input is widened. The starter catalog is listed as unsupported until provider
+  (FR-058) is authored by `init` for new manifests, and for an existing version 1 manifest only with an explicit
+  `--overwrite workharbor.json`; the resolver rejects it until the reviewed resolver change T035, and no accepted provider
+  input is widened. This replaces the upstream assumption that accepted schemas gain no fields (Werner's decision of
+  2026-10-17: manifest extension). The starter catalog is listed as unsupported until provider
   admission (owner decision of 2026-10-17).
 - The dashboard reads Spec Kit artifacts at an identified Git revision.
