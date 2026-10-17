@@ -53,9 +53,7 @@ type dir struct {
 
 // openDir opens path as the root of the walk.
 func openDir(path string) (*dir, error) {
-	// A trailing slash or a trailing /. would make lstat follow a link in the
-	// last component, so the walk starts from the cleaned spelling.
-	path = filepath.Clean(path)
+	path = walkPath(path)
 	info, err := os.Lstat(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
@@ -75,12 +73,50 @@ func openDir(path string) (*dir, error) {
 		root.Close()
 		return nil, &accessError{accUnsafe, "changed while it was opened", "run validate again"}
 	}
-	abs, err := filepath.Abs(path)
+	abs, err := absPath(path)
 	if err != nil {
 		root.Close()
 		return nil, &accessError{accUnsafe, "path cannot be resolved", "pass an absolute or relative path that exists"}
 	}
 	return &dir{root: root, abs: abs}, nil
+}
+
+// hasDotDot reports a .. component, which the kernel resolves against the
+// physical parent of a link target and a lexical Clean would not.
+func hasDotDot(path string) bool {
+	for _, part := range strings.Split(path, "/") {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// walkPath is the spelling the walk starts from. A trailing slash or a
+// trailing /. would make lstat follow a link in the last component, so they are
+// removed. Clean does that, but it also folds link/.. into the directory that
+// holds the link, whereas the kernel (and the shell) read it as the parent of
+// the link's target; a path with a .. component is therefore left to the kernel.
+func walkPath(path string) string {
+	if !hasDotDot(path) {
+		return filepath.Clean(path)
+	}
+	for len(path) > 1 && (strings.HasSuffix(path, "/") || strings.HasSuffix(path, "/.")) {
+		path = strings.TrimSuffix(strings.TrimSuffix(path, "."), "/")
+	}
+	return path
+}
+
+// absPath is the absolute physical spelling used for Git's directories.
+func absPath(path string) (string, error) {
+	if hasDotDot(path) {
+		resolved, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			return "", err
+		}
+		path = resolved
+	}
+	return filepath.Abs(path)
 }
 
 func (d *dir) Close() { d.root.Close() }
