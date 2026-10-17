@@ -569,6 +569,7 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/version/TestVersionBuildMetadataIsInjectable",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestAssertNoRawControlsClasses",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestAssertNoRawControlsWaitsForOutputEnd",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestCSILengthCapBoundary",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestChunkingNeverChangesTheResult",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestCloseSemantics",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestCountParametersAreBoundedBeforeAllocating",
@@ -617,8 +618,10 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestResizeRefusesImpossibleSizes",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestScreenRendersEraseAndCursorMovement",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestScreenTailBounded",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestTerminatedSequenceFloodAcrossReads",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestUnterminatedSequenceFloodIsMatchedLinearly",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestUnterminatedSequencesAreCapped"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestUnterminatedSequencesAreCapped",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestWideEditsLeaveNoOrphanedHalf"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
