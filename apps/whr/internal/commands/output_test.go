@@ -85,7 +85,7 @@ func TestColorFlagsEndToEnd(t *testing.T) {
 			Stdout: &out, Stderr: &errOut,
 			Getenv:     func(k string) string { return e[k] },
 			IsTerminal: func(io.Writer) bool { return tty },
-		}, commands.DefaultHandlers())
+		}, baseHandlers())
 		return result{code, out.String(), errOut.String()}
 	}
 	const red = "\x1b[1;31mwhr:\x1b[0m"

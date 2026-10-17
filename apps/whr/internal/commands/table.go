@@ -63,7 +63,6 @@ var blockedOn = map[string]string{
 // delivered after this foundation.
 var pending = map[string]string{
 	"workspace.validate": "work item T026",
-	"host.doctor":        "work item T027",
 	"workspace.init":     "work item T030",
 }
 
