@@ -104,15 +104,30 @@ func escape(b []byte) token {
 	return token{kind: tokOther, n: i + 1}
 }
 
+// Hostile output may carry any numbers; they are bounded where they are
+// parsed so no later arithmetic or allocation sees an absurd value.
+const (
+	maxParam  = 1<<16 - 1 // largest accepted CSI parameter
+	maxParams = 16        // parameters kept per sequence
+	maxDim    = 1 << 16   // rows or columns of an unbounded screen
+	maxSeq    = 4096      // longest unterminated escape sequence kept
+)
+
 func parseParams(s string) []int {
 	s = strings.TrimLeft(s, "?<=>")
 	if s == "" {
 		return nil
 	}
 	var out []int
-	for _, f := range strings.Split(s, ";") {
-		v, _ := strconv.Atoi(f)
-		out = append(out, v)
+	for _, f := range strings.SplitN(s, ";", maxParams+1) {
+		if len(out) == maxParams {
+			break
+		}
+		v, err := strconv.Atoi(f)
+		if err != nil && f != "" || v > maxParam {
+			v = maxParam
+		}
+		out = append(out, max(v, 0))
 	}
 	return out
 }
@@ -238,9 +253,23 @@ func (s *screen) lineFeed() {
 	s.row()
 }
 
+func (s *screen) maxCol() int {
+	if s.w > 0 {
+		return s.w
+	}
+	return maxDim
+}
+
+func (s *screen) maxRow() int {
+	if s.h > 0 {
+		return s.h
+	}
+	return maxDim
+}
+
 func (s *screen) clampCol() {
-	if s.w > 0 && s.c >= s.w {
-		s.c = s.w - 1
+	if m := s.maxCol(); s.c >= m {
+		s.c = m - 1
 	}
 }
 
@@ -284,12 +313,26 @@ func (s *screen) put(r rune) {
 	for len(l) < s.c+w {
 		l = append(l, cell{})
 	}
+	for i := s.c; i < s.c+w; i++ {
+		breakWide(l, i)
+	}
 	l[s.c] = cell{r: r}
 	if w == 2 {
 		l[s.c+1] = cell{r: -1}
 	}
 	s.rows[s.r] = l
 	s.c += w
+}
+
+// breakWide blanks the other half of a wide character before cell i of l is
+// overwritten, as a terminal does.
+func breakWide(l []cell, i int) {
+	if l[i].r == -1 && i > 0 {
+		l[i-1] = cell{}
+	}
+	if l[i].r > 0 && i+1 < len(l) && l[i+1].r == -1 {
+		l[i+1] = cell{}
+	}
 }
 
 func arg(p []int, i, def int) int {
@@ -303,8 +346,8 @@ func (s *screen) clampRow() {
 	if s.r < 0 {
 		s.r = 0
 	}
-	if s.h > 0 && s.r >= s.h {
-		s.r = s.h - 1
+	if m := s.maxRow(); s.r >= m {
+		s.r = m - 1
 	}
 	s.row()
 }
@@ -426,12 +469,12 @@ func (s *screen) csi(t token) {
 		s.clampRow()
 	case 'L', 'M':
 		s.row()
-		n := arg(p, 0, 1)
+		n := min(arg(p, 0, 1), s.maxRow())
 		if t.final == 'L' {
 			blank := make([][]cell, n)
 			s.rows = append(s.rows[:s.r], append(blank, s.rows[s.r:]...)...)
-			if s.h > 0 && len(s.rows) > s.h {
-				s.rows = s.rows[:s.h]
+			if m := s.maxRow(); len(s.rows) > m {
+				s.rows = s.rows[:m]
 			}
 		} else {
 			end := min(s.r+n, len(s.rows))
@@ -477,12 +520,13 @@ func (s *screen) editChars(op byte, n int) {
 		end := min(s.c+n, len(l))
 		l = append(l[:s.c], l[end:]...)
 	case '@':
-		l = append(l[:s.c], append(make([]cell, n), l[s.c:]...)...)
-		if s.w > 0 && len(l) > s.w {
-			l = l[:s.w]
+		l = append(l[:s.c], append(make([]cell, min(n, s.maxCol())), l[s.c:]...)...)
+		if m := s.maxCol(); len(l) > m {
+			l = l[:m]
 		}
 	case 'X':
 		for i := s.c; i < s.c+n && i < len(l); i++ {
+			breakWide(l, i)
 			l[i] = cell{}
 		}
 	}

@@ -3,6 +3,7 @@
 package ptytest
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -125,5 +126,91 @@ func TestExcerptBounded(t *testing.T) {
 	big := excerpt([]byte(strings.Repeat("x", 1<<20)))
 	if len(big) > 5000 || !strings.Contains(big, "1048576 bytes") {
 		t.Fatalf("excerpt %d bytes: %.80s", len(big), big)
+	}
+}
+
+// countParams are the parameter spellings a hostile program can use.
+var countParams = []string{"", "0", "1", "2147483648", "99999999999999999999",
+	"1000000000", "65536", "1;99999999999999999999", "99999999999999999999;99999999999999999999",
+	";", "-1", "1;2;3;4;5;6;7;8;9;10;11;12;13;14;15;16;17;18;19;20;1000000000"}
+
+func TestCountParametersAreBoundedBeforeAllocating(t *testing.T) {
+	finals := "@ABCDEFGHIJKLMPSTXZ`abdefghlmnqrsu"
+	for _, size := range [][2]int{{80, 24}, {0, 0}, {1000, 1000}} {
+		for _, f := range finals {
+			for _, p := range countParams {
+				for _, prefix := range []string{"", "?"} {
+					var before, after runtime.MemStats
+					runtime.ReadMemStats(&before)
+					s := newScreen(size[0], size[1])
+					in := "x\r\ny\x1b[" + prefix + p + string(f) + "z\x1b[" + prefix + p + string(f)
+					func() {
+						defer func() {
+							if r := recover(); r != nil {
+								t.Errorf("w=%d h=%d %q panicked: %v", size[0], size[1], in, r)
+							}
+						}()
+						s.feed([]byte(in))
+						_ = s.text()
+					}()
+					runtime.ReadMemStats(&after)
+					if d := after.TotalAlloc - before.TotalAlloc; d > 64<<20 {
+						t.Errorf("w=%d h=%d %q allocated %d bytes", size[0], size[1], in, d)
+					}
+					if s.h > 0 && len(s.rows) > s.h {
+						t.Errorf("%q: %d rows on a %d row screen", in, len(s.rows), s.h)
+					}
+				}
+			}
+		}
+	}
+}
+
+func TestInsertAndDeleteClampToTheScreen(t *testing.T) {
+	if got := draw(80, 3, "a\r\nb\r\nc\x1b[1;1H\x1b[99999999999999999999L"); got != "" {
+		t.Fatalf("insert beyond the screen clears it: %q", got)
+	}
+	if got := draw(5, 3, "abcde\x1b[1G\x1b[99999999999999999999@"); got != "" {
+		t.Fatalf("insert beyond the width: %q", got)
+	}
+	if got := draw(80, 24, "abc\x1b[1G\x1b[99999999999999999999P"); got != "" {
+		t.Fatalf("delete beyond the line: %q", got)
+	}
+	if got := draw(80, 24, "abc\x1b[1G\x1b[99999999999999999999X"); got != "" {
+		t.Fatalf("erase beyond the line: %q", got)
+	}
+	if got := draw(80, 24, "ab\x1b[99999999999999999999Cz"); !strings.HasSuffix(got, "z") || len(got) != 80 {
+		t.Fatalf("cursor right clamps to the last column: %q", got)
+	}
+}
+
+func FuzzScreenFeed(f *testing.F) {
+	for _, s := range []string{"", "a\x1b[1;1H", "\x1b[99999999999999999999L", "\x1b[?1049h\x1b[1000000000@",
+		"\x1b]0;x", "\x1bP", "\x1b[", "\xe2\x82", "中\b中x\x1b7\x1b8", "a\x1b[2J\x1b[3A\x1b[9999D"} {
+		f.Add([]byte(s), uint8(80), uint8(24))
+	}
+	f.Fuzz(func(t *testing.T, in []byte, w, h uint8) {
+		s := newScreen(int(w)%100, int(h)%30)
+		s.feed(in)
+		_ = s.text()
+		_ = s.tail()
+		project(in)
+		if s.h > 0 && len(s.rows) > s.h {
+			t.Fatalf("%d rows on a %d row screen", len(s.rows), s.h)
+		}
+	})
+}
+
+func TestNarrowCharacterOverWideCharacterBlanksTheOtherHalf(t *testing.T) {
+	for _, c := range []struct{ name, in, want string }{
+		{"over the right half", "中\bx", " x"},
+		{"over the left half", "中\b\bx", "x"},
+		{"wide over two narrow", "ab\b\b中", "中"},
+		{"wide over right half of wide", "中中\b\b\b中", " 中"},
+		{"erase chars through the right half", "中\x1b[1G\x1b[1X", ""},
+	} {
+		if got := draw(0, 0, c.in); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
 	}
 }

@@ -631,3 +631,10 @@ func TestPTYCleanupKillsRunningChild(t *testing.T) {
 	f.cleanup()
 	waitGone(t, pid) // fails after 5 s if cleanup did not kill it
 }
+
+func TestOversizedWindowIsRefused(t *testing.T) {
+	f := newFakeTB(t)
+	f.run(func() { ptytest.StartFunc(f, "quiet", ptytest.Options{Rows: 5000}) })
+	f.wantFatal("exceeds")
+	f.cleanup()
+}
