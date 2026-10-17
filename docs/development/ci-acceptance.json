@@ -711,7 +711,18 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestGitmodulesResolverParity",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestValidateExitCodes",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestValidateJSONMatchesSchema",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestValidateInterrupted"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestValidateInterrupted",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateGitInternalLinksAreUnsafe",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateUnbornDecision",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestMemoryAndDiskAgreeOnAllVectors",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestBoundaries",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapBoundary",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerStdinIsDevNull",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerKillsTheProcessGroupWithinTheBudget",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateSymlinkedDirectorySpellings",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateUnmergedIndexHasItsOwnMessage",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRemoteHelperPromisorNeedsAllowProtocol",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateNeverConnectsToAListener"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
