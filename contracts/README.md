@@ -64,7 +64,7 @@ these accepted ports or approve runtime integration.
 
 ## Workspace configuration manifest
 [`workspace/workharbor.schema.json`](workspace/workharbor.schema.json) describes `workharbor.json`
-(schema_version 1) as read today by the host agent resolver and `scripts/check_repo.py`; it adds no field.
+(schema_version 1) as read today by the host agent resolver and `scripts/check_repo.py`; its version 1 definition adds no field.
 `whr validate` and `whr init` (Feature 006) are specified to validate against it. The schema also describes the
 proposed `schema_version` 2 (optional `name`, `start_dir`, `human_shell`, `console_mode`, `shortcuts`, `project`),
 which the resolver rejects until a separate reviewed change. The Go validator is hand-written and frozen against the

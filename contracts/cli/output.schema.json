@@ -794,7 +794,8 @@
         "actions",
         "validation",
         "runtime_enforcement",
-        "git_checks"
+        "git_checks",
+        "bundle_selection_unavailable"
       ],
       "properties": {
         "directory": {
@@ -839,7 +840,10 @@
               "diff": {
                 "type": "string",
                 "maxLength": 65536,
-                "description": "Proposed contents or diff; untrusted text, JSON-escaped; omitted for reuse and skip_existing."
+                "description": "Proposed contents or diff; untrusted text, JSON-escaped. Truncated to 65536 characters per file with diff_truncated true; the written content is never truncated."
+              },
+              "diff_truncated": {
+                "type": "boolean"
               }
             }
           }
@@ -877,6 +881,25 @@
         "settings": {
           "type": "object",
           "description": "Effective manifest settings (name, start_dir, human_shell, console_mode, shortcuts, project) with the origin of each value (flag, existing, default)."
+        },
+        "settings_not_persisted": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "name",
+              "start_dir",
+              "human_shell",
+              "console_mode",
+              "shortcuts",
+              "project"
+            ]
+          },
+          "description": "Settings given by flag or default that could not be written because an existing version 1 manifest was preserved."
+        },
+        "bundle_selection_unavailable": {
+          "const": true,
+          "description": "FR-050: bundle selection is not offered; new manifests carry an empty list and existing declarations are left unchanged."
         }
       },
       "allOf": [

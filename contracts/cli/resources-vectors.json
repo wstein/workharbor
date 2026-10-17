@@ -4,7 +4,7 @@
  "decision": "H77",
  "status": "proposed",
  "spec": "specs/006-whr-cli/spec.md FR-039..FR-042, FR-059",
- "description": "Shared test vectors for CPU and memory parsing, canonicalization and per-field resolution, usable by the Go client library (apps/whr/internal/resources) and later by the Elixir control plane. CPU canonical value is integer thousandths of a CPU equivalent; memory is integer bytes (MiB = 1048576, GiB = 1073741824). Grammar: cpu = int [ '.' 1*3DIGIT ]; memory = int ( 'MiB' / 'GiB' ), int = '0' / nonzero *DIGIT, ASCII digits only, case-sensitive units, no whitespace. Rejections are classified by the first matching rule of classification_order. Spellings with equal canonical values share request identity. Resolution is per field: explicit flag, then host profile, else needs-human (unattended) or prompt (interactive); omission never means unlimited.",
+ "description": "Shared test vectors for CPU and memory parsing, canonicalization and per-field resolution, usable by the Go client library (apps/whr/internal/resources) and later by the Elixir control plane. CPU canonical value is integer thousandths of a CPU equivalent; memory is integer bytes (MiB = 1048576, GiB = 1073741824). Grammar: cpu = int [ '.' 1*3DIGIT ]; memory = int ( 'MiB' / 'GiB' ), int = 1*DIGIT (leading zeros accepted, per FR-039's 'positive base-10 number'), ASCII digits only, case-sensitive units, no whitespace. Rejections are classified by the first matching rule of classification_order. Spellings with equal canonical values share request identity. Resolution is per field: explicit flag, then host profile, else needs-human (unattended) or prompt (interactive); omission never means unlimited.",
  "limits": {
   "max_canonical": 9223372036854775807,
   "mib": 1048576,
@@ -41,7 +41,7 @@
   },
   {
    "input": "007",
-   "error": "syntax"
+   "expect": 7000
   },
   {
    "input": "0",
@@ -170,6 +170,26 @@
   {
    "input": "2\u200b",
    "error": "syntax"
+  },
+  {
+   "input": "02",
+   "expect": 2000
+  },
+  {
+   "input": "00.5",
+   "expect": 500
+  },
+  {
+   "input": "0002.500",
+   "expect": 2500
+  },
+  {
+   "input": "1a",
+   "error": "syntax"
+  },
+  {
+   "input": "2GiB",
+   "error": "syntax"
   }
  ],
  "memory_cases": [
@@ -207,7 +227,7 @@
   },
   {
    "input": "007",
-   "error": "syntax"
+   "error": "missing_unit"
   },
   {
    "input": "4GB",
@@ -279,7 +299,7 @@
   },
   {
    "input": "007GiB",
-   "error": "syntax"
+   "expect": 7516192768
   },
   {
    "input": "\uff18GiB",
@@ -304,6 +324,26 @@
   {
    "input": "99999999999999999999MiB",
    "error": "overflow"
+  },
+  {
+   "input": "02GiB",
+   "expect": 2147483648
+  },
+  {
+   "input": "0004MiB",
+   "expect": 4194304
+  },
+  {
+   "input": "4.5MiB",
+   "error": "syntax"
+  },
+  {
+   "input": "4.GiB",
+   "error": "syntax"
+  },
+  {
+   "input": "4GiB4",
+   "error": "syntax"
   }
  ],
  "resolution_cases": [
@@ -452,6 +492,59 @@
      "origin": "flag"
     }
    }
+  },
+  {
+   "id": "resolution-10",
+   "flags": {},
+   "profile": {
+    "cpu_thousandths": 1000
+   },
+   "mode": "unattended",
+   "expect": {
+    "needs_human": [
+     "--memory"
+    ]
+   }
+  },
+  {
+   "id": "resolution-11",
+   "flags": {
+    "memory": "2GiB"
+   },
+   "profile": {
+    "cpu_thousandths": 1000
+   },
+   "mode": "unattended",
+   "expect": {
+    "cpu": {
+     "value": 1000,
+     "origin": "host_default"
+    },
+    "memory": {
+     "value": 2147483648,
+     "origin": "flag"
+    }
+   }
+  },
+  {
+   "id": "resolution-12",
+   "flags": {
+    "cpu": "1"
+   },
+   "profile": {
+    "memory_bytes": 1073741824
+   },
+   "mode": "interactive",
+   "expect": {
+    "cpu": {
+     "value": 1000,
+     "origin": "flag"
+    },
+    "memory": {
+     "value": 1073741824,
+     "origin": "host_default"
+    }
+   }
   }
  ],
  "freeze": {
@@ -469,11 +562,30 @@
   "sign: first character '+' or '-' (so '-0', '+inf' and '-inf' are sign)",
   "nonfinite: starts with nan, inf or infinity, any case",
   "exponent: digits and dots followed by e or E (so '1e3GiB' is exponent)",
-  "syntax: not matching the grammar, including leading zeros ('007', '007GiB'), a trailing or leading dot, whitespace, non-ASCII digits and zero-width characters",
-  "missing_unit (memory): a valid integer with no unit",
-  "bad_unit (memory): a valid integer followed by letters that are not exactly MiB or GiB",
+  "syntax: not matching the relaxed lexical form 1*ASCII-DIGIT [ '.' 1*ASCII-DIGIT ] *ASCII-LETTER, which includes whitespace, non-ASCII digits, zero-width characters, a leading or trailing dot, commas and underscores; additionally a cpu value with letters, or a memory value with a dot, is syntax",
+  "missing_unit (memory): digits only",
+  "bad_unit (memory): digits followed by letters that are not exactly MiB or GiB (case-sensitive)",
   "excess_precision (cpu): more than three fractional digits, even when they are zeros",
   "not_positive: canonical value zero",
   "overflow: canonical value above 2^63-1"
+ ],
+ "equivalence_sets": [
+  {
+   "expect": 1073741824,
+   "memory": [
+    "1GiB",
+    "1024MiB",
+    "01GiB",
+    "001024MiB"
+   ]
+  },
+  {
+   "expect": 2500,
+   "cpu": [
+    "2.5",
+    "2.500",
+    "02.5"
+   ]
+  }
  ]
 }
