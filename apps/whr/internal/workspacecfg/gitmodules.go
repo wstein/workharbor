@@ -214,9 +214,6 @@ var (
 	sshSubmodule   = regexp.MustCompile(`^ssh://(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$`)
 	scpSubmodule   = regexp.MustCompile(`^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._~!$&'()*+,;=:@%/-]+$`)
 	scpPassword    = regexp.MustCompile(`^[^@/:\s]+:[^@/]*@[^/:\s]+:`)
-	// hostNamePattern is the resolver's host rule (validOrigin in the host agent):
-	// dot-separated labels of letters, digits and inner hyphens, none empty.
-	hostNamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*$`)
 )
 
 // submoduleURLCode classifies a .gitmodules URL: "" when admitted, otherwise
@@ -239,10 +236,7 @@ func submoduleURLCode(u string) string {
 		return "submodule.url_invalid"
 	}
 	if _, userinfo, host, _, ok := urlAuthority(u); ok {
-		name := host
-		if i := strings.LastIndex(host, ":"); i >= 0 {
-			name = host[:i]
-		}
+		name := hostWithoutPort(host)
 		if strings.HasPrefix(userinfo, "-") || strings.HasPrefix(host, "-") || !portOK(host) || !hostNamePattern.MatchString(name) {
 			return "submodule.url_invalid"
 		}
