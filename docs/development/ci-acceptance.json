@@ -789,7 +789,11 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealReftableTableLinkIsUnsafe",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealGitDotDotReadsThePhysicalParent",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRefusesLinkReachedThroughDotDot",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateDotDotThroughLinkVariants"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateDotDotThroughLinkVariants",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateDirectorySwappedAroundOneGitCall",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateDirectorySwappedBeforeGit",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateGitWalkBudgetMessage",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealIncrementalMultiPackIndex"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

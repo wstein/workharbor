@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg"
 )
@@ -253,5 +254,131 @@ func TestValidateDirectoryMovedDuringGitIsUnsafe(t *testing.T) {
 	r := validate(t, dir, workspacecfg.Options{Git: &fakeGit{handler: h}, LookGit: fixedGit("/git")})
 	if !swapped || !has(r, "git.unsafe_path") || has(r, "git.head_missing") {
 		t.Errorf("%+v", r.Findings)
+	}
+}
+
+// Git's incremental multi-pack-index chain lives in objects/pack/multi-pack-index.d.
+func TestValidateRealIncrementalMultiPackIndex(t *testing.T) {
+	realGit(t)
+	dir := repoDir(t, true)
+	runGit(t, dir, "", "repack", "-a", "-d", "-q")
+	write(t, dir, "more.txt", "more\n")
+	runGit(t, dir, "", "add", "-A")
+	runGit(t, dir, "", "commit", "-q", "-m", "second")
+	runGit(t, dir, "", "repack", "-q")
+	cmd := exec.Command("git", "multi-pack-index", "write", "--incremental")
+	cmd.Dir = dir
+	cmd.Env = hermeticEnv(t.TempDir())
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("this Git has no incremental multi-pack-index: %v %s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git/objects/pack/multi-pack-index.d")); err != nil {
+		t.Skipf("no multi-pack-index.d: %v", err)
+	}
+	if r := validate(t, dir, workspacecfg.Options{}); !r.Valid || has(r, "git.unsafe_path") {
+		t.Fatalf("%+v", r.Findings)
+	}
+	// A link inside the chain directory is still refused.
+	entries, _ := os.ReadDir(filepath.Join(dir, ".git/objects/pack/multi-pack-index.d"))
+	if len(entries) == 0 {
+		t.Skip("empty chain directory")
+	}
+	rel := ".git/objects/pack/multi-pack-index.d/" + entries[0].Name()
+	if err := os.Rename(filepath.Join(dir, rel), filepath.Join(dir, rel+".real")); err != nil {
+		t.Fatal(err)
+	}
+	symlink(t, dir, rel, filepath.Join(dir, rel+".real"))
+	if r := validate(t, dir, workspacecfg.Options{}); errorCodes(r) != "git.unsafe_path" {
+		t.Errorf("link in the chain: %+v", r.Findings)
+	}
+}
+
+// The walk reads at most its budget and says how to get under it.
+func TestValidateGitWalkBudgetMessage(t *testing.T) {
+	defer workspacecfg.SetGitWalkBudget(5)()
+	for name, rel := range map[string]string{"loose objects": ".git/objects/ab", "refs": ".git/refs/tags"} {
+		t.Run(name, func(t *testing.T) {
+			dir := validDir(t)
+			minimalGitDir(t, dir)
+			for i := 0; i < 20; i++ {
+				write(t, dir, rel+"/"+strings.Repeat("c", 30)+string(rune('a'+i)), "")
+			}
+			f := &fakeGit{handler: healthyHandler}
+			r := validate(t, dir, workspacecfg.Options{Git: f, LookGit: fixedGit("/git")})
+			m := find(r, "git.unsafe_path").Message
+			want := "git gc"
+			if name == "refs" {
+				want = "git pack-refs"
+			}
+			if errorCodes(r) != "git.unsafe_path" || len(f.calls) != 0 || !strings.Contains(m, "more entries than the 5") || !strings.Contains(m, want) {
+				t.Errorf("%q %+v", m, r.Findings)
+			}
+		})
+	}
+	// Within the budget nothing is said.
+	dir := validDir(t)
+	minimalGitDir(t, dir)
+	write(t, dir, ".git/objects/ab/"+strings.Repeat("c", 38), "")
+	if r := validate(t, dir, workspacecfg.Options{Git: &fakeGit{handler: healthyHandler}, LookGit: fixedGit("/git")}); has(r, "git.unsafe_path") {
+		t.Errorf("%+v", r.Findings)
+	}
+}
+
+// The path handed to Git is checked against the opened directory before the
+// Git stage and around every Git call.
+func TestValidateDirectorySwappedBeforeGit(t *testing.T) {
+	var swapped int
+	for k := 1; k <= 12; k++ {
+		dir := validDir(t)
+		minimalGitDir(t, dir)
+		calls, done := 0, false
+		clock := func() time.Time {
+			if calls++; calls == k && !done {
+				done = true
+				if err := os.Rename(dir, dir+".moved"); err == nil {
+					_ = os.Mkdir(dir, 0o755)
+					t.Cleanup(func() { os.RemoveAll(dir + ".moved") })
+				}
+			}
+			return time.Unix(1000, 0)
+		}
+		f := &fakeGit{handler: healthyHandler}
+		r := validate(t, dir, workspacecfg.Options{Git: f, LookGit: fixedGit("/git"), Clock: clock})
+		if done && len(f.calls) == 0 && has(r, "git.unsafe_path") {
+			swapped++
+		}
+	}
+	if swapped == 0 {
+		t.Error("a swap just before the Git stage must stop Git before any call")
+	}
+}
+
+func TestValidateDirectorySwappedAroundOneGitCall(t *testing.T) {
+	for _, sub := range []string{"rev-parse", "ls-files", "ls-tree"} {
+		t.Run(sub, func(t *testing.T) {
+			dir := validDir(t)
+			minimalGitDir(t, dir)
+			after := false
+			h := func(s string, c workspacecfg.GitCmd) (workspacecfg.GitOut, error) {
+				if s == sub && !after {
+					after = true
+					if err := os.Rename(dir, dir+".moved"); err == nil {
+						_ = os.Mkdir(dir, 0o755)
+					}
+					t.Cleanup(func() { os.RemoveAll(dir + ".moved") })
+				}
+				return healthyHandler(s, c)
+			}
+			f := &fakeGit{handler: h}
+			r := validate(t, dir, workspacecfg.Options{Git: f, LookGit: fixedGit("/git")})
+			if !has(r, "git.unsafe_path") {
+				t.Fatalf("%+v", r.Findings)
+			}
+			for _, s := range f.subs() {
+				if s == "ls-tree" && sub != "ls-tree" {
+					t.Errorf("Git went on after the swap: %v", f.subs())
+				}
+			}
+		})
 	}
 }
