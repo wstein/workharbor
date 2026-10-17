@@ -999,7 +999,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   is not a cancellation (72), and the wizard does not offer an edit without the flag that would be refused (it
   prints the warning instead); an edit pre-confirmed by the flag that would be refused is 68 in every mode. The
   general rule of FR-046 and FR-063 (a declined path is a cancellation, a refused edit is 68) stays unchanged for
-  every file other than `AGENTS.md` and `.claude/settings.json` (FR-065). `--no-agents-block` adds no `AGENTS.md` entry and leaves the file untouched; with
+  every file other than `AGENTS.md` and `.claude/settings.json` (FR-065). No "changed since preview" re-check applies to an `AGENTS.md` that is `left_unchanged` or `skip_existing`, since nothing is written. `--no-agents-block` adds no `AGENTS.md` entry and leaves the file untouched; with
   `--overwrite AGENTS.md` it is a usage error (64). `validate` never opens `AGENTS.md` (FR-055), so init checks
   marker integrity itself, in memory before the first write and on the written result.
 
@@ -1110,7 +1110,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
   edited, and a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0) 70, in unattended mode only (needs-human,
   with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72, except `AGENTS.md`, where a declined edit is not a cancellation (FR-064), and `.claude/settings.json`, which the wizard offers to replace only when `--overwrite .claude/settings.json` names it (FR-065));
-  invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview, pre-existing
+  invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview (no such re-check applies to a path that is left unchanged and not written), pre-existing
   content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a `doctor` run with a failed check, an unsupported platform for a mutating host
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback 73, which takes precedence over 72 and over
