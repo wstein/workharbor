@@ -119,10 +119,8 @@ func projectURLProblem(u string) string {
 		return "has a malformed percent escape"
 	}
 	_, userinfo, host, rest, _ := urlAuthority(u)
-	if i := strings.LastIndex(host, ":"); i >= 0 {
-		if port, err := strconv.Atoi(host[i+1:]); err != nil || port < 1 || port > 65535 {
-			return "has a port outside 1-65535"
-		}
+	if !portOK(host) {
+		return "has a port outside 1-65535"
 	}
 	if strings.Contains(rest, "//") {
 		return "has an empty path component"
@@ -131,4 +129,14 @@ func projectURLProblem(u string) string {
 		return "has a user or host starting with a hyphen"
 	}
 	return ""
+}
+
+// portOK accepts a host without a port or with one in 1-65535.
+func portOK(host string) bool {
+	i := strings.LastIndex(host, ":")
+	if i < 0 {
+		return true
+	}
+	port, err := strconv.Atoi(host[i+1:])
+	return err == nil && port >= 1 && port <= 65535
 }

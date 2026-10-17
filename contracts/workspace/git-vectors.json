@@ -577,10 +577,9 @@
    "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
    "expect_codes": [
     "gitmodules.duplicate_field",
-    "submodule.nested",
     "submodule.pinned"
    ],
-   "note": "the same name twice lists the same path twice, which overlaps"
+   "note": "sections of the same name merge; repeating path and url is a duplicate field"
   },
   {
    "id": "keys-are-case-insensitive",
@@ -1161,6 +1160,136 @@
     "100644 a workharbor.json"
    ],
    "expect_codes": []
+  },
+  {
+   "id": "url-port-0",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example:0/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-port-65536",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example:65536/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-port-99999",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example:99999/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-port-65535",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example:65535/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "url-port-1",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example:1/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "url-ssh-port-0",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://git@f.example:0/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "url-credentials-with-space",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://u:CANARYpw @f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_credentials"
+   ],
+   "note": "the credential check runs before the shape check"
+  },
+  {
+   "id": "split-sections-same-name-merge",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n[submodule \"app\"]\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ],
+   "note": "Git merges sections of the same name"
+  },
+  {
+   "id": "section-name-keyword-case",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[Submodule \"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ],
+   "note": "the section keyword is case-insensitive"
+  },
+  {
+   "id": "section-header-whitespace",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule   \"app\"  ]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "key-on-header-line",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"] path = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ],
+   "note": "Git reads a key after the header on the same line"
   }
  ]
 }
