@@ -30,12 +30,8 @@ func (r *run) gitUnsafe() (reason string, missing bool) {
 	}
 	// Directories Git descends into must be real directories: a link there would
 	// make Git read refs or objects from outside the validated directory.
-	for _, rel := range []string{".git/objects", ".git/objects/info", ".git/refs", ".git/refs/heads"} {
-		if info, aerr := r.d.lstat(rel); aerr != nil && aerr.kind != accMissing {
-			return rel + " " + aerr.why, false
-		} else if aerr == nil && info.Mode()&fs.ModeSymlink != 0 {
-			return rel + " is a symbolic link", false
-		}
+	if reason := r.gitLinks(); reason != "" {
+		return reason, false
 	}
 	for _, rel := range []string{".git/commondir", ".git/objects/info/alternates"} {
 		if _, aerr := r.d.lstat(rel); aerr == nil {
@@ -47,7 +43,9 @@ func (r *run) gitUnsafe() (reason string, missing bool) {
 	if info, aerr := r.d.lstat(".git/packed-refs"); aerr == nil && info.Mode()&fs.ModeSymlink != 0 {
 		return ".git/packed-refs is a symbolic link", false
 	}
-	if ref := r.headRef(); ref != "" {
+	// A reftable repository keeps no loose reference files: .git/refs/heads is a
+	// placeholder file and the HEAD it names is only a marker.
+	if ref := r.headRef(); ref != "" && !r.reftable {
 		if info, aerr := r.d.lstat(".git/" + ref); aerr != nil && aerr.kind != accMissing {
 			return ".git/" + ref + " " + aerr.why, false
 		} else if aerr == nil && info.Mode()&fs.ModeSymlink != 0 {
@@ -70,6 +68,81 @@ func (r *run) gitUnsafe() (reason string, missing bool) {
 		}
 	}
 	return "", false
+}
+
+// Bounds of the .git link walk: a hostile repository cannot make it unbounded.
+const (
+	maxGitWalkEntries = 100000
+	maxGitWalkDepth   = 32
+)
+
+// gitLinks refuses any symbolic link in the parts of .git that Git reads
+// through directory entries: the first level of .git/objects (pack, info and
+// the fan-out directories), all of .git/refs and .git/reftable. It also
+// records whether the repository uses the reftable format.
+func (r *run) gitLinks() string {
+	budget := maxGitWalkEntries
+	var walk func(rel string, depth int) string
+	walk = func(rel string, depth int) string {
+		entries, aerr := r.d.readDir(rel)
+		if aerr != nil {
+			if aerr.kind == accMissing {
+				return ""
+			}
+			return rel + " " + aerr.why
+		}
+		for _, e := range entries {
+			if budget--; budget < 0 {
+				return rel + " has more entries than can be inspected"
+			}
+			child := rel + "/" + e.Name()
+			switch {
+			case e.Type()&fs.ModeSymlink != 0:
+				return child + " is a symbolic link"
+			case e.IsDir() && depth < maxGitWalkDepth && !strings.HasPrefix(rel, ".git/objects"):
+				if reason := walk(child, depth+1); reason != "" {
+					return reason
+				}
+			case e.IsDir() && strings.HasPrefix(rel, ".git/refs") && depth >= maxGitWalkDepth:
+				return rel + " is nested deeper than can be inspected"
+			}
+		}
+		return ""
+	}
+	for _, rel := range []string{".git/objects", ".git/refs", ".git/reftable"} {
+		if reason := walk(rel, 1); reason != "" {
+			return reason
+		}
+	}
+	if info, aerr := r.d.lstat(".git/reftable"); aerr == nil && info.IsDir() {
+		r.reftable = true
+	} else if r.configNamesReftable() {
+		r.reftable = true
+	}
+	return ""
+}
+
+// configNamesReftable reports extensions.refStorage = reftable in .git/config.
+func (r *run) configNamesReftable() bool {
+	raw, aerr := r.d.readFile(".git/config", MaxListingBytes)
+	if aerr != nil {
+		return false
+	}
+	inExtensions := false
+	for _, line := range strings.Split(string(raw), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			name, _, _ := strings.Cut(strings.TrimPrefix(line, "["), "]")
+			inExtensions = strings.EqualFold(strings.TrimSpace(name), "extensions")
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if inExtensions && ok && strings.EqualFold(strings.TrimSpace(key), "refstorage") &&
+			strings.EqualFold(strings.Trim(strings.TrimSpace(value), `"`), "reftable") {
+			return true
+		}
+	}
+	return false
 }
 
 // headRef returns the reference .git/HEAD names ("refs/heads/main"), or "" when
@@ -265,6 +338,9 @@ func (g *gitSession) headExists() (bool, *gitFailure) {
 	ref := strings.TrimSpace(string(out.Stdout))
 	if out.Exit != 0 || !validRefName(ref) {
 		return false, &gitFailure{"git.listing_failed", "HEAD is neither a commit nor an unborn branch"}
+	}
+	if g.r.reftable {
+		return false, nil // the reference store is not made of files; Git has decided
 	}
 	// Unborn means the named reference is absent, loose and packed.
 	if _, aerr := g.r.d.lstat(".git/" + ref); aerr == nil || aerr.kind != accMissing {

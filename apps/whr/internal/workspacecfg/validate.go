@@ -57,6 +57,8 @@ type run struct {
 	// gitkeeps records what the Git stage learned for the project declaration.
 	gitState *GitInfo
 	gitRan   bool
+	// reftable is set by the .git link walk for a repository in the reftable format.
+	reftable bool
 }
 
 // Validate checks the configuration directory dir. It reads the directory

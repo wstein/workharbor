@@ -148,6 +148,45 @@ func (d *dir) lstat(rel string) (fs.FileInfo, *accessError) {
 	return info, nil
 }
 
+// readDir lists the directory rel without following links: rel itself and
+// every component above it must be real directories. The entries are lstat
+// based, so a link is reported as a link and never followed.
+func (d *dir) readDir(rel string) ([]fs.DirEntry, *accessError) {
+	cur, leaf, done, err := d.walk(rel)
+	if err != nil {
+		return nil, err.(*accessError)
+	}
+	defer done()
+	info, lerr := cur.Lstat(leaf)
+	if lerr != nil {
+		return nil, classify(lerr)
+	}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return nil, unsafeErr("is a symbolic link")
+	}
+	if !info.IsDir() {
+		return nil, unsafeErr("is %s, not a directory", kindName(info.Mode()))
+	}
+	sub, oerr := cur.OpenRoot(leaf)
+	if oerr != nil {
+		return nil, unsafeErr("cannot be opened")
+	}
+	defer sub.Close()
+	if now, serr := sub.Stat("."); serr != nil || !os.SameFile(info, now) {
+		return nil, unsafeErr("changed while it was opened")
+	}
+	f, oerr := sub.Open(".")
+	if oerr != nil {
+		return nil, unsafeErr("cannot be opened")
+	}
+	defer f.Close()
+	entries, rerr := f.ReadDir(-1)
+	if rerr != nil {
+		return nil, unsafeErr("cannot be read")
+	}
+	return entries, nil
+}
+
 // kindName names a file type for messages without revealing anything else.
 func kindName(m fs.FileMode) string {
 	switch {

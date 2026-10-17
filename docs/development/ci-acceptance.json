@@ -774,7 +774,11 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateStartDirIsNotCheckedOnDisk",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateTimeBudgetOutsideGit",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateUnreadableDirectoryRemediation",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateValidDirectory"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateValidDirectory",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateGitDirectoryWalkRefusesLinks",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealReftableRepository",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateReftableLayoutIsNotUnsafe",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateReftableLinksAreStillUnsafe"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
