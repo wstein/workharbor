@@ -109,13 +109,13 @@
             "url": {
               "type": "string",
               "maxLength": 2048,
-              "pattern": "^(https://[^@/\\s]+/[^\\s]+|ssh://(?:[A-Za-z0-9._-]+@)?[^@/\\s]+/[^\\s]+)$",
-              "description": "Desired input only, never a pin: https without userinfo, or ssh. whr never fetches it."
+              "pattern": "^(https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+|ssh://(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+)$",
+              "description": "Desired input only, never a pin: https without userinfo, or ssh (a user name before @ is admitted for ssh only). No query, fragment, whitespace, control or bidirectional characters; percent escapes must be well formed (checked by validators). whr never fetches it. Stricter than the resolver's origin check by design: scp-like addresses are not accepted here."
             },
             "path": {
               "type": "string",
-              "pattern": "^projects/[A-Za-z0-9][A-Za-z0-9._-]*$",
-              "description": "Must lie below projects_path when that is 'projects'; validators check containment against projects_path."
+              "description": "projects_path + '/' + name, where name is the last path component of url with one trailing .git removed and matches [A-Za-z0-9][A-Za-z0-9._-]*; validators check containment against projects_path (the pattern cannot).",
+              "minLength": 3
             }
           }
         },
