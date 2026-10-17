@@ -17,7 +17,7 @@ Status: proposed extension of Feature 001 domain contracts.
 | ManifestV2 | proposed schema_version 2 of workharbor.json: the four version 1 fields plus optional name, start_dir, human_shell, console_mode, shortcuts, project (url, path); defaults fish, herdr, on, '.'; fail-closed until the resolver accepts it. |
 | ResourceSelection | CPU integer thousandths and memory integer bytes from the pure library; per-field origin (flag, host_default, missing); no wiring in the first increment. |
 | ValidationResult | directory as supplied, valid, counts, at most 200 findings (code, severity, subject, message, remediation), truncated, `provider_admission` always `not_evaluated`; never contains file content or a credential. |
-| InitProposal | ordered file actions (create, overwrite, reuse, skip_existing) with content hash and diff, the effective manifest settings with origin (flag, existing, default), dry-run flag, created and overwritten path list with device and inode for rollback, validation result; no credential. |
+| InitProposal | ordered file actions (create, overwrite, reuse, skip_existing, append_block, replace_block, left_unchanged) with content hash and diff, the effective manifest settings with origin (flag, existing, default), dry-run flag, created and overwritten path list with device and inode for rollback, validation result; no credential. |
 | DoctorCheck | catalogue id, status pass/fail/skipped/unknown, reason when skipped or unknown, redacted evidence, remediation when failed; verdict ok/failed/incomplete. |
 | PlatformEvidence | exact source, command, client/host versions, observed results/date; a build target is not verified platform support. |
 
