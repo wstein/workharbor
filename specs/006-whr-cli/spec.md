@@ -104,10 +104,10 @@ Numbering: the highest decision number recorded in the repository is H76:a, so t
   by id), `/api/v1/auth` (login, status, logout, revoke, dashboard credentials) and the login and owner pages; no
   workspace, operation, session, agent, host-list or dashboard API exists.
 - **H77 (5) - Placement and scope (chat 2026-10-16/17)**: the first-increment work items run on their own branch and
-  pull requests, not in the T001-T024 chain (renewed approval of `tasks.md` from T009 onward: given by Werner in chat on
-  2026-10-17, quote "5approved"; per WORKFLOW.md the approval must refer to one exact head with a tracker or PR link,
-  which is to be added when the specification pull request exists, and until then no work item of T009 onward or
-  T025 to T035 may start on the strength of this amendment);
+  pull requests, not in the T001-T024 chain (Werner's chat answer "5approved" on 2026-10-17 to the question of renewed approval of
+  `tasks.md` from T009 onward is recorded here as decision H77 (5); it is not approval of any head's text, per WORKFLOW.md
+  the approval must refer to one exact head with a tracker or PR link, to be added when the specification pull request
+  exists, and until then no work item of T009 onward or T025 to T035 may start on the strength of this amendment);
   `setup --dry-run` stays out of the first increment (FR-061); `ADR 0013` gets a superseding ADR for "remote
   unreachable" before owner-API client work, and `init`'s unclassified code stays until then; `doctor` exits 0 with the
   verdict `incomplete` when only skipped or unknown checks remain and runs read-only on macOS. Scope extension of
@@ -122,7 +122,7 @@ Numbering: the highest decision number recorded in the repository is H76:a, so t
   68 for invalid configuration and a failed doctor check, 72 for wizard cancellation, 73 taking precedence over 72 and
   the original code on an incomplete rollback, and 70 only in unattended mode; (3) the host-agent resolver work item
   that accepts manifest version 2 is added now (T035); (4) the 5 s value is the per-Git-call deadline and the per-run
-  bound of the hostile corpus, as interpreted in H77 (6); (5) renewed approval of `tasks.md` from T009 onward, recorded
+  bound of the hostile corpus, as interpreted in H77 (6), implemented as one shared per-run budget (FR-055); (5) renewed approval of `tasks.md` from T009 onward, recorded
   under H77 (5). None of this approves the amendment text of a head; that needs an independent review CLEAR for its
   exact head and the owner's approval with a tracker or PR link.
 - **H77 (6) - Thresholds (owner confirmation, chat 2026-10-17)**: "Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s,
@@ -855,7 +855,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   directory) by `fstat` on the opened descriptor, never blocking on a FIFO, socket or device, and reading at most
   64 KiB (manifest), 256 KiB (devcontainer file) and 64 KiB (`.gitmodules`, at most 256 entries) plus
   bounded depth, key counts and index listing size, all within one shared 5 second wall-clock budget per run (file reads
-  and every Git call draw on the remaining budget; exhaustion of the Git share is `git.listing_failed`). Before any Git call it
+  and every Git call draw on the remaining budget; exhaustion during Git work is `git.listing_failed`, elsewhere the error `findings.time_budget_exhausted`). Before any Git call it
   checks by `lstat` that `.git/HEAD`, `.git/index` (if present) and `.git/config` are regular files, else `git.unsafe_path`.
   It MUST NOT reveal a link target, a file's content beyond a
   truncated escaped key, path or redacted URL, or a credential contained in a URL. Git is used only through a fixed,
@@ -882,7 +882,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   needs-human (70) whose remediation names `.devcontainer/devcontainer.json`. By the owner's decision of 2026-10-17 (starters
   unsupported) US0 scenario 4 ("in a new directory") is accepted in wave 1a only for a directory that already contains a
   devcontainer file; this narrows the scenario until wave 1b/2, it does not change it. `--non-interactive` without `--yes` and
-  without `--dry-run` exits 70 naming `--yes`; `--devcontainer` in wave 1a exits 64 ("not in this release"). The placeholder file
+  without `--dry-run` exits 70 naming `--yes`; `--devcontainer` in wave 1a exits 64 ("not in this release"). Without `--non-interactive` and without `--dry-run`, wave 1a (no wizard yet) exits 70 naming `--non-interactive --yes`, on a terminal or not. The placeholder file
   is `<projects_path>/.gitkeep`. Wave 1b: the interactive wizard (D2: back, review, cancel; its terminal test
   harness is its own work item) and `--devcontainer <path>` selection with devcontainer reuse in the wizard (D3).
   Wave 2: `--template` and the starter catalog, which stay listed as unsupported (FR-058) until the provider admits
@@ -921,13 +921,13 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   cancellation changes nothing; (g) an existing manifest of `schema_version` 1 is preserved unchanged only by a run that uses defaults alone (exit 0 with a
   not-persisted warning listing `settings_not_persisted` and that the result is not creation-ready); when explicit flags
   would need the manifest edited, unattended init exits 70 naming `--overwrite workharbor.json`, and rewriting it to version 2
-  with that flag warns that the result is not creation-ready until the resolver accepts version 2 (FR-058); because both versions require `bundles: []`, a manifest
+  with that flag warns that the result is not creation-ready until the resolver accepts version 2 (FR-058). A defaults-only run with `--overwrite workharbor.json` still preserves the manifest unless the owner also passes a setting; an explicit flag equal to its default counts as explicit; `--dry-run` with flags reports the same exit 70 or 0 without writing; an unchanged version 1 manifest remains creation-ready, which the warning states only when settings were not persisted; because both versions require `bundles: []`, a manifest
   with bundle declarations is left unchanged and reported (FR-050), never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
   accepted, written or printed.
 - **FR-058**: The settings that FR-044 collects extend the manifest `workharbor.json`, as the owner decided on
   2026-10-17. [`workharbor.schema.json`](../../contracts/workspace/workharbor.schema.json) defines the accepted
   `schema_version` 1 (exactly four fields, unchanged) and the proposed `schema_version` 2: the same four fields plus
-  optional `name` (lowercase letters, digits and hyphens, 1-64 characters), `start_dir`, `human_shell` (`fish`, `bash`, `zsh`, `nu`), `console_mode` (`herdr`, `plain`), `shortcuts`
+  optional `name` (lowercase letters, digits and hyphens, 1-64 characters, no leading or trailing hyphen), `start_dir`, `human_shell` (`fish`, `bash`, `zsh`, `nu`), `console_mode` (`herdr`, `plain`), `shortcuts`
   (`on`, `off`) and `project` (`url`, `path`), with the defaults of FR-047 to FR-049 when a field is absent (`start_dir`
   `.`, fish, herdr, on); the agent-command shell is fixed to bash by policy and is not a field. Version 2 is
   fail-closed: the host-agent resolver rejects any manifest whose field set is not exactly version 1's until a separate,
@@ -963,7 +963,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (`control_plane.reachable`, `host.identity`, `host.credentials_permissions`, `service.agent`) MUST report `skipped`
   with a reason. The verdict is `failed` when any check fails, `incomplete` when none fails but some are skipped or
   unknown, and `ok` only when all pass. Exit status is 0 unless a check failed (FR-063); owner decision of 2026-10-17:
-  `incomplete` exits 0. Evidence is redacted (home directory as `~`; the user name and host name replaced wherever
+  `incomplete` exits 0. Doctor has the same 5 second wall-clock budget per run (each socket dial, `git --version` and `daemon.json` read draws on it). Evidence is redacted (home directory as `~`; the user name and host name replaced wherever
   they occur in a path; no environment value or credential), so `--json` output is the shareable report of FR-010; a
   separate report file option is not part of the first increment. Doctor is read-only on every platform; FR-026's
   refusal of unsupported host platforms applies to the mutating host commands, and doctor reports an unlisted

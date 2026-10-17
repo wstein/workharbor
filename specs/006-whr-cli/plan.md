@@ -159,12 +159,12 @@ independent review CLEAR for its exact head and then explicit owner approval of 
 Werner's chat direction and implementation go-ahead of 2026-10-16 are the recorded decision H77, not text approval.
 
 Scope: spec FR-051 to FR-063 together with the owner's initialization and resource revisions (US0, US1a, FR-039 to
-FR-050), as work items T025 to T034 in [tasks](tasks.md). Everything needing the owner API (verified 2026-10-16: the
+FR-050), as work items T025 to T035 in [tasks](tasks.md). Everything needing the owner API (verified 2026-10-16: the
 router serves only `/api/v1/hosts` and `/api/v1/auth`) stays with T009 onward. The first-increment series (T025 to
-T034) touches `apps/whr`, `contracts/` and docs only; T011, T016 and T017 consume its foundation instead of
+T035) touches `apps/whr`, `contracts/`, `scripts/check_repo.py`, `tests/` and docs, and T035 alone the host agent; T011, T016 and T017 consume its foundation instead of
 re-creating it. Owner decisions of 2026-10-16/17 (H77 (5)): the series runs on its own branches and pull requests,
-one pull request per work item, outside the T001-T024 chain; renewed approval of `tasks.md` from T009 onward is the
-owner's to give. After the foundation T025 the work items can proceed in parallel worktrees (see the dependency graph
+one pull request per work item, outside the T001-T024 chain; 
+Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5); it is not approval of any head's text, and the edits take effect only with approval at one exact head with a tracker or PR link. After the foundation T025 the work items can proceed in parallel worktrees (see the dependency graph
 in tasks.md); shared files (`internal/commands` registration, `ci-acceptance.json`, `go.mod`) are the only expected
 merge points, resolved by rebasing in merge order. The initialization revision requires human review of the plan, task
 scope, configuration schema and launcher contracts before implementation; this document and its contracts
@@ -207,7 +207,7 @@ is shown equivalent to the Go checker by the positive and negative path vectors,
 is added. Divergence between this checker,
 the resolver and `check_repo.py` (severity of an entry without a gitlink, scp-like origins, https userinfo, case-folded
 `.git`, `1.0`) is closed by those vectors on the whr side; running the same vectors in the host agent test is a
-follow-up test-only change to be sequenced with T009.
+work item T035, sequenced after T009.
 
 Hostile input (FR-055): the target directory itself is opened with a no-follow, directory-only open and its
 device and inode are compared with a prior `Lstat`; every further component is opened relative to the previous
@@ -317,19 +317,17 @@ Full combined-head canonical and live pilot evidence remain later required gates
 
 ## Open questions for the owner (H77 amendment)
 
-Decided by the owner in chat on 2026-10-16/17: own branches and pull requests for the first increment (renewed approval of
-`tasks.md` from T009 onward is the owner's to give); `setup --dry-run` excluded; a superseding ADR for "remote
+Decided by the owner in chat on 2026-10-16/17: own branches and pull requests for the first increment (Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5); it is not approval of any head's text, and the edits take effect only with approval at one exact head with a tracker or PR link); `setup --dry-run` excluded; a superseding ADR for "remote
 unreachable" before owner-API client work; `doctor` exit 0 with verdict `incomplete`; read-only `doctor` on macOS;
 thresholds Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s, 256 MiB ("seems to be fine from my side", 2026-10-17).
 
 Still open:
 
 1. (Decided 2026-10-17, H77 (7); kept for the record) Manifest `schema_version` 2 adds `name` and `project` beyond the four fields the owner listed (`start_dir`, `human_shell`,
-   `console_mode`, `shortcuts`), because the wizard collects them and no other file is permitted; this is my addition: confirm or move them.
-   A resolver and provider change to accept version 2 is needed and is not scheduled here (coordinate with T009).
-2. `--template` refuses with exit 64 while starters are unsupported; confirm the code.
-3. Wizard cancellation exits 72 (interrupted) and an overwrite without permission or a missing unattended input exits 70;
-   confirm against ADR 0013 intent.
+   `console_mode`, `shortcuts`), because the wizard collects them and no other file is permitted; this was my addition and is confirmed.
+   The resolver change to accept version 2 is the work item T035 (after T009).
+2. Decided (H77 (7)): `--template` refuses with exit 64 while starters are unsupported.
+3. Decided (H77 (7)): wizard cancellation exits 72; an overwrite without permission or a missing input exits 70 in unattended mode only.
 4. Exit 68 for an invalid configuration and for a failed doctor check (rather than 64 or a new code).
 5. `init` runs no Git command and never adds the project submodule; the owner pins the project with Git after init
    (FR-049). Confirm that a `.gitkeep` and a printed next-step list are sufficient.

@@ -815,6 +815,57 @@
    "expect_codes": [
     "manifest.schema"
    ]
+  },
+  {
+   "id": "v2-project-name-mismatch",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/app.git",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "path name must equal the name derived from the url"
+  },
+  {
+   "id": "v2-project-ssh-password",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "ssh://git:pw@f.example/o/app.git",
+     "path": "projects/app"
+    }
+   },
+   "expect_codes": [
+    "manifest.url_credentials"
+   ],
+   "note": "yields only this code"
+  },
+  {
+   "id": "v2-project-trailing-slash",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/app/",
+     "path": "projects/app"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "the last path component is empty"
   }
  ]
 }
