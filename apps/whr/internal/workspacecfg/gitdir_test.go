@@ -310,7 +310,7 @@ func TestValidateGitWalkBudgetMessage(t *testing.T) {
 			if name == "refs" {
 				want = "git pack-refs"
 			}
-			if errorCodes(r) != "git.unsafe_path" || len(f.calls) != 0 || !strings.Contains(m, "more entries than the 5") || !strings.Contains(m, want) {
+			if errorCodes(r) != "git.unsafe_path" || len(f.calls) != 0 || !strings.Contains(m, "more than 5 entries") || !strings.Contains(m, want) {
 				t.Errorf("%q %+v", m, r.Findings)
 			}
 		})
@@ -380,5 +380,73 @@ func TestValidateDirectorySwappedAroundOneGitCall(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// The budget is shared by all directories of the walk and names .git as a whole.
+func TestValidateGitWalkBudgetIsShared(t *testing.T) {
+	defer workspacecfg.SetGitWalkBudget(5)()
+	fill := func(t *testing.T, d, rel string, n int) {
+		for i := 0; i < n; i++ {
+			write(t, d, rel+"/"+strings.Repeat("c", 30)+string(rune('a'+i)), "")
+		}
+	}
+	run := func(t *testing.T, setup func(d string)) (*workspacecfg.Report, *fakeGit) {
+		dir := validDir(t)
+		minimalGitDir(t, dir) // .git/objects holds info; with the fan-out directory that is two entries
+		setup(dir)
+		f := &fakeGit{handler: healthyHandler}
+		return validate(t, dir, workspacecfg.Options{Git: f, LookGit: fixedGit("/git")}), f
+	}
+	// No directory is over the budget on its own; together they are.
+	r, f := run(t, func(d string) {
+		fill(t, d, ".git/objects/ab", 2)
+		fill(t, d, ".git/objects/cd", 2)
+		fill(t, d, ".git/refs/tags", 2)
+	})
+	m := find(r, "git.unsafe_path").Message
+	if errorCodes(r) != "git.unsafe_path" || len(f.calls) != 0 || !strings.Contains(m, ".git has more than 5 entries") || strings.Contains(m, "objects/ab has") {
+		t.Errorf("%q %+v", m, r.Findings)
+	}
+	// Exactly the budget is fine, one more is not.
+	if r, _ := run(t, func(d string) { fill(t, d, ".git/objects/ab", 3) }); has(r, "git.unsafe_path") {
+		t.Errorf("exactly the budget: %+v", r.Findings)
+	}
+	if r, _ := run(t, func(d string) { fill(t, d, ".git/objects/ab", 4) }); !has(r, "git.unsafe_path") {
+		t.Errorf("one over the budget: %+v", r.Findings)
+	}
+}
+
+// Only the files of objects/pack/multi-pack-index.d are admitted, one level deep.
+func TestValidateMultiPackIndexDirectoryIsNarrow(t *testing.T) {
+	for name, setup := range map[string]func(t *testing.T, d string){
+		"subdirectory inside the chain directory": func(t *testing.T, d string) {
+			write(t, d, ".git/objects/pack/multi-pack-index.d/sub/x", "")
+		},
+		"chain directory outside pack": func(t *testing.T, d string) {
+			write(t, d, ".git/objects/ab/multi-pack-index.d/x", "")
+		},
+		"chain directory below refs": func(t *testing.T, d string) {
+			write(t, d, ".git/objects/pack/other/multi-pack-index.d/x", "")
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := validDir(t)
+			minimalGitDir(t, dir)
+			write(t, dir, ".git/objects/pack/.keep", "")
+			setup(t, dir)
+			f := &fakeGit{handler: healthyHandler}
+			r := validate(t, dir, workspacecfg.Options{Git: f, LookGit: fixedGit("/git")})
+			if errorCodes(r) != "git.unsafe_path" || len(f.calls) != 0 {
+				t.Errorf("%+v", r.Findings)
+			}
+		})
+	}
+	// The plain chain directory with regular files is fine.
+	dir := validDir(t)
+	minimalGitDir(t, dir)
+	write(t, dir, ".git/objects/pack/multi-pack-index.d/midx-1.midx", "")
+	if r := validate(t, dir, workspacecfg.Options{Git: &fakeGit{handler: healthyHandler}, LookGit: fixedGit("/git")}); has(r, "git.unsafe_path") {
+		t.Errorf("%+v", r.Findings)
 	}
 }
