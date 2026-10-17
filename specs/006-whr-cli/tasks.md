@@ -3,7 +3,7 @@
 Amendment H77 (2026-10-16/17) adds the first-increment WIs T025–T037 below; they are proposed, not approved or started,
 and change no checkbox of T001–T024. The owner decided that the series runs on its own branches and pull requests; its
 edits to the descriptions and dependencies of T011, T015, T016 and T017 take effect only with the owner's approval of
-tasks.md from T009 onward at one exact head with a tracker or PR link (WORKFLOW.md), to be added when the specification pull request exists; Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5) and is not that approval. Until the spec, the plan and the whole `tasks.md` are approved at one exact head, neither T009 nor any of T025 to T036 may start on the strength of this amendment.
+tasks.md from T009 onward at one exact head with a tracker or PR link (WORKFLOW.md), to be added when the specification pull request exists; Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5) and is not that approval. Until the spec, the plan and the whole `tasks.md` are approved at one exact head, neither T009 nor any of T025 to T037 may start on the strength of this amendment.
 Status: execution in progress. T001 scaffold independently Sol CLEAR at
 `d3d84c8361a1389292fad96d02a828ac9fabc2e3`; T002 is independently CLEAR at
 `bc18034164597aa841bea561cf6a882e9c0715e2`; T003 independently CLEAR at
@@ -127,7 +127,7 @@ and the T034 real-host runs.
 
 Dependency graph (each WI runs in its own worktree, branch and pull request to `main`; the merge order follows the graph):
 T025 -> {T026, T027, T028, T031}; {T026, T028} -> T030 (T027 is not a prerequisite); T030 -> {T032, T033} (T032 also needs T031); T029 has no
-dependency; T035 needs T009 and T028 and is outside the waves; T037 needs T030 and T036; T036 needs T030 and T032 (T032 owns the per-path confirmation; T036 is not a prerequisite of T034); T034 needs T025-T033. Wave 1a = T025-T030; wave 1b = T031-T033, T036 (after T030 and T032) and T037 (after T030 and T036). The only expected merge points are the
+dependency; T035 needs T009 and T028 and is outside the waves; T037 needs T030 and T036; T036 needs T030 and T032 (T032 owns the per-path confirmation; T036 and T037 are not prerequisites of T034); T034 needs T025-T033. Wave 1a = T025-T030; wave 1b = T031-T033, T036 (after T030 and T032) and T037 (after T030 and T036). The only expected merge points are the
 `internal/commands` registration, `docs/development/ci-acceptance.json` and `apps/whr/go.mod`; `contracts/workspace/vectors.json` has the single owner T028, and T026 and T027 touch disjoint packages but share the `internal/commands` registration merge point; later branches rebase.
 
 Common rules: each WI is its own task and commit series (Conventional Commits), written test first with the
