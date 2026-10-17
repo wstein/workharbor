@@ -525,11 +525,9 @@ func TestCloseSemantics(t *testing.T) {
 		t.Fatalf("%d cleanups registered, want 1", len(f.cleanups))
 	}
 	start := time.Now()
-	s.Close()
-	if !ptytest.ProcessGone(s.Pid()) && time.Since(start) > 0 {
-		waitGone(t, s.Pid())
-	}
-	s.Close() // idempotent
+	guard(t, "Close", s.Close)
+	waitGone(t, s.Pid())
+	guard(t, "second Close", s.Close) // idempotent
 	f.cleanup()
 	if d := time.Since(start); d > 4*time.Second {
 		t.Fatalf("Close took %v", d)
@@ -549,7 +547,7 @@ func TestExitedLeaderIsNotSignalledAgain(t *testing.T) {
 	if len(kills) != 1 || kills[0] != s.Pid() {
 		t.Fatalf("expected exactly one sweep at exit, got %v", kills)
 	}
-	s.Close()
+	guard(t, "Close", s.Close)
 	f.cleanup()
 	if len(kills) != 1 {
 		t.Fatalf("group signalled after the leader was reaped: %v", kills)
@@ -684,4 +682,35 @@ func TestExpectRegexpWorkIsBounded(t *testing.T) {
 	if w, out := s.Work(), len(s.Transcript()); w > uint64(40*out) {
 		t.Fatalf("regexp work %d for %d bytes of output: window not applied", w, out)
 	}
+}
+
+func TestPTYWorkCountsTheUnterminatedTail(t *testing.T) {
+	s := ptytest.StartFunc(t, "partialosc", ptytest.Options{})
+	deadline := time.Now().Add(10 * time.Second)
+	for len(s.Transcript()) < 1005 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	s.Screen() // advance over the output
+	// The 1005 byte tail is looked at again by both the text and the screen.
+	if w := s.Work(); w < 2000 {
+		t.Fatalf("work %d: the unterminated tail is not counted", w)
+	}
+}
+
+func TestResizeRefusesImpossibleSizes(t *testing.T) {
+	for _, sz := range [][2]int{{0, 80}, {24, 0}, {-1, 80}, {24, -5}, {1001, 80}, {24, 70000}, {65536 + 24, 80}} {
+		f := newFakeTB(t)
+		f.run(func() {
+			s := ptytest.StartFunc(f, "winch", ptytest.Options{})
+			s.Expect("size=24x80")
+			s.Resize(sz[0], sz[1])
+		})
+		f.wantFatal("resize")
+		f.cleanup()
+	}
+	s := ptytest.StartFunc(t, "winch", ptytest.Options{})
+	s.Expect("size=24x80")
+	s.Resize(1000, 1000)
+	s.Expect("size=1000x1000")
+	s.ExpectExit(0)
 }

@@ -28,6 +28,50 @@ type token struct {
 	params  []int
 	private bool // CSI parameters began with '?'
 	final   byte
+	discard discardMode // set when a too long sequence was dropped
+}
+
+// discardMode says how the rest of a dropped sequence is skipped.
+type discardMode byte
+
+const (
+	discardNone   discardMode = iota
+	discardString             // OSC, DCS, APC, PM, SOS: until BEL or ST
+	discardStrESC             // as above, the previous byte was ESC
+	discardCSI                // until the final byte
+)
+
+// skipState carries a discard across reads so results never depend on where
+// the reads fall.
+type skipState struct{ mode discardMode }
+
+// skip consumes the part of b that belongs to a dropped sequence.
+func (st *skipState) skip(b []byte) int {
+	for i, c := range b {
+		switch st.mode {
+		case discardString, discardStrESC:
+			switch {
+			case c == 0x07, c == '\\' && st.mode == discardStrESC:
+				st.mode = discardNone
+				return i + 1
+			case c == 0x1b:
+				st.mode = discardStrESC
+			default:
+				st.mode = discardString
+			}
+		case discardCSI:
+			switch {
+			case c >= 0x20 && c <= 0x3f:
+			case c >= 0x40 && c <= 0x7e:
+				st.mode = discardNone
+				return i + 1
+			default: // malformed: the byte is not part of the sequence
+				st.mode = discardNone
+				return i
+			}
+		}
+	}
+	return len(b)
 }
 
 // next splits the first token off b (len(b) > 0).
@@ -58,16 +102,16 @@ func next(b []byte) token {
 // maxSeq bytes it is dropped instead of waiting, so a program that never
 // terminates one cannot make every later chunk rescan it (quadratic work);
 // the rest of that sequence is then treated as text.
-func incomplete(b []byte) token {
+func incomplete(b []byte, mode discardMode) token {
 	if len(b) >= maxSeq {
-		return token{kind: tokOther, n: len(b)}
+		return token{kind: tokOther, n: len(b), discard: mode}
 	}
 	return token{kind: tokIncomplete, n: len(b)}
 }
 
 func escape(b []byte) token {
 	if len(b) < 2 {
-		return incomplete(b)
+		return incomplete(b, discardNone)
 	}
 	switch b[1] {
 	case '[':
@@ -78,8 +122,21 @@ func escape(b []byte) token {
 		for i < len(b) && b[i] >= 0x20 && b[i] <= 0x2f {
 			i++
 		}
+		if i >= maxSeq { // too long to be real: ignore it, however it ends
+			j := i
+			for j < len(b) && b[j] >= 0x20 && b[j] <= 0x3f {
+				j++
+			}
+			switch {
+			case j >= len(b):
+				return incomplete(b, discardCSI)
+			case b[j] >= 0x40 && b[j] <= 0x7e:
+				return token{kind: tokOther, n: j + 1}
+			}
+			return token{kind: tokOther, n: j}
+		}
 		if i >= len(b) {
-			return incomplete(b)
+			return incomplete(b, discardCSI)
 		}
 		if b[i] < 0x40 || b[i] > 0x7e {
 			return token{kind: tokOther, n: i} // malformed: drop the prefix
@@ -93,21 +150,21 @@ func escape(b []byte) token {
 			}
 			if b[i] == 0x1b {
 				if i+1 >= len(b) {
-					return incomplete(b)
+					return incomplete(b, discardStrESC)
 				}
 				if b[i+1] == '\\' {
 					return token{kind: tokOther, n: i + 2}
 				}
 			}
 		}
-		return incomplete(b)
+		return incomplete(b, discardString)
 	}
 	i := 1
 	for i < len(b) && b[i] >= 0x20 && b[i] <= 0x2f { // intermediates
 		i++
 	}
 	if i >= len(b) {
-		return incomplete(b)
+		return incomplete(b, discardNone)
 	}
 	if i == 1 {
 		return token{kind: tokESC, n: 2, final: b[1]}
@@ -147,9 +204,16 @@ func parseParams(s string) []int {
 // escape sequence removed except newline and tab, for each byte of that text
 // the offset in b just after the token that produced it, and the number of
 // bytes of b consumed. A truncated trailing sequence is left unconsumed.
-func project(b []byte) (plain []byte, ends []uint32, consumed int) {
+func project(b []byte, st *skipState) (plain []byte, ends []uint32, consumed int) {
+	if st == nil {
+		st = &skipState{}
+	}
 	off := 0
 	for off < len(b) {
+		if st.mode != discardNone {
+			off += st.skip(b[off:])
+			continue
+		}
 		if c := b[off]; c >= 0x20 && c < 0x7f { // fast path: printable ASCII
 			plain = append(plain, c)
 			off++
@@ -162,6 +226,9 @@ func project(b []byte) (plain []byte, ends []uint32, consumed int) {
 		}
 		start := off
 		off += t.n
+		if t.discard != discardNone {
+			st.mode = t.discard
+		}
 		switch {
 		case t.kind == tokText && t.r == utf8.RuneError && t.n == 1:
 			plain = append(plain, b[start])
@@ -212,6 +279,7 @@ type screen struct {
 	sr, sc int
 	alt    *altSave
 	exts   []string
+	skip   skipState
 }
 
 func newScreen(w, h int) *screen { return &screen{w: w, h: h} }
@@ -234,10 +302,10 @@ func (s *screen) row() []cell {
 
 func (s *screen) rowText(l []cell) string {
 	var sb strings.Builder
-	for _, c := range l {
+	for i, c := range l {
 		switch {
-		case c.r == 0:
-			sb.WriteByte(' ')
+		case c.r == 0, c.r == -1 && !(i > 0 && l[i-1].r > 0 && width(l[i-1].r) == 2):
+			sb.WriteByte(' ') // blank, or the right half of a vanished wide character
 		case c.r > 0:
 			sb.WriteRune(c.r)
 			if c.x > 0 {
@@ -368,6 +436,10 @@ func (s *screen) clampRow() {
 func (s *screen) feed(b []byte) int {
 	off := 0
 	for off < len(b) {
+		if s.skip.mode != discardNone {
+			off += s.skip.skip(b[off:])
+			continue
+		}
 		if c := b[off]; c >= 0x20 && c < 0x7f { // fast path: printable ASCII
 			s.put(rune(c))
 			off++
@@ -378,6 +450,9 @@ func (s *screen) feed(b []byte) int {
 			break
 		}
 		off += t.n
+		if t.discard != discardNone {
+			s.skip.mode = t.discard
+		}
 		switch t.kind {
 		case tokText:
 			s.put(t.r)
@@ -509,10 +584,12 @@ func (s *screen) eraseLine(mode int) {
 	switch mode {
 	case 0:
 		if s.c < len(l) {
+			breakWide(l, s.c)
 			s.rows[s.r] = l[:s.c]
 		}
 	case 1:
 		for i := 0; i <= s.c && i < len(l); i++ {
+			breakWide(l, i)
 			l[i] = cell{}
 		}
 	case 2:
@@ -529,10 +606,23 @@ func (s *screen) editChars(op byte, n int) {
 	switch op {
 	case 'P':
 		end := min(s.c+n, len(l))
+		if s.c < len(l) {
+			breakWide(l, s.c)
+		}
+		if end < len(l) && l[end].r == -1 {
+			l[end] = cell{} // its left half is deleted
+		}
 		l = append(l[:s.c], l[end:]...)
 	case '@':
+		if s.c < len(l) && l[s.c].r == -1 {
+			breakWide(l, s.c) // inserting between the halves
+			l[s.c] = cell{}
+		}
 		l = append(l[:s.c], append(make([]cell, min(n, s.maxCol())), l[s.c:]...)...)
 		if m := s.maxCol(); len(l) > m {
+			if l[m].r == -1 {
+				l[m-1] = cell{} // the right half is cut off
+			}
 			l = l[:m]
 		}
 	case 'X':

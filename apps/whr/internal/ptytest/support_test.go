@@ -119,3 +119,19 @@ func TestPTYUnsupportedPlatformSkipsExplicitly(t *testing.T) {
 		t.Fatal("fixture variable leaked into the test process")
 	}
 }
+
+// guard runs fn and fails the test, instead of hanging until the go test
+// timeout, if it does not return within the watchdog.
+func guard(t *testing.T, what string, fn func()) {
+	t.Helper()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		fn()
+	}()
+	select {
+	case <-done:
+	case <-time.After(watchdog):
+		t.Fatalf("%s hung for %v", what, watchdog)
+	}
+}
