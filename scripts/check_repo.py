@@ -41,7 +41,10 @@ class _Duplicate(Exception):
 
 
 def _schema(root=None):
-    return json.loads((Path(root or SCHEMA_ROOT)/SCHEMA_PATH).read_text(encoding='utf-8'))
+    path = Path(root or SCHEMA_ROOT)/SCHEMA_PATH
+    if not path.is_file():
+        path = SCHEMA_ROOT/SCHEMA_PATH
+    return json.loads(path.read_text(encoding='utf-8'))
 
 
 def _too_deep(text):
@@ -71,6 +74,15 @@ def _no_constant(name):
     raise ValueError(name)
 
 
+class _BigInt:
+    """An integer too long to compare with anything: never equal to a schema constant."""
+
+
+def _parse_int(text):
+    # Independent of the interpreter's int/str digit limit; the 64 KiB bound keeps this cheap.
+    return int(text) if len(text) <= 18 else _BigInt()
+
+
 def _unique_pairs(pairs):
     keys = [key for key, _ in pairs]
     if len(keys) != len(set(keys)):
@@ -78,39 +90,79 @@ def _unique_pairs(pairs):
     return dict(pairs)
 
 
-def manifest_codes(content, schema=None):
-    """Finding codes (contracts/cli/validate-findings.json) for the raw bytes of a manifest.
+def _has_lone_surrogate(value):
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            if _SURROGATE.search(item):
+                return True
+        elif isinstance(item, dict):
+            stack.extend(item.keys())
+            stack.extend(item.values())
+        elif isinstance(item, list):
+            stack.extend(item)
+    return False
 
-    An empty list means valid. Version comparison is type-exact: True, 1.0 and 1e0 are not 1.
+
+_SURROGATE = re.compile('[\ud800-\udfff]')
+# Order of the manifest.* codes in contracts/cli/validate-findings.json.
+CODE_ORDER = ('manifest.too_large', 'manifest.encoding', 'manifest.syntax', 'manifest.duplicate_key',
+              'manifest.schema', 'manifest.path_invalid', 'manifest.url_credentials',
+              'manifest.bundles_deferred')
+
+
+def manifest_findings(content, schema=None):
+    """(code, field, detail) tuples for the raw bytes of a manifest; empty means valid.
+
+    Version comparison is type-exact: True, 1.0 and 1e0 are not 1.
     """
     if len(content) > MANIFEST_MAX_BYTES:
-        return ['manifest.too_large']
+        return [('manifest.too_large', '', '')]
     if content.startswith(b'\xef\xbb\xbf') or b'\x00' in content:
-        return ['manifest.encoding']
+        return [('manifest.encoding', '', '')]
     try:
         text = content.decode('utf-8')
     except UnicodeDecodeError:
-        return ['manifest.encoding']
+        return [('manifest.encoding', '', '')]
     if _too_deep(text):
-        return ['manifest.syntax']
+        return [('manifest.syntax', '', '')]
     try:
-        data = json.loads(text, object_pairs_hook=_unique_pairs, parse_constant=_no_constant)
+        data = json.loads(text, object_pairs_hook=_unique_pairs, parse_constant=_no_constant,
+                          parse_int=_parse_int)
     except _Duplicate:
-        return ['manifest.duplicate_key']
+        return [('manifest.duplicate_key', '', '')]
     except (ValueError, RecursionError):
-        return ['manifest.syntax']
-    return list(dict.fromkeys(code for code, _, _ in manifest_document_findings(data, schema)))
+        return [('manifest.syntax', '', '')]
+    if _has_lone_surrogate(data):
+        return [('manifest.encoding', '', 'lone surrogate')]
+    return manifest_document_findings(data, schema)
+
+
+def manifest_codes(content, schema=None):
+    """Distinct finding codes in catalogue order (see CODE_ORDER); empty means valid."""
+    codes = {code for code, _, _ in manifest_findings(content, schema)}
+    return [code for code in CODE_ORDER if code in codes]
 
 
 def _is_int(value, expected):
     return type(value) is int and value == expected
 
 
+def _versions(schema):
+    """Map each accepted schema_version to its definition, following the schema's oneOf."""
+    defs = schema['$defs']
+    result = {}
+    for branch in schema['oneOf']:
+        definition = defs[branch['$ref'].rsplit('/', 1)[-1]]
+        result[definition['properties']['schema_version']['const']] = definition
+    return result
+
+
 def manifest_document_findings(data, schema=None):
     """(code, field, detail) tuples for a parsed manifest value."""
     schema = schema or _schema()
     defs = schema['$defs']
-    v2 = defs['v2']['properties']
     findings = []
 
     def add(code, field, detail=''):
@@ -118,11 +170,14 @@ def manifest_document_findings(data, schema=None):
 
     if not isinstance(data, dict):
         return [('manifest.schema', '', 'require a JSON object')]
+    versions = _versions(schema)
     version = data.get('schema_version')
-    if not (_is_int(version, 1) or _is_int(version, 2)):
-        return [('manifest.schema', 'schema_version', 'require the integer 1 or 2')]
-    allowed = set(V1_FIELDS) | (set(V2_OPTIONAL) if version == 2 else set())
-    if not set(V1_FIELDS) <= set(data) or set(data) - allowed:
+    definition = next((d for v, d in versions.items() if _is_int(version, v)), None)
+    if definition is None:
+        return [('manifest.schema', 'schema_version', 'require a supported integer version')]
+    properties = definition['properties']
+    if (not set(definition['required']) <= set(data)
+            or (definition.get('additionalProperties') is False and set(data) - set(properties))):
         add('manifest.schema', '', 'unexpected or missing fields')
     path_pattern = re.compile(defs['canonicalPath']['pattern'])
 
@@ -139,25 +194,27 @@ def manifest_document_findings(data, schema=None):
     if 'bundles' in data:
         if not isinstance(data['bundles'], list):
             add('manifest.schema', 'bundles', 'require a list')
-        elif data['bundles']:
+        elif len(data['bundles']) > properties['bundles'].get('maxItems', len(data['bundles'])):
             add('manifest.bundles_deferred', 'bundles')
-    if version != 2:
-        return findings
-    if 'name' in data:
-        if not (isinstance(data['name'], str) and re.fullmatch(v2['name']['pattern'], data['name'])):
+    if 'name' in data and 'name' in properties:
+        if not (isinstance(data['name'], str) and re.fullmatch(properties['name']['pattern'], data['name'])):
             add('manifest.schema', 'name')
-    if 'start_dir' in data:
+    if 'start_dir' in data and 'start_dir' in properties:
         value = data['start_dir']
         if not isinstance(value, str):
             add('manifest.schema', 'start_dir', 'require a string')
         elif value != '.' and not canonical(value):
             add('manifest.path_invalid', 'start_dir')
     for field in ('human_shell', 'console_mode', 'shortcuts'):
-        if field in data and not (isinstance(data[field], str) and data[field] in v2[field]['enum']):
+        if field in data and field in properties and not (
+                isinstance(data[field], str) and data[field] in properties[field]['enum']):
             add('manifest.schema', field)
-    if 'project' in data:
-        findings.extend(_project_findings(data['project'], data.get('projects_path'), v2['project']))
+    if 'project' in data and 'project' in properties:
+        findings.extend(_project_findings(data['project'], data.get('projects_path'), properties['project']))
     return findings
+
+
+_URL_PARTS = re.compile(r'(?:https|ssh)://(?:[^/@]*@)?[^/:@]+(?::([0-9]+))?(/.*)')
 
 
 def _project_findings(project, projects_path, project_schema):
@@ -170,11 +227,14 @@ def _project_findings(project, projects_path, project_schema):
     if userinfo and (url.startswith('https://') or ':' in userinfo.group(1)):
         return [('manifest.url_credentials', 'project.url', '')]
     problems = []
-    pattern = project_schema['properties']['url']['pattern']
-    if (not re.fullmatch(pattern, url) or len(url) > project_schema['properties']['url']['maxLength']
-            or re.search(r'%(?![0-9A-Fa-f]{2})', url)):
+    url_schema = project_schema['properties']['url']
+    parts = _URL_PARTS.fullmatch(url)
+    if (not re.fullmatch(url_schema['pattern'], url) or len(url) > url_schema['maxLength']
+            or re.search(r'%(?![0-9A-Fa-f]{2})', url) or parts is None
+            or (parts.group(1) is not None and not 1 <= int(parts.group(1)) <= 65535)
+            or '//' in parts.group(2)):
         problems.append(('manifest.schema', 'project.url', ''))
-    last = url.rstrip('/').rsplit('/', 1)[-1] if not url.endswith('/') else ''
+    last = '' if url.endswith('/') else url.rsplit('/', 1)[-1]
     name = last[:-4] if last.endswith('.git') else last
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or path != f'{projects_path}/{name}':
         problems.append(('manifest.schema', 'project.path', ''))
@@ -194,6 +254,9 @@ def vector_bytes(case):
     return template + b' ' * (spec['total'] - len(template))
 
 
+MIN_VECTOR_CASES = 93
+
+
 def vector_case_errors(cases):
     errors = []
     seen = set()
@@ -211,23 +274,45 @@ def vector_case_errors(cases):
 def vector_errors(root):
     path = Path(root)/VECTORS_PATH
     if not path.is_file():
-        return []
+        return [f'{VECTORS_PATH}: required vectors missing; restore the shared file']
     try:
-        return vector_case_errors(json.loads(path.read_text(encoding='utf-8'))['cases'])
-    except (ValueError, KeyError, TypeError, OSError) as exc:
+        cases = json.loads(path.read_text(encoding='utf-8'))['cases']
+        errors = vector_case_errors(cases)
+    except (ValueError, KeyError, TypeError, OSError, RecursionError) as exc:
         return [f'{VECTORS_PATH}: malformed vector file; repair it ({exc})']
+    if len(cases) < MIN_VECTOR_CASES:
+        errors.append(f'{VECTORS_PATH}: {len(cases)} cases, fewer than the pinned {MIN_VECTOR_CASES}; '
+                      'cases are add-only')
+    return errors
+
+
+def _example_message(code, field, detail):
+    """The historical workspace-example wording, kept verbatim for the old failure classes."""
+    if code == 'manifest.path_invalid' or (code == 'manifest.schema' and field in ('devcontainer_path', 'projects_path')):
+        return f'workspace example: unsafe {field}; use a relative path without traversal'
+    if code == 'manifest.bundles_deferred' or field == 'bundles':
+        return 'workspace example: attachments are deferred; retain the empty bundle list'
+    if code == 'manifest.schema' and field in ('', 'schema_version') and detail.startswith('require a'):
+        return 'workspace example: require schema_version 1'
+    if code == 'manifest.schema' and field == '':
+        return 'workspace example: unexpected or missing fields; update the reviewed contract'
+    label = ' '.join(part for part in (code, field, detail) if part)
+    return f'workspace example: {label}; update the reviewed contract'
 
 
 def workspace_errors(data):
-    errors = []
-    for code, field, detail in manifest_document_findings(data):
-        if code == 'manifest.path_invalid':
-            errors.append(f'workspace example: unsafe {field}; use a relative path without traversal')
-        elif code == 'manifest.bundles_deferred':
-            errors.append('workspace example: attachments are deferred; retain the empty bundle list')
-        else:
-            errors.append(f'workspace example: {code} {field} {detail}'.rstrip() + '; update the reviewed contract')
-    return errors
+    return list(dict.fromkeys(_example_message(*f) for f in manifest_document_findings(data)))
+
+
+def example_errors(root, path):
+    """Strict byte-level validation of one example manifest, reported once."""
+    relative = path.relative_to(root)
+    findings = manifest_findings(path.read_bytes(), _schema(root))
+    if any(code in ('manifest.too_large', 'manifest.encoding', 'manifest.syntax', 'manifest.duplicate_key')
+           for code, _, _ in findings):
+        return [f'{relative}: invalid JSON; repair syntax ({findings[0][0]})']
+    return [e.replace('workspace example:', f'{relative}:', 1) if path != root/WORKSPACE_MANIFEST else e
+            for e in dict.fromkeys(_example_message(*f) for f in findings)]
 
 def boundary_errors(relative, text):
     errors = []
@@ -254,16 +339,9 @@ def boundary_errors(relative, text):
 
 def check(root):
     errors = [f'{name}: required artifact missing; restore it' for name in REQUIRED if not (root/name).is_file()]
-    manifest = root/WORKSPACE_MANIFEST
-    if manifest.is_file():
-        try:
-            errors.extend(workspace_errors(json.loads(manifest.read_text())))
-        except (ValueError, UnicodeError) as exc:
-            errors.append(f'{WORKSPACE_MANIFEST}: invalid JSON; repair syntax ({exc})')
-    for example in sorted((root/'examples/workspace').glob('*.json')):
-        codes = manifest_codes(example.read_bytes(), _schema(root))
-        if codes:
-            errors.append(f'{example.relative_to(root)}: manifest findings {codes}; repair the example')
+    manifests = {root/WORKSPACE_MANIFEST, *(root/'examples/workspace').rglob('workharbor.json')}
+    for manifest in sorted(m for m in manifests if m.is_file() and not m.is_symlink()):
+        errors.extend(example_errors(root, manifest))
     errors.extend(vector_errors(root))
     tracked = subprocess.check_output(['git', 'ls-files', '-z'], cwd=root).decode().split('\0')
     for name in filter(None, tracked):
@@ -271,10 +349,10 @@ def check(root):
         if not path.is_file():
             errors.append(f'{name}: tracked file missing; restore or remove deliberately')
             continue
-        if name.endswith('.json'):
+        if name.endswith('.json') and path not in manifests:
             try:
                 data = json.loads(path.read_text())
-            except (ValueError, UnicodeError) as exc:
+            except (ValueError, UnicodeError, RecursionError) as exc:
                 errors.append(f'{name}: invalid JSON; repair syntax ({exc})')
         if name.endswith('.md') and (name.startswith(('docs/', 'specs/', 'contracts/', 'examples/')) or name in ('README.md','AGENTS.md')):
             errors.extend(document_errors(root, path))

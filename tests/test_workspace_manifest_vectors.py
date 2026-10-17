@@ -1,5 +1,8 @@
 import importlib.util
+import copy
 import json
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -38,7 +41,7 @@ class WorkspaceManifestVectorTests(unittest.TestCase):
                  ('document', 'bytes_hex', 'raw_text', 'generate_bytes')}
         self.assertEqual({'document', 'bytes_hex', 'raw_text', 'generate_bytes'}, kinds)
         sizes = {len(checks.vector_bytes(c)) for c in self.cases() if 'generate_bytes' in c}
-        self.assertEqual({65537}, sizes)
+        self.assertEqual({65536, 65537}, sizes)
         self.assertEqual([], checks.manifest_codes(b' ' * 0 + raw(BASE) + b' ' * (65536 - len(raw(BASE)))))
 
     def test_schema_version_is_type_exact(self):
@@ -88,6 +91,101 @@ class WorkspaceManifestVectorTests(unittest.TestCase):
         self.assertEqual(['manifest.syntax'], checks.manifest_codes(b'{"schema_version":NaN}'))
         self.assertEqual(['manifest.duplicate_key'], checks.manifest_codes(b'{"a":{"b":1,"b":2}}'))
         self.assertEqual(['manifest.encoding'], checks.manifest_codes(b'\xef\xbb\xbf{}'))
+
+    def test_old_workspace_error_messages_are_unchanged(self):
+        expected = {
+            'require schema_version 1': ('workspace example: require schema_version 1', [dict(BASE, schema_version=3), [1]]),
+            'fields': ('workspace example: unexpected or missing fields; update the reviewed contract',
+                       [dict(BASE, extra=1), {k: v for k, v in BASE.items() if k != 'bundles'}]),
+            'path': ('workspace example: unsafe projects_path; use a relative path without traversal',
+                     [dict(BASE, projects_path='../x'), dict(BASE, projects_path=3)]),
+            'bundles': ('workspace example: attachments are deferred; retain the empty bundle list',
+                        [dict(BASE, bundles=[1]), dict(BASE, bundles='x')]),
+        }
+        for name, (message, documents) in expected.items():
+            for document in documents:
+                with self.subTest(name=name, document=document):
+                    self.assertEqual([message], checks.workspace_errors(document))
+
+    def make_root(self, files):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
+        for name, content in files.items():
+            (root / name).parent.mkdir(parents=True, exist_ok=True)
+            (root / name).write_bytes(content)
+        subprocess.run(['git', 'add', '.'], cwd=root, check=True, capture_output=True)
+        return root
+
+    def test_check_survives_depth_bomb_example_and_reports_once(self):
+        deep = b'[' * 100000 + b']' * 100000
+        root = self.make_root({checks.WORKSPACE_MANIFEST: deep})
+        errors = [e for e in checks.check(root) if 'workharbor.json' in e and 'required artifact' not in e]
+        self.assertEqual(1, len(errors), errors)
+
+    def test_check_validates_nested_example_manifests(self):
+        bad = raw(dict(BASE, projects_path='../x'))
+        root = self.make_root({checks.WORKSPACE_MANIFEST: raw(BASE),
+                               'examples/workspace/admitted-image/workharbor.json': bad,
+                               'examples/workspace/admitted-image/.devcontainer/devcontainer.json': b'{"image":"x"}'})
+        errors = checks.check(root)
+        self.assertTrue(any('admitted-image/workharbor.json' in e for e in errors), errors)
+        self.assertFalse(any('devcontainer.json' in e for e in errors), errors)
+
+    def test_check_runs_vectors_and_requires_them(self):
+        root = self.make_root({checks.WORKSPACE_MANIFEST: raw(BASE)})
+        self.assertTrue(any('vectors.json' in e for e in checks.check(root)))
+        original = checks.vector_errors
+        checks.vector_errors = lambda _root: ['sentinel vector error']
+        try:
+            self.assertIn('sentinel vector error', checks.check(root))
+        finally:
+            checks.vector_errors = original
+
+    def test_vectors_fewer_than_pinned_count_fail(self):
+        cases = self.cases()
+        root = self.make_root({'contracts/workspace/vectors.json': json.dumps({'cases': cases[:5]}).encode()})
+        self.assertTrue(any('fewer' in e for e in checks.vector_errors(root)))
+        root = self.make_root({'contracts/workspace/vectors.json': json.dumps({'cases': cases}).encode()})
+        self.assertEqual([], checks.vector_errors(root))
+
+    def test_duplicate_vector_ids_rejected(self):
+        case = {'id': 'x', 'document': BASE, 'expect_codes': []}
+        self.assertTrue(any('duplicate' in e for e in checks.vector_case_errors([case, case])))
+
+    def test_check_follows_the_schema_file(self):
+        schema = json.loads(SCHEMA.read_text(encoding='utf-8'))
+
+        def codes(mutate, document):
+            changed = copy.deepcopy(schema)
+            mutate(changed)
+            return checks.manifest_codes(raw(document), changed)
+
+        v2 = dict(BASE, schema_version=2)
+        # const of a version
+        self.assertEqual([], codes(lambda s: None, v2))
+        self.assertEqual(['manifest.schema'], codes(lambda s: s['$defs']['v2']['properties']['schema_version'].update(const=3), v2))
+        # required list
+        self.assertEqual([], codes(lambda s: s['$defs']['v1'].update(required=['schema_version']),
+                                   {'schema_version': 1}))
+        self.assertEqual(['manifest.schema'], codes(lambda s: s['$defs']['v1']['required'].append('name'), BASE))
+        # additionalProperties
+        self.assertEqual([], codes(lambda s: s['$defs']['v1'].update(additionalProperties=True), dict(BASE, extra=1)))
+        # maxItems of bundles
+        self.assertEqual([], codes(lambda s: s['$defs']['v1']['properties']['bundles'].update(maxItems=1),
+                                   dict(BASE, bundles=[1])))
+        # enum and name pattern
+        self.assertEqual([], codes(lambda s: s['$defs']['v2']['properties']['human_shell']['enum'].append('tcsh'),
+                                   dict(v2, human_shell='tcsh')))
+        self.assertEqual([], codes(lambda s: s['$defs']['v2']['properties']['name'].update(pattern='^X$'), dict(v2, name='X')))
+        # oneOf: removing version 2 makes it unknown
+        self.assertEqual(['manifest.schema'], codes(lambda s: s['oneOf'].pop(), v2))
+
+    def test_catalogue_order_of_codes(self):
+        document = dict(BASE, schema_version=2, devcontainer_path='/abs', bundles=[1], name='My')
+        self.assertEqual(['manifest.schema', 'manifest.path_invalid', 'manifest.bundles_deferred'],
+                         checks.manifest_codes(raw(document)))
 
 
 if __name__ == '__main__':

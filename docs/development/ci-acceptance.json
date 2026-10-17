@@ -518,7 +518,15 @@
     "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_version2_defaults_documented",
     "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_version2_has_no_resolver_or_agent_shell_field",
     "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_repository_check_runs_vectors_and_reports_disagreement",
-    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_hostile_bytes"
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_hostile_bytes",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_old_workspace_error_messages_are_unchanged",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_check_survives_depth_bomb_example_and_reports_once",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_check_validates_nested_example_manifests",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_check_runs_vectors_and_requires_them",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_vectors_fewer_than_pinned_count_fail",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_duplicate_vector_ids_rejected",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_check_follows_the_schema_file",
+    "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_catalogue_order_of_codes"
   ],
   "retained_assertion_failures": [],
   "application_tests": {
