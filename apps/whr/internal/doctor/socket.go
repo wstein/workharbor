@@ -32,20 +32,25 @@ const socketFix = "Start an existing Docker-compatible runtime and rerun whr doc
 
 // candidates expands the templates; unknown home or XDG_RUNTIME_DIR drops the
 // candidates that need them rather than guessing.
-func (r *run) candidates() []string {
-	var out []string
+// A candidate is dialed at path and reported as shown, which names environment
+// sources by variable instead of value.
+type candidate struct{ path, shown string }
+
+func (r *run) candidates() []candidate {
+	var out []candidate
 	for _, t := range candidateTemplates {
 		switch {
 		case strings.HasPrefix(t, "$XDG_RUNTIME_DIR/"):
 			if x := r.p.Getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(x) {
-				out = append(out, filepath.Join(x, strings.TrimPrefix(t, "$XDG_RUNTIME_DIR/")))
+				out = append(out, candidate{filepath.Join(x, strings.TrimPrefix(t, "$XDG_RUNTIME_DIR/")), t})
 			}
 		case strings.HasPrefix(t, "~/"):
 			if r.home != "" {
-				out = append(out, filepath.Join(r.home, strings.TrimPrefix(t, "~/")))
+				p := filepath.Join(r.home, strings.TrimPrefix(t, "~/"))
+				out = append(out, candidate{p, p})
 			}
 		default:
-			out = append(out, t)
+			out = append(out, candidate{t, t})
 		}
 	}
 	return out
@@ -61,6 +66,8 @@ func classify(err error) string {
 		return "denied"
 	case errors.Is(err, syscall.ECONNREFUSED):
 		return "refused"
+	case errors.Is(err, syscall.EINVAL), errors.Is(err, syscall.ENAMETOOLONG):
+		return "path_too_long" // longer than sockaddr_un; absent unless the path exists
 	}
 	return "error"
 }
@@ -79,13 +86,13 @@ func (r *run) dockerSocket() (path string, remote bool, ok bool) {
 
 func (r *run) socket() Check {
 	const id = "container.socket"
-	var paths []string
+	var paths []candidate
 	source := "candidates"
 	if r.dockerHost != "" {
 		p, remote, ok := r.dockerSocket()
 		switch {
 		case ok:
-			paths, source = []string{p}, "DOCKER_HOST"
+			paths, source = []candidate{{p, "$DOCKER_HOST"}}, "DOCKER_HOST"
 		case remote && !strings.HasPrefix(r.dockerHost, "unix:"):
 			scheme, _, _ := strings.Cut(r.dockerHost, ":")
 			if len(scheme) > 12 || scheme == "" {
@@ -102,7 +109,8 @@ func (r *run) socket() Check {
 	}
 	var tried []any
 	unmeasured := false
-	for _, p := range paths {
+	for _, c := range paths {
+		p := c.path
 		if r.b.remaining() == 0 {
 			return exhausted(id)
 		}
@@ -110,13 +118,19 @@ func (r *run) socket() Check {
 		err := r.p.DialUnix(dctx, p)
 		cancel()
 		if err == nil {
-			return passed(id, "A Docker-compatible socket accepted a connection; nothing was sent.", map[string]any{"path": p, "source": source})
+			return passed(id, "A Docker-compatible socket accepted a connection; nothing was sent.", map[string]any{"path": c.shown, "source": source})
 		}
 		res := classify(err)
+		if res == "path_too_long" {
+			res = "error"
+			if _, serr := r.lstat(p); errors.Is(serr, os.ErrNotExist) || errors.Is(serr, syscall.ENOTDIR) {
+				res = "not_found"
+			}
+		}
 		if res == "timeout" || res == "error" {
 			unmeasured = true
 		}
-		tried = append(tried, map[string]any{"path": p, "result": res})
+		tried = append(tried, map[string]any{"path": c.shown, "result": res})
 	}
 	ev := map[string]any{"source": source, "tried": tried}
 	if unmeasured {

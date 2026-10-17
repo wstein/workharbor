@@ -3,6 +3,8 @@
 package doctor
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -17,6 +19,14 @@ func (r Report) Human() string {
 		fmt.Fprintf(&b, "%-7s %s  %s\n", c.Status, c.ID, terminal.Escape(c.Message))
 		if c.Reason != "" {
 			fmt.Fprintf(&b, "        reason: %s\n", terminal.Escape(c.Reason))
+		}
+		if len(c.Evidence) > 0 {
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			enc.SetEscapeHTML(false)
+			if enc.Encode(c.Evidence) == nil { // keys sorted
+				fmt.Fprintf(&b, "        evidence: %s\n", terminal.Escape(strings.TrimSpace(buf.String())))
+			}
 		}
 		if c.Remediation != "" {
 			fmt.Fprintf(&b, "        hint: %s\n", terminal.Escape(c.Remediation))

@@ -10,6 +10,8 @@ package doctor
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"strings"
 	"time"
 )
@@ -111,10 +113,11 @@ func CatalogueIDs() []string { return append([]string(nil), catalogue...) }
 type budget struct {
 	now   func() time.Time
 	start time.Time
+	total time.Duration
 }
 
 func (b *budget) remaining() time.Duration {
-	if r := Budget - b.now().Sub(b.start); r > 0 {
+	if r := b.total - b.now().Sub(b.start); r > 0 {
 		return r
 	}
 	return 0
@@ -143,24 +146,33 @@ func Run(ctx context.Context, p Ports) Report {
 		later("service.agent", reasonNotInIncrement, "No agent service unit exists before host setup.",
 			"Nothing to do now; this check arrives with host setup."),
 	}
+	// Only dynamic evidence is redacted; messages and remediations are static
+	// text and must not be altered by a user or host name such as "doc".
 	rd := NewRedactor(r.home, p.User(), p.Host())
-	rep := Report{Platform: Platform{OS: p.OS, Arch: p.Arch}}
 	for i := range checks {
 		checks[i] = rd.check(checks[i])
-		switch checks[i].Status {
-		case StatusPass:
-			rep.Counts.Pass++
-		case StatusFail:
-			rep.Counts.Fail++
-		case StatusSkipped:
-			rep.Counts.Skipped++
-		default:
-			rep.Counts.Unknown++
-		}
 	}
-	rep.Checks = checks
+	rep := Report{Platform: Platform{OS: p.OS, Arch: p.Arch}, Checks: checks, Counts: Count(checks)}
 	rep.Verdict = Verdict(rep.Counts)
 	return rep
+}
+
+// Count tallies statuses; anything unexpected counts as unknown, never pass.
+func Count(checks []Check) Counts {
+	var c Counts
+	for _, k := range checks {
+		switch k.Status {
+		case StatusPass:
+			c.Pass++
+		case StatusFail:
+			c.Fail++
+		case StatusSkipped:
+			c.Skipped++
+		default:
+			c.Unknown++
+		}
+	}
+	return c
 }
 
 func later(id, reason, msg, fix string) Check {
@@ -198,7 +210,11 @@ type run struct {
 }
 
 func newRun(ctx context.Context, p Ports) *run {
-	r := &run{ctx: ctx, p: p, b: &budget{now: p.Now, start: p.Now()}}
+	total := Budget
+	if p.Budget > 0 {
+		total = p.Budget
+	}
+	r := &run{ctx: ctx, p: p, b: &budget{now: p.Now, start: p.Now(), total: total}}
 	r.home, _ = p.Home()
 	r.cwd, _ = p.Getwd()
 	r.dockerHost = strings.TrimSpace(p.Getenv("DOCKER_HOST"))
@@ -213,4 +229,52 @@ func (r *run) platform() Check {
 	return unknown("platform.host", reasonUnsupportedPlatform,
 		"This platform is not in the host-platform matrix; the remaining read-only checks still ran.",
 		"Use Linux on amd64 or arm64 for a supported host; the other results are still valid measurements.", ev)
+}
+
+// lstatGrace lets a metadata lookup finish after the budget is spent, so
+// that a precondition (is there a workharbor.json?) is still answered.
+const lstatGrace = 100 * time.Millisecond
+
+var errBudget = errors.New("the doctor budget ran out")
+
+// bound runs a call that cannot take a context (statfs, readdir, stat on a
+// possibly hung mount) and gives up when the shared budget is spent. The call
+// may keep running in its goroutine; doctor reports unknown and moves on.
+func bound[T any](r *run, floor time.Duration, fn func() (T, error)) (T, error) {
+	type res struct {
+		v   T
+		err error
+	}
+	ch := make(chan res, 1)
+	go func() { v, err := fn(); ch <- res{v, err} }()
+	t := time.NewTimer(max(r.b.remaining(), floor))
+	defer t.Stop()
+	select {
+	case x := <-ch:
+		return x.v, x.err
+	case <-t.C:
+		var zero T
+		return zero, errBudget
+	}
+}
+
+func (r *run) lstat(path string) (fs.FileInfo, error) {
+	return bound(r, lstatGrace, func() (fs.FileInfo, error) { return r.p.Lstat(path) })
+}
+
+func (r *run) readFile(path string, max int64) ([]byte, error) {
+	return bound(r, 0, func() ([]byte, error) { return r.p.ReadFile(path, max) })
+}
+
+func (r *run) canRead(dir string) error {
+	_, err := bound(r, 0, func() (struct{}, error) { return struct{}{}, r.p.CanRead(dir) })
+	return err
+}
+
+func (r *run) readlink(path string) (string, error) {
+	return bound(r, 0, func() (string, error) { return r.p.Readlink(path) })
+}
+
+func (r *run) freeBytes(path string) (uint64, error) {
+	return bound(r, 0, func() (uint64, error) { return r.p.FreeBytes(path) })
 }

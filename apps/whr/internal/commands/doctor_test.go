@@ -114,7 +114,9 @@ func TestDoctorJSONMatchesSchema(t *testing.T) {
 }
 
 // TestMutatingHostCommandsRefuseUnsupportedPlatform is table-level: the
-// mutating host commands are unavailable until T015, so they refuse before any I/O.
+// mutating host commands are unavailable until T015, so they refuse before any I/O
+// with the usage code 64. The platform refusal of FR-026 (68 on an unsupported
+// platform) cannot be exercised before those commands exist; T015 owns that test.
 func TestMutatingHostCommandsRefuseUnsupportedPlatform(t *testing.T) {
 	n := 0
 	for _, e := range commands.Table() {

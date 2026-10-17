@@ -385,7 +385,7 @@ func TestDoctorRedaction(t *testing.T) {
 	w.home, w.user, w.host = "/Users/canaryuser", "canaryuser", "canaryhost"
 	w.cwd = "/Users/canaryuser/canaryhost-work"
 	w.free = map[string]uint64{w.cwd: 1 * gib, "/var/lib/docker": gib}
-	w.env["DOCKER_HOST"] = "unix:///Users/canaryuser/.hostcanaryhost/d.sock"
+	w.env["DOCKER_HOST"] = "unix:///Users/canaryuser/canaryhost/d.sock"
 	w.env["SECRET_TOKEN"] = "s3cr3t-canary-value"
 	w.env["XDG_RUNTIME_DIR"] = "/run/user/canaryuser"
 	w.sockets = nil

@@ -9,7 +9,6 @@ import (
 	"io/fs"
 	"net"
 	"os"
-	"os/user"
 	"runtime"
 	"time"
 )
@@ -48,6 +47,10 @@ type Ports struct {
 	GitVersion func(ctx context.Context, gitPath string) (string, error)
 	// FreeBytes is the space available to an unprivileged user on the filesystem of path.
 	FreeBytes func(path string) (uint64, error)
+	// Readlink reads a symbolic link; it is never followed or executed.
+	Readlink func(path string) (string, error)
+	// Budget overrides the 5 s shared budget (tests only); zero means Budget.
+	Budget time.Duration
 	// Validator is nil until the real validator is wired (T034).
 	Validator Validator
 }
@@ -91,6 +94,9 @@ func (p Ports) withDefaults() Ports {
 	if p.GitVersion == nil {
 		p.GitVersion = func(context.Context, string) (string, error) { return "", errNoPort }
 	}
+	if p.Readlink == nil {
+		p.Readlink = func(string) (string, error) { return "", errNoPort }
+	}
 	if p.FreeBytes == nil {
 		p.FreeBytes = func(string) (uint64, error) { return 0, errNoPort }
 	}
@@ -103,16 +109,17 @@ func SystemPorts(validator Validator) Ports {
 		OS: runtime.GOOS, Arch: runtime.GOARCH,
 		Getenv: os.Getenv,
 		Home:   os.UserHomeDir,
+		// No NSS lookup (nscd, sssd, LDAP): the environment is enough for redaction.
 		User: func() string {
-			if u, err := user.Current(); err == nil {
-				return u.Username
+			if u := os.Getenv("USER"); u != "" {
+				return u
 			}
-			return ""
+			return os.Getenv("LOGNAME")
 		},
 		Host:  func() string { h, _ := os.Hostname(); return h },
 		Getwd: os.Getwd,
 		Now:   time.Now,
-		Lstat: os.Lstat,
+		Lstat: os.Lstat, Readlink: os.Readlink,
 		DialUnix: func(ctx context.Context, path string) error {
 			var d net.Dialer
 			c, err := d.DialContext(ctx, "unix", path)
@@ -130,21 +137,21 @@ func SystemPorts(validator Validator) Ports {
 	}
 }
 
-// readBounded reads a regular file without following a final link and never
-// blocks on a FIFO or device.
+// readBounded reads a regular file. The open never follows a final link and
+// never blocks on a FIFO; the type is checked on the opened descriptor.
 func readBounded(path string, max int64) ([]byte, error) {
-	fi, err := os.Lstat(path)
+	f, err := openNoFollow(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	fi, err := f.Stat()
 	if err != nil {
 		return nil, err
 	}
 	if !fi.Mode().IsRegular() {
 		return nil, errors.New("not a regular file")
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
 	b, err := io.ReadAll(io.LimitReader(f, max+1))
 	if err != nil {
 		return nil, err

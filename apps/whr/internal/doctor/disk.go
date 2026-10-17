@@ -27,7 +27,7 @@ func (r *run) diskWorkdir() Check {
 }
 
 func (r *run) free(id, path, what, fix string) Check {
-	n, err := r.p.FreeBytes(path)
+	n, err := r.freeBytes(path)
 	ev := map[string]any{"path": path}
 	if err != nil {
 		return unknown(id, reasonNotMeasurable, what+" could not be measured.", "Check that the path is readable and rerun whr doctor.", ev)
@@ -53,7 +53,7 @@ func (r *run) diskStorage() Check {
 			return unknown(id, reasonNotMeasurable, "DOCKER_HOST does not name a local unix socket, so the data root is not known.", fix, nil)
 		}
 	}
-	body, err := r.p.ReadFile(daemonJSON, daemonJSONMax)
+	body, err := r.readFile(daemonJSON, daemonJSONMax)
 	switch {
 	case err == nil:
 		var m map[string]json.RawMessage
@@ -69,7 +69,7 @@ func (r *run) diskStorage() Check {
 	default:
 		return unknown(id, reasonNotMeasurable, "/etc/docker/daemon.json could not be read, so the data root is not known.", fix, map[string]any{"checked": daemonJSON})
 	}
-	if err := r.p.CanRead(dockerRoot); err != nil {
+	if err := r.canRead(dockerRoot); err != nil {
 		reason := "unreadable"
 		if errors.Is(err, fs.ErrNotExist) {
 			reason = "absent"
