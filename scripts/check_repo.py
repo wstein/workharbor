@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Portable scaffold checks; never presented as product acceptance."""
 import json
+import os
 import re
 import subprocess
 import sys
@@ -308,7 +309,7 @@ def vector_bytes(case):
     return template + b' ' * (spec['total'] - len(template))
 
 
-MIN_VECTOR_CASES = 101
+MIN_VECTOR_CASES = 124
 
 
 def vector_case_errors(cases):
@@ -365,8 +366,28 @@ def example_errors(root, path):
     if any(code in ('manifest.too_large', 'manifest.encoding', 'manifest.syntax', 'manifest.duplicate_key')
            for code, _, _ in findings):
         return [f'{relative}: invalid JSON; repair syntax ({findings[0][0]})']
+    messages = [_example_message(*f) for f in findings]
+    if not messages:
+        # The resolver reads schema_version 1 only; version 2 is not an accepted example until T035.
+        if json.loads(path.read_text(encoding='utf-8')).get('schema_version') != 1:
+            messages.append('workspace example: require schema_version 1 until the resolver accepts version 2')
     return [e.replace('workspace example:', f'{relative}:', 1) if path != root/WORKSPACE_MANIFEST else e
-            for e in dict.fromkeys(_example_message(*f) for f in findings)]
+            for e in dict.fromkeys(messages)]
+
+
+def example_link_errors(root):
+    """Any symbolic link under examples/workspace (or as the root manifest) could hide a manifest."""
+    errors = []
+    if (root/WORKSPACE_MANIFEST).is_symlink():
+        errors.append(f'{WORKSPACE_MANIFEST}: symbolic link; replace it with a regular file')
+    base = root/'examples/workspace'
+    for directory, names, files in os.walk(base):
+        for name in sorted(names + files):
+            path = Path(directory)/name
+            if path.is_symlink():
+                errors.append(f'{path.relative_to(root)}: symbolic link in the workspace examples; '
+                              'replace it with a regular file or directory')
+    return errors
 
 def boundary_errors(relative, text):
     errors = []
@@ -394,6 +415,7 @@ def boundary_errors(relative, text):
 def check(root):
     errors = [f'{name}: required artifact missing; restore it' for name in REQUIRED if not (root/name).is_file()]
     manifests = {root/WORKSPACE_MANIFEST, *(root/'examples/workspace').rglob('workharbor.json')}
+    errors.extend(example_link_errors(root))
     for manifest in sorted(m for m in manifests if m.is_file() and not m.is_symlink()):
         errors.extend(example_errors(root, manifest))
     errors.extend(vector_errors(root))

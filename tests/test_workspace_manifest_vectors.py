@@ -1,6 +1,8 @@
 import importlib.util
 import copy
 import json
+import os
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -29,7 +31,7 @@ class WorkspaceManifestVectorTests(unittest.TestCase):
 
     def test_workspace_manifest_vectors(self):
         cases = self.cases()
-        self.assertGreaterEqual(len(cases), 70)
+        self.assertEqual(checks.MIN_VECTOR_CASES, len(cases))
         ids = [case['id'] for case in cases]
         self.assertEqual(len(ids), len(set(ids)))
         for case in cases:
@@ -111,11 +113,16 @@ class WorkspaceManifestVectorTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name)
-        subprocess.run(['git', 'init', str(root)], check=True, capture_output=True)
+        # Isolated from the ambient Git configuration and HOME of whoever runs the tests.
+        home = root.parent / (root.name + '-home')
+        home.mkdir()
+        self.addCleanup(shutil.rmtree, home, True)
+        self.git_env = dict(os.environ, HOME=str(home), GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM='1')
+        subprocess.run(['git', 'init', str(root)], check=True, capture_output=True, env=self.git_env)
         for name, content in files.items():
             (root / name).parent.mkdir(parents=True, exist_ok=True)
             (root / name).write_bytes(content)
-        subprocess.run(['git', 'add', '.'], cwd=root, check=True, capture_output=True)
+        subprocess.run(['git', 'add', '.'], cwd=root, check=True, capture_output=True, env=self.git_env)
         return root
 
     def test_check_survives_depth_bomb_example_and_reports_once(self):
@@ -132,6 +139,36 @@ class WorkspaceManifestVectorTests(unittest.TestCase):
         errors = checks.check(root)
         self.assertTrue(any('admitted-image/workharbor.json' in e for e in errors), errors)
         self.assertFalse(any('devcontainer.json' in e for e in errors), errors)
+
+    def test_check_reports_a_symlinked_example_manifest(self):
+        root = self.make_root({checks.WORKSPACE_MANIFEST: raw(BASE),
+                               'examples/workspace/real/workharbor.json': raw(BASE)})
+        link = root / 'examples/workspace/linked/workharbor.json'
+        link.parent.mkdir(parents=True)
+        link.symlink_to('../real/workharbor.json')
+        errors = checks.check(root)
+        self.assertTrue(any('linked/workharbor.json' in e and 'symbolic link' in e for e in errors), errors)
+        dangling = root / 'examples/workspace/dangling/workharbor.json'
+        dangling.parent.mkdir(parents=True)
+        dangling.symlink_to('nowhere.json')
+        self.assertTrue(any('dangling/workharbor.json' in e and 'symbolic link' in e for e in checks.check(root)))
+
+    def test_check_reports_a_symlinked_example_directory(self):
+        root = self.make_root({checks.WORKSPACE_MANIFEST: raw(BASE),
+                               'elsewhere/workharbor.json': raw(dict(BASE, projects_path='../x'))})
+        (root / 'examples/workspace/dir').symlink_to(root / 'elsewhere')
+        errors = checks.check(root)
+        self.assertTrue(any('examples/workspace/dir' in e and 'symbolic link' in e for e in errors), errors)
+
+    def test_examples_stay_on_the_schema_version_the_resolver_accepts(self):
+        v2 = raw(dict(BASE, schema_version=2))
+        root = self.make_root({checks.WORKSPACE_MANIFEST: raw(BASE),
+                               'examples/workspace/v2/workharbor.json': v2})
+        errors = checks.check(root)
+        self.assertTrue(any('v2/workharbor.json' in e and 'schema_version 1' in e for e in errors), errors)
+        self.assertEqual([], checks.manifest_codes(v2))
+        root = self.make_root({checks.WORKSPACE_MANIFEST: v2})
+        self.assertTrue(any('schema_version 1' in e for e in checks.check(root)))
 
     def test_check_runs_vectors_and_requires_them(self):
         root = self.make_root({checks.WORKSPACE_MANIFEST: raw(BASE)})
