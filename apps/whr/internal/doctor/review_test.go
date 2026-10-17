@@ -480,3 +480,66 @@ func TestDoctorDockerHostUnixCase(t *testing.T) {
 		}
 	}
 }
+
+// Windows-style paths, Unicode names and the single-pass rule.
+func TestDoctorRedactionWindowsUnicodeSinglePass(t *testing.T) {
+	cases := []struct{ user, host, in, want string }{
+		{"werner", "box", `C:\tools\werner\bin`, `C:\tools\<user>\bin`},
+		{"jürgen", "box", "/srv/JÜRGEN/x", "/srv/<user>/x"},
+		{"werner", "box", "/srv/werner\u2014x", "/srv/<user>\u2014x"},
+		{"werner", "box", "/srv/wernerü", "/srv/wernerü"},
+		{"werner", "box", "/srv/ñwerner", "/srv/ñwerner"},
+		{"werner", "werner", "/srv/werner/x", "/srv/<user>/x"},
+		{"werner", "box", "/srv/box/werner", "/srv/<host>/<user>"},
+		{"user", "host", "/srv/user/host", "/srv/<user>/<host>"},
+		{"host", "user", "/srv/user/host", "/srv/<host>/<user>"},
+		{"<user>", "x", "/srv/<user>", "/srv/<user>"},
+	}
+	for _, c := range cases {
+		if got := doctor.NewRedactor("/h", c.user, c.host).String(c.in); got != c.want {
+			t.Errorf("user %q host %q: %q -> %q, want %q", c.user, c.host, c.in, got, c.want)
+		}
+	}
+	// a host equal to the user must not be redacted twice
+	if got := doctor.NewRedactor("/h", "host", "user").String("/srv/host/user"); strings.Contains(got, "<<") || strings.Contains(got, ">>") {
+		t.Errorf("nested placeholders: %q", got)
+	}
+	rd := doctor.NewRedactor(`C:\Users\werner`, "werner", "box")
+	if got := rd.String(`C:\Users\werner\bin\x`); got != `~\bin\x` {
+		t.Errorf("windows home: %q", got)
+	}
+	if got := doctor.NewRedactor(`C:\Users\werner\`, "x", "y").String(`C:\Users\werner\bin`); got != `~\bin` {
+		t.Errorf("trailing backslash home: %q", got)
+	}
+	w := healthy()
+	w.user, w.gitPath = "werner", `C:\Users\werner\bin\git.exe`
+	w.home = `C:\Users\werner`
+	if g := statusOf(run(w), "git.version"); g.Evidence["executable"] != `~\bin\git.exe` {
+		t.Errorf("windows executable: %v", g.Evidence)
+	}
+	w = healthy()
+	w.user, w.gitPath = "werner", `D:\werner\git.exe`
+	if g := statusOf(run(w), "git.version"); g.Evidence["executable"] != `D:\<user>\git.exe` {
+		t.Errorf("windows executable dir: %v", g.Evidence)
+	}
+}
+
+// Every system word is protected; removing one from the list fails here.
+func TestDoctorSystemWordsComplete(t *testing.T) {
+	want := []string{"bin", "boot", "dev", "docker", "etc", "git", "home", "lib", "lib64", "local", "media", "mnt", "opt",
+		"proc", "root", "run", "sbin", "share", "srv", "sys", "tmp", "usr", "var"}
+	if got := doctor.SystemWords(); strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("system words %v, want %v", got, want)
+	}
+	for _, w := range want {
+		for _, name := range []string{w, strings.ToUpper(w)} {
+			in := "/srv/" + w + "/x"
+			if got := doctor.NewRedactor("/h", name, "zz").String(in); got != in {
+				t.Errorf("name %q altered %q -> %q", name, in, got)
+			}
+			if got := doctor.NewRedactor("/h", "zz", name).String(in); got != in {
+				t.Errorf("host %q altered %q -> %q", name, in, got)
+			}
+		}
+	}
+}

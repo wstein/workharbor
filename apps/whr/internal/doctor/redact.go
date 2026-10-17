@@ -2,7 +2,11 @@
 
 package doctor
 
-import "strings"
+import (
+	"sort"
+	"strings"
+	"unicode"
+)
 
 // Redactor removes the home directory, user name and host name from text so a
 // report can be shared (FR-060). The home directory becomes "~"; the names are
@@ -11,7 +15,7 @@ type Redactor struct{ home, user, host string }
 
 // NewRedactor returns a redactor; empty values are ignored.
 func NewRedactor(home, user, host string) Redactor {
-	home = strings.TrimRight(home, "/")
+	home = strings.TrimRight(home, `/\`)
 	return Redactor{home: home, user: user, host: host}
 }
 
@@ -20,8 +24,7 @@ func (r Redactor) String(s string) string {
 	if r.home != "" {
 		s = replaceHome(s, r.home)
 	}
-	s = replaceName(s, r.user, "<user>")
-	return replaceName(s, r.host, "<host>")
+	return replaceNames(s, []nameRepl{{r.user, "<user>"}, {r.host, "<host>"}})
 }
 
 func replaceHome(s, home string) string {
@@ -32,7 +35,7 @@ func replaceHome(s, home string) string {
 			break
 		}
 		end := i + len(home)
-		if end < len(s) && s[end] != '/' && !strings.ContainsAny(s[end:end+1], " \t\n\"',;:)") {
+		if end < len(s) && s[end] != '/' && s[end] != '\\' && !strings.ContainsAny(s[end:end+1], " \t\n\"',;:)") {
 			b.WriteString(s[:end])
 			s = s[end:]
 			continue
@@ -55,51 +58,60 @@ var systemWords = map[string]bool{
 	"proc": true, "sys": true, "mnt": true, "media": true, "local": true, "share": true, "boot": true,
 }
 
-// replaceName replaces name, compared without regard to ASCII case, where it is
-// a whole word of a path: delimited by the ends of the text or by any byte that
-// is not an ASCII letter, digit or part of a non-ASCII character. So "doc"
-// never alters "doctor", while "werner.data", "x@werner" and "Werner" are
-// replaced. Names in systemWords are never replaced.
-func replaceName(s, name, repl string) string {
-	if name == "" || systemWords[strings.ToLower(name)] {
+// SystemWords lists the names that are never redacted, sorted.
+func SystemWords() []string {
+	out := make([]string, 0, len(systemWords))
+	for w := range systemWords {
+		out = append(out, w)
+	}
+	sort.Strings(out)
+	return out
+}
+
+type nameRepl struct{ name, repl string }
+
+// replaceNames replaces the names in one pass, so a placeholder is never
+// rescanned (a host called "user" cannot garble "<user>"). A name matches,
+// without regard to Unicode case, where it is a whole word of a path:
+// delimited by the ends of the text or by any rune that is not a letter or a
+// digit. "doc" therefore never alters "doctor", while "werner.data", "x@werner"
+// and "Werner" are replaced. Names in systemWords are never replaced.
+func replaceNames(s string, names []nameRepl) string {
+	var active []nameRepl
+	for _, n := range names {
+		if n.name != "" && !systemWords[strings.ToLower(n.name)] {
+			active = append(active, nameRepl{strings.ToLower(n.name), n.repl})
+		}
+	}
+	if len(active) == 0 {
 		return s
 	}
-	ls, ln := foldASCII(s), foldASCII(name)
+	rs := []rune(s)
 	var b strings.Builder
-	pos := 0
-	for {
-		i := strings.Index(ls[pos:], ln)
-		if i < 0 {
+	for i := 0; i < len(rs); {
+		matched := false
+		for _, n := range active {
+			nr := []rune(n.name)
+			end := i + len(nr)
+			if end > len(rs) || !strings.EqualFold(string(rs[i:end]), n.name) {
+				continue
+			}
+			if (i > 0 && isWordRune(rs[i-1])) || (end < len(rs) && isWordRune(rs[end])) {
+				continue
+			}
+			b.WriteString(n.repl)
+			i, matched = end, true
 			break
 		}
-		i += pos
-		end := i + len(ln)
-		if (i > 0 && wordByte(s[i-1])) || (end < len(s) && wordByte(s[end])) {
-			b.WriteString(s[pos : i+1])
-			pos = i + 1
-			continue
+		if !matched {
+			b.WriteRune(rs[i])
+			i++
 		}
-		b.WriteString(s[pos:i])
-		b.WriteString(repl)
-		pos = end
 	}
-	b.WriteString(s[pos:])
 	return b.String()
 }
 
-func foldASCII(s string) string {
-	b := []byte(s)
-	for i, c := range b {
-		if c >= 'A' && c <= 'Z' {
-			b[i] = c + 32
-		}
-	}
-	return string(b)
-}
-
-func wordByte(c byte) bool {
-	return c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= 0x80
-}
+func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
 
 // pathKeys are the evidence keys that hold file system paths; only their
 // values are redacted (FR-060: names "in a path"). Constant paths such as the
@@ -118,7 +130,7 @@ func (r Redactor) value(key string, v any) any {
 		case pathKeys[key]:
 			return r.String(x)
 		case executableKeys[key]:
-			if i := strings.LastIndex(x, "/"); i >= 0 {
+			if i := strings.LastIndexAny(x, `/\`); i >= 0 {
 				return r.String(x[:i+1]) + x[i+1:]
 			}
 		}
