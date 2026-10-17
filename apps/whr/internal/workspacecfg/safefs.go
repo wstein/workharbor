@@ -1,0 +1,204 @@
+// SPDX-License-Identifier: EUPL-1.2
+
+package workspacecfg
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+	"syscall"
+)
+
+// Errors for the directory itself; they decide the exit code, not a finding.
+var (
+	ErrNotFound     = errors.New("the directory does not exist")
+	ErrNotDirectory = errors.New("the path is not a directory")
+)
+
+type accessKind int
+
+const (
+	accMissing accessKind = iota + 1
+	accUnsafe
+	accTooLarge
+)
+
+// accessError says why a path could not be used. It never carries a link
+// target or file content.
+type accessError struct {
+	kind accessKind
+	why  string
+}
+
+func (e *accessError) Error() string { return e.why }
+
+func unsafeErr(format string, args ...any) *accessError {
+	return &accessError{accUnsafe, fmt.Sprintf(format, args...)}
+}
+
+// dir is a validated directory held open for no-follow access. Every path below
+// it is walked one component at a time with lstat and an identity check, never
+// through a symbolic link, and special files are never opened (FR-055). The
+// directory itself and everything below it is held to no-follow; ancestors of
+// the given path are followed (macOS /tmp is a link).
+type dir struct {
+	root *os.Root
+	abs  string
+}
+
+// openDir opens path as the root of the walk.
+func openDir(path string) (*dir, error) {
+	info, err := os.Lstat(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
+		return nil, ErrNotFound
+	case err != nil:
+		return nil, unsafeErr("the directory cannot be inspected")
+	case info.Mode()&fs.ModeSymlink != 0:
+		return nil, unsafeErr("the directory is a symbolic link; pass the real directory")
+	case !info.IsDir():
+		return nil, ErrNotDirectory
+	}
+	root, err := os.OpenRoot(path)
+	if err != nil {
+		return nil, unsafeErr("the directory cannot be opened")
+	}
+	if now, err := root.Stat("."); err != nil || !os.SameFile(info, now) {
+		root.Close()
+		return nil, unsafeErr("the directory changed while it was opened")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		root.Close()
+		return nil, unsafeErr("the directory path cannot be resolved")
+	}
+	return &dir{root: root, abs: abs}, nil
+}
+
+func (d *dir) Close() { d.root.Close() }
+
+// walk descends through the directory components of rel and returns the
+// directory holding its last component, plus a function that closes what it
+// opened. A symbolic link, a non-directory or a component that changed identity
+// between lstat and open is unsafe.
+func (d *dir) walk(rel string) (*os.Root, string, func(), error) {
+	parts := strings.Split(rel, "/")
+	cur := d.root
+	var opened []*os.Root
+	closeAll := func() {
+		for _, r := range opened {
+			r.Close()
+		}
+	}
+	for _, name := range parts[:len(parts)-1] {
+		info, err := cur.Lstat(name)
+		if err != nil {
+			closeAll()
+			return nil, "", nil, classify(err)
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			closeAll()
+			return nil, "", nil, unsafeErr("a path component is a symbolic link")
+		}
+		if !info.IsDir() {
+			closeAll()
+			return nil, "", nil, unsafeErr("a path component is not a directory")
+		}
+		next, err := cur.OpenRoot(name)
+		if err != nil {
+			closeAll()
+			return nil, "", nil, unsafeErr("a path component cannot be opened")
+		}
+		opened = append(opened, next)
+		if now, err := next.Stat("."); err != nil || !os.SameFile(info, now) {
+			closeAll()
+			return nil, "", nil, unsafeErr("a path component changed while it was opened")
+		}
+		cur = next
+	}
+	return cur, parts[len(parts)-1], closeAll, nil
+}
+
+func classify(err error) *accessError {
+	if errors.Is(err, fs.ErrNotExist) {
+		return &accessError{accMissing, "does not exist"}
+	}
+	return unsafeErr("cannot be inspected")
+}
+
+// lstat inspects rel without following any link in it.
+func (d *dir) lstat(rel string) (fs.FileInfo, *accessError) {
+	cur, leaf, done, err := d.walk(rel)
+	if err != nil {
+		return nil, err.(*accessError)
+	}
+	defer done()
+	info, lerr := cur.Lstat(leaf)
+	if lerr != nil {
+		return nil, classify(lerr)
+	}
+	return info, nil
+}
+
+// kindName names a file type for messages without revealing anything else.
+func kindName(m fs.FileMode) string {
+	switch {
+	case m&fs.ModeSymlink != 0:
+		return "a symbolic link"
+	case m.IsDir():
+		return "a directory"
+	case m&fs.ModeNamedPipe != 0:
+		return "a FIFO"
+	case m&fs.ModeSocket != 0:
+		return "a socket"
+	case m&fs.ModeDevice != 0:
+		return "a device"
+	}
+	return "not a regular file"
+}
+
+// readFile reads the regular file rel, at most limit bytes: a larger file is
+// rejected by its size without being read. The file is opened with
+// O_NOFOLLOW|O_NONBLOCK only after lstat showed a regular file, and the opened
+// descriptor must be that same file.
+func (d *dir) readFile(rel string, limit int64) ([]byte, *accessError) {
+	cur, leaf, done, err := d.walk(rel)
+	if err != nil {
+		return nil, err.(*accessError)
+	}
+	defer done()
+	info, lerr := cur.Lstat(leaf)
+	if lerr != nil {
+		return nil, classify(lerr)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, unsafeErr("is %s, not a regular file", kindName(info.Mode()))
+	}
+	if info.Size() > limit {
+		return nil, &accessError{accTooLarge, "is larger than its limit"}
+	}
+	f, oerr := cur.OpenFile(leaf, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if oerr != nil {
+		if errors.Is(oerr, fs.ErrNotExist) {
+			return nil, &accessError{accMissing, "does not exist"}
+		}
+		return nil, unsafeErr("cannot be opened")
+	}
+	defer f.Close()
+	fi, serr := f.Stat()
+	if serr != nil || !fi.Mode().IsRegular() || !os.SameFile(info, fi) {
+		return nil, unsafeErr("changed while it was opened")
+	}
+	data, rerr := io.ReadAll(io.LimitReader(f, limit+1))
+	if rerr != nil {
+		return nil, unsafeErr("cannot be read")
+	}
+	if int64(len(data)) > limit {
+		return nil, &accessError{accTooLarge, "is larger than its limit"}
+	}
+	return data, nil
+}
