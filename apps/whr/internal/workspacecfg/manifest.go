@@ -102,15 +102,17 @@ func CheckManifest(raw []byte) ManifestResult {
 	} else {
 		schema("schema_version must be the integer 1 or 2")
 	}
+	if version == 0 {
+		// An unusable version stops further findings: the field set is unknowable.
+		res.Findings = c.list
+		return res
+	}
 	allowed := v2Fields
-	switch version {
-	case 1:
+	if version == 1 {
 		allowed = v1Fields
-	case 0:
-		allowed = nil // an unusable version makes every other field name moot
 	}
 	for _, member := range doc.obj {
-		if allowed == nil || allowed[member.key] {
+		if allowed[member.key] {
 			continue
 		}
 		if v2Fields[member.key] {
