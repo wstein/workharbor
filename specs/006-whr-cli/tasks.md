@@ -1,6 +1,6 @@
 # Feature 006 pilot work items
 
-Amendment H77 (2026-10-16/17) adds the first-increment WIs T025–T036 below; they are proposed, not approved or started,
+Amendment H77 (2026-10-16/17) adds the first-increment WIs T025–T037 below; they are proposed, not approved or started,
 and change no checkbox of T001–T024. The owner decided that the series runs on its own branches and pull requests; its
 edits to the descriptions and dependencies of T011, T015, T016 and T017 take effect only with the owner's approval of
 tasks.md from T009 onward at one exact head with a tracker or PR link (WORKFLOW.md), to be added when the specification pull request exists; Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5) and is not that approval. Until the spec, the plan and the whole `tasks.md` are approved at one exact head, neither T009 nor any of T025 to T036 may start on the strength of this amendment.
@@ -127,7 +127,7 @@ and the T034 real-host runs.
 
 Dependency graph (each WI runs in its own worktree, branch and pull request to `main`; the merge order follows the graph):
 T025 -> {T026, T027, T028, T031}; {T026, T028} -> T030 (T027 is not a prerequisite); T030 -> {T032, T033} (T032 also needs T031); T029 has no
-dependency; T035 needs T009 and T028 and is outside the waves; T036 needs T030 and T032 (T032 owns the per-path confirmation; T036 is not a prerequisite of T034); T034 needs T025-T033. Wave 1a = T025-T030; wave 1b = T031-T033 and T036 (after T030 and T032). The only expected merge points are the
+dependency; T035 needs T009 and T028 and is outside the waves; T037 needs T030 and T036; T036 needs T030 and T032 (T032 owns the per-path confirmation; T036 is not a prerequisite of T034); T034 needs T025-T033. Wave 1a = T025-T030; wave 1b = T031-T033, T036 (after T030 and T032) and T037 (after T030 and T036). The only expected merge points are the
 `internal/commands` registration, `docs/development/ci-acceptance.json` and `apps/whr/go.mod`; `contracts/workspace/vectors.json` has the single owner T028, and T026 and T027 touch disjoint packages but share the `internal/commands` registration merge point; later branches rebase.
 
 Common rules: each WI is its own task and commit series (Conventional Commits), written test first with the
@@ -158,13 +158,15 @@ the repository's ordinary `go build`/application checks; no archive, image, rele
 
 - [ ] T036 [US0] Agent workflow block (FR-064, SC-022; wave 1b, after T030 and T032): the versioned template in `apps/whr/internal/scaffold/`, marker parsing and the classification and action mapping of FR-064 with the exit codes of FR-063, `--no-agents-block` (already registered in `contracts/cli/commands.json` and the command table, so the FR-051 freeze tests stay green), the new actions `append_block`, `replace_block`, `left_unchanged` and the `agents_block_warnings` array in `contracts/cli/output.schema.json` (`initResult` is closed), a unit test that the template body contains no marker-like line, and the table test of SC-022. FR-064 is on by default, so it changes the D1 (T030) proposal output and the no-op-rerun baseline: T036 updates the T030 and T032 tests and vectors accordingly. Needs the spec review of the 2026-10-17 revision first; no previous approval covers it. Source and unit tests only: no container, network or Git command.
 
+- [ ] T037 [US0] Claude Code settings default (FR-065, SC-023; wave 1b, after T030 and T036): the authored `.claude/settings.json` (`{"attribution": {"sessionUrl": false}}`, 2-space indent, trailing newline) in the `apps/whr/internal/scaffold/` proposal, an existing file left unchanged (`left_unchanged`, exit 0) unless `--overwrite .claude/settings.json`, the exit codes of FR-063, no new flag and no schema change (it reuses the actions of T036), the table test of SC-023, and updates of the T030, T032 and T036 tests and vectors for the new default proposal and the no-op-rerun baseline. Needs the spec review first. Source and unit tests only: no container, network or Git command.
+
 ## Dependencies and execution
 
-The first-increment WIs T025 to T034 and T036 follow the dependency graph above and depend only on T001–T004 (accepted) and on no
+The first-increment WIs T025 to T034, T036 and T037 follow the dependency graph above and depend only on T001–T004 (accepted) and on no
 control-plane WI; T035 additionally needs T009 and T028; T011 additionally depends on T025, T016 on T027 and T017 on T025. T005–T010 are unaffected. By owner decision
 (2026-10-16/17) they run on their own branches and pull requests outside the chain below. Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5); it is not approval of any head's text, and the edits take effect only with approval at one exact head with a tracker or PR link; until then the chain below is unchanged and authoritative.
 
-Machine-readable dependency table (the single-task guard requires exactly one, sorted, covering every task; T001 to T024 follow the chain below, T025 to T036 the graph above):
+Machine-readable dependency table (the single-task guard requires exactly one, sorted, covering every task; T001 to T024 follow the chain below, T025 to T037 the graph above):
 
 | Task | Prerequisites |
 | --- | --- |
@@ -204,6 +206,7 @@ Machine-readable dependency table (the single-task guard requires exactly one, s
 | T034 | T025, T026, T027, T028, T029, T030, T031, T032, T033 |
 | T035 | T009, T028 |
 | T036 | T030, T032 |
+| T037 | T030, T036 |
 
 
 (The dependency table above encodes the amended graph, including T011 <- T025, T016 <- T027 and T017 <- T025; those extra edges take effect only with the owner's approval of this file at one exact head with a tracker or PR link. The chain below is the unamended order.)
