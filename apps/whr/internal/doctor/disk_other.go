@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: EUPL-1.2
+
+//go:build !unix
+
+package doctor
+
+import "errors"
+
+func freeBytes(string) (uint64, error) {
+	return 0, errors.New("free space is not measured on this platform")
+}
