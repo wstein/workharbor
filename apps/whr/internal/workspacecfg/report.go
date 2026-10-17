@@ -105,6 +105,10 @@ func severityRank(s Severity) int {
 	return 2
 }
 
+// NewReport builds a report from findings: sorted deterministically, counted
+// and bounded as newReport does.
+func NewReport(directory string, list []Finding) *Report { return newReport(directory, list) }
+
 // newReport sorts findings deterministically (severity, code, subject,
 // message), drops exact duplicates, counts them and bounds the listing.
 func newReport(directory string, list []Finding) *Report {

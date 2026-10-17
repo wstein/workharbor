@@ -55,7 +55,7 @@ type run struct {
 	c   collector
 	m   *Manifest
 	// gitkeeps records what the Git stage learned for the project declaration.
-	gitState *gitInfo
+	gitState *GitInfo
 	gitRan   bool
 }
 
@@ -161,7 +161,7 @@ func (r *run) declaration() {
 	if r.gitRan && r.gitState == nil {
 		return // Git failed; its own errors say why
 	}
-	if r.gitState != nil && r.gitState.hasGitlink(r.m.Project.Path) {
+	if r.gitState != nil && r.gitState.HasGitlink(r.m.Project.Path) {
 		return
 	}
 	declaredNotPinned(&r.c, r.m.Project.Path)
