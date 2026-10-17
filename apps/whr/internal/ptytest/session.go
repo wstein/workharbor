@@ -60,6 +60,9 @@ type Options struct {
 	MaxOutput int
 }
 
+// maxWindow bounds Options.Rows and Options.Cols (and so the screen model).
+const maxWindow = 1000
+
 // Defaults of Options.
 const (
 	DefaultTimeout   = 10 * time.Second
@@ -122,6 +125,9 @@ func Start(t TB, path string, opts Options) *Session {
 	}
 	if opts.MaxOutput <= 0 {
 		opts.MaxOutput = DefaultMaxOutput
+	}
+	if opts.Rows > maxWindow || opts.Cols > maxWindow {
+		t.Fatalf("ptytest: window %dx%d exceeds %d rows or columns", opts.Rows, opts.Cols, maxWindow)
 	}
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
