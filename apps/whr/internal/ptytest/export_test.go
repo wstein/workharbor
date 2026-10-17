@@ -17,3 +17,10 @@ func (s *Session) Work() uint64 {
 	defer s.mu.Unlock()
 	return s.work
 }
+
+// Pending reports how many visible bytes Expect has examined without a match.
+func (s *Session) Pending() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.plain)
+}

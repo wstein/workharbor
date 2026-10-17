@@ -357,6 +357,7 @@ func (s *Session) ExpectRegexp(pattern string) []string {
 	var got []string
 	s.expect(s.opts.Timeout, "/"+pattern+"/", func(p []byte) (int, bool) {
 		base := max(0, len(p)-regexpWindow)
+		s.addWork(len(p) - base)
 		loc := re.FindSubmatchIndex(p[base:])
 		if loc == nil {
 			return 0, false
