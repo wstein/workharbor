@@ -3,22 +3,39 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/commands"
 )
 
-func main() { os.Exit(run(os.Args[1:], os.Stdout, os.Stderr)) }
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := run(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	stop()
+	os.Exit(code)
+}
 
-func run(args []string, out, errOut io.Writer) int {
-	if len(args) == 0 || (len(args) == 1 && (args[0] == "--help" || args[0] == "-h" || args[0] == "help")) {
-		fmt.Fprintln(out, "whr scaffold: product commands are not implemented.\nUsage: whr [--help | --version]")
-		return 0
+// run is the thin entry point: all behavior lives in internal/commands.
+func run(ctx context.Context, args []string, out, errOut io.Writer) int {
+	return commands.Execute(ctx, args, commands.Env{
+		Stdout: out, Stderr: errOut, Getenv: os.Getenv, IsTerminal: isTerminal,
+	}, commands.DefaultHandlers())
+}
+
+// isTerminal reports whether w is a character device other than /dev/null.
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
 	}
-	if len(args) == 1 && args[0] == "--version" {
-		fmt.Fprintln(out, "whr 0.1.0-dev (scaffold)")
-		return 0
+	info, err := f.Stat()
+	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
+		return false
 	}
-	fmt.Fprintln(errOut, "whr: product commands are not implemented; use --help")
-	return 64
+	null, err := os.Stat(os.DevNull)
+	return err != nil || !os.SameFile(info, null)
 }
