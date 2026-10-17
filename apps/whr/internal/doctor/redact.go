@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Redactor removes the home directory, user name and host name from text so a
@@ -80,38 +81,75 @@ func replaceNames(s string, names []nameRepl) string {
 	var active []nameRepl
 	for _, n := range names {
 		if n.name != "" && !systemWords[strings.ToLower(n.name)] {
-			active = append(active, nameRepl{strings.ToLower(n.name), n.repl})
+			active = append(active, n)
 		}
 	}
 	if len(active) == 0 {
 		return s
 	}
-	rs := []rune(s)
 	var b strings.Builder
-	for i := 0; i < len(rs); {
-		matched := false
+	for i := 0; i < len(s); {
+		// The longest matching name wins, so "werner" never cuts into "werner-pc".
+		best, bestEnd := "", -1
 		for _, n := range active {
-			nr := []rune(n.name)
-			end := i + len(nr)
-			if end > len(rs) || !strings.EqualFold(string(rs[i:end]), n.name) {
+			end, ok := matchFold(s, i, n.name)
+			if !ok || end <= bestEnd {
 				continue
 			}
-			if (i > 0 && isWordRune(rs[i-1])) || (end < len(rs) && isWordRune(rs[end])) {
-				continue
+			if i > 0 {
+				if r, _ := utf8.DecodeLastRuneInString(s[:i]); isWordRune(r) {
+					continue
+				}
 			}
-			b.WriteString(n.repl)
-			i, matched = end, true
-			break
+			if end < len(s) {
+				if r, _ := utf8.DecodeRuneInString(s[end:]); isWordRune(r) {
+					continue
+				}
+			}
+			best, bestEnd = n.repl, end
 		}
-		if !matched {
-			b.WriteRune(rs[i])
-			i++
+		if bestEnd >= 0 {
+			b.WriteString(best)
+			i = bestEnd
+			continue
 		}
+		// Copy the original bytes, valid UTF-8 or not.
+		_, w := utf8.DecodeRuneInString(s[i:])
+		b.WriteString(s[i : i+w])
+		i += w
 	}
 	return b.String()
 }
 
-func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
+// matchFold reports whether s at byte offset i starts with name, comparing
+// rune by rune under Unicode simple case folding, and returns the end offset.
+func matchFold(s string, i int, name string) (int, bool) {
+	for _, nr := range name {
+		if i >= len(s) {
+			return 0, false
+		}
+		r, w := utf8.DecodeRuneInString(s[i:])
+		if r == utf8.RuneError && w == 1 || !foldEqual(r, nr) {
+			return 0, false
+		}
+		i += w
+	}
+	return i, true
+}
+
+func foldEqual(a, b rune) bool {
+	for f := unicode.SimpleFold(a); ; f = unicode.SimpleFold(f) {
+		if f == b {
+			return true
+		}
+		if f == a {
+			return a == b
+		}
+	}
+}
+
+// isWordRune counts letters, digits and combining marks as part of a word.
+func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) }
 
 // pathKeys are the evidence keys that hold file system paths; only their
 // values are redacted (FR-060: names "in a path"). Constant paths such as the
