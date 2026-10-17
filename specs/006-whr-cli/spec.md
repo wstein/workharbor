@@ -938,7 +938,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   directory, so a path created or replaced by another process after the preview is a conflict; existing real
   directories (`.devcontainer`, `projects`, `.claude`) are reused and never removed by rollback; a symbolic link,
   file or special file at a target path is refused unless the file is named by `--overwrite` and is a regular file, except that a regular file whose bytes equal the
-  proposal is `skip_existing` and needs no flag;
+  proposal is `skip_existing` and needs no flag, except the paths of FR-064 and FR-065, whose outcomes those requirements define;
   (c) an overwrite writes a temporary file with the deterministic prefix `.whr-init-tmp-` in the same directory with the
   old file's mode, re-checks the identity (`fstat` device and inode) and content hash of the opened target immediately
   before the rename, keeps the old bytes until then and restores them on failure; a change in the remaining window
@@ -999,7 +999,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   is not a cancellation (72), and the wizard does not offer an edit without the flag that would be refused (it
   prints the warning instead); an edit pre-confirmed by the flag that would be refused is 68 in every mode. The
   general rule of FR-046 and FR-063 (a declined path is a cancellation, a refused edit is 68) stays unchanged for
-  every other file. `--no-agents-block` adds no `AGENTS.md` entry and leaves the file untouched; with
+  every file other than `AGENTS.md` and `.claude/settings.json` (FR-065). `--no-agents-block` adds no `AGENTS.md` entry and leaves the file untouched; with
   `--overwrite AGENTS.md` it is a usage error (64). `validate` never opens `AGENTS.md` (FR-055), so init checks
   marker integrity itself, in memory before the first write and on the written result.
 
@@ -1076,7 +1076,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   Claude Code appends the claude.ai session link (a `Claude-Session` trailer on commits, a link in pull request
   descriptions) when it commits or opens a pull request from a cloud or Remote Control session; the default is true.
   The file turns that off for sessions whose working directory is the workspace configuration directory. It sets neither
-  `commit` nor `pr`, so those texts stay at Claude Code's defaults; whether Claude Code merges the nested `attribution`
+  `commit` nor `pr`; their values come from other scopes or Claude Code's defaults; whether Claude Code merges the nested `attribution`
   object across settings scopes is unconfirmed, and its own scope precedence is unchanged. The file holds no credential,
   is read only when the owner uses Claude Code there, is harmless for workspaces that do not, and writing it installs,
   authenticates and launches nothing (scenario 6). `~/.claude/settings.json` is the owner's decision and is never read
@@ -1086,14 +1086,17 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (a rerun is a no-op). Any other existing regular file is never merged or edited by default: it is `left_unchanged`,
   exit 0, no warning, and a defaults-only run preserves it as in FR-057(g). Without `--overwrite .claude/settings.json`,
   a non-regular target (symbolic link, FIFO, special file) or a `.claude` that is not a real directory is also
-  `left_unchanged` (exit 0, nothing opened or followed, no `.claude` or file created). Every `left_unchanged` of this
+  `left_unchanged` (exit 0; classified by no-follow `fstatat`, only a regular file is opened, nothing is followed, no
+  `.claude` or file is created, and the only row is the one `left_unchanged` for `.claude/settings.json`, with no
+  `.claude` row). Every `left_unchanged` of this
   path adds one `next_steps` entry naming `attribution.sessionUrl: false` and `--overwrite .claude/settings.json`, with
   the note that overwrite replaces the whole file, and a human output line. `applied` is false for `skip_existing` and
   `left_unchanged`. With `--overwrite .claude/settings.json` (plus `--yes` unattended; the flag pre-confirms the path in
   the wizard, which offers the replacement only then and otherwise asks nothing) the file is replaced entirely
-  (`overwrite`) under FR-046; then a symbolic link, special file or non-directory `.claude` is refused (68), as is a file
-  that changes or appears after the preview (68, FR-057(b)). The file is opened no-follow and non-blocking; its `fstat`
-  size is compared first and at most the proposal length plus one byte is read. A rerun after an upgrade creates these
+  (`overwrite`) under FR-046; then a symbolic link, special file or non-directory `.claude` is refused (68). With or
+  without the flag, a file that appears or changes after the preview is 68 (FR-057(b)), except that no re-check applies
+  to a path that is `left_unchanged`. A regular file is opened no-follow and non-blocking; its `fstat` size is compared
+  first and at most the proposal length plus one byte is read. A rerun after an upgrade creates these
   new files once. No flag, schema field or warning code is added; T037 uses the `left_unchanged` action of T036.
   Exit codes follow FR-063.
 - **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
@@ -1106,13 +1109,13 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   unsupported, `--no-agents-block` together with `--overwrite AGENTS.md` 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
   edited, and a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0) 70, in unattended mode only (needs-human,
-  with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72, except `AGENTS.md` and `.claude/settings.json`, which the wizard offers to edit only when `--overwrite` names them);
+  with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72, except `AGENTS.md`, where a declined edit is not a cancellation (FR-064), and `.claude/settings.json`, which the wizard offers to replace only when `--overwrite .claude/settings.json` names it (FR-065));
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview, pre-existing
   content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a `doctor` run with a failed check, an unsupported platform for a mutating host
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
-  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, or a change after the preview, is 68. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
+  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
   increment. Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
   `exit_code` in the exit-code table (`conflict` for 68, `needs_human` for 70, and so on).
 
@@ -1330,7 +1333,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `--overwrite .claude/settings.json` (with `--yes` unattended; in the wizard, pre-confirmed and not offered without the
   flag, with T032); `--dry-run` previews the file and writes nothing; a rerun is a no-op; a symbolic-link, FIFO and
   `.claude`-is-a-file or symlinked `.claude` target (`left_unchanged`, exit 0, nothing opened, without the flag; 68 with
-  it); and a file appearing after the preview (68 with the flag).
+  it); and a file appearing after the preview (68 with or without the flag; for the no-flag case, absent at preview and created by another
+  process before the exclusive create), with exactly one `left_unchanged` row and no `.claude` row for a non-directory `.claude`.
 - **SC-011**: A lost-response test (drop the reply to a workspace lifecycle mutation) yields exactly one operation, retrievable
   with `whr op show --key`. A lost `agent send` response reports unknown delivery without an automatic resend.
 
