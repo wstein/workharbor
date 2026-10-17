@@ -159,9 +159,9 @@ independent review CLEAR for its exact head and then explicit owner approval of 
 Werner's chat direction and implementation go-ahead of 2026-10-16 are the recorded decision H77, not text approval.
 
 Scope: spec FR-051 to FR-063 together with the owner's initialization and resource revisions (US0, US1a, FR-039 to
-FR-050), as work items T025 to T032 in [tasks](tasks.md). Everything needing the owner API (verified 2026-10-16: the
+FR-050), as work items T025 to T034 in [tasks](tasks.md). Everything needing the owner API (verified 2026-10-16: the
 router serves only `/api/v1/hosts` and `/api/v1/auth`) stays with T009 onward. The first-increment series (T025 to
-T032) touches `apps/whr`, `contracts/` and docs only; T011, T016 and T017 consume its foundation instead of
+T034) touches `apps/whr`, `contracts/` and docs only; T011, T016 and T017 consume its foundation instead of
 re-creating it. Owner decisions of 2026-10-16/17 (H77 (5)): the series runs on its own branches and pull requests,
 one pull request per work item, outside the T001-T024 chain; renewed approval of `tasks.md` from T009 onward is the
 owner's to give. After the foundation T025 the work items can proceed in parallel worktrees (see the dependency graph
@@ -192,7 +192,7 @@ only rename siblings, so the root short forms are generated root commands sharin
 in a custom help template (hint form, "not yet available" block for unavailable commands), are offered by a root
 `ValidArgsFunction` that reads the table (Hidden commands are excluded from Cobra completion), and flag errors go
 through `SetFlagErrorFunc` so messages and the `command` field use the canonical id. Unavailable commands share one
-handler that returns the usage error (FR-049) before any I/O.
+handler that returns the usage error (FR-061, FR-063) before any I/O.
 
 Strict JSON for the manifest uses `apps/api_client/wirejson` (unchanged; this series does not touch `apps/api_client`),
 which reports only `invalid-json` or `input-limit-exceeded`. `whr` therefore classifies first (size, UTF-8, BOM,
@@ -202,14 +202,14 @@ Node (`JSONC{NodePath}`) and is `internal` to its module, so `whr` carries a sma
 (comments, trailing commas, duplicate keys rejected, size and depth limits). It is a pre-flight, not the authority; the
 host agent re-parses at trust time, which is why `provider_admission` is `not_evaluated`. No JSON Schema library is
 added to product code; the manifest checker is hand-written and frozen against vectors in
-`contracts/workspace/vectors.json`, which T026 creates before the checker; the schema's lookahead pattern (not RE2)
+`contracts/workspace/vectors.json`, which the amendment authors and T028 owns (T026 reads it); the schema's lookahead pattern (not RE2)
 is shown equivalent to the Go checker by the positive and negative path vectors, so no Python or JavaScript test runner
 is added. Divergence between this checker,
 the resolver and `check_repo.py` (severity of an entry without a gitlink, scp-like origins, https userinfo, case-folded
 `.git`, `1.0`) is closed by those vectors on the whr side; running the same vectors in the host agent test is a
 follow-up test-only change to be sequenced with T009.
 
-Hostile input (FR-043): the target directory itself is opened with a no-follow, directory-only open and its
+Hostile input (FR-055): the target directory itself is opened with a no-follow, directory-only open and its
 device and inode are compared with a prior `Lstat`; every further component is opened relative to the previous
 descriptor with `O_NOFOLLOW|O_DIRECTORY` (Linux additionally `openat2` with `RESOLVE_NO_SYMLINKS`), the type is
 checked by `Lstat` before any `open` so a device or FIFO is never opened, files are opened non-blocking and `fstat`ed
@@ -222,9 +222,17 @@ path such as `/nonexistent`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/nu
 `GIT_TRACE*`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_CONFIG_COUNT`,
 `GIT_CONFIG_PARAMETERS` and `GIT_EXEC_PATH` is dropped), neutral `cmd.Dir`, empty stdin, `--git-dir` and `--work-tree`
 arguments, `-c` flags (not `GIT_CONFIG_COUNT`, which needs Git 2.31) for `core.fsmonitor=false`,
-`core.hooksPath=/dev/null` and `protocol.allow=never`, a 5 second deadline, a capped output reader, a minimum Git version
-check (below it: `git.unavailable`), `exec.ErrDot` treated as Git absent, and exactly six argument vectors:
-`--version`, `ls-files --stage -z`, `rev-parse --verify HEAD`, `ls-tree -r -z HEAD`, `cat-file blob HEAD:.gitmodules` and, when HEAD is unborn, `cat-file blob :.gitmodules`. With an unborn HEAD the last two HEAD vectors are skipped (FR-042). `GIT_NO_LAZY_FETCH` needs Git 2.44; on the 2.39.5 minimum `protocol.allow=never` is what prevents a promisor fetch, and the corpus includes a partial-clone repository asserting no fetch. An explicit `--git-dir` skips discovery
+`core.hooksPath=/dev/null`, `protocol.allow=never` and `protocol.<name>.allow=never` for file, git, ssh, http, https and
+ext (a per-protocol setting in the hostile `.git/config` would otherwise override `protocol.allow`), `GIT_ALLOW_PROTOCOL` set to a
+name matching no protocol, `GIT_NO_LAZY_FETCH=1` (effective from Git 2.44; below it the protocol overrides are what stop a promisor
+fetch), a 5 second deadline per call, a capped output reader, a minimum Git version check (below it: the error
+`git.unavailable`), `exec.ErrDot` treated as Git absent, and exactly seven argument vectors: `--version`,
+`symbolic-ref -q HEAD`, `rev-parse --verify --quiet HEAD`, `ls-files --stage -z`, `ls-tree -r -z HEAD`,
+`cat-file blob HEAD:.gitmodules` (only when the HEAD tree lists it) and `cat-file blob :.gitmodules` (only with an unborn HEAD
+and when the index lists it). HEAD is unborn exactly when `rev-parse --verify --quiet HEAD` exits 1 with empty standard error and
+`symbolic-ref -q HEAD` names a missing ref (FR-054); the two HEAD vectors are then skipped. A `.git` containing `commondir` or
+`objects/info/alternates` is `git.unsafe_path`. The corpus includes a partial-clone repository with `protocol.file.allow=always` and an
+`uploadpack` that writes a marker, asserting no fetch and no marker. An explicit `--git-dir` skips discovery
 and the ownership check, and `.git/config` (with includes) is still parsed; the `-c` list and the minimum version carry
 the protection and `safe.directory` is never set. No `status`, `diff`, `submodule` or checkout command ever runs on
 the validated directory. On macOS the Git binary is first checked without executing it: the `/usr/bin/git` shim with
@@ -247,7 +255,7 @@ written with `O_EXCL|O_NOFOLLOW` relative to a no-follow-opened target; overwrit
 temporary file and rename, with the old bytes kept until the rename. Each created path is recorded with device and
 inode for reverse-order rollback, which restores overwritten files and removes a path only when the identity still
 matches; the preview carries a content hash per file, re-checked immediately before writing to detect change since
-preview. `init` runs no Git command and makes no network connection (FR-056); `--project-url` is written to the manifest
+preview. `init` runs no Git command and makes no network connection (FR-056); it validates with the Git-free profile of the `validate` code (manifest, devcontainer and projects checks, `git_checks: not_run`, FR-057), and an existing version 1 manifest is preserved unless `--overwrite workharbor.json` is given; `--project-url` is written to the manifest
 only. The wizard (D2) uses a prompt port (stderr for prompts, terminal check on stdin and stderr, `--non-interactive`,
 `--json` and non-terminals suppress it) so unit tests drive it with scripted answers; a separate work item builds a PTY
 test harness for end-to-end terminal behavior (raw mode, line editing, cancel by interrupt), which D2 then uses for its
@@ -270,11 +278,11 @@ Per work item: tests first with recorded absent-implementation RED, then `gofmt`
 `go test -count=1` in `apps/whr` through `make check-apps` (`apps/whr` reaches `apps/api_client` through the root
 `go.work` only, as `host_agent` does, without a `require` line; a standalone build outside the workspace fails the same way), plus `make check`;
 required test IDs are appended to `docs/development/ci-acceptance.json` without changing earlier IDs. Real evidence
-for T032: the built binary run on the owner's macOS with OrbStack and on Linux (arm64 or amd64), exact versions
+for T034: the built binary run on the owner's macOS with OrbStack and on Linux (arm64 or amd64), exact versions
 and commands recorded in the quickstart; mocks are labelled. Building artifacts for evidence uses ordinary
 `go build` into a temporary directory under the repository's application checks; no archive, image, release or
 publication is produced or authorized. Independent Sol review of each WI's exact head, with the hostile corpus rerun
-by the reviewer for T026 and T028 (and the wizard transcript and PTY tests of T032).
+by the reviewer for T026 and T030 (and the wizard transcript and PTY tests of T032).
 
 ### Risks
 
@@ -316,8 +324,8 @@ thresholds Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s, 256 MiB ("seems to be fine 
 
 Still open:
 
-1. Manifest `schema_version` 2 adds `name` and `project` beyond the fields the owner listed (`start_dir`, `human_shell`,
-   `console_mode`, `shortcuts`), because the wizard collects them and no other file is permitted; confirm or move them.
+1. Manifest `schema_version` 2 adds `name` and `project` beyond the four fields the owner listed (`start_dir`, `human_shell`,
+   `console_mode`, `shortcuts`), because the wizard collects them and no other file is permitted; this is my addition: confirm or move them.
    A resolver and provider change to accept version 2 is needed and is not scheduled here (coordinate with T009).
 2. `--template` refuses with exit 64 while starters are unsupported; confirm the code.
 3. Wizard cancellation exits 72 (interrupted) and an overwrite without permission or a missing unattended input exits 70;

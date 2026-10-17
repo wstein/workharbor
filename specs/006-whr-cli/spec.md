@@ -4,7 +4,7 @@
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
 **Status**: Amended 2026-10-16/17 (decision H77: grouped command structure, short-form aliases, local `validate`
-and `doctor`, and a first increment that also implements `ws init` and the client side of `ws create` resources) on top of the
+and `doctor`, and a first increment that also implements the `ws init` core and wizard and a pure resource-parsing library) on top of the
 workspace initialization and resource-selection revision, which is proposed for owner review (2026-10-16); not implemented.
 The H77 amendment text is proposed: it needs an independent review CLEAR for its exact head and then explicit owner
 approval of that head, evidenced by a tracker or PR link (WORKFLOW.md). Werner's chat decisions of 2026-10-16/17 are
@@ -115,7 +115,8 @@ Numbering: the highest decision number recorded in the repository is H76:a, so t
   requests.
 - **H77 (6) - Thresholds (owner confirmation, chat 2026-10-17)**: "Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s,
   256 MiB seems to be fine from my side." These are the minimum Git version, the free-disk threshold, the manifest,
-  devcontainer and `.gitmodules` size limits, the Git call deadline and the memory bound of FR-054 to FR-060. A change
+  devcontainer and `.gitmodules` size limits, the time bound (applied both to each Git call and to each hostile-corpus
+  run) and the memory bound of FR-054 to FR-060. A change
   needs a spec amendment and a test change.
 
 These decisions are recorded in [ADR 0014](../../docs/adr/0014-whr-command-structure.md) and the contracts
@@ -478,7 +479,7 @@ created and that no network connection was attempted.
    code and one `manifest.missing` finding with a remediation naming `whr init`; **Given** a path that does not
    exist, **Then** it exits with the not-found code; **Given** a path that is a file, **Then** it exits with the
    usage code.
-3. **Given** a manifest with an unknown or missing field, a `schema_version` other than 1, a non-empty `bundles`
+3. **Given** a manifest with an unknown or missing field, a `schema_version` other than 1 or 2, a version 1 manifest carrying a version 2 field, a non-empty `bundles`
    list, or an absolute, traversing, backslash-bearing, glob-bearing, `.git`-containing or empty path, **When** it
    runs, **Then** every such defect is reported as its own error finding in one run (bounded to 200 findings), and
    the exit code is the conflict/wrong-state code.
@@ -829,7 +830,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
     `git.listing_failed`. With a `HEAD`, `unlisted` and `not_pinned` compare `HEAD`-tree gitlinks with the committed
     `.gitmodules` blob (read only when the `HEAD` tree lists it); staged-only differences are the warnings
     `submodule.not_committed` and `gitmodules.uncommitted_change`.
-  Path rules refuse any case variant of `.git`, as the resolver does, and `schema_version` must be the integer 1 (not
+  Path rules refuse any case variant of `.git`, as the resolver does, and `schema_version` must be the integer 1 or 2 (not
   `1.0`). The result states `provider_admission: not_evaluated`: validation never claims a configuration is
   provisionable, because admission is the host agent's decision at trust time. Findings beyond 200 are counted but
   not listed (`truncated`). All independent defects are reported in one run. `--json` follows the
@@ -845,10 +846,15 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   truncated escaped key, path or redacted URL, or a credential contained in a URL. Git is used only through a fixed,
   read-only invocation with a freshly built environment (no inherited `GIT_*` variables, no system or global
   configuration, no trace output, no optional locks, no pager, no prompts, neutral working directory, empty
-  standard input) and `-c` overrides of `core.fsmonitor`, `core.hooksPath` and `protocol.allow` (the repository's own
-  `.git/config`, including includes, is still parsed, so the override list and a minimum Git version carry the
-  protection; `safe.directory` is never set) that lists the index and `HEAD` tree; an absent, too old or unusable Git
-  yields `git.unavailable`, not a pass. A `.git` that is a symbolic link or a file (gitfile) yields `git.unsafe_path`
+  standard input) and `-c` overrides of `core.fsmonitor`, `core.hooksPath` and `protocol.allow` plus `protocol.<name>.allow=never` for
+  `file`, `git`, `ssh`, `http`, `https` and `ext`, with `GIT_ALLOW_PROTOCOL` set to a name that matches no protocol and
+  `GIT_NO_LAZY_FETCH=1` (the repository's own `.git/config`, including includes, is still parsed; a per-protocol
+  setting overrides `protocol.allow`, so a partial clone or promisor remote must never trigger a fetch, an
+  `uploadpack` or `sshCommand`, or a credential helper; the override list and the minimum Git version carry the
+  protection; `safe.directory` is never set). A `.git` containing `commondir` or `objects/info/alternates` is
+  `git.unsafe_path` that lists the index and `HEAD` tree; an absent, too old or unusable Git
+  while `.git` is a real directory yields the error `git.unavailable` (the Git-derived checks did not run, so the result
+  is never `valid`); without a `.git` it is not reported. A `.git` that is a symbolic link or a file (gitfile) yields `git.unsafe_path`
   and no Git call. On macOS a Git that would open the Command Line Tools installer is detected without executing it
   and reported as unavailable. It MUST NOT modify any file or directory, including `.git`.
 - **FR-056**: `whr workspace init` (short form `whr init`) implements FR-043 to FR-050 as specified by the owner,
@@ -865,27 +871,37 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (launching fish or herdr, console grants, availability checks at creation or session launch) and every bundle
   selection (FR-050: empty list only) are not in the first increment and are labelled so in the output
   (`runtime_enforcement: not_in_this_release`). init runs no Git command, makes no network connection and never fetches a
-  project: `--project-url` (`https://` or `ssh://`, no `https` userinfo) is written as the manifest's `project`
-  declaration with the path `projects/<name>` derived from its last path component, and the next steps tell the owner to
+  project: `--project-url` (`https://` or `ssh://`, no `https` userinfo, no query or fragment, no control or bidirectional characters, well-formed
+  percent escapes) is written as the manifest's `project` declaration with the path `<projects_path>/<name>`, where
+  `<name>` is the last path component of the URL with one trailing `.git` removed and must match
+  `[A-Za-z0-9][A-Za-z0-9._-]*` (otherwise a usage error), and the next steps tell the owner to
   `git init -b main`, add and pin the project as a submodule and commit; until pinned the project is not creation-ready
   (validate warns `project.declared_not_pinned`). Exit codes follow FR-063. This reconciliation is the human review
   input that the owner's text requires for the plan, task scope, configuration schema and launcher contracts; it is not
   their approval.
 - **FR-057**: `init` MUST add these safety properties to FR-046: (a) it validates the complete proposal with the code
-  of `validate` (FR-054) in memory before the first write and the written result on disk after the last write, and
-  reuses the same findings for `--dry-run`; an error finding in generated files rolls back and exits with the
+  of `validate` (FR-054) in its Git-free profile (manifest, devcontainer and projects checks; no Git command runs, the
+  Git-derived checks are marked `git_checks: not_run` and the next steps tell the owner to run `whr validate` after
+  `git init`; `project.declared_not_pinned` is reported whenever a project is declared) in memory before the first write
+  and on the written result after the last write, and reuses the same findings, computed in memory, for `--dry-run`; an error finding in generated files rolls back and exits with the
   unclassified code, an error caused by content it preserved is the conflict code, detected before the first write
   where possible; (b) targets are created with exclusive no-follow creation relative to a no-follow-opened target
   directory, so a path created or replaced by another process after the preview is a conflict; existing real
   directories (`.devcontainer`, `projects`) are reused and never removed by rollback; a symbolic link,
   file or special file at a target path is refused unless the file is named by `--overwrite` and is a regular file;
-  (c) an overwrite writes a temporary file in the same directory and renames it, keeps the old bytes until the
-  rename and restores them on failure; (d) rollback removes exactly the paths this run created, and restores
+  (c) an overwrite writes a temporary file with the deterministic prefix `.whr-init-tmp-` in the same directory with the
+  old file's mode, re-checks the identity (`fstat` device and inode) and content hash of the opened target immediately
+  before the rename, keeps the old bytes until then and restores them on failure; a change in the remaining window
+  between that check and the rename is documented, not eliminated, and leftover temporary files are detected by the next
+  run like other leftover paths; (d) rollback removes exactly the paths this run created, and restores
   overwritten files, verifying device and inode before each removal, never removes the target directory unless this
   run created it, and an incomplete rollback is a partial failure (73) listing the remaining paths and recovery steps,
   taking precedence over the original failure code; (e) SIGINT and SIGTERM trigger the rollback and exit 72; SIGKILL or a
   crash is not rolled back and the next run refuses on the leftover paths with the conflict code; (f) wizard
-  cancellation changes nothing; (g) files are created 0644 and directories 0755 subject to the umask; no secret is
+  cancellation changes nothing; (g) an existing manifest of `schema_version` 1 is preserved unchanged by default and the settings it cannot hold are
+  reported as not persisted; rewriting it to version 2 needs `--overwrite workharbor.json` and warns that the result is
+  not creation-ready until the resolver accepts version 2 (FR-058); because both versions require `bundles: []`, a manifest
+  with bundle declarations is left unchanged and reported (FR-050), never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
   accepted, written or printed.
 - **FR-058**: The settings that FR-044 collects extend the manifest `workharbor.json`, as the owner decided on
   2026-10-17. [`workharbor.schema.json`](../../contracts/workspace/workharbor.schema.json) defines the accepted
@@ -950,14 +966,14 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (FR-063) until their work items are accepted; they never fake a result or contact an endpoint.
 - **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
   credential or provider account (FR-028). No secret is accepted, read, stored or printed by them: a
-  `--project-url` containing userinfo or a token and a `.gitmodules` URL containing credentials are refused or
-  reported redacted (FR-020), and no credential is written to generated files, output or logs.
+  `--project-url` with `https` userinfo or any password or token (`ssh://git@host/...` is admitted) and a `.gitmodules`
+  URL containing credentials are refused or reported redacted (FR-020), and no credential is written to generated files, output or logs.
 - **FR-063**: The new failures map to the codes of ADR 0013 without changing that table: success, including warnings
   only, 0; unknown flag, invalid or missing flag value, mutually exclusive flags, a traversing or credential-bearing
   input, `--template` while starters are unsupported, a `dir` that is a file, an unavailable command, `--json` where
   unsupported 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
-  (including a missing devcontainer) and an overwrite without explicit permission 70 (needs-human, with the flag names);
-  invalid configuration (`validate`), an existing or symlinked target path, a file changed since preview, pre-existing
+  (including a missing devcontainer) and a regular file that existed at preview time without `--overwrite` 70 (needs-human, with the flag names);
+  invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview, pre-existing
   content that fails validation, a `doctor` run with a failed check, an unsupported platform for a mutating host
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback 73, which takes precedence over 72 and over
