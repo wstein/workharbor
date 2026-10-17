@@ -23,7 +23,7 @@ const (
 
 // initBool lists the boolean flags of workspace.init; its other contract
 // flags take a value. --json is the global flag.
-var initBool = map[string]bool{"--non-interactive": true, "--yes": true, "--dry-run": true, "--overwrite": true}
+var initBool = map[string]bool{"--non-interactive": true, "--yes": true, "--dry-run": true, "--overwrite": true, "--no-agents-block": true}
 
 // build generates the Cobra tree from the table: canonical groups and
 // commands, the group alias, and short forms as hidden root commands that share
@@ -183,7 +183,7 @@ func initFlagHelp(name string) string {
 		"devcontainer": "devcontainer file to use", "template": "starter template", "human-shell": "interactive shell: fish, bash, zsh or nu",
 		"console-mode": "console mode: herdr or plain", "shortcuts": "shell shortcuts: on or off",
 		"non-interactive": "never prompt", "yes": "confirm the proposed writes", "dry-run": "show the proposal without writing",
-		"overwrite": "replace existing files",
+		"overwrite": "replace existing files", "no-agents-block": "do not write the agent workflow block into AGENTS.md",
 	}[name]
 }
 

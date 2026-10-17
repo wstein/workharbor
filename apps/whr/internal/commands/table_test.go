@@ -448,7 +448,7 @@ func TestInitFlagsMatchContract(t *testing.T) {
 
 func isBoolFlag(flag string) bool {
 	switch flag {
-	case "--non-interactive", "--yes", "--dry-run", "--overwrite", "--json":
+	case "--non-interactive", "--yes", "--dry-run", "--overwrite", "--no-agents-block", "--json":
 		return true
 	}
 	return false
