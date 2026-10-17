@@ -514,7 +514,12 @@
   "retained_assertion_failures": [],
   "application_tests": {
     "whr": [
-      "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestScaffoldRefusesProductCommands"
+      "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestScaffoldRefusesProductCommands",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/resources/TestCPUVectors",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/resources/TestMemoryVectors",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/resources/TestResolutionVectors",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/resources/TestEquivalentSpellingsShareIdentity",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/resources/TestNoUnlimitedOnOmission"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

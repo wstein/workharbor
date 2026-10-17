@@ -78,7 +78,7 @@ func TestMemoryEdgeCases(t *testing.T) {
 		{"\t1GiB", 0, ClassSyntax},
 		{"1GiB\n", 0, ClassSyntax},
 		{"١GiB", 0, ClassSyntax},
-		{"1GıB", 0, ClassBadUnit}, // dotless i is not a unit
+		{"1GıB", 0, ClassSyntax}, // non-ASCII letter
 		{"1GiB\x00", 0, ClassSyntax},
 		{"1MIB", 0, ClassBadUnit},
 		{"1mib", 0, ClassBadUnit},
@@ -132,7 +132,7 @@ func TestCanonicalFormatting(t *testing.T) {
 			t.Errorf("CPU(%d).String() = %q, want %q", v, got, want)
 		}
 	}
-	for want, v := range map[string]Memory{"1MiB": MiB, "1GiB": GiB, "1536MiB": GiB + 512*MiB, "4GiB": 4 * GiB} {
+	for want, v := range map[string]Memory{"1MiB": Memory(MiB), "1GiB": Memory(GiB), "1536MiB": Memory(GiB + 512*MiB), "4GiB": Memory(4 * GiB)} {
 		if got := v.String(); got != want {
 			t.Errorf("Memory(%d).String() = %q, want %q", v, got, want)
 		}
