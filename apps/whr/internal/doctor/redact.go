@@ -80,7 +80,7 @@ type nameRepl struct{ name, repl string }
 func replaceNames(s string, names []nameRepl) string {
 	var active []nameRepl
 	for _, n := range names {
-		if n.name != "" && !systemWords[strings.ToLower(n.name)] {
+		if n.name != "" && !isSystemWord(n.name) {
 			active = append(active, n)
 		}
 	}
@@ -121,6 +121,10 @@ func replaceNames(s string, names []nameRepl) string {
 	return b.String()
 }
 
+// Names are not Unicode-normalised (no new dependency): a decomposed "jose\u0301"
+// (HFS+) does not match a composed "jos\u00e9" or the reverse. The tradeoff
+// list of the package comment records this.
+//
 // matchFold reports whether s at byte offset i starts with name, comparing
 // rune by rune under Unicode simple case folding, and returns the end offset.
 func matchFold(s string, i int, name string) (int, bool) {
@@ -195,4 +199,15 @@ func (r Redactor) check(c Check) Check {
 		c.Evidence = r.value("", c.Evidence).(map[string]any)
 	}
 	return c
+}
+
+// isSystemWord compares with the same Unicode folding as the matching, so a
+// user called "ſbin" is as protected as "sbin".
+func isSystemWord(name string) bool {
+	for w := range systemWords {
+		if strings.EqualFold(name, w) {
+			return true
+		}
+	}
+	return false
 }
