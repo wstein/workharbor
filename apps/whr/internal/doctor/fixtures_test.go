@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"io/fs"
-	"os"
 	"syscall"
 	"time"
 
@@ -141,5 +140,3 @@ func statusOf(r doctor.Report, id string) doctor.Check {
 	}
 	return doctor.Check{}
 }
-
-var _ = os.DevNull
