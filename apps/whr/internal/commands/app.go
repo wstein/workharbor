@@ -45,11 +45,12 @@ type Handler func(ctx context.Context, call Call) (Result, error)
 
 // DefaultHandlers returns the handlers of the commands implemented so far.
 // `help` and `completion` are built in. Later work items add their commands
-// here (validate T026, init T030).
+// here (init T030).
 func DefaultHandlers() map[string]Handler {
 	return map[string]Handler{
-		"version":     versionHandler,
-		"host.doctor": DoctorHandler(doctor.SystemPorts(nil)),
+		"version":            versionHandler,
+		"host.doctor":        DoctorHandler(doctor.SystemPorts(nil)),
+		"workspace.validate": validateHandler,
 	}
 }
 
@@ -160,8 +161,12 @@ func (a *app) run(ctx context.Context, e Entry, args []string) error {
 	}
 	res, err := h(ctx, Call{Entry: e, Args: args})
 	if err != nil {
-		// A handler may fail with data to show, such as a doctor report.
-		if res.Human != "" && !a.jsonMode() {
+		// A handler may fail with data to show, such as a doctor report
+		// or a validate findings list.
+		var hf *humanFailure
+		if errors.As(err, &hf) && !a.jsonMode() {
+			_, _ = io.WriteString(a.env.Stdout, hf.human)
+		} else if res.Human != "" && !a.jsonMode() {
 			_, _ = io.WriteString(a.env.Stdout, res.Human)
 		}
 		a.exit = w.Failure(e.ID, asError(err))
