@@ -5,6 +5,10 @@
 package ptytest_test
 
 import (
+	"encoding/hex"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -48,7 +52,8 @@ func TestPTYKeysAndEnvironment(t *testing.T) {
 		{ptytest.KeyUp, "UP"}, {ptytest.KeyDown, "DOWN"}, {ptytest.KeyLeft, "LEFT"},
 		{ptytest.KeyRight, "RIGHT"}, {ptytest.KeyEnter, "ENTER"},
 		{ptytest.KeyBackspace, "BACKSPACE"}, {ptytest.KeyEscape, "ESC"},
-		{ptytest.KeyCtrlD, "EOT"},
+		{ptytest.KeyCtrlD, "EOT"}, {ptytest.KeyDelete, "DELETE"}, {ptytest.KeyHome, "HOME"},
+		{ptytest.KeyEnd, "END"}, {ptytest.KeyTab, "TAB"},
 	} {
 		s.SendKey(k.key)
 		s.Expect("key=" + k.name)
@@ -195,5 +200,386 @@ func TestPTYScreenRendering(t *testing.T) {
 	s.ExpectExit(0)
 	if got, want := s.Screen(), "progress 100%\nfinal"; got != want {
 		t.Fatalf("screen = %q, want %q", got, want)
+	}
+}
+
+func TestKeyBytes(t *testing.T) {
+	for k, want := range map[ptytest.Key]string{
+		ptytest.KeyEnter: "\r", ptytest.KeyTab: "\t", ptytest.KeyBackspace: "\x7f",
+		ptytest.KeyEscape: "\x1b", ptytest.KeyCtrlC: "\x03", ptytest.KeyCtrlD: "\x04",
+		ptytest.KeyUp: "\x1b[A", ptytest.KeyDown: "\x1b[B", ptytest.KeyRight: "\x1b[C",
+		ptytest.KeyLeft: "\x1b[D", ptytest.KeyHome: "\x1b[H", ptytest.KeyEnd: "\x1b[F",
+		ptytest.KeyDelete: "\x1b[3~",
+	} {
+		if string(k) != want {
+			t.Errorf("key %q != %q", string(k), want)
+		}
+	}
+}
+
+func envOf(t *testing.T, s *ptytest.Session) map[string]string {
+	t.Helper()
+	s.ExpectExit(0)
+	got := map[string]string{}
+	for _, l := range strings.Split(s.Screen(), "\n") {
+		if kv, ok := strings.CutPrefix(l, "ENV:"); ok {
+			k, v, _ := strings.Cut(kv, "=")
+			got[k] = v
+		}
+	}
+	return got
+}
+
+func TestPTYChildEnvironmentIsExactAndIsolated(t *testing.T) {
+	t.Setenv("PTYTEST_PARENT_SECRET", "leak")
+	t.Setenv("HOME", "/home/real-user")
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("GOCOVERDIR", "")
+	t.Setenv("LANG", "de_DE.UTF-8")
+	s := ptytest.StartFunc(t, "envdump", ptytest.Options{Cols: 200, Env: []string{"EXTRA=1", "TZ=Europe/Berlin"}})
+	got := envOf(t, s)
+	root := filepath.Dir(s.Home())
+	want := map[string]string{
+		"PATH": "/usr/bin:/bin", "HOME": s.Home(), "TMPDIR": filepath.Join(root, "tmp"),
+		"XDG_CONFIG_HOME": filepath.Join(s.Home(), ".config"), "XDG_CACHE_HOME": filepath.Join(s.Home(), ".cache"),
+		"XDG_DATA_HOME": filepath.Join(s.Home(), ".local", "share"), "XDG_STATE_HOME": filepath.Join(s.Home(), ".local", "state"),
+		"LC_ALL": "C", "LANG": "C", "TZ": "Europe/Berlin", "GORACE": "atexit_sleep_ms=0",
+		"TERM": "xterm-256color", "PTYTEST_FUNC": "envdump", "EXTRA": "1",
+	}
+	if len(got) != len(want) {
+		t.Errorf("env = %v", got)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q", k, got[k], v)
+		}
+	}
+	if s.Home() == "/home/real-user" {
+		t.Fatal("real HOME used")
+	}
+}
+
+func TestPTYEnvironmentOptionalVariables(t *testing.T) {
+	t.Setenv("GOCOVERDIR", "/cover")
+	got := envOf(t, ptytest.StartFunc(t, "envdump", ptytest.Options{NoColor: true, Term: "dumb", Cols: 200}))
+	if got["GOCOVERDIR"] != "/cover" || got["NO_COLOR"] != "1" || got["TERM"] != "dumb" {
+		t.Fatalf("env = %v", got)
+	}
+}
+
+func TestPTYDefaultAndCustomWorkingDirectory(t *testing.T) {
+	s := ptytest.StartFunc(t, "pwd", ptytest.Options{Cols: 200})
+	want, _ := filepath.EvalSymlinks(filepath.Join(filepath.Dir(s.Home()), "work"))
+	s.Expect("PWD=" + want)
+	s.ExpectExit(0)
+	dir := t.TempDir()
+	want, _ = filepath.EvalSymlinks(dir)
+	c := ptytest.StartFunc(t, "pwd", ptytest.Options{Dir: dir, Cols: 200})
+	c.Expect("PWD=" + want)
+	c.ExpectExit(0)
+}
+
+func emit(t testing.TB, b string, o ptytest.Options) *ptytest.Session {
+	o.Args = []string{hex.EncodeToString([]byte(b))}
+	return ptytest.StartFunc(t, "emit", o)
+}
+
+func TestAssertNoRawControlsClasses(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		out     string
+		allowed []string
+		bad     bool
+	}{
+		{"plain text, newline, tab", "ok\ttext\r\nmore\n", nil, false},
+		{"unicode text", "gr\u00fc\u00dfe \u4e2d", nil, false},
+		{"lone ESC", "a\x1b", nil, true},
+		{"CSI", "a\x1b[31mb", nil, true},
+		{"OSC title", "\x1b]0;x\x07", nil, true},
+		{"BEL", "a\ab", nil, true},
+		{"NUL", "a\x00b", nil, true},
+		{"DEL", "a\x7fb", nil, true},
+		{"backspace", "a\bb", nil, true},
+		{"C1 CSI", "a\u009b31m", nil, true},
+		{"bidi override", "a\u202eb", nil, true},
+		{"line separator", "a\u2028b", nil, true},
+		{"invalid UTF-8 byte", "a\xffb", nil, true},
+		{"cut-off multibyte rune at the end", "ok\xe2\x82", nil, false},
+		{"cut-off rune in the middle", "a\xe2\x82b", nil, true},
+		{"allowed color codes", "\x1b[32mgreen\x1b[0m", []string{"\x1b[32m", "\x1b[0m"}, false},
+		{"allowed does not cover other sequences", "\x1b[32mx\x1b[31m", []string{"\x1b[32m"}, true},
+		{"allowed literal ending inside a token", "\x1b[32m", []string{"\x1b[3"}, true},
+		{"allowed literal starting inside a token", "\x1b[32m", []string{"[32m"}, true},
+		{"allowed literals spanning tokens", "\x1b[1mbold\x1b[0m", []string{"\x1b[1mbold\x1b[0m"}, false},
+		{"neighbours of an allowed literal stay checked", "\x1b[\x1b[0m0m", []string{"\x1b[0m"}, true},
+	} {
+		f := newFakeTB(t)
+		f.run(func() {
+			s := emit(f, c.out, ptytest.Options{})
+			s.AssertNoRawControls(c.allowed...)
+		})
+		f.cleanup()
+		if got := len(f.fatals) > 0; got != c.bad {
+			t.Errorf("%s: failed=%v (%q), want %v", c.name, got, f.fatals, c.bad)
+		}
+	}
+}
+
+func TestAssertNoRawControlsWaitsForOutputEnd(t *testing.T) {
+	// The hostile text arrives after a pause; asserting before ExpectExit must
+	// not pass on the incomplete transcript.
+	f := newFakeTB(t)
+	f.run(func() {
+		s := ptytest.StartFunc(f, "late", ptytest.Options{})
+		s.Expect("first")
+		s.Send("\n") // the hostile text is written only now
+		s.AssertNoRawControls()
+	})
+	f.wantFatal("raw control")
+	f.cleanup()
+
+	g := newFakeTB(t)
+	g.run(func() {
+		s := ptytest.StartFunc(g, "hang", ptytest.Options{Timeout: short})
+		s.Expect("up")
+		s.AssertNoRawControls()
+	})
+	g.wantFatal("call ExpectExit first")
+	g.cleanup()
+}
+
+func TestScreenRendersEraseAndCursorMovement(t *testing.T) {
+	s := emit(t, "abcdef\r\x1b[3C\x1b[K\nsecond\x1b[1A\rX", ptytest.Options{})
+	s.ExpectExit(0)
+	if got, want := s.Screen(), "Xbc\nsecond"; got != want {
+		t.Fatalf("screen = %q, want %q", got, want)
+	}
+}
+
+func TestExpectScreenDeadline(t *testing.T) {
+	f := newFakeTB(t)
+	f.run(func() {
+		s := ptytest.StartFunc(f, "hang", ptytest.Options{Timeout: short})
+		s.ExpectScreen("up")
+		s.ExpectScreen("never")
+	})
+	f.wantFatal("timed out")
+	f.wantFatal("never")
+	f.cleanup()
+
+	g := newFakeTB(t)
+	g.run(func() {
+		s := ptytest.StartFunc(g, "quiet", ptytest.Options{})
+		s.ExpectScreen("never")
+	})
+	g.wantFatal("output ended")
+	g.cleanup()
+
+	h := ptytest.StartFunc(t, "quiet", ptytest.Options{})
+	h.ExpectScreen("bye")
+	h.ExpectScreenWithin(short, "bye") // consumes nothing
+	h.ExpectExit(0)
+}
+
+func TestExpectFailsFastWhenOutputEnds(t *testing.T) {
+	f := newFakeTB(t)
+	start := time.Now()
+	f.run(func() {
+		s := ptytest.StartFunc(f, "quiet", ptytest.Options{Timeout: time.Minute})
+		s.Expect("never printed")
+	})
+	f.wantFatal("output ended before")
+	f.cleanup()
+	if d := time.Since(start); d > 20*time.Second {
+		t.Fatalf("took %v; must not wait for the timeout", d)
+	}
+}
+
+func TestExpectConsumesThroughTheMatch(t *testing.T) {
+	s := emit(t, "alpha\nbeta\ngamma\n", ptytest.Options{})
+	s.Expect("alpha")
+	s.Expect("beta")
+	s.Expect("gamma")
+	s.ExpectExit(0)
+	// alpha was consumed: it cannot match again.
+	g := newFakeTB(t)
+	g.run(func() {
+		x := emit(g, "alpha\nbeta\n", ptytest.Options{})
+		x.Expect("beta")
+		x.ExpectWithin(short, "alpha")
+	})
+	g.wantFatal("alpha")
+	g.cleanup()
+}
+
+func TestExpectRegexpSubmatches(t *testing.T) {
+	s := emit(t, "id=ab-end\n", ptytest.Options{})
+	got := s.ExpectRegexp(`id=(a)(x)?(b)`)
+	if len(got) != 4 || got[0] != "id=ab" || got[1] != "a" || got[2] != "" || got[3] != "b" {
+		t.Fatalf("submatches = %q", got)
+	}
+	s.Expect("-end") // consumed exactly through the match
+	s.ExpectExit(0)
+}
+
+func TestExpectHandlesSplitSequencesAndRunes(t *testing.T) {
+	s := emit(t, "gr\xc3\xbc\xc3\x9fe \x1b[1mbold\x1b[0m\n", ptytest.Options{})
+	s.Expect("gr\u00fc\u00dfe bold")
+	s.ExpectExit(0)
+}
+
+// largeOutputBudget is well above the ~0.5 s an idle machine needs and far
+// below the minutes the former quadratic matcher needed; it leaves room for
+// -race with GOMAXPROCS=1 on a loaded CI runner.
+const largeOutputBudget = 10 * time.Second
+
+func TestLargeOutputIsMatchedQuickly(t *testing.T) {
+	start := time.Now()
+	s := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(10 << 20)}, Timeout: 60 * time.Second})
+	s.Expect("END")
+	s.ExpectExit(0)
+	if d := time.Since(start); d > largeOutputBudget {
+		t.Fatalf("10 MiB took %v", d)
+	}
+	if n := len(s.Transcript()); n < 10<<20 {
+		t.Fatalf("transcript has %d bytes", n)
+	}
+	start = time.Now()
+	r := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(10 << 20)}, Timeout: 60 * time.Second})
+	r.ExpectScreen("END")
+	r.ExpectExit(0)
+	if d := time.Since(start); d > largeOutputBudget {
+		t.Fatalf("ExpectScreen on 10 MiB took %v", d)
+	}
+}
+
+func TestFailureMessagesAreBounded(t *testing.T) {
+	f := newFakeTB(t)
+	f.run(func() {
+		s := ptytest.StartFunc(f, "flood", ptytest.Options{Args: []string{strconv.Itoa(1 << 20)}})
+		s.Expect("never printed")
+	})
+	f.cleanup()
+	if len(f.fatals) != 1 || len(f.fatals[0]) > 10000 {
+		t.Fatalf("message of %d bytes", len(f.fatals[0]))
+	}
+}
+
+func TestMaxOutputFailsTheTest(t *testing.T) {
+	f := newFakeTB(t)
+	f.run(func() {
+		s := ptytest.StartFunc(f, "flood", ptytest.Options{Args: []string{strconv.Itoa(2 << 20)}, MaxOutput: 64 << 10})
+		s.Expect("never printed")
+	})
+	f.wantFatal("exceeded MaxOutput")
+	f.cleanup()
+	g := newFakeTB(t)
+	g.run(func() {
+		s := ptytest.StartFunc(g, "flood", ptytest.Options{Args: []string{strconv.Itoa(2 << 20)}, MaxOutput: 64 << 10})
+		s.ExpectExit(0)
+	})
+	g.wantFatal("exceeded MaxOutput")
+	g.cleanup()
+	h := newFakeTB(t)
+	h.run(func() {
+		s := ptytest.StartFunc(h, "flood", ptytest.Options{Args: []string{strconv.Itoa(2 << 20)}, MaxOutput: 64 << 10})
+		s.ExpectScreen("never printed")
+	})
+	h.wantFatal("exceeded MaxOutput")
+	h.cleanup()
+}
+
+func TestExpectExitReportsSignalDeath(t *testing.T) {
+	f := newFakeTB(t)
+	f.run(func() {
+		s := ptytest.StartFunc(f, "selfkill", ptytest.Options{})
+		s.ExpectExit(0)
+	})
+	f.wantFatal("killed by signal")
+	f.wantFatal("killed")
+	f.cleanup()
+}
+
+func TestCloseSemantics(t *testing.T) {
+	f := newFakeTB(t)
+	var s *ptytest.Session
+	f.run(func() {
+		s = ptytest.StartFunc(f, "hang", ptytest.Options{})
+		s.Expect("up")
+	})
+	if len(f.cleanups) != 1 {
+		t.Fatalf("%d cleanups registered, want 1", len(f.cleanups))
+	}
+	start := time.Now()
+	s.Close()
+	if !ptytest.ProcessGone(s.Pid()) && time.Since(start) > 0 {
+		waitGone(t, s.Pid())
+	}
+	s.Close() // idempotent
+	f.cleanup()
+	if d := time.Since(start); d > 4*time.Second {
+		t.Fatalf("Close took %v", d)
+	}
+}
+
+func TestExitedLeaderIsNotSignalledAgain(t *testing.T) {
+	var kills []int
+	restore := ptytest.SetKiller(func(pid int) { kills = append(kills, pid) })
+	defer restore()
+	f := newFakeTB(t)
+	var s *ptytest.Session
+	f.run(func() {
+		s = ptytest.StartFunc(f, "exitfast", ptytest.Options{})
+		s.ExpectExit(3)
+	})
+	if len(kills) != 1 || kills[0] != s.Pid() {
+		t.Fatalf("expected exactly one sweep at exit, got %v", kills)
+	}
+	s.Close()
+	f.cleanup()
+	if len(kills) != 1 {
+		t.Fatalf("group signalled after the leader was reaped: %v", kills)
+	}
+}
+
+func TestProcessGone(t *testing.T) {
+	if ptytest.ProcessGone(os.Getpid()) {
+		t.Fatal("the running test process is not gone")
+	}
+	cmd := exec.Command("/bin/sleep", "30")
+	if err := cmd.Start(); err != nil {
+		t.Skipf("SKIPPED, NOT PASSED: cannot start /bin/sleep: %v", err)
+	}
+	if ptytest.ProcessGone(cmd.Process.Pid) {
+		t.Fatal("a sleeping child is not gone")
+	}
+	cmd.Process.Kill()
+	// Killed but not yet reaped: a zombie counts as gone.
+	deadline := time.Now().Add(5 * time.Second)
+	for !ptytest.ProcessGone(cmd.Process.Pid) {
+		if time.Now().After(deadline) {
+			t.Fatal("zombie not reported as gone")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	cmd.Wait()
+	if !ptytest.ProcessGone(cmd.Process.Pid) {
+		t.Fatal("reaped child must be gone")
+	}
+}
+
+func TestDefaults(t *testing.T) {
+	if ptytest.DefaultTimeout != 10*time.Second || ptytest.DefaultMaxOutput != 64<<20 {
+		t.Fatal("documented defaults changed")
+	}
+}
+
+func TestResizeChangesScreenWidth(t *testing.T) {
+	s := ptytest.StartFunc(t, "winch-wide", ptytest.Options{})
+	s.Expect("ready")
+	s.Resize(24, 120)
+	s.ExpectExit(0)
+	if got := s.Screen(); got != "ready\n"+strings.Repeat("w", 100) {
+		t.Fatalf("100 columns must fit on a 120 column screen: %q", got)
 	}
 }
