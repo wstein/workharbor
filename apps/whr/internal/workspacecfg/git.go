@@ -78,10 +78,32 @@ const (
 
 // gitLinks refuses any symbolic link in the parts of .git that Git reads
 // through directory entries: the first level of .git/objects (pack, info and
-// the fan-out directories), all of .git/refs and .git/reftable. It also
+// the fan-out directories), the files inside pack and the fan-out directories,
+// all of .git/refs and .git/reftable. Files there must be regular files. It also
 // records whether the repository uses the reftable format.
 func (r *run) gitLinks() string {
 	budget := maxGitWalkEntries
+	walkObjects := func(rel string) string {
+		entries, aerr := r.d.readDir(rel)
+		if aerr != nil {
+			if aerr.kind == accMissing {
+				return ""
+			}
+			return rel + " " + aerr.why
+		}
+		for _, e := range entries {
+			if budget--; budget < 0 {
+				return rel + " has more entries than can be inspected"
+			}
+			switch {
+			case e.Type()&fs.ModeSymlink != 0:
+				return rel + "/" + e.Name() + " is a symbolic link"
+			case !e.Type().IsRegular():
+				return rel + "/" + e.Name() + " is not a regular file"
+			}
+		}
+		return ""
+	}
 	var walk func(rel string, depth int) string
 	walk = func(rel string, depth int) string {
 		entries, aerr := r.d.readDir(rel)
@@ -99,6 +121,11 @@ func (r *run) gitLinks() string {
 			switch {
 			case e.Type()&fs.ModeSymlink != 0:
 				return child + " is a symbolic link"
+			case rel == ".git/objects" && e.IsDir() && (e.Name() == "pack" || isFanout(e.Name())):
+				// Pack files and loose objects are read by Git: they must be regular files.
+				if reason := walkObjects(child); reason != "" {
+					return reason
+				}
 			case e.IsDir() && depth < maxGitWalkDepth && !strings.HasPrefix(rel, ".git/objects"):
 				if reason := walk(child, depth+1); reason != "" {
 					return reason
@@ -120,6 +147,11 @@ func (r *run) gitLinks() string {
 		r.reftable = true
 	}
 	return ""
+}
+
+// isFanout reports a loose-object directory name: two hexadecimal digits.
+func isFanout(name string) bool {
+	return len(name) == 2 && hexVal(name[0]) >= 0 && hexVal(name[1]) >= 0
 }
 
 // configNamesReftable reports extensions.refStorage = reftable in .git/config.
@@ -186,11 +218,23 @@ func (r *run) git() {
 		return
 	}
 	r.gitRan = true
+	if reason == "" && !r.d.stillAtAbs() {
+		reason = "the directory path no longer names the opened directory"
+	}
 	if reason != "" {
 		r.c.add("git.unsafe_path", ".git", reason+"; Git did not run", "")
 		return
 	}
-	if f := r.gitStage(); f != nil {
+	before := len(r.c.list)
+	f := r.gitStage()
+	if f == nil && !r.d.stillAtAbs() {
+		// The directory moved while Git ran: nothing Git printed can be trusted.
+		r.c.list = r.c.list[:before]
+		r.gitState = nil
+		r.c.add("git.unsafe_path", ".git", "the directory path no longer names the opened directory; Git results were discarded", "")
+		return
+	}
+	if f != nil {
 		r.gitState = nil
 		if f.code != "" {
 			r.c.add(f.code, "", f.msg, "")

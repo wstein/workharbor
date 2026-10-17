@@ -139,3 +139,119 @@ func TestValidateGitDirectoryWalkRefusesLinks(t *testing.T) {
 		})
 	}
 }
+
+// Git reads pack files and loose objects through the directory entries: a link
+// or a special file there would make it read outside the validated directory.
+func TestValidateRealObjectFilesMustBeRegular(t *testing.T) {
+	realGit(t)
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err := os.WriteFile(outside, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]func(t *testing.T, d string){
+		"pack file link": func(t *testing.T, d string) {
+			write(t, d, ".git/objects/pack/keep.idx", "")
+			symlink(t, d, ".git/objects/pack/pack-0.pack", outside)
+		},
+		"loose object link": func(t *testing.T, d string) {
+			entries, err := os.ReadDir(filepath.Join(d, ".git/objects"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range entries {
+				if len(e.Name()) == 2 {
+					sub, _ := os.ReadDir(filepath.Join(d, ".git/objects", e.Name()))
+					symlink(t, d, ".git/objects/"+e.Name()+"/"+sub[0].Name(), outside)
+					return
+				}
+			}
+			t.Fatal("no loose object")
+		},
+		"pack fifo": func(t *testing.T, d string) { fifo(t, d, ".git/objects/pack/pack-1.pack") },
+	}
+	for name, setup := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := repoDir(t, true)
+			setup(t, dir)
+			r := validate(t, dir, workspacecfg.Options{})
+			if r.Valid || errorCodes(r) != "git.unsafe_path" {
+				t.Fatalf("%+v", r.Findings)
+			}
+		})
+	}
+}
+
+func TestValidateObjectFilesFakeGit(t *testing.T) {
+	for name, setup := range map[string]func(t *testing.T, d string){
+		"pack link": func(t *testing.T, d string) { symlink(t, d, ".git/objects/pack/p.pack", "/etc/hostname") },
+		"fan-out link": func(t *testing.T, d string) {
+			symlink(t, d, ".git/objects/ab/"+strings.Repeat("c", 38), "/etc/hostname")
+		},
+		"pack subdirectory": func(t *testing.T, d string) { write(t, d, ".git/objects/pack/sub/x", "") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := validDir(t)
+			minimalGitDir(t, dir)
+			write(t, dir, ".git/objects/pack/.keep", "")
+			write(t, dir, ".git/objects/ab/.keep", "")
+			setup(t, dir)
+			f := &fakeGit{handler: healthyHandler}
+			r := validate(t, dir, workspacecfg.Options{Git: f, LookGit: fixedGit("/git")})
+			if errorCodes(r) != "git.unsafe_path" || len(f.calls) != 0 {
+				t.Fatalf("%+v %v", r.Findings, f.subs())
+			}
+		})
+	}
+}
+
+// A symlinked reference table is refused in a real reftable repository.
+func TestValidateRealReftableTableLinkIsUnsafe(t *testing.T) {
+	realGit(t)
+	dir := validDir(t)
+	probe := exec.Command("git", "init", "-q", "-b", "main", "--template=", "--ref-format=reftable")
+	probe.Dir = dir
+	probe.Env = hermeticEnv(t.TempDir())
+	if out, err := probe.CombinedOutput(); err != nil {
+		t.Skipf("this Git cannot create a reftable repository: %v %s", err, out)
+	}
+	runGit(t, dir, "", "add", "-A")
+	runGit(t, dir, "", "commit", "-q", "-m", "init")
+	tables, err := filepath.Glob(filepath.Join(dir, ".git/reftable/*.ref"))
+	if err != nil || len(tables) == 0 {
+		t.Skipf("no reftable table file: %v", err)
+	}
+	moved := tables[0] + ".real"
+	if err := os.Rename(tables[0], moved); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(moved, tables[0]); err != nil {
+		t.Fatal(err)
+	}
+	if r := validate(t, dir, workspacecfg.Options{}); errorCodes(r) != "git.unsafe_path" {
+		t.Errorf("%+v", r.Findings)
+	}
+}
+
+// The directory moving while Git runs discards what Git printed.
+func TestValidateDirectoryMovedDuringGitIsUnsafe(t *testing.T) {
+	dir := validDir(t)
+	minimalGitDir(t, dir)
+	swapped := false
+	h := func(sub string, c workspacecfg.GitCmd) (workspacecfg.GitOut, error) {
+		if sub == "ls-files" && !swapped {
+			swapped = true
+			if err := os.Rename(dir, dir+".moved"); err != nil {
+				t.Error(err)
+			}
+			if err := os.Mkdir(dir, 0o755); err != nil {
+				t.Error(err)
+			}
+		}
+		return healthyHandler(sub, c)
+	}
+	defer os.RemoveAll(dir + ".moved")
+	r := validate(t, dir, workspacecfg.Options{Git: &fakeGit{handler: h}, LookGit: fixedGit("/git")})
+	if !swapped || !has(r, "git.unsafe_path") || has(r, "git.head_missing") {
+		t.Errorf("%+v", r.Findings)
+	}
+}

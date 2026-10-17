@@ -119,6 +119,18 @@ func absPath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
+// stillAtAbs reports whether the absolute path Git is given still names the
+// directory held open: not a link, and the same file as the root. It guards the
+// window between resolving the path and handing it to Git, and the Git run.
+func (d *dir) stillAtAbs() bool {
+	info, err := os.Lstat(d.abs)
+	if err != nil || info.Mode()&fs.ModeSymlink != 0 {
+		return false
+	}
+	now, err := d.root.Stat(".")
+	return err == nil && os.SameFile(info, now)
+}
+
 func (d *dir) Close() { d.root.Close() }
 
 // walk descends through the directory components of rel and returns the
