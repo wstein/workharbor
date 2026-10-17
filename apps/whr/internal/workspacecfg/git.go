@@ -2,15 +2,293 @@
 
 package workspacecfg
 
-// GitRunner runs the fixed Git invocations; the production runner executes the
-// binary and tests inject a fake.
-type GitRunner interface{}
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io/fs"
+	"strings"
+)
+
+// gitUnsafe lstat-checks the .git directory before any Git call and returns the
+// reason it must not be handed to Git, or "". missing is true when there is no
+// .git at all.
+func (r *run) gitUnsafe() (reason string, missing bool) {
+	info, aerr := r.d.lstat(".git")
+	switch {
+	case aerr != nil && aerr.kind == accMissing:
+		return "", true
+	case aerr != nil:
+		return ".git " + aerr.why, false
+	case info.Mode()&fs.ModeSymlink != 0:
+		return ".git is a symbolic link", false
+	case !info.IsDir():
+		if info.Mode().IsRegular() {
+			return ".git is a file (gitfile), not a directory", false
+		}
+		return ".git is " + kindName(info.Mode()), false
+	}
+	for _, rel := range []string{".git/commondir", ".git/objects/info/alternates"} {
+		if _, aerr := r.d.lstat(rel); aerr == nil || aerr.kind != accMissing {
+			return rel[len(".git/"):] + " is present, which redirects Git to other storage", false
+		}
+	}
+	for _, f := range []struct {
+		rel      string
+		optional bool
+	}{{".git/HEAD", false}, {".git/index", true}, {".git/config", false}} {
+		info, aerr := r.d.lstat(f.rel)
+		switch {
+		case aerr != nil && aerr.kind == accMissing && f.optional:
+		case aerr != nil && aerr.kind == accMissing:
+			return f.rel + " does not exist", false
+		case aerr != nil:
+			return f.rel + " " + aerr.why, false
+		case !info.Mode().IsRegular():
+			return f.rel + " is " + kindName(info.Mode()) + ", not a regular file", false
+		}
+	}
+	return "", false
+}
+
+// gitFailure aborts the Git stage with a finding.
+type gitFailure struct{ code, msg string }
 
 func (r *run) git() {
 	if r.opt.GitFree {
 		return
 	}
-	if _, aerr := r.d.lstat(".git"); aerr != nil && aerr.kind == accMissing {
+	reason, missing := r.gitUnsafe()
+	if missing {
 		r.c.add("git.not_repository", "", "the directory contains no .git; Git checks did not run", "")
+		return
 	}
+	r.gitRan = true
+	if reason != "" {
+		r.c.add("git.unsafe_path", ".git", reason+"; Git did not run", "")
+		return
+	}
+	if f := r.gitStage(); f != nil {
+		r.gitState = nil
+		if f.code != "" {
+			r.c.add(f.code, "", f.msg, "")
+		}
+	}
+}
+
+// gitStage runs the fixed Git invocations and the analysis. It returns nil when
+// the Git state was read, otherwise the failure to report.
+func (r *run) gitStage() *gitFailure {
+	look := r.opt.LookGit
+	if look == nil {
+		look = lookGit
+	}
+	path, err := look()
+	if err != nil {
+		return &gitFailure{"git.unavailable", "Git is not available; the Git-derived checks did not run"}
+	}
+	runner := r.opt.Git
+	if runner == nil {
+		runner = ExecRunner{}
+	}
+	g := &gitSession{r: r, runner: runner, path: path, gitDir: r.d.abs + "/.git", workTree: r.d.abs}
+
+	out, f := g.call(MaxListingBytes, "--version")
+	if f != nil {
+		return f
+	}
+	if out.Exit != 0 || !gitVersionOK(out.Stdout) {
+		return &gitFailure{"git.unavailable", "Git is older than 2.39.5 or its version is unreadable; the Git-derived checks did not run"}
+	}
+
+	head, f := g.headExists()
+	if f != nil {
+		return f
+	}
+	index, f := g.listing("ls-files", "--stage", "-z")
+	if f != nil {
+		return f
+	}
+	snap := GitSnapshot{ProjectsPath: "", HeadExists: head, Index: index}
+	if r.m != nil {
+		snap.ProjectsPath = r.m.ProjectsPath
+	}
+	if head {
+		if snap.Head, f = g.listing("ls-tree", "-r", "-z", "HEAD"); f != nil {
+			return f
+		}
+	}
+	src, spec := snap.Index, ":.gitmodules"
+	if head {
+		src, spec = snap.Head, "HEAD:.gitmodules"
+	}
+	if e, ok := find1(src, ".gitmodules"); ok && isRegularMode(e.Mode) {
+		out, f := g.call(MaxGitmodulesBytes+1, "cat-file", "blob", spec)
+		if f != nil {
+			return f
+		}
+		switch {
+		case out.Truncated:
+			snap.Gitmodules = make([]byte, MaxGitmodulesBytes+1)
+		case out.Exit != 0:
+			return &gitFailure{"git.listing_failed", "git cat-file failed on .gitmodules"}
+		default:
+			snap.Gitmodules = out.Stdout
+			if snap.Gitmodules == nil {
+				snap.Gitmodules = []byte{}
+			}
+		}
+	}
+	findings, info := AnalyzeGit(snap)
+	r.c.addAll(findings)
+	r.gitState = info
+	return nil
+}
+
+// gitSession carries one run's Git settings.
+type gitSession struct {
+	r        *run
+	runner   GitRunner
+	path     string
+	gitDir   string
+	workTree string
+}
+
+// call runs one Git invocation within the remaining budget.
+func (g *gitSession) call(maxOut int, sub ...string) (GitOut, *gitFailure) {
+	r := g.r
+	if err := r.ctx.Err(); err != nil {
+		return GitOut{}, &gitFailure{} // Validate returns the context error
+	}
+	remaining := r.b.remaining()
+	if remaining <= 0 {
+		return GitOut{}, &gitFailure{"git.listing_failed", "the shared time budget ran out during Git work"}
+	}
+	args := sub
+	if len(sub) > 0 && sub[0] != "--version" {
+		args = gitArgs(g.gitDir, g.workTree, sub...)
+	}
+	out, err := g.runner.Run(r.ctx, GitCmd{
+		Path: g.path, Args: args, Env: gitEnv(), Dir: "/", MaxOutput: maxOut, Timeout: remaining,
+	})
+	if cerr := r.ctx.Err(); cerr != nil {
+		return GitOut{}, &gitFailure{}
+	}
+	if err != nil {
+		msg := "git " + subName(sub) + " failed"
+		if errors.Is(err, context.DeadlineExceeded) {
+			msg = "git " + subName(sub) + " ran out of time"
+		}
+		return GitOut{}, &gitFailure{"git.listing_failed", msg}
+	}
+	return out, nil
+}
+
+func subName(sub []string) string {
+	if len(sub) == 0 {
+		return ""
+	}
+	return strings.TrimPrefix(sub[0], "--")
+}
+
+// headExists decides between a HEAD and an unborn HEAD (FR-054): unborn exactly
+// when rev-parse exits 1 with empty standard error and symbolic-ref names a
+// reference. Everything else that is not success is a listing failure.
+func (g *gitSession) headExists() (bool, *gitFailure) {
+	out, f := g.call(512, "rev-parse", "--verify", "--quiet", "HEAD")
+	if f != nil {
+		return false, f
+	}
+	switch {
+	case out.Exit == 0:
+		if !isObjectID(strings.TrimSpace(string(out.Stdout))) {
+			return false, &gitFailure{"git.listing_failed", "git rev-parse printed an unexpected value"}
+		}
+		return true, nil
+	case out.Exit == 1 && len(bytes.TrimSpace(out.Stderr)) == 0:
+	default:
+		return false, &gitFailure{"git.listing_failed", "git rev-parse failed"}
+	}
+	out, f = g.call(512, "symbolic-ref", "-q", "HEAD")
+	if f != nil {
+		return false, f
+	}
+	if out.Exit != 0 || !strings.HasPrefix(strings.TrimSpace(string(out.Stdout)), "refs/") {
+		return false, &gitFailure{"git.listing_failed", "HEAD is neither a commit nor an unborn branch"}
+	}
+	return false, nil
+}
+
+func isObjectID(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if hexVal(s[i]) < 0 || s[i] >= 'A' && s[i] <= 'F' {
+			return false
+		}
+	}
+	return true
+}
+
+// listing runs ls-files --stage or ls-tree and parses NUL-terminated records.
+func (g *gitSession) listing(sub ...string) ([]TreeEntry, *gitFailure) {
+	out, f := g.call(MaxListingBytes, sub...)
+	if f != nil {
+		return nil, f
+	}
+	if out.Truncated {
+		return nil, &gitFailure{"git.limit_exceeded", "the git " + sub[0] + " listing is beyond its size bound"}
+	}
+	if out.Exit != 0 {
+		return nil, &gitFailure{"git.listing_failed", "git " + sub[0] + " failed"}
+	}
+	var entries []TreeEntry
+	data := out.Stdout
+	for len(data) > 0 {
+		i := bytes.IndexByte(data, 0)
+		if i < 0 {
+			return nil, &gitFailure{"git.listing_failed", "git " + sub[0] + " printed an unterminated record"}
+		}
+		rec := string(data[:i])
+		data = data[i+1:]
+		e, ok := parseListingRecord(sub[0], rec)
+		if !ok {
+			return nil, &gitFailure{"git.listing_failed", "git " + sub[0] + " printed an unparsable record"}
+		}
+		if len(entries) >= MaxListingEntries {
+			return nil, &gitFailure{"git.limit_exceeded", "the git " + sub[0] + " listing has more entries than its bound"}
+		}
+		entries = append(entries, e)
+	}
+	return entries, nil
+}
+
+// parseListingRecord parses "MODE SHA STAGE\tPATH" (ls-files --stage) or
+// "MODE TYPE SHA\tPATH" (ls-tree). Unmerged index entries are refused.
+func parseListingRecord(kind, rec string) (TreeEntry, bool) {
+	meta, path, ok := strings.Cut(rec, "\t")
+	if !ok || path == "" {
+		return TreeEntry{}, false
+	}
+	f := strings.Split(meta, " ")
+	if len(f) != 3 || len(f[0]) != 6 {
+		return TreeEntry{}, false
+	}
+	var sha string
+	if kind == "ls-files" {
+		if f[2] != "0" {
+			return TreeEntry{}, false
+		}
+		sha = f[1]
+	} else {
+		if f[1] != "blob" && f[1] != "commit" && f[1] != "tree" {
+			return TreeEntry{}, false
+		}
+		sha = f[2]
+	}
+	if !isObjectID(sha) {
+		return TreeEntry{}, false
+	}
+	return TreeEntry{Mode: f[0], SHA: sha, Path: path}, true
 }

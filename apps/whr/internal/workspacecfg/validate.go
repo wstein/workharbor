@@ -77,12 +77,13 @@ func Validate(ctx context.Context, dirPath string, opt Options) (*Report, error)
 	}
 	defer d.Close()
 	r.d = d
-	for _, step := range []func(){r.manifest, r.devcontainer, r.projects, r.git, r.declaration} {
+	for _, step := range []func(){r.manifest, r.devcontainer, r.projects, r.git} {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		if r.b.expired() {
 			r.c.add("findings.time_budget_exhausted", "", "the shared time budget ran out; later checks did not run", "")
+			r.gitRan = !opt.GitFree // Git state is unknown, not absent
 			break
 		}
 		step()
@@ -90,6 +91,7 @@ func Validate(ctx context.Context, dirPath string, opt Options) (*Report, error)
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	r.declaration() // pure: no file or Git access, so no budget
 	return newReport(dirPath, r.c.list), nil
 }
 
