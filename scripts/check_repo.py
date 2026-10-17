@@ -36,10 +36,6 @@ V2_OPTIONAL = ('name', 'start_dir', 'human_shell', 'console_mode', 'shortcuts', 
 SCHEMA_ROOT = Path(__file__).resolve().parents[1]
 
 
-class _Duplicate(Exception):
-    pass
-
-
 def _schema(root=None):
     path = Path(root or SCHEMA_ROOT)/SCHEMA_PATH
     if not path.is_file():
@@ -83,11 +79,22 @@ def _parse_int(text):
     return int(text) if len(text) <= 18 else _BigInt()
 
 
-def _unique_pairs(pairs):
-    keys = [key for key, _ in pairs]
-    if len(keys) != len(set(keys)):
-        raise _Duplicate()
-    return dict(pairs)
+class _Seen:
+    """Parse-time facts collected by the object hook: a repeated key and any lone surrogate."""
+
+    def __init__(self):
+        self.duplicate = False
+        self.surrogate = False
+
+    def pairs(self, pairs):
+        keys = [key for key, _ in pairs]
+        if len(keys) != len(set(keys)):
+            self.duplicate = True
+        # Inspect every pair, including values a duplicate key would drop.
+        if not self.surrogate and _has_lone_surrogate([item for pair in pairs for item in pair
+                                                       if not isinstance(item, (dict, list))]):
+            self.surrogate = True
+        return dict(pairs)
 
 
 def _has_lone_surrogate(value):
@@ -127,15 +134,16 @@ def manifest_findings(content, schema=None):
         return [('manifest.encoding', '', '')]
     if _too_deep(text):
         return [('manifest.syntax', '', '')]
+    seen = _Seen()
     try:
-        data = json.loads(text, object_pairs_hook=_unique_pairs, parse_constant=_no_constant,
+        data = json.loads(text, object_pairs_hook=seen.pairs, parse_constant=_no_constant,
                           parse_int=_parse_int)
-    except _Duplicate:
-        return [('manifest.duplicate_key', '', '')]
     except (ValueError, RecursionError):
         return [('manifest.syntax', '', '')]
-    if _has_lone_surrogate(data):
+    if seen.surrogate or _has_lone_surrogate(data):
         return [('manifest.encoding', '', 'lone surrogate')]
+    if seen.duplicate:
+        return [('manifest.duplicate_key', '', '')]
     return manifest_document_findings(data, schema)
 
 
@@ -183,7 +191,7 @@ def manifest_document_findings(data, schema=None):
 
     def canonical(value):
         return (isinstance(value, str) and path_pattern.fullmatch(value) is not None
-                and '.git' not in (part.casefold() for part in value.split('/')))
+                and '.git' not in (part.rstrip('. ').casefold() for part in value.split('/')))
 
     for field in ('devcontainer_path', 'projects_path'):
         if field in data:
@@ -254,7 +262,7 @@ def vector_bytes(case):
     return template + b' ' * (spec['total'] - len(template))
 
 
-MIN_VECTOR_CASES = 93
+MIN_VECTOR_CASES = 101
 
 
 def vector_case_errors(cases):
@@ -265,7 +273,7 @@ def vector_case_errors(cases):
             errors.append(f'{VECTORS_PATH}: duplicate case id {case["id"]}; ids are unique')
         seen.add(case['id'])
         actual = manifest_codes(vector_bytes(case))
-        if actual != case['expect_codes']:
+        if sorted(actual) != sorted(case['expect_codes']):
             errors.append(f'{VECTORS_PATH}: case {case["id"]} expects {case["expect_codes"]} but check_repo.py '
                           f'yields {actual}; align the rule and the vector')
     return errors
