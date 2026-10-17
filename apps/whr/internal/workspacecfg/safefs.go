@@ -53,6 +53,14 @@ type dir struct {
 
 // openDir opens path as the root of the walk.
 func openDir(path string) (*dir, error) {
+	// A path with a .. component is read by the kernel, so the directory itself is
+	// reached physically; but when its lexical spelling names a link (rlink/x/.. with
+	// rlink a link) the caller passed a link, which is refused like rlink itself.
+	if hasDotDot(path) {
+		if lex, lerr := os.Lstat(filepath.Clean(path)); lerr == nil && lex.Mode()&fs.ModeSymlink != 0 {
+			return nil, &accessError{accUnsafe, "is a symbolic link", "pass the real directory, not a link"}
+		}
+	}
 	path = walkPath(path)
 	info, err := os.Lstat(path)
 	switch {
