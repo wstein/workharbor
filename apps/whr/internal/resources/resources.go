@@ -2,10 +2,16 @@
 
 // Package resources parses and resolves the CPU and memory limits of
 // "workspace create" (FR-039, FR-040, FR-059). It is pure: no I/O, no
-// globals, no clock. CPU is canonicalized to integer thousandths of a CPU
+// mutable state, no clock. CPU is canonicalized to integer thousandths of a CPU
 // equivalent and memory to integer bytes, both within 2^63-1, using explicit
 // 64-bit arithmetic so results do not depend on the architecture. The
 // shared vectors are contracts/cli/resources-vectors.json.
+//
+// An unresolved field of a Resolution holds the zero Value, which a container
+// runtime may read as "unlimited". Callers must not read Value without
+// checking Status; Resolution.Effective enforces that. Resolve reports errors
+// in a fixed precedence: invalid mode, invalid host profile, invalid explicit
+// CPU, invalid explicit memory.
 package resources
 
 import (
@@ -79,11 +85,7 @@ func ParseCPU(s string) (CPU, error) {
 		fracDigits += "0"
 	}
 	hi, lo, ok := mulDigits(whole, 1000)
-	if !ok {
-		// A nonzero value this large overflows; an all-zero one is not positive.
-		if allZero(whole) && allZero(fracDigits) {
-			return fail(ClassNotPositive)
-		}
+	if !ok { // leading zeros are stripped, so the value is nonzero
 		return fail(ClassOverflow)
 	}
 	f, _ := strconv.ParseUint(fracDigits, 10, 64) // exactly 3 ASCII digits
@@ -112,9 +114,6 @@ func ParseMemory(s string) (Memory, error) {
 	}
 	hi, lo, ok := mulDigits(p.intDigits, unit)
 	if !ok {
-		if allZero(p.intDigits) {
-			return 0, &ParseError{FieldMemory, ClassNotPositive}
-		}
 		return 0, &ParseError{FieldMemory, ClassOverflow}
 	}
 	return finish[Memory](FieldMemory, hi, lo)
@@ -215,15 +214,6 @@ func mulDigits(digits string, m uint64) (hi, lo uint64, ok bool) {
 	return hi, lo, true
 }
 
-func allZero(d string) bool {
-	for i := 0; i < len(d); i++ {
-		if d[i] != '0' {
-			return false
-		}
-	}
-	return true
-}
-
 func isDigit(c byte) bool  { return c >= '0' && c <= '9' }
 func isLetter(c byte) bool { return c|0x20 >= 'a' && c|0x20 <= 'z' }
 
@@ -242,6 +232,9 @@ func hasFoldedPrefix(s, lower string) bool {
 // String renders the canonical spelling: shortest decimal with up to three
 // fractional digits. It re-parses to the same value.
 func (c CPU) String() string {
+	if c <= 0 {
+		return strconv.FormatInt(int64(c), 10) + "m" // never produced by ParseCPU; does not parse
+	}
 	w, f := int64(c)/1000, int64(c)%1000
 	out := strconv.FormatInt(w, 10)
 	if f == 0 {
@@ -259,6 +252,7 @@ func (c CPU) String() string {
 // rendered in bytes with a "B" suffix, which does not parse.
 func (m Memory) String() string {
 	switch {
+	case m <= 0:
 	case m%Memory(GiB) == 0:
 		return strconv.FormatInt(int64(m)/GiB, 10) + "GiB"
 	case m%Memory(MiB) == 0:
@@ -320,7 +314,8 @@ type Resolution struct {
 
 var (
 	ErrInvalidMode    = errors.New("resources: invalid mode")
-	ErrInvalidProfile = errors.New("resources: host profile value is not positive")
+	ErrInvalidProfile = errors.New("resources: host profile value is not positive (memory: a whole number of MiB)")
+	ErrIncomplete     = errors.New("resources: not every limit is resolved")
 )
 
 // Resolve applies, independently per field, the explicit flag, then the host
@@ -332,7 +327,7 @@ func Resolve(explicit Explicit, host Profile, mode Mode) (Resolution, error) {
 	if mode != ModeUnattended && mode != ModeInteractive {
 		return r, ErrInvalidMode
 	}
-	if (host.CPU != nil && *host.CPU <= 0) || (host.Memory != nil && *host.Memory <= 0) {
+	if (host.CPU != nil && *host.CPU <= 0) || (host.Memory != nil && (*host.Memory <= 0 || int64(*host.Memory)%MiB != 0)) {
 		return r, ErrInvalidProfile
 	}
 	switch {
@@ -368,4 +363,13 @@ func Resolve(explicit Explicit, host Profile, mode Mode) (Resolution, error) {
 		r.Status = StatusNeedsHuman
 	}
 	return r, nil
+}
+
+// Effective returns the final limits, or ErrIncomplete unless Status is
+// StatusComplete. It is the only safe way to read the values.
+func (r Resolution) Effective() (CPU, Memory, error) {
+	if r.Status != StatusComplete || r.CPU.Origin == OriginNone || r.Memory.Origin == OriginNone {
+		return 0, 0, ErrIncomplete
+	}
+	return r.CPU.Value, r.Memory.Value, nil
 }
