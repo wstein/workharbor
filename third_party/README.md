@@ -27,3 +27,6 @@ Buu Nguyen; its full MIT notice is retained in [topbar/LICENSE](topbar/LICENSE).
 Generated Phoenix welcome images/markup remain scaffold assets, not WorkHarbor
 branding. Other fetched packages are not vendored; exact Hex checksums and
 heroicons/daisyUI Git revisions are recorded in the control-plane `mix.lock`.
+
+The `whr` CLI's Cobra, pflag and mousetrap notices and the test-only schema validator
+are described in [cobra/PROVENANCE.md](cobra/PROVENANCE.md).
