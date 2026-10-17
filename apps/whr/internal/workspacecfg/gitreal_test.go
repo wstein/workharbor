@@ -518,23 +518,86 @@ func noNetworkChild() int {
 	return 0
 }
 
+// netnsCandidates are the ways to start bin in a fresh network namespace, best
+// first: an unprivileged user namespace, then passwordless sudo with the
+// privileges dropped back to the invoking user before bin runs (runners that
+// restrict unprivileged user namespaces, such as GitHub's ubuntu-24.04, allow
+// sudo). Either way bin runs as the invoking user with no network at all.
+func netnsCandidates(bin string, uid, gid int, home, path, tmp string) [][]string {
+	return [][]string{
+		{"unshare", "-rn", bin},
+		{"sudo", "-n", "unshare", "--net", "--", "setpriv",
+			fmt.Sprintf("--reuid=%d", uid), fmt.Sprintf("--regid=%d", gid), "--clear-groups",
+			"env", "WHR_NO_NETWORK_CHILD=1", "HOME=" + home, "PATH=" + path, "TMPDIR=" + tmp, bin},
+	}
+}
+
+// netnsRequired reports that a run without the namespace proof must fail: on CI
+// (CI is set by GitHub Actions) or when WHR_REQUIRE_NETNS=1. Elsewhere the test
+// still says SKIPPED, NOT PASSED.
+func netnsRequired(env func(string) string) bool {
+	return env("WHR_REQUIRE_NETNS") == "1" || env("CI") != ""
+}
+
+func TestNetnsCandidatesDropPrivilegesAndRequirementIsSet(t *testing.T) {
+	c := netnsCandidates("/bin/x", 1001, 1002, "/home/u", "/usr/bin", "/tmp")
+	if len(c) != 2 || strings.Join(c[0], " ") != "unshare -rn /bin/x" {
+		t.Fatalf("%v", c)
+	}
+	sudo := strings.Join(c[1], " ")
+	for _, want := range []string{"sudo -n unshare --net --", "setpriv --reuid=1001 --regid=1002 --clear-groups", "WHR_NO_NETWORK_CHILD=1", " /bin/x"} {
+		if !strings.Contains(sudo, want) {
+			t.Errorf("%q lacks %q", sudo, want)
+		}
+	}
+	if strings.Index(sudo, "setpriv") > strings.Index(sudo, "/bin/x") || strings.Index(sudo, "unshare --net") > strings.Index(sudo, "setpriv") {
+		t.Errorf("the privileges must be dropped inside the namespace, before the binary runs: %q", sudo)
+	}
+	for _, tc := range []struct {
+		env  map[string]string
+		want bool
+	}{{nil, false}, {map[string]string{"CI": "true"}, true}, {map[string]string{"WHR_REQUIRE_NETNS": "1"}, true}, {map[string]string{"WHR_REQUIRE_NETNS": "0"}, false}} {
+		if got := netnsRequired(func(k string) string { return tc.env[k] }); got != tc.want {
+			t.Errorf("%v: %v", tc.env, got)
+		}
+	}
+}
+
 // TestValidateNoNetworkUnshare re-runs a validation in a fresh network
-// namespace (Linux, needs unprivileged user namespaces).
+// namespace (Linux). It must really run on CI: when no namespace can be made
+// there, or WHR_REQUIRE_NETNS=1, it fails instead of skipping.
 func TestValidateNoNetworkUnshare(t *testing.T) {
 	realGit(t)
-	if _, err := exec.LookPath("unshare"); err != nil {
-		t.Skip("SKIPPED, NOT PASSED: unshare is not available, so the network-namespace run did not happen")
-	}
-	cmd := exec.Command("unshare", "-rn", os.Args[0])
-	cmd.Env = append(os.Environ(), "WHR_NO_NETWORK_CHILD=1")
-	out, err := cmd.CombinedOutput()
+	bin, err := os.Executable()
 	if err != nil {
-		if strings.Contains(string(out), "unshare:") {
-			t.Skipf("SKIPPED, NOT PASSED: the network-namespace run did not happen (cannot create one here): %s", strings.TrimSpace(string(out)))
+		t.Fatal(err)
+	}
+	uid, gid := os.Getuid(), os.Getgid()
+	var reasons []string
+	for _, argv := range netnsCandidates(bin, uid, gid, os.Getenv("HOME"), os.Getenv("PATH"), os.TempDir()) {
+		if _, err := exec.LookPath(argv[0]); err != nil {
+			reasons = append(reasons, argv[0]+" is not available")
+			continue
 		}
-		t.Fatalf("%v\n%s", err, out)
+		cmd := exec.Command(argv[0], argv[1:]...)
+		cmd.Env = append(os.Environ(), "WHR_NO_NETWORK_CHILD=1")
+		out, err := cmd.CombinedOutput()
+		text := strings.TrimSpace(string(out))
+		if err != nil && (strings.HasPrefix(text, "unshare:") || strings.HasPrefix(text, "sudo:") || strings.HasPrefix(text, "setpriv:")) {
+			reasons = append(reasons, argv[0]+": "+text)
+			continue
+		}
+		if err != nil {
+			t.Fatalf("%v\n%s", err, out)
+		}
+		if !strings.Contains(string(out), "child ok") {
+			t.Errorf("%s", out)
+		}
+		return
 	}
-	if !strings.Contains(string(out), "child ok") {
-		t.Errorf("%s", out)
+	msg := "the network-namespace run did not happen (cannot create one here): " + strings.Join(reasons, "; ")
+	if netnsRequired(os.Getenv) {
+		t.Fatalf("FAILED, NOT SKIPPED: %s", msg)
 	}
+	t.Skip("SKIPPED, NOT PASSED: " + msg)
 }
