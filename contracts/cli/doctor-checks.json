@@ -9,6 +9,7 @@
     "A check reports pass only when the thing was measured and met its threshold; an absent tool or an unmeasurable value is fail (required tool absent) or unknown, never pass.",
     "skipped means the check was deliberately not run and carries a reason; skipped and unknown never count as pass.",
     "Evidence is redacted: home directory shown as ~, user name and host name replaced wherever they occur in a path, no environment values or credentials.",
+    "Doctor shares the 5 s wall-clock budget per run with validate (FR-060): each socket dial, git --version and daemon.json read draws on it.",
     "Local checks read only; they create no file, start no process other than the fixed git --version and, for config.valid, the fixed Git invocations of validate (FR-055), and send no data over the network."
   ],
   "thresholds": {

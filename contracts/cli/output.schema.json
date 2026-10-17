@@ -880,7 +880,124 @@
         },
         "settings": {
           "type": "object",
-          "description": "Effective manifest settings (name, start_dir, human_shell, console_mode, shortcuts, project) with the origin of each value (flag, existing, default)."
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "origin"
+              ],
+              "properties": {
+                "value": {},
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "flag",
+                    "existing",
+                    "default"
+                  ]
+                }
+              }
+            },
+            "start_dir": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "origin"
+              ],
+              "properties": {
+                "value": {},
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "flag",
+                    "existing",
+                    "default"
+                  ]
+                }
+              }
+            },
+            "human_shell": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "origin"
+              ],
+              "properties": {
+                "value": {},
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "flag",
+                    "existing",
+                    "default"
+                  ]
+                }
+              }
+            },
+            "console_mode": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "origin"
+              ],
+              "properties": {
+                "value": {},
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "flag",
+                    "existing",
+                    "default"
+                  ]
+                }
+              }
+            },
+            "shortcuts": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "origin"
+              ],
+              "properties": {
+                "value": {},
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "flag",
+                    "existing",
+                    "default"
+                  ]
+                }
+              }
+            },
+            "project": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "origin"
+              ],
+              "properties": {
+                "value": {},
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "flag",
+                    "existing",
+                    "default"
+                  ]
+                }
+              }
+            }
+          },
+          "description": "Effective manifest settings with the origin of each value (flag, existing, default)."
         },
         "settings_not_persisted": {
           "type": "array",
@@ -895,7 +1012,7 @@
               "project"
             ]
           },
-          "description": "Settings given by flag or default that could not be written because an existing version 1 manifest was preserved."
+          "description": "Settings of a defaults-only run that could not be written because an existing version 1 manifest was preserved (explicit flags needing the edit exit 70 instead)."
         },
         "bundle_selection_unavailable": {
           "const": true,

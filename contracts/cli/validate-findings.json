@@ -181,7 +181,7 @@
     {
       "code": "gitmodules.uncommitted_change",
       "severity": "warning",
-      "note": "working-tree .gitmodules differs from the HEAD blob"
+      "note": "index .gitmodules differs from the HEAD blob (staged-only difference)"
     },
     {
       "code": "submodule.url_invalid",
@@ -237,6 +237,11 @@
       "code": "project.declared_not_pinned",
       "severity": "warning",
       "note": "manifest project declaration without a pinned gitlink at its path; not creation-ready (FR-049)"
+    },
+    {
+      "code": "findings.time_budget_exhausted",
+      "severity": "error",
+      "note": "the shared 5 s wall-clock budget ran out outside Git work"
     }
   ],
   "freeze": {
@@ -250,5 +255,5 @@
   "unborn_head": "HEAD is unborn exactly when rev-parse --verify --quiet HEAD exits 1 with empty stderr and symbolic-ref -q HEAD names a ref that does not exist; every other non-zero exit, timeout or unparsable output is git.listing_failed.",
   "manifest_vectors": "contracts/workspace/vectors.json",
   "git_invocation": "seven fixed vectors: --version, symbolic-ref -q HEAD, rev-parse --verify --quiet HEAD, ls-files --stage -z, ls-tree -r -z HEAD, cat-file blob HEAD:.gitmodules (only when the HEAD tree lists it), cat-file blob :.gitmodules (only with an unborn HEAD and when the index lists it); protocol.<name>.allow=never for file, git, ssh, http, https, ext; GIT_ALLOW_PROTOCOL set to a name matching no protocol; GIT_NO_LAZY_FETCH=1",
-  "time_budget": "one shared 5 s wall-clock budget per validate run: file reads and every Git call draw on the remaining budget; exhaustion is git.listing_failed for Git work and a finding (limit_exceeded) otherwise"
+  "time_budget": "one shared 5 s wall-clock budget per validate run: file reads and every Git call draw on the remaining budget; exhaustion during Git work is git.listing_failed, elsewhere findings.time_budget_exhausted"
 }

@@ -33,7 +33,7 @@ Status: researched choices for implementation review; nothing claimed implemente
 - Local first increment (H77): Go [`os.Root`](https://pkg.go.dev/os#Root) gives traversal-resistant access but follows
   symlinks that stay inside the root, so `validate` adds an explicit per-component `Lstat` refusal. Cobra aliases
   rename siblings only, so short forms are generated root commands. Git on a hostile directory is limited to
-  the fixed vectors listed in the plan (`ls-files --stage`, `rev-parse`, `ls-tree`, `cat-file`) with an isolated environment because `status`/`diff` can run fsmonitor or filters;
+  the seven fixed vectors listed in the plan with an isolated environment because `status`/`diff` can run fsmonitor or filters;
   `.gitmodules` is parsed in process.
 
 ## Decisions still needed before dependent WIs

@@ -2,8 +2,7 @@
 
 Rounds 1 to 3 below reviewed the pre-rebase branch (backup/h77-pre-rebase); their FR, SC and work-item numbers are the old ones (FR-039..049, SC-013..017, T025..T029; US7..US9). After the owner's upstream revisions (US0, US1a, FR-039..FR-050, SC-013..SC-015, 2026-10-16) and the scope decisions of 2026-10-17 the amendment was reconciled on origin/main with new numbers: FR-051..FR-063, SC-016..SC-021, US7..US8, T025..T034. Round 4 and later review the reconciled text.
 
-Records review rounds of the amendment text (spec FR-039–FR-049, US7–US9, plan, tasks T025–T029, ADR 0014 and the
-CLI/workspace contracts). A READY verdict is not owner approval; owner approval of an exact head needs a tracker or PR
+Records review rounds of the amendment text. Rounds 1 to 3 used the old numbering (FR-039–FR-049, US7–US9, T025–T029); later rounds use FR-051–FR-063, US7–US8 and T025–T035. A READY verdict is not owner approval; owner approval of an exact head needs a tracker or PR
 link (WORKFLOW.md). Reviewer: read-only Plan agent (opus), prompt naming the worktree and head.
 
 ## Round 1 - reviewed revision 5c32c3c338ef8518a372bcfca4b83089a2f333bc - NOT READY (5 high, 13 medium, 5 low)
@@ -104,3 +103,12 @@ the first increment.
 | L1-L14 | low | Wording, notes, type-exact vectors (`true`, `1e0`), README scope, Assumptions, leading zeros accepted, equivalence and partial-profile vectors, exit 70 clauses, structured init result fields, T030/T027 dependency, data-root evidence, `.gitkeep` path | Applied in the round 5 commits |
 
 Owner answers of 2026-10-17 ("1j 2j 3j 4j 5approved") are recorded as H77 (7) and under H77 (5); they approve no head's text.
+
+## Round 6 - reviewed revision 5ed129f01cde8ff40f5af8cf492cf60df628c18f - READY (0 critical/high, 7 medium, 13 low)
+
+READY applies to 5ed129f0 only. The reviewer's findings were then fixed in the next commit, which has not been reviewed:
+a machine-readable dependency table for `single_task.py` (T001-T035), T030 not depending on T027, special-file `.git/HEAD|index|config`
+as `git.unsafe_path` with matching tests, Git-free in-memory checker API (T026), doctor registration and validator wiring owners,
+one approval wording (chat answer recorded as H77 (5), not text approval), the T035 exception in the series rules, wave 1a behavior
+of plain `whr init` (70 naming `--non-interactive --yes`), version 1 manifest edge cases, `findings.time_budget_exhausted`, doctor's
+5 s budget, typed `settings`, extra vectors, name rule and stale plan text. READY is not owner approval.

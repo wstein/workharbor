@@ -86,7 +86,7 @@ unchanged. This revision is ready for human spec review, not implementation.
 
 - Implementation-detail items above ("No implementation details") describe the original text; FR-055 and FR-057 of the H77 amendment deliberately prescribe file-access and Git invocation properties because they are the security requirement.
 - [ ] Independent review CLEAR for the exact head of the H77 amendment (spec FR-051–FR-063, US7–US8, SC-016–SC-021,
-  plan, tasks T025–T034, ADR 0014 and the `commands.json`, `output.schema.json`, `doctor-checks.json`,
+  plan, tasks T025–T035, ADR 0014 and the `commands.json`, `output.schema.json`, `doctor-checks.json`,
   `validate-findings.json`, `resources-vectors.json`, `workharbor.schema.json` (version 2), `vectors.json` and
   `starters.json` contracts). Unchecked: no approval is claimed.
 - [ ] Explicit owner approval of the amendment text for that head, evidenced by a tracker or PR link. Werner's chat
