@@ -6,10 +6,13 @@ package ptytest_test
 
 import (
 	"bufio"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"os/exec"
 	"os/signal"
+	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -31,6 +34,15 @@ var fixtures = map[string]func(args []string) int{
 	"hostile-safe": fixtureHostileSafe,
 	"colored":      fixtureColored,
 	"redraw":       fixtureRedraw,
+	"winch-wide":   fixtureWinchWide,
+	"late":         fixtureLate,
+	"flood":        fixtureFlood,
+	"emit":         fixtureEmit,
+	"envdump":      fixtureEnvDump,
+	"pwd":          fixturePwd,
+	"selfkill":     fixtureSelfKill,
+	"quiet":        fixtureQuiet,
+	"exitfast":     func([]string) int { return 3 },
 }
 
 const hostileText = "evil\x1b]0;pwned\x07\x1b[2J\u009b31m\x07end"
@@ -53,6 +65,7 @@ func fixtureKeys([]string) int {
 	names := map[string]string{
 		"\x1b[A": "UP", "\x1b[B": "DOWN", "\x1b[D": "LEFT", "\x1b[C": "RIGHT",
 		"\r": "ENTER", "\x7f": "BACKSPACE", "\x1b": "ESC", "\x04": "EOT",
+		"\x1b[3~": "DELETE", "\x1b[H": "HOME", "\x1b[F": "END", "\t": "TAB",
 	}
 	buf := make([]byte, 16)
 	for {
@@ -160,3 +173,68 @@ func fixtureRedraw([]string) int {
 
 // block waits forever without tripping the runtime's deadlock detector.
 func block() { time.Sleep(time.Hour) }
+
+// fixtureFlood writes args[0] bytes of 80-column lines, then END.
+func fixtureFlood(args []string) int {
+	n, _ := strconv.Atoi(args[0])
+	w := bufio.NewWriterSize(os.Stdout, 1<<16)
+	line := strings.Repeat("x", 78) + "\n"
+	for written := 0; written < n; written += len(line) {
+		w.WriteString(line)
+	}
+	w.WriteString("END\n")
+	w.Flush()
+	return 0
+}
+
+// fixtureEmit writes the hex-decoded bytes of args[0] verbatim, then exits.
+func fixtureEmit(args []string) int {
+	b, err := hex.DecodeString(args[0])
+	if err != nil {
+		return 2
+	}
+	os.Stdout.Write(b)
+	return 0
+}
+
+func fixtureEnvDump([]string) int {
+	env := os.Environ()
+	sort.Strings(env)
+	for _, e := range env {
+		fmt.Printf("ENV:%s\n", e)
+	}
+	return 0
+}
+
+func fixturePwd([]string) int {
+	wd, _ := os.Getwd()
+	fmt.Printf("PWD=%s\n", wd)
+	return 0
+}
+
+func fixtureSelfKill([]string) int {
+	fmt.Println("dying")
+	syscall.Kill(os.Getpid(), syscall.SIGKILL)
+	block()
+	return 0
+}
+
+func fixtureQuiet([]string) int { fmt.Println("bye"); return 0 }
+
+// fixtureLate prints "first", then hostile bytes only after reading a line,
+// so a test that asserts before the process ends sees an incomplete transcript.
+func fixtureLate([]string) int {
+	fmt.Println("first")
+	bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Print("\x1b[2Jlate\n")
+	return 0
+}
+
+func fixtureWinchWide([]string) int {
+	ch := make(chan os.Signal, 4)
+	signal.Notify(ch, syscall.SIGWINCH)
+	fmt.Println("ready")
+	<-ch
+	fmt.Println(strings.Repeat("w", 100))
+	return 0
+}

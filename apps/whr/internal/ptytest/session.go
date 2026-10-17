@@ -3,6 +3,7 @@
 package ptytest
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -53,8 +54,17 @@ type Options struct {
 	Cols    int           // default 80
 	Term    string        // TERM; default xterm-256color
 	NoColor bool          // sets NO_COLOR=1
-	Timeout time.Duration // default deadline of Expect and ExpectExit; default 10s
+	Timeout time.Duration // default deadline of Expect and ExpectExit; default DefaultTimeout
+	// MaxOutput bounds the transcript in bytes; a child that writes more fails
+	// the test instead of exhausting memory. Default DefaultMaxOutput.
+	MaxOutput int
 }
+
+// Defaults of Options.
+const (
+	DefaultTimeout   = 10 * time.Second
+	DefaultMaxOutput = 64 << 20
+)
 
 // ExitStatus is how the child ended.
 type ExitStatus struct {
@@ -75,10 +85,17 @@ type Session struct {
 	status  ExitStatus
 	drained chan struct{} // closed when the reader reached end of output
 
-	mu      sync.Mutex
-	buf     []byte
-	mark    int // raw offset up to which Expect has consumed output
-	changed chan struct{}
+	mu       sync.Mutex
+	buf      []byte
+	overflow bool
+	changed  chan struct{}
+	scanned  int    // raw offset projected into plain
+	plain    []byte // visible text not yet consumed by Expect
+	scr      *screen
+	fed      int // raw offset drawn on scr
+
+	groupMu   sync.Mutex
+	groupDead bool // the group was swept when the leader exited
 
 	closeOnce sync.Once
 }
@@ -100,7 +117,10 @@ func Start(t TB, path string, opts Options) *Session {
 		opts.Term = "xterm-256color"
 	}
 	if opts.Timeout <= 0 {
-		opts.Timeout = 10 * time.Second
+		opts.Timeout = DefaultTimeout
+	}
+	if opts.MaxOutput <= 0 {
+		opts.MaxOutput = DefaultMaxOutput
 	}
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
@@ -133,6 +153,7 @@ func Start(t TB, path string, opts Options) *Session {
 	s := &Session{
 		t: t, opts: opts, cmd: cmd, master: master, home: home, pid: cmd.Process.Pid,
 		exited: make(chan struct{}), drained: make(chan struct{}), changed: make(chan struct{}),
+		scr: newScreen(opts.Cols, opts.Rows),
 	}
 	t.Cleanup(s.Close)
 	go s.readLoop()
@@ -195,12 +216,16 @@ func hermeticEnv(root, home string, o Options) []string {
 
 func (s *Session) readLoop() {
 	defer close(s.drained)
-	chunk := make([]byte, 4096)
+	chunk := make([]byte, 32<<10)
 	for {
 		n, err := s.master.Read(chunk)
 		if n > 0 {
 			s.mu.Lock()
-			s.buf = append(s.buf, chunk[:n]...)
+			if len(s.buf)+n > s.opts.MaxOutput {
+				s.overflow = true // keep reading so the child can finish, but drop the data
+			} else {
+				s.buf = append(s.buf, chunk[:n]...)
+			}
 			close(s.changed)
 			s.changed = make(chan struct{})
 			s.mu.Unlock()
@@ -211,13 +236,21 @@ func (s *Session) readLoop() {
 	}
 }
 
+// killer signals the process group led by a pid; tests replace it.
+var killer = killGroup
+
 func (s *Session) waitLoop() {
-	err := s.cmd.Wait()
+	_ = s.cmd.Wait()
+	// The leader is reaped, so its pid may be reused once the group is empty:
+	// sweep the group now, exactly once, and never signal it again afterwards.
+	s.groupMu.Lock()
+	killer(s.pid)
+	s.groupDead = true
+	s.groupMu.Unlock()
 	st := ExitStatus{Code: s.cmd.ProcessState.ExitCode()}
 	if ws, ok := s.cmd.ProcessState.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
 		st.Signaled, st.Signal, st.Code = true, ws.Signal(), -1
 	}
-	_ = err
 	s.status = st
 	close(s.exited)
 }
@@ -248,6 +281,9 @@ func (s *Session) Resize(rows, cols int) {
 	if err := setWinsize(s.master, rows, cols); err != nil {
 		s.t.Fatalf("ptytest: resize: %v", err)
 	}
+	s.mu.Lock()
+	s.scr.resize(cols, rows)
+	s.mu.Unlock()
 }
 
 // Transcript returns every byte the child wrote to the terminal so far.
@@ -257,8 +293,21 @@ func (s *Session) Transcript() []byte {
 	return append([]byte(nil), s.buf...)
 }
 
+// advanceLocked projects and draws the output received since the last call.
+func (s *Session) advanceLocked() {
+	p, _, n := project(s.buf[s.scanned:])
+	s.plain = append(s.plain, p...)
+	s.scanned += n
+	s.fed += s.scr.feed(s.buf[s.fed:])
+}
+
 // Screen renders the transcript so far as text (see the package comment).
-func (s *Session) Screen() string { return render(s.Transcript()) }
+func (s *Session) Screen() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.advanceLocked()
+	return s.scr.text()
+}
 
 // Expect waits until the visible output not yet consumed contains substr.
 func (s *Session) Expect(substr string) {
@@ -269,16 +318,25 @@ func (s *Session) Expect(substr string) {
 // ExpectWithin is Expect with an explicit deadline.
 func (s *Session) ExpectWithin(d time.Duration, substr string) {
 	s.t.Helper()
-	s.expect(d, fmt.Sprintf("%q", substr), func(p string) (int, bool) {
-		i := strings.Index(p, substr)
+	needle := []byte(substr)
+	from := 0
+	s.expect(d, fmt.Sprintf("%q", substr), func(p []byte) (int, bool) {
+		i := bytes.Index(p[from:], needle)
 		if i < 0 {
+			// Only bytes that could still start a match need rescanning.
+			from = max(0, min(len(p), len(p)-len(needle)+1))
 			return 0, false
 		}
-		return i + len(substr), true
+		return from + i + len(needle), true
 	})
 }
 
-// ExpectRegexp waits for a match of pattern and returns the submatches.
+// regexpWindow bounds how much unconsumed text ExpectRegexp searches.
+const regexpWindow = 64 << 10
+
+// ExpectRegexp waits for a match of pattern in the last 64 KiB of unconsumed
+// visible text and returns the match and its submatches ("" for groups that
+// did not take part).
 func (s *Session) ExpectRegexp(pattern string) []string {
 	s.t.Helper()
 	re, err := regexp.Compile(pattern)
@@ -286,8 +344,9 @@ func (s *Session) ExpectRegexp(pattern string) []string {
 		s.t.Fatalf("ptytest: bad pattern %q: %v", pattern, err)
 	}
 	var got []string
-	s.expect(s.opts.Timeout, "/"+pattern+"/", func(p string) (int, bool) {
-		loc := re.FindStringSubmatchIndex(p)
+	s.expect(s.opts.Timeout, "/"+pattern+"/", func(p []byte) (int, bool) {
+		base := max(0, len(p)-regexpWindow)
+		loc := re.FindSubmatchIndex(p[base:])
 		if loc == nil {
 			return 0, false
 		}
@@ -296,74 +355,90 @@ func (s *Session) ExpectRegexp(pattern string) []string {
 			if loc[i] < 0 {
 				got = append(got, "")
 			} else {
-				got = append(got, p[loc[i]:loc[i+1]])
+				got = append(got, string(p[base+loc[i]:base+loc[i+1]]))
 			}
 		}
-		return loc[1], true
+		return base + loc[1], true
 	})
 	return got
 }
 
 // ExpectScreen waits until the rendered screen contains substr. Unlike
-// Expect it consumes nothing.
+// Expect it consumes nothing; it looks at the visible rows and the last 256
+// scrolled-off lines.
 func (s *Session) ExpectScreen(substr string) {
 	s.t.Helper()
-	deadline := time.NewTimer(s.opts.Timeout)
-	defer deadline.Stop()
+	s.ExpectScreenWithin(s.opts.Timeout, substr)
+}
+
+// ExpectScreenWithin is ExpectScreen with an explicit deadline.
+func (s *Session) ExpectScreenWithin(d time.Duration, substr string) {
+	s.t.Helper()
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	drained := false
 	for {
 		s.mu.Lock()
-		raw, changed := append([]byte(nil), s.buf...), s.changed
+		s.advanceLocked()
+		found := strings.Contains(s.scr.tail(), substr)
+		changed, over := s.changed, s.overflow
 		s.mu.Unlock()
-		if strings.Contains(render(raw), substr) {
+		switch {
+		case found:
 			return
+		case over:
+			s.failOverflow()
+		case drained:
+			s.t.Fatalf("ptytest: output ended before the screen contained %q\nscreen: %s", substr, excerpt([]byte(s.Screen())))
 		}
 		select {
 		case <-changed:
 		case <-s.drained:
-			if strings.Contains(s.Screen(), substr) {
-				return
-			}
-			s.t.Fatalf("ptytest: output ended before screen contained %q\nscreen: %q", substr, s.Screen())
-		case <-deadline.C:
-			s.t.Fatalf("ptytest: timed out after %v waiting for screen to contain %q\nscreen: %q",
-				s.opts.Timeout, substr, s.Screen())
+			drained = true
+		case <-timer.C:
+			s.t.Fatalf("ptytest: timed out after %v waiting for the screen to contain %q\nscreen: %s", d, substr, excerpt([]byte(s.Screen())))
 		}
 	}
 }
 
-func (s *Session) expect(d time.Duration, what string, match func(plain string) (int, bool)) {
+func (s *Session) failOverflow() {
+	s.t.Helper()
+	s.t.Fatalf("ptytest: output exceeded MaxOutput (%d bytes)", s.opts.MaxOutput)
+}
+
+// expect waits until find reports a match in the unconsumed visible text,
+// then consumes the text up to the end of the match. find sees the whole
+// unconsumed text on every call and may remember how far it already looked.
+func (s *Session) expect(d time.Duration, what string, find func(plain []byte) (int, bool)) {
 	s.t.Helper()
 	timer := time.NewTimer(d)
 	defer timer.Stop()
+	drained := false
 	for {
 		s.mu.Lock()
-		plain, ends := project(s.buf[s.mark:])
-		if end, ok := match(string(plain)); ok {
+		s.advanceLocked()
+		end, ok := find(s.plain)
+		if ok {
 			if end > 0 {
-				s.mark += ends[end-1]
+				s.plain = s.plain[end:]
 			}
 			s.mu.Unlock()
 			return
 		}
-		changed := s.changed
+		changed, over := s.changed, s.overflow
 		s.mu.Unlock()
+		switch {
+		case over:
+			s.failOverflow()
+		case drained:
+			s.t.Fatalf("ptytest: output ended before %s appeared\ntranscript: %s", what, excerpt(s.Transcript()))
+		}
 		select {
 		case <-changed:
 		case <-s.drained:
-			// All output is in the buffer; check once more, then give up.
-			s.mu.Lock()
-			plain, ends = project(s.buf[s.mark:])
-			end, ok := match(string(plain))
-			if ok && end > 0 {
-				s.mark += ends[end-1]
-			}
-			s.mu.Unlock()
-			if ok {
-				return
-			}
-			s.t.Fatalf("ptytest: output ended before %s appeared\ntranscript: %q", what, s.Transcript())
+			drained = true
 		case <-timer.C:
-			s.t.Fatalf("ptytest: timed out after %v waiting for %s\ntranscript: %q", d, what, s.Transcript())
+			s.t.Fatalf("ptytest: timed out after %v waiting for %s\ntranscript: %s", d, what, excerpt(s.Transcript()))
 		}
 	}
 }
@@ -384,45 +459,91 @@ func (s *Session) ExpectExitWithin(d time.Duration, code int) {
 		select {
 		case <-ch:
 		case <-timer.C:
-			s.t.Fatalf("ptytest: process did not exit within %v (or kept the terminal open)\ntranscript: %q", d, s.Transcript())
+			s.t.Fatalf("ptytest: process did not exit within %v (or kept the terminal open)\ntranscript: %s", d, excerpt(s.Transcript()))
 		}
 	}
+	s.mu.Lock()
+	over := s.overflow
+	s.mu.Unlock()
+	if over {
+		s.failOverflow()
+	}
 	if s.status.Signaled {
-		s.t.Fatalf("ptytest: process killed by signal %v, want exit status %d\ntranscript: %q", s.status.Signal, code, s.Transcript())
+		s.t.Fatalf("ptytest: process killed by signal %v, want exit status %d\ntranscript: %s", s.status.Signal, code, excerpt(s.Transcript()))
 	}
 	if s.status.Code != code {
-		s.t.Fatalf("ptytest: exit status %d, want %d\ntranscript: %q", s.status.Code, code, s.Transcript())
+		s.t.Fatalf("ptytest: exit status %d, want %d\ntranscript: %s", s.status.Code, code, excerpt(s.Transcript()))
 	}
 }
 
-// AssertNoRawControls fails the test if the transcript contains a control
-// character in any FR-022 class other than newline, carriage return and tab,
-// after removing each literal sequence in allowed (for example the program's
-// own color codes). It proves untrusted text reached the terminal inert.
+// AssertNoRawControls waits (up to Options.Timeout) until the child has
+// exited and all its output was read, then fails the test if the transcript
+// contains a control character in any FR-022 class other than newline,
+// carriage return and tab, an escape sequence, or an invalid UTF-8 byte. Each
+// literal in allowed (for example the program's own color codes) is exempt
+// only where it covers whole tokens. A multibyte character cut off at the very
+// end of the output is tolerated.
 func (s *Session) AssertNoRawControls(allowed ...string) {
 	s.t.Helper()
-	text := string(s.Transcript())
-	for _, a := range allowed {
-		text = strings.ReplaceAll(text, a, "")
+	timer := time.NewTimer(s.opts.Timeout)
+	defer timer.Stop()
+	for _, ch := range []chan struct{}{s.exited, s.drained} {
+		select {
+		case <-ch:
+		case <-timer.C:
+			s.t.Fatalf("ptytest: AssertNoRawControls needs the process to exit and its output to end within %v; call ExpectExit first", s.opts.Timeout)
+		}
 	}
-	for i := 0; i < len(text); {
-		r, n := utf8.DecodeRuneInString(text[i:])
-		bad := r == utf8.RuneError && n == 1
-		if r != '\n' && r != '\r' && terminal.IsUnsafe(r) {
+	text := s.Transcript()
+	// Token boundaries, so an allowed literal never matches part of a token.
+	boundary := map[int]bool{0: true}
+	for off := 0; off < len(text); {
+		t := next(text[off:])
+		off += t.n
+		boundary[off] = true
+	}
+	for off := 0; off < len(text); {
+		skipped := false
+		for _, a := range allowed {
+			if a != "" && bytes.HasPrefix(text[off:], []byte(a)) && boundary[off+len(a)] {
+				off += len(a)
+				skipped = true
+				break
+			}
+		}
+		if skipped {
+			continue
+		}
+		t := next(text[off:])
+		bad := false
+		switch t.kind {
+		case tokText:
+			bad = t.r == utf8.RuneError && t.n == 1 || t.r != utf8.RuneError && t.r != '\n' && t.r != '\r' && terminal.IsUnsafe(t.r)
+		case tokControl:
+			bad = t.r != '\n' && t.r != '\r' && t.r != '\t'
+		case tokIncomplete:
+			bad = text[off] < 0x80 // a cut-off multibyte rune is tolerated
+		default:
 			bad = true
 		}
 		if bad {
-			s.t.Fatalf("ptytest: raw control character %U at offset %d reached the terminal\ntranscript: %q", r, i, s.Transcript())
+			s.t.Fatalf("ptytest: raw control sequence at offset %d reached the terminal\ntranscript: %s", off, excerpt(text))
 		}
-		i += n
+		off += t.n
 	}
 }
 
 // Close kills the whole process group and waits for it. It is idempotent and
-// registered automatically as test cleanup.
+// registered automatically as test cleanup. The group is signalled only while
+// the leader has not been reaped: when it exits the group is swept once (see
+// waitLoop), so a recycled process or group id is never signalled.
 func (s *Session) Close() {
 	s.closeOnce.Do(func() {
-		killGroup(s.pid)
+		s.groupMu.Lock()
+		if !s.groupDead {
+			killer(s.pid)
+		}
+		s.groupMu.Unlock()
 		<-s.exited
 		select {
 		case <-s.drained:
