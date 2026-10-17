@@ -229,20 +229,23 @@ func TestFailureLines(t *testing.T) {
 func TestEnvelopeEscapesAndBoundsText(t *testing.T) {
 	w, out, _ := jsonWriter()
 	long := "\u202e\u009b\x7f" + strings.Repeat("\u00e4", 2000)
-	w.Failure("workspace.ls", exitcode.Errorf(exitcode.PathBadArguments, "%s", long))
+	w.Failure("workspace.ls", exitcode.Errorf(exitcode.PathBadArguments, "%s", long).WithRemediation("%s", long))
 	for _, r := range out.String() {
 		if r == 0x202e || r == 0x9b || r == 0x7f {
 			t.Fatalf("raw hostile rune U+%04X in JSON: %q", r, out)
 		}
 	}
 	var env struct {
-		Error struct{ Message string }
+		Error struct{ Message, Remediation string }
 	}
 	if err := json.Unmarshal(out.Bytes(), &env); err != nil {
 		t.Fatal(err)
 	}
-	if n := len([]rune(env.Error.Message)); n > 1024 {
-		t.Fatalf("message has %d runes, schema allows 1024", n)
+	if n := len([]rune(env.Error.Message)); n != 1024 {
+		t.Fatalf("message has %d runes, want exactly the clip limit 1024", n)
+	}
+	if n := len([]rune(env.Error.Remediation)); n != 1024 {
+		t.Fatalf("remediation has %d runes, want exactly the clip limit 1024", n)
 	}
 }
 
@@ -269,6 +272,8 @@ func TestColorMatrix(t *testing.T) {
 		{"--no-color beats auto", in{output.ColorAuto, true, nil, true}, false},
 		{"--no-color beats always", in{output.ColorAlways, true, nil, true}, false},
 		{"empty mode is auto", in{"", false, nil, true}, true},
+		{"TERM=dumb with spaces", in{output.ColorAuto, false, map[string]string{"TERM": " dumb "}, true}, false},
+		{"TERM=xterm", in{output.ColorAuto, false, map[string]string{"TERM": "xterm-256color"}, true}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
