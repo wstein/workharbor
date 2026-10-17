@@ -40,7 +40,7 @@ func TestIsTerminal(t *testing.T) {
 	}
 	null, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
-		t.Skip(err)
+		t.Fatal(err)
 	}
 	defer null.Close()
 	if isTerminal(null) {
