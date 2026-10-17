@@ -890,7 +890,10 @@
                 "origin"
               ],
               "properties": {
-                "value": {},
+                "value": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$"
+                },
                 "origin": {
                   "type": "string",
                   "enum": [
@@ -909,7 +912,10 @@
                 "origin"
               ],
               "properties": {
-                "value": {},
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                },
                 "origin": {
                   "type": "string",
                   "enum": [
@@ -928,7 +934,14 @@
                 "origin"
               ],
               "properties": {
-                "value": {},
+                "value": {
+                  "enum": [
+                    "fish",
+                    "bash",
+                    "zsh",
+                    "nu"
+                  ]
+                },
                 "origin": {
                   "type": "string",
                   "enum": [
@@ -947,7 +960,12 @@
                 "origin"
               ],
               "properties": {
-                "value": {},
+                "value": {
+                  "enum": [
+                    "herdr",
+                    "plain"
+                  ]
+                },
                 "origin": {
                   "type": "string",
                   "enum": [
@@ -966,7 +984,12 @@
                 "origin"
               ],
               "properties": {
-                "value": {},
+                "value": {
+                  "enum": [
+                    "on",
+                    "off"
+                  ]
+                },
                 "origin": {
                   "type": "string",
                   "enum": [
@@ -985,7 +1008,22 @@
                 "origin"
               ],
               "properties": {
-                "value": {},
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "url",
+                    "path"
+                  ],
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    }
+                  }
+                },
                 "origin": {
                   "type": "string",
                   "enum": [
@@ -1004,12 +1042,10 @@
           "items": {
             "type": "string",
             "enum": [
-              "name",
               "start_dir",
               "human_shell",
               "console_mode",
-              "shortcuts",
-              "project"
+              "shortcuts"
             ]
           },
           "description": "Settings of a defaults-only run that could not be written because an existing version 1 manifest was preserved (explicit flags needing the edit exit 70 instead)."

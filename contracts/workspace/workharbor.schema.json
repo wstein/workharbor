@@ -122,7 +122,7 @@
         "name": {
           "type": "string",
           "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
-          "description": "Suggested workspace name for 'ws create' (an input, not an identity). Lowercase letters, digits and hyphens, 1-64 characters; the grammar is to match the future owner-API workspace name rule and changes only together with it."
+          "description": "Suggested workspace name for 'ws create' (an input, not an identity). Lowercase letters, digits and hyphens, 1-64 characters, no leading or trailing hyphen; the grammar is to match the future owner-API workspace name rule and changes only together with it."
         }
       }
     }
