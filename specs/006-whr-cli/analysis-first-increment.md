@@ -112,3 +112,39 @@ as `git.unsafe_path` with matching tests, Git-free in-memory checker API (T026),
 one approval wording (chat answer recorded as H77 (5), not text approval), the T035 exception in the series rules, wave 1a behavior
 of plain `whr init` (70 naming `--non-interactive --yes`), version 1 manifest edge cases, `findings.time_budget_exhausted`, doctor's
 5 s budget, typed `settings`, extra vectors, name rule and stale plan text. READY is not owner approval.
+
+### Round 6 per-finding table (reviewed 5ed129f0; fixed in 908284ac unless noted)
+
+| # | Sev | Finding | Status |
+| --- | --- | --- | --- |
+| 1 | med | Dependency table for `single_task.py` | Fixed (table T001-T035, parsed by the guard's own function) |
+| 2 | med | T030 vs T027 | Fixed (T027 not a prerequisite) |
+| 3 | med | FIFO test vs lstat pre-check | Fixed (tests split) |
+| 4 | med | Unowned code (doctor registration, Git-free API, wiring) | Fixed (T026, T027, T034) |
+| 5 | med | Approval wording two ways | Fixed in 908284ac; wording tightened again in round 7 (L10) |
+| 6 | med | Plain `whr init` in wave 1a | Fixed to exit 70, corrected to 64 in round 7 (M1) |
+| 7 | low | v1 manifest edge cases | Fixed; creation-readiness sentence corrected in round 7 (M2) |
+| 8 | med | T035 vs series rules | Fixed |
+| 9 | low | Time budget code | Fixed (`findings.time_budget_exhausted`) |
+| 10 | low | 5 s wording, doctor budget | Fixed; implementation note separated in round 7 |
+| 11-20 | low | Stale plan text, checklist T035, T028 order and test file, `uncommitted_change`, name rule, vector gaps, analysis intro, typed settings, research vectors | Fixed |
+
+## Round 7 - confirmation review of 908284ac - READY (0 critical/high, 3 medium, 10 low)
+
+Fixed in the round 7 commits on top of 908284ac (append-only; the pull request is public). READY is not owner approval.
+
+| # | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| M1 | med | Plain `init` in wave 1a: exit 70 vs 70 only in unattended mode | Exit 64 "not in this release" (FR-056, FR-063, ADR 0014 section 4, commands.json, T030 `TestInitModes`) |
+| M2 | med | FR-057(g) contradicted itself on creation-readiness | A defaults-only run on version 1 exits 0, lists the four unstorable defaults in `settings_not_persisted`, stays creation-ready |
+| M3 | med | tasks.md "depend only on" sentence included T035 | T025-T034 only; T035 needs T009 and T028 |
+| L4 | low | Dependency table vs unamended chain | Stated that the table encodes the amended graph and takes effect with approval at one exact head; chain annotated |
+| L5 | low | Untyped `settings` values | Typed values; `settings_not_persisted` limited to the four unstorable settings |
+| L6 | low | `config.valid` vs the shared budget | Uses the remainder, `unknown` on exhaustion; `TestDoctorTimeBudget`, `TestValidateTimeBudget` |
+| L7 | low | `config.valid` before wiring | `skipped` with `not_in_increment` until T034 |
+| L8 | low | "disjoint packages" | Shared `internal/commands` merge point stated |
+| L9 | low | vectors.json ownership text vs T028 | Aligned |
+| L10 | low | Implementation note inside the quoted answer; (5) wording | Separated; "chat answer recorded as decision H77 (5), not approval of any head's text" |
+| L11 | low | FR-054 Git-state bullet vs FR-055 | Non-regular HEAD/index/config, commondir, alternates added |
+| L12 | low | Round 6 table | Added above |
+| L13 | low | Trailing whitespace; name description | Fixed; "no leading or trailing hyphen" added |
