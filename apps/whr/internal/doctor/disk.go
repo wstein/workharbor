@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
-	"os"
 	"strconv"
 )
 
@@ -79,5 +78,3 @@ func (r *run) diskStorage() Check {
 	}
 	return r.free(id, dockerRoot, "The container storage filesystem", "Free disk space under "+dockerRoot+" (for example prune unused images) and rerun whr doctor.")
 }
-
-var _ = os.DevNull
