@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workharbor.invalid/contracts/workspace/workharbor.schema.json",
+  "title": "WorkHarbor workspace manifest (workharbor.json), schema_version 1 and proposed schema_version 2",
+  "description": "Language-neutral description of the manifest. schema_version 1 is the accepted form read today by the host agent resolver (apps/host_agent/internal/config/resolver.go) and scripts/check_repo.py: exactly four fields. schema_version 2 is PROPOSED by owner decision H77 (2026-10-17, wave 1a): the same four fields plus optional name, start_dir, human_shell, console_mode, shortcuts and project; the resolver rejects it until a separate, reviewed resolver change lands, which keeps the extension fail-closed. Strict JSON: UTF-8 without BOM, duplicate keys rejected, depth <= 128, size <= 65536 bytes for whr validate. Path values are exact native strings. Rules beyond JSON Schema, enforced by validators and frozen in contracts/workspace/vectors.json: schema_version must be the integer 1 or 2 (not 1.0), and any case variant of .git is refused as a path component (the resolver compares case-insensitively). The path pattern is exact-case and uses lookahead, so it documents the rule and is not executed by RE2; the positive and negative path vectors prove its equivalence with the Go checker. Defaults when a version 2 field is absent: start_dir '.', human_shell fish, console_mode herdr, shortcuts on (FR-047/FR-048/FR-049); the WorkHarbor agent-command shell is fixed to bash by policy and is not a field.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/v1"
+    },
+    {
+      "$ref": "#/$defs/v2"
+    }
+  ],
+  "$defs": {
+    "canonicalPath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!(?:.*/)?(?:\\.|\\.\\.|\\.git)(?:/|$))[^/\\\\\\u0000\\r\\n\\t*?\\[\\]]+(?:/[^/\\\\\\u0000\\r\\n\\t*?\\[\\]]+)*$",
+      "description": "Relative, slash-separated, no empty/./../.git component, no backslash, NUL, CR, LF, tab or glob characters; mirrors CanonicalPath in apps/host_agent/internal/config/path.go. Containment and symlink safety are filesystem checks, not schema checks."
+    },
+    "v1": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "devcontainer_path",
+        "projects_path",
+        "bundles"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 1
+        },
+        "devcontainer_path": {
+          "$ref": "#/$defs/canonicalPath"
+        },
+        "projects_path": {
+          "$ref": "#/$defs/canonicalPath"
+        },
+        "bundles": {
+          "type": "array",
+          "maxItems": 0,
+          "description": "Bundle attachments are deferred; the list must be empty."
+        }
+      }
+    },
+    "v2": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "devcontainer_path",
+        "projects_path",
+        "bundles"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": 2
+        },
+        "devcontainer_path": {
+          "$ref": "#/$defs/canonicalPath"
+        },
+        "projects_path": {
+          "$ref": "#/$defs/canonicalPath"
+        },
+        "bundles": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "start_dir": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/canonicalPath"
+            },
+            {
+              "const": "."
+            }
+          ],
+          "description": "Workspace-relative starting directory; '.' is the workspace root. Existence is checked in the runtime before spawning, not here."
+        },
+        "human_shell": {
+          "enum": [
+            "fish",
+            "bash",
+            "zsh",
+            "nu"
+          ]
+        },
+        "console_mode": {
+          "enum": [
+            "herdr",
+            "plain"
+          ]
+        },
+        "shortcuts": {
+          "enum": [
+            "on",
+            "off"
+          ]
+        },
+        "project": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "url",
+            "path"
+          ],
+          "properties": {
+            "url": {
+              "type": "string",
+              "maxLength": 2048,
+              "pattern": "^(https://[^@/\\s]+/[^\\s]+|ssh://(?:[A-Za-z0-9._-]+@)?[^@/\\s]+/[^\\s]+)$",
+              "description": "Desired input only, never a pin: https without userinfo, or ssh. whr never fetches it."
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^projects/[A-Za-z0-9][A-Za-z0-9._-]*$",
+              "description": "Must lie below projects_path when that is 'projects'; validators check containment against projects_path."
+            }
+          }
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$",
+          "description": "Workspace name: lowercase letters, digits and hyphens, 1-64 characters."
+        }
+      }
+    }
+  }
+}

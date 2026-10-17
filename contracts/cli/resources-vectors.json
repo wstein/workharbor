@@ -1,0 +1,407 @@
+{
+ "schema_version": 1,
+ "contract": "whr-resource-vectors",
+ "decision": "H77",
+ "status": "proposed",
+ "spec": "specs/006-whr-cli/spec.md FR-039..FR-042, FR-059",
+ "description": "Shared test vectors for CPU and memory parsing, canonicalization and per-field resolution, usable by the Go client library (apps/whr/internal/resources) and later by the Elixir control plane. CPU canonical value is integer thousandths of a CPU equivalent; memory is integer bytes (MiB = 1048576, GiB = 1073741824). Grammar: cpu = int [ '.' 1*3DIGIT ]; memory = int ( 'MiB' / 'GiB' ), int = '0' / nonzero *DIGIT, ASCII digits only, case-sensitive units, no whitespace. Rejections: empty, sign, exponent, nonfinite, syntax, excess_precision, missing_unit, bad_unit, not_positive, overflow (canonical value above 2^63-1). Spellings with equal canonical values share request identity. Resolution is per field: explicit flag, then host profile, else needs-human (unattended) or prompt (interactive); omission never means unlimited.",
+ "limits": {
+  "max_canonical": 9223372036854775807,
+  "mib": 1048576,
+  "gib": 1073741824
+ },
+ "cpu_cases": [
+  {
+   "input": "2",
+   "expect": 2000
+  },
+  {
+   "input": "2.5",
+   "expect": 2500
+  },
+  {
+   "input": "2.500",
+   "expect": 2500
+  },
+  {
+   "input": "0.001",
+   "expect": 1
+  },
+  {
+   "input": "0.5",
+   "expect": 500
+  },
+  {
+   "input": "1.000",
+   "expect": 1000
+  },
+  {
+   "input": "16",
+   "expect": 16000
+  },
+  {
+   "input": "007",
+   "error": "syntax"
+  },
+  {
+   "input": "0",
+   "error": "not_positive"
+  },
+  {
+   "input": "0.000",
+   "error": "not_positive"
+  },
+  {
+   "input": "0.0001",
+   "error": "excess_precision"
+  },
+  {
+   "input": "2.5000",
+   "error": "excess_precision"
+  },
+  {
+   "input": "-1",
+   "error": "sign"
+  },
+  {
+   "input": "+2",
+   "error": "sign"
+  },
+  {
+   "input": "1e3",
+   "error": "exponent"
+  },
+  {
+   "input": "1E2",
+   "error": "exponent"
+  },
+  {
+   "input": "NaN",
+   "error": "nonfinite"
+  },
+  {
+   "input": "inf",
+   "error": "nonfinite"
+  },
+  {
+   "input": "",
+   "error": "empty"
+  },
+  {
+   "input": "2.",
+   "error": "syntax"
+  },
+  {
+   "input": "\u200b.5",
+   "error": "syntax"
+  },
+  {
+   "input": ".5",
+   "error": "syntax"
+  },
+  {
+   "input": "1,5",
+   "error": "syntax"
+  },
+  {
+   "input": "\uff12",
+   "error": "syntax"
+  },
+  {
+   "input": "9223372036854775",
+   "expect": 9223372036854775000
+  },
+  {
+   "input": "9223372036854775.807",
+   "expect": 9223372036854775807
+  },
+  {
+   "input": "9223372036854775.808",
+   "error": "overflow"
+  },
+  {
+   "input": "99999999999999999999",
+   "error": "overflow"
+  },
+  {
+   "input": " 2",
+   "error": "syntax"
+  },
+  {
+   "input": "2 ",
+   "error": "syntax"
+  },
+  {
+   "input": "0x10",
+   "error": "syntax"
+  },
+  {
+   "input": "1_0",
+   "error": "syntax"
+  }
+ ],
+ "memory_cases": [
+  {
+   "input": "4GiB",
+   "expect": 4294967296
+  },
+  {
+   "input": "512MiB",
+   "expect": 536870912
+  },
+  {
+   "input": "1MiB",
+   "expect": 1048576
+  },
+  {
+   "input": "1024MiB",
+   "expect": 1073741824
+  },
+  {
+   "input": "8GiB",
+   "expect": 8589934592
+  },
+  {
+   "input": "0GiB",
+   "error": "not_positive"
+  },
+  {
+   "input": "0MiB",
+   "error": "not_positive"
+  },
+  {
+   "input": "4",
+   "error": "missing_unit"
+  },
+  {
+   "input": "4GB",
+   "error": "bad_unit"
+  },
+  {
+   "input": "4gib",
+   "error": "bad_unit"
+  },
+  {
+   "input": "4 GiB",
+   "error": "syntax"
+  },
+  {
+   "input": "4GiB ",
+   "error": "syntax"
+  },
+  {
+   "input": "-4GiB",
+   "error": "sign"
+  },
+  {
+   "input": "+4GiB",
+   "error": "sign"
+  },
+  {
+   "input": "1e3GiB",
+   "error": "exponent"
+  },
+  {
+   "input": "4.5GiB",
+   "error": "syntax"
+  },
+  {
+   "input": "NaN",
+   "error": "nonfinite"
+  },
+  {
+   "input": "",
+   "error": "empty"
+  },
+  {
+   "input": "GiB",
+   "error": "syntax"
+  },
+  {
+   "input": "007GiB",
+   "error": "bad_unit"
+  },
+  {
+   "input": "8589934591GiB",
+   "expect": 9223372035781033984
+  },
+  {
+   "input": "8796093022207MiB",
+   "expect": 9223372036853727232
+  },
+  {
+   "input": "9007199254740992GiB",
+   "error": "overflow"
+  },
+  {
+   "input": "4Gi",
+   "error": "bad_unit"
+  },
+  {
+   "input": "4KiB",
+   "error": "bad_unit"
+  },
+  {
+   "input": "\uff14GiB",
+   "error": "syntax"
+  }
+ ],
+ "resolution_cases": [
+  {
+   "id": "resolution-1",
+   "flags": {
+    "cpu": "2",
+    "memory": "4GiB"
+   },
+   "profile": null,
+   "mode": "unattended",
+   "expect": {
+    "cpu": {
+     "value": 2000,
+     "origin": "flag"
+    },
+    "memory": {
+     "value": 4294967296,
+     "origin": "flag"
+    }
+   }
+  },
+  {
+   "id": "resolution-2",
+   "flags": {
+    "cpu": "2"
+   },
+   "profile": {
+    "cpu_thousandths": 1000,
+    "memory_bytes": 1073741824
+   },
+   "mode": "unattended",
+   "expect": {
+    "cpu": {
+     "value": 2000,
+     "origin": "flag"
+    },
+    "memory": {
+     "value": 1073741824,
+     "origin": "host_default"
+    }
+   }
+  },
+  {
+   "id": "resolution-3",
+   "flags": {},
+   "profile": {
+    "cpu_thousandths": 1000,
+    "memory_bytes": 1073741824
+   },
+   "mode": "unattended",
+   "expect": {
+    "cpu": {
+     "value": 1000,
+     "origin": "host_default"
+    },
+    "memory": {
+     "value": 1073741824,
+     "origin": "host_default"
+    }
+   }
+  },
+  {
+   "id": "resolution-4",
+   "flags": {},
+   "profile": null,
+   "mode": "unattended",
+   "expect": {
+    "needs_human": [
+     "--cpus",
+     "--memory"
+    ]
+   }
+  },
+  {
+   "id": "resolution-5",
+   "flags": {
+    "cpu": "2"
+   },
+   "profile": null,
+   "mode": "unattended",
+   "expect": {
+    "needs_human": [
+     "--memory"
+    ]
+   }
+  },
+  {
+   "id": "resolution-6",
+   "flags": {
+    "memory": "4GiB"
+   },
+   "profile": null,
+   "mode": "unattended",
+   "expect": {
+    "needs_human": [
+     "--cpus"
+    ]
+   }
+  },
+  {
+   "id": "resolution-7",
+   "flags": {},
+   "profile": null,
+   "mode": "interactive",
+   "expect": {
+    "prompt": [
+     "--cpus",
+     "--memory"
+    ]
+   }
+  },
+  {
+   "id": "resolution-8",
+   "flags": {
+    "cpu": "0"
+   },
+   "profile": {
+    "cpu_thousandths": 1000,
+    "memory_bytes": 1073741824
+   },
+   "mode": "unattended",
+   "expect": {
+    "error": "invalid_cpu",
+    "detail": "not_positive"
+   }
+  },
+  {
+   "id": "resolution-9",
+   "flags": {
+    "cpu": "2.5",
+    "memory": "512MiB"
+   },
+   "profile": {
+    "cpu_thousandths": 1000,
+    "memory_bytes": 1073741824
+   },
+   "mode": "unattended",
+   "expect": {
+    "cpu": {
+     "value": 2500,
+     "origin": "flag"
+    },
+    "memory": {
+     "value": 536870912,
+     "origin": "flag"
+    }
+   }
+  }
+ ],
+ "freeze": {
+  "test_file": "apps/whr/internal/resources/vectors_test.go",
+  "test_ids": [
+   "TestCPUVectors",
+   "TestMemoryVectors",
+   "TestResolutionVectors",
+   "TestEquivalentSpellingsShareIdentity"
+  ],
+  "offline": true
+ }
+}

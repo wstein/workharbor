@@ -52,6 +52,27 @@ these accepted ports or approve runtime integration.
 
 ## CLI contracts
 - [`cli/exit-codes.json`](cli/exit-codes.json): frozen `whr` exit-code table, accepted in [ADR 0013](../docs/adr/0013-whr-exit-codes.md) (H15:b).
+- [`cli/commands.json`](cli/commands.json): the single `whr` command table with group and short-form
+  aliases, proposed in [ADR 0014](../docs/adr/0014-whr-command-structure.md) (H77). Design baseline;
+  the Go table and its freeze tests are not implemented.
+- [`cli/output.schema.json`](cli/output.schema.json): `--json` envelope and the results of the first-increment
+  commands (`version`, `workspace.validate`, `workspace.init`, `host.doctor`); proposed, not implemented.
+- [`cli/validate-findings.json`](cli/validate-findings.json): fully qualified `whr validate` finding codes and
+  severities; proposed, not implemented.
+- [`cli/doctor-checks.json`](cli/doctor-checks.json): the `whr doctor` check catalogue, thresholds and the
+  first-increment boundary; proposed, not implemented.
+
+## Workspace configuration manifest
+[`workspace/workharbor.schema.json`](workspace/workharbor.schema.json) describes `workharbor.json`
+(schema_version 1) as read today by the host agent resolver and `scripts/check_repo.py`; it adds no field.
+`whr validate` and `whr init` (Feature 006) are specified to validate against it. The schema also describes the
+proposed `schema_version` 2 (optional `name`, `start_dir`, `human_shell`, `console_mode`, `shortcuts`, `project`),
+which the resolver rejects until a separate reviewed change. The Go validator is hand-written and frozen against the
+shared vectors [`workspace/vectors.json`](workspace/vectors.json); product code uses no JSON Schema library (a
+test-only validator may prove the output schema). [`workspace/starters.json`](workspace/starters.json) lists the
+`whr workspace init` starters, all unsupported until provider admission;
+[`cli/resources-vectors.json`](cli/resources-vectors.json) holds the shared CPU and memory parsing vectors (FR-059).
+None of these is implemented.
 
 ## Agent session interface
 [agent-session-v1.md](agent-session-v1.md) with its

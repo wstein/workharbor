@@ -1,0 +1,252 @@
+{
+  "schema_version": 1,
+  "contract": "whr-validate-findings",
+  "decision": "H77",
+  "status": "proposed",
+  "adr": "docs/adr/0014-whr-command-structure.md",
+  "sources": "with an unborn HEAD (git.head_missing) the HEAD vectors are skipped and .gitmodules is read from the index; manifest, devcontainer and projects checks read the working tree; Git checks read the index (ls-files --stage), the HEAD tree (ls-tree) and the committed .gitmodules blob (cat-file), matching the resolver, which reads committed objects",
+  "rules": [
+    "valid is true exactly when no finding has severity error",
+    "every code is area.reason, lowercase with underscores",
+    "a Git failure never downgrades to a warning when .git is a real directory (git.listing_failed is an error)"
+  ],
+  "codes": [
+    {
+      "code": "manifest.missing",
+      "severity": "error",
+      "note": "workharbor.json absent"
+    },
+    {
+      "code": "manifest.unsafe_path",
+      "severity": "error",
+      "note": "symlink, special file, unreadable or non-regular"
+    },
+    {
+      "code": "manifest.too_large",
+      "severity": "error",
+      "note": "over 64 KiB"
+    },
+    {
+      "code": "manifest.encoding",
+      "severity": "error",
+      "note": "not UTF-8, BOM or NUL"
+    },
+    {
+      "code": "manifest.syntax",
+      "severity": "error",
+      "note": "invalid JSON or depth bound"
+    },
+    {
+      "code": "manifest.duplicate_key",
+      "severity": "error",
+      "note": "duplicate key at any depth"
+    },
+    {
+      "code": "manifest.schema",
+      "severity": "error",
+      "note": "unknown/missing field, wrong type, schema_version not integer 1"
+    },
+    {
+      "code": "manifest.path_invalid",
+      "severity": "error",
+      "note": "devcontainer_path or projects_path breaks the canonical path rule (including case variants of .git)"
+    },
+    {
+      "code": "manifest.url_credentials",
+      "severity": "error",
+      "note": "userinfo or token in project.url; never echoed"
+    },
+    {
+      "code": "manifest.bundles_deferred",
+      "severity": "error",
+      "note": "bundles not empty"
+    },
+    {
+      "code": "devcontainer.missing",
+      "severity": "error"
+    },
+    {
+      "code": "devcontainer.unsafe_path",
+      "severity": "error",
+      "note": "symlink component, outside root, special or unreadable"
+    },
+    {
+      "code": "devcontainer.too_large",
+      "severity": "error",
+      "note": "over 256 KiB"
+    },
+    {
+      "code": "devcontainer.encoding",
+      "severity": "error"
+    },
+    {
+      "code": "devcontainer.syntax",
+      "severity": "error"
+    },
+    {
+      "code": "devcontainer.duplicate_key",
+      "severity": "error"
+    },
+    {
+      "code": "devcontainer.unsupported_key",
+      "severity": "warning",
+      "note": "outside the provider subset"
+    },
+    {
+      "code": "devcontainer.image_not_digest_pinned",
+      "severity": "warning"
+    },
+    {
+      "code": "devcontainer.users_not_numeric",
+      "severity": "warning"
+    },
+    {
+      "code": "devcontainer.host_command",
+      "severity": "warning",
+      "note": "initializeCommand or postAttachCommand"
+    },
+    {
+      "code": "projects.missing",
+      "severity": "error",
+      "note": "projects_path not a directory"
+    },
+    {
+      "code": "projects.unsafe_path",
+      "severity": "error"
+    },
+    {
+      "code": "projects.not_a_submodule",
+      "severity": "warning",
+      "note": "committed regular file other than .gitkeep"
+    },
+    {
+      "code": "git.not_repository",
+      "severity": "warning",
+      "note": "no .git in the directory itself"
+    },
+    {
+      "code": "git.unavailable",
+      "severity": "warning",
+      "note": "git absent, too old or macOS installer shim; Git checks skipped"
+    },
+    {
+      "code": "git.unsafe_path",
+      "severity": "error",
+      "note": ".git is a symlink or gitfile"
+    },
+    {
+      "code": "git.head_missing",
+      "severity": "warning",
+      "note": "no commit yet"
+    },
+    {
+      "code": "git.listing_failed",
+      "severity": "error",
+      "note": "git call failed, timed out or output unparsable although .git is a real directory"
+    },
+    {
+      "code": "git.limit_exceeded",
+      "severity": "error",
+      "note": "index or tree listing beyond its bound"
+    },
+    {
+      "code": "git.tree_path_invalid",
+      "severity": "error",
+      "note": "HEAD tree path with a non-canonical or case-folded .git component"
+    },
+    {
+      "code": "gitmodules.unsafe",
+      "severity": "error",
+      "note": ".gitmodules not a regular blob/file (mode other than 100644/100755 or symlink)"
+    },
+    {
+      "code": "gitmodules.too_large",
+      "severity": "error",
+      "note": "over 64 KiB or 256 entries"
+    },
+    {
+      "code": "gitmodules.syntax",
+      "severity": "error"
+    },
+    {
+      "code": "gitmodules.duplicate_field",
+      "severity": "error",
+      "note": "duplicate path or url in one entry"
+    },
+    {
+      "code": "gitmodules.unsupported_key",
+      "severity": "error",
+      "note": "key other than path and url (resolver rejects)"
+    },
+    {
+      "code": "gitmodules.uncommitted_change",
+      "severity": "warning",
+      "note": "working-tree .gitmodules differs from the HEAD blob"
+    },
+    {
+      "code": "submodule.url_invalid",
+      "severity": "error",
+      "note": "not https://, ssh:// or scp-like user@host:path; relative, file:, ext::"
+    },
+    {
+      "code": "submodule.url_credentials",
+      "severity": "error",
+      "note": "any https userinfo or a password; value never echoed"
+    },
+    {
+      "code": "submodule.update_command",
+      "severity": "error",
+      "note": "update value is a command (!...)"
+    },
+    {
+      "code": "submodule.unlisted",
+      "severity": "error",
+      "note": "gitlink without .gitmodules entry"
+    },
+    {
+      "code": "submodule.not_pinned",
+      "severity": "error",
+      "note": ".gitmodules entry without gitlink"
+    },
+    {
+      "code": "submodule.outside_projects",
+      "severity": "error",
+      "note": "path not below projects_path"
+    },
+    {
+      "code": "submodule.nested",
+      "severity": "error",
+      "note": "nested or overlapping submodule paths"
+    },
+    {
+      "code": "submodule.not_committed",
+      "severity": "warning",
+      "note": "index gitlink differs from HEAD"
+    },
+    {
+      "code": "submodule.pinned",
+      "severity": "info",
+      "note": "pinned commit reported"
+    },
+    {
+      "code": "findings.truncated",
+      "severity": "info",
+      "note": "more than 200 findings; counts stay exact"
+    },
+    {
+      "code": "project.declared_not_pinned",
+      "severity": "warning",
+      "note": "manifest project declaration without a pinned gitlink at its path; not creation-ready (FR-049)"
+    }
+  ],
+  "freeze": {
+    "test_file": "apps/whr/internal/workspacecfg/findings_test.go",
+    "test_ids": [
+      "TestFindingCatalogueMatchesContract",
+      "TestFindingCodesMatchOutputSchemaPattern"
+    ],
+    "offline": true
+  },
+  "unborn_head": "HEAD is unborn exactly when git rev-parse --verify --quiet HEAD exits 1 with empty stderr and .git/HEAD is a symbolic reference to a missing ref; every other non-zero exit, timeout or unparsable output is git.listing_failed. cat-file of .gitmodules runs only when the index (unborn HEAD) or the HEAD tree lists it.",
+  "manifest_vectors": "contracts/workspace/vectors.json"
+}

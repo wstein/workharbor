@@ -1,0 +1,695 @@
+{
+ "schema_version": 1,
+ "contract": "workspace-manifest-vectors",
+ "decision": "H77",
+ "status": "proposed",
+ "description": "Shared positive and negative vectors for the manifest checker (schema_version 1 and proposed 2). Go (apps/whr), scripts/check_repo.py and, after a reviewed resolver change, the host agent read the same file. Cases with document are JSON values; bytes_hex are raw file bytes; __raw is a literal text to parse. expect_codes are the manifest.* finding codes of contracts/cli/validate-findings.json for the manifest alone (an empty list means valid). This initial set is authored with the spec amendment; work items extend it, and a change needs a reviewed decision.",
+ "cases": [
+  {
+   "id": "v1-valid",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": []
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-minimal",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": []
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-full",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "start_dir": "projects/app",
+    "human_shell": "fish",
+    "console_mode": "herdr",
+    "shortcuts": "on",
+    "project": {
+     "url": "https://forge.example/org/app.git",
+     "path": "projects/app"
+    }
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-start-dir-root",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "start_dir": "."
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-ssh-project",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "ssh://git@forge.example/org/app.git",
+     "path": "projects/app"
+    }
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v1-with-v2-field",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "human_shell": "fish"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "version 1 stays exactly four fields"
+  },
+  {
+   "id": "version-3",
+   "document": {
+    "schema_version": 3,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "version-float",
+   "document": {
+    "__raw": "{\"schema_version\":1.0,\"devcontainer_path\":\".devcontainer/devcontainer.json\",\"projects_path\":\"projects\",\"bundles\":[]}"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "1.0 is not the integer 1"
+  },
+  {
+   "id": "version-string",
+   "document": {
+    "schema_version": "1",
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "missing-field",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "unknown-field",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "extra": 1
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "not-object",
+   "document": [
+    1
+   ],
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "path-abs",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "/etc",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-traversal",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a/../b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-dotdot",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "../x",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-dot",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": ".",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-empty",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-backslash",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a\\b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-dot-git",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": ".git",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-dot-git-nested",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "x/.git/y",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-dot-git-case",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a/.GIT/b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-glob",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a*",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-trailing-slash",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a/",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-double-slash",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a//b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-tab",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a\tb",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-nul",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a\u0000b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-newline",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a\nb",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-bracket",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a[b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-ok-dot-prefixed-name",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "..foo",
+    "bundles": []
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "path-ok-hidden",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": ".hidden",
+    "bundles": []
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "path-ok-suffix-git",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a.git",
+    "bundles": []
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "path-ok-deep",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a/b/c",
+    "bundles": []
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "bundles-nonempty",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [
+     {
+      "x": 1
+     }
+    ]
+   },
+   "expect_codes": [
+    "manifest.bundles_deferred"
+   ]
+  },
+  {
+   "id": "bundles-not-array",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": {}
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-bad-shell",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "human_shell": "csh"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-bad-console",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "console_mode": "screen"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-bad-shortcuts",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "shortcuts": "yes"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-start-dir-traversal",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "start_dir": "../x"
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "v2-start-dir-abs",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "start_dir": "/x"
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "v2-project-userinfo",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://user:tok@forge.example/o/a.git",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.url_credentials"
+   ]
+  },
+  {
+   "id": "v2-project-token-user",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://tok@forge.example/o/a.git",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.url_credentials"
+   ]
+  },
+  {
+   "id": "v2-project-file-url",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "file:///x",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-scp-like",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "git@forge.example:o/a.git",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "scp-like addresses are refused in the manifest declaration (usage), though validate accepts them in .gitmodules"
+  },
+  {
+   "id": "v2-project-bad-path",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a.git",
+     "path": "other/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-extra",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a.git",
+     "path": "projects/a",
+     "branch": "main"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "raw-bom",
+   "bytes_hex": "efbbbf7b22736368656d615f76657273696f6e223a317d",
+   "expect_codes": [
+    "manifest.encoding"
+   ]
+  },
+  {
+   "id": "raw-invalid-utf8",
+   "bytes_hex": "7b2261223a22ff227d",
+   "expect_codes": [
+    "manifest.encoding"
+   ]
+  },
+  {
+   "id": "raw-nul",
+   "bytes_hex": "7b7d00",
+   "expect_codes": [
+    "manifest.encoding"
+   ]
+  },
+  {
+   "id": "raw-syntax",
+   "bytes_hex": "7b",
+   "expect_codes": [
+    "manifest.syntax"
+   ]
+  },
+  {
+   "id": "raw-duplicate-key",
+   "bytes_hex": "7b22736368656d615f76657273696f6e223a312c22736368656d615f76657273696f6e223a317d",
+   "expect_codes": [
+    "manifest.duplicate_key"
+   ]
+  },
+  {
+   "id": "raw-nested-duplicate",
+   "bytes_hex": "7b2262756e646c6573223a5b7b2261223a312c2261223a327d5d7d",
+   "expect_codes": [
+    "manifest.duplicate_key"
+   ]
+  },
+  {
+   "id": "raw-depth-129",
+   "bytes_hex": "5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5b5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d5d",
+   "expect_codes": [
+    "manifest.syntax"
+   ]
+  },
+  {
+   "id": "size-over-limit",
+   "generate": "65537 bytes of spaces around a valid document",
+   "expect_codes": [
+    "manifest.too_large"
+   ]
+  },
+  {
+   "id": "v2-name-ok",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "name": "my-ws"
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-name-upper",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "name": "My"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-name-leading-hyphen",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "name": "-a"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-name-too-long",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-name-empty",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "name": ""
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  }
+ ]
+}
