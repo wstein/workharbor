@@ -62,7 +62,11 @@ func windowsAlias(component string) bool {
 var (
 	projectURLPattern  = regexp.MustCompile(`^(https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+|ssh://(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+)$`)
 	projectNamePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	workspaceName      = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
+	// hostNamePattern is the resolver's host rule (hostName in the host agent), shared by
+	// project.url and .gitmodules URLs: dot-separated labels of letters, digits and inner
+	// hyphens, none empty, with one optional trailing dot.
+	hostNamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.?$`)
+	workspaceName   = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
 )
 
 const maxURL = 2048
@@ -148,7 +152,18 @@ func projectURLProblem(u string) string {
 	if strings.HasPrefix(userinfo, "-") || strings.HasPrefix(host, "-") {
 		return "has a user or host starting with a hyphen"
 	}
+	if !hostNamePattern.MatchString(hostWithoutPort(host)) {
+		return "has a host that is not dot-separated labels of letters, digits and inner hyphens"
+	}
 	return ""
+}
+
+// hostWithoutPort drops a :port suffix.
+func hostWithoutPort(host string) string {
+	if i := strings.LastIndex(host, ":"); i >= 0 {
+		return host[:i]
+	}
+	return host
 }
 
 // portOK accepts a host without a port or with one in 1-65535.

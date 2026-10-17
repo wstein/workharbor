@@ -3,7 +3,7 @@
  "contract": "workspace-git-vectors",
  "decision": "H77",
  "status": "proposed",
- "description": "Vectors for the pure Git-state analysis of whr validate (committed .gitmodules blob and tree/index listings). Owned by T026. A tree or index entry is the string 'MODE SHA PATH'; a SHA of one hex character stands for 40 repetitions of it. 'tree' is the HEAD tree (or the index when head is false), 'index' defaults to 'tree'; 'gitmodules' is the blob text, 'bytes_hex' raw bytes; generate_bytes pads the template to 'total' bytes with newlines; generate_entries adds N submodules projects/sNNN (with their gitlinks when with_gitlinks). expect_codes is the sorted set of distinct finding codes. Messages never echo URL credentials (canary 'CANARY').",
+ "description": "Vectors for the pure Git-state analysis of whr validate (committed .gitmodules blob and tree/index listings). Owned by T026. A tree or index entry is the string 'MODE SHA PATH'; a SHA of one hex character stands for 40 repetitions of it. 'tree' is the HEAD tree (or the index when head is false), 'index' defaults to 'tree'; 'gitmodules' is the blob text, 'bytes_hex' raw bytes; generate_bytes pads the template to 'total' bytes with newlines; generate_entries adds N submodules projects/sNNN (with their gitlinks when with_gitlinks). expect_codes is the sorted set of distinct finding codes. Messages never echo URL credentials (canary 'CANARY'). Deliberate fail-closed refusals beyond Git: the dotted section header [submodule.name] and a leading byte-order mark are gitmodules.syntax although Git reads both.",
  "cases": [
   {
    "id": "empty-repository",
@@ -1420,9 +1420,9 @@
    ],
    "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://h./o/a\n",
    "expect_codes": [
-    "submodule.pinned",
-    "submodule.url_invalid"
-   ]
+    "submodule.pinned"
+   ],
+   "note": "the resolver admits one trailing dot"
   },
   {
    "id": "url-ssh-trailing-hyphen-host",
@@ -1532,6 +1532,76 @@
     "submodule.pinned",
     "submodule.url_invalid"
    ]
+  },
+  {
+   "id": "url-ssh-trailing-dot-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = ssh://git@h./o/a\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "url-scp-trailing-dot-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = git@h.:o/a\n",
+   "expect_codes": [
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "url-https-two-trailing-dots-host",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = projects/app\n\turl = https://h../o/a\n",
+   "expect_codes": [
+    "submodule.pinned",
+    "submodule.url_invalid"
+   ]
+  },
+  {
+   "id": "section-header-no-space-after-keyword",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule\"app\"]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ],
+   "note": "real Git: bad config line"
+  },
+  {
+   "id": "section-dotted-header",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule.app]\n\tpath = projects/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ],
+   "note": "deliberately stricter than Git, which reads [submodule.app] as the section submodule with the name app: whr accepts only the [submodule \"name\"] form (fail closed)"
+  },
+  {
+   "id": "gitmodules-byte-order-mark",
+   "tree": [
+    "160000 a projects/app",
+    "100644 b .gitmodules"
+   ],
+   "bytes_hex": "efbbbf5b7375626d6f64756c652022617070225d0a0970617468203d2070726f6a656374732f6170700a0975726c203d2068747470733a2f2f662e6578616d706c652f6f2f6170702e6769740a",
+   "expect_codes": [
+    "gitmodules.syntax"
+   ],
+   "note": "deliberately stricter than Git, which skips a leading byte-order mark: whr refuses it (fail closed)"
   }
  ]
 }
