@@ -225,7 +225,7 @@ arguments, `-c` flags (not `GIT_CONFIG_COUNT`, which needs Git 2.31) for `core.f
 `core.hooksPath=/dev/null`, `protocol.allow=never` and `protocol.<name>.allow=never` for file, git, ssh, http, https and
 ext (a per-protocol setting in the hostile `.git/config` would otherwise override `protocol.allow`), `GIT_ALLOW_PROTOCOL` set to a
 name matching no protocol, `GIT_NO_LAZY_FETCH=1` (effective from Git 2.44; below it the protocol overrides are what stop a promisor
-fetch), a 5 second deadline per call, a capped output reader, a minimum Git version check (below it: the error
+fetch), one shared 5 second wall-clock budget per run (each call gets the remainder), `lstat` pre-checks that `.git/HEAD`, `.git/index` (if present) and `.git/config` are regular files, a capped output reader, a minimum Git version check (below it: the error
 `git.unavailable`), `exec.ErrDot` treated as Git absent, and exactly seven argument vectors: `--version`,
 `symbolic-ref -q HEAD`, `rev-parse --verify --quiet HEAD`, `ls-files --stage -z`, `ls-tree -r -z HEAD`,
 `cat-file blob HEAD:.gitmodules` (only when the HEAD tree lists it) and `cat-file blob :.gitmodules` (only with an unborn HEAD
@@ -247,15 +247,15 @@ redaction function is shared and tested with a canary home directory, user and h
 
 `init` (D1, wave 1a) builds a proposal in memory: the manifest `workharbor.json` (version 2, FR-058, explicit values for
 every setting, defaults filling only missing ones), the existing devcontainer file at the manifest's path (reused
-unchanged and only validated; wave 1a never generates one) and `projects/.gitkeep`, each marked create, overwrite, reuse or
+unchanged and only validated; wave 1a never generates one) and `<projects_path>/.gitkeep`, each marked create, overwrite, reuse or
 skip_existing, with a unified diff for overwrites. The same proposal model feeds the wizard (D2, wave 1b), the unattended
 flags and `--dry-run`, which gives wizard and flag parity by construction. The proposal is validated with the `validate`
-code (in-memory content checks before the first write, the full checker on the written result), preflighted, and
+code (in-memory content checks before the first write, the Git-free checker profile on the written result), preflighted, and
 written with `O_EXCL|O_NOFOLLOW` relative to a no-follow-opened target; overwrites go through a same-directory
 temporary file and rename, with the old bytes kept until the rename. Each created path is recorded with device and
 inode for reverse-order rollback, which restores overwritten files and removes a path only when the identity still
 matches; the preview carries a content hash per file, re-checked immediately before writing to detect change since
-preview. `init` runs no Git command and makes no network connection (FR-056); it validates with the Git-free profile of the `validate` code (manifest, devcontainer and projects checks, `git_checks: not_run`, FR-057), and an existing version 1 manifest is preserved unless `--overwrite workharbor.json` is given; `--project-url` is written to the manifest
+preview. `init` runs no Git command and makes no network connection (FR-056); it validates with the Git-free profile of the `validate` code (manifest, devcontainer and projects checks, `git_checks: not_run`, FR-057), and an existing version 1 manifest is preserved only by a defaults-only run (exit 0, not-persisted warning), while explicit flags that need it edited exit 70 naming `--overwrite workharbor.json`; `--project-url` is written to the manifest
 only. The wizard (D2) uses a prompt port (stderr for prompts, terminal check on stdin and stderr, `--non-interactive`,
 `--json` and non-terminals suppress it) so unit tests drive it with scripted answers; a separate work item builds a PTY
 test harness for end-to-end terminal behavior (raw mode, line editing, cancel by interrupt), which D2 then uses for its
@@ -324,7 +324,7 @@ thresholds Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s, 256 MiB ("seems to be fine 
 
 Still open:
 
-1. Manifest `schema_version` 2 adds `name` and `project` beyond the four fields the owner listed (`start_dir`, `human_shell`,
+1. (Decided 2026-10-17, H77 (7); kept for the record) Manifest `schema_version` 2 adds `name` and `project` beyond the four fields the owner listed (`start_dir`, `human_shell`,
    `console_mode`, `shortcuts`), because the wizard collects them and no other file is permitted; this is my addition: confirm or move them.
    A resolver and provider change to accept version 2 is needed and is not scheduled here (coordinate with T009).
 2. `--template` refuses with exit 64 while starters are unsupported; confirm the code.
@@ -334,3 +334,12 @@ Still open:
 5. `init` runs no Git command and never adds the project submodule; the owner pins the project with Git after init
    (FR-049). Confirm that a `.gitkeep` and a printed next-step list are sufficient.
 6. In wave 1a, unattended init needs an existing devcontainer file; devcontainer relocation and wizard reuse arrive in 1b.
+
+## Resolver follow-up and rebasing rules (H77, round 5)
+
+T035 is the reviewed resolver change: `apps/host_agent/internal/config/resolver.go` accepts manifest version 2 (exact field
+set per version, type-exact `schema_version`) and a shared-vectors test in `apps/host_agent` runs
+`contracts/workspace/vectors.json`; it starts only after T009 is accepted and needs its own owner-approved scope because it
+touches accepted provider inputs. In-flight rebases: a branch with a started single-task state (`.symphony/single-task.json`)
+finishes its completion before rebasing onto a sibling merge, or the owner re-baselines it; otherwise merges of siblings are
+serialised in graph order. Dependent branches start from the merged `main` that contains their prerequisites.
