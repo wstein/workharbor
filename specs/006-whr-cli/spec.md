@@ -3,12 +3,19 @@
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
-**Status**: Workspace initialization and resource-selection revision proposed for owner review (2026-10-16); not implemented.
-Earlier scope status: Revised after review; awaiting independent re-review. Owner approval for planning (H13:a, 2026-10-13)
-covers this revised text only once that re-review is CLEAR for its exact head. Not implemented. Owner decisions
+**Status**: Amended 2026-10-16/17 (decision H77: grouped command structure, short-form aliases, local `validate`
+and `doctor`, and a first increment that also implements `ws init` and the client side of `ws create` resources) on top of the
+workspace initialization and resource-selection revision, which is proposed for owner review (2026-10-16); not implemented.
+The H77 amendment text is proposed: it needs an independent review CLEAR for its exact head and then explicit owner
+approval of that head, evidenced by a tracker or PR link (WORKFLOW.md). Werner's chat decisions of 2026-10-16/17 are
+the owner decisions recorded below, not approval of this text, and the owner's request for human review of the plan,
+task scope, configuration schema and launcher contracts of the initialization revision is not satisfied by
+this document. Earlier scope status: Revised after review; awaiting independent re-review. Owner approval for planning (H13:a, 2026-10-13)
+covers only the pre-amendment revised text, and only once that re-review is CLEAR for its exact head; it does not cover the H77 text or the 2026-10-16 revisions. Not implemented. Owner decisions
 are recorded below; implementation prerequisites are listed under "Prerequisites".
-**Input**: Specify the product CLI `whr` for workspace lifecycle plus host and operations commands (`ws`, `open`,
-`shell`, `console`, `ssh`, `setup`, `doctor`, `offboard`, `service`, `version`), release and packaging conventions,
+**Input**: Specify the product CLI `whr` for workspace lifecycle plus host and operations commands (groups
+`workspace`, `host`, `auth`, `op`, `agent` with daily short forms such as `open`, `shell`, `console`, `ssh`, `setup`,
+`doctor`, `offboard`, `service`, plus `init`, `validate` and `version`), release and packaging conventions,
 exit codes, output formats, secret handling and terminal-text safety, plus the owner's later decisions on
 in-container agent session interoperation and a read-only Spec Kit dashboard. Record unresolved legacy-versus-
 rewrite conflicts as clarification questions rather than silent choices.
@@ -68,6 +75,56 @@ agent supervision commands are not adopted as such: session interoperation follo
   default in `shell`, `console`, `agent attach` and sessions that `whr ssh` relays itself; unfiltered output
   requires an explicit per-session raw opt-in.
 
+### Owner decisions (2026-10-16): H77
+
+Numbering: the highest decision number recorded in the repository is H76:a, so this amendment is H77. The owner
+(Werner, 2026-10-16) decided:
+
+- **H77 (1) - Command structure**: long form `whr <group> <verb>` for the groups `workspace` and `host`; short
+  form `whr <verb>` for the daily verbs. The canonical group name is `workspace` and `ws` is an alias. Workspace
+  verbs `ls`, `show`, `create`, `start`, `stop`, `rebuild`, `rm`, the interactive `shell`, `console`, `ssh`, `open`
+  and the new `init` and `validate` have short forms. Host verbs `setup`, `doctor`, `offboard`, `service` have short
+  forms; `host ls` and `host show` have none because `ls` and `show` belong to the workspace. Authentication is
+  `whr auth login|status|logout` with the short forms `whr login` and `whr logout`. Decided here: `auth status`
+  keeps no short form, because bare `whr status` is ambiguous between authentication, workspace and console state
+  (ADR 0014).
+- **H77 (2) - Local commands**: `whr validate [dir]` (read-only check of `workharbor.json` against its schema, of the
+  devcontainer configuration and of pinned submodules, with `--json`) and `whr init [dir]` (the local initialization
+  wizard that US0 and FR-043 to FR-050 specify, which validates its output with `validate`'s code and is the only
+  writing command of the first increment) need neither control plane nor login. `whr doctor` additionally runs the
+  validate checks when the current directory contains a `workharbor.json`.
+- **H77 (3) - Alias rules**: one command table in code; short forms are aliases of the same command; the table is
+  frozen by a test like the exit-code table; the canonical name appears in `--json` (`command: "workspace.ls"`),
+  logs and errors; a verb that exists in two groups gets the short form only for `workspace`; `--help` shows the
+  short form as a hint; shell completion knows both forms; a new short form needs a table change.
+- **H77 (4) - First increment**: implementation order A foundation, B `validate`, C `doctor` (local checks), D
+  `init`; `setup --dry-run` only if cheap and consistent with FR-009. Everything that needs the owner API stays
+  specified but is out of the first increment and blocked on it. Verified on 2026-10-16:
+  `apps/control_plane/lib/workharbor_web/router.ex` serves only `/api/v1/hosts` (enrollment issue, revoke, status
+  by id), `/api/v1/auth` (login, status, logout, revoke, dashboard credentials) and the login and owner pages; no
+  workspace, operation, session, agent, host-list or dashboard API exists.
+- **H77 (5) - Placement and scope (chat 2026-10-16/17)**: the first-increment work items run on their own branch and
+  pull requests, not in the T001-T024 chain (renewed approval of `tasks.md` from T009 onward is the owner's to give);
+  `setup --dry-run` stays out of the first increment (FR-061); `ADR 0013` gets a superseding ADR for "remote
+  unreachable" before owner-API client work, and `init`'s unclassified code stays until then; `doctor` exits 0 with the
+  verdict `incomplete` when only skipped or unknown checks remain and runs read-only on macOS. Scope extension of
+  2026-10-17: wave 1a is the foundation, `validate`, local `doctor`, the manifest-schema extension (FR-058) and then the
+  non-interactive core of `ws init`, plus a pure resource parsing library with shared vectors and no `ws create`
+  wiring; wave 1b is the interactive wizard and devcontainer reuse; the starter catalog stays unsupported and `ws
+  create` wiring comes with the owner API in wave 2 (FR-061). The work items run in separate worktrees, branches and pull
+  requests.
+- **H77 (6) - Thresholds (owner confirmation, chat 2026-10-17)**: "Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s,
+  256 MiB seems to be fine from my side." These are the minimum Git version, the free-disk threshold, the manifest,
+  devcontainer and `.gitmodules` size limits, the Git call deadline and the memory bound of FR-054 to FR-060. A change
+  needs a spec amendment and a test change.
+
+These decisions are recorded in [ADR 0014](../../docs/adr/0014-whr-command-structure.md) and the contracts
+[`commands.json`](../../contracts/cli/commands.json), [`output.schema.json`](../../contracts/cli/output.schema.json),
+[`doctor-checks.json`](../../contracts/cli/doctor-checks.json), [`validate-findings.json`](../../contracts/cli/validate-findings.json),
+[`workharbor.schema.json`](../../contracts/workspace/workharbor.schema.json), [`vectors.json`](../../contracts/workspace/vectors.json), [`resources-vectors.json`](../../contracts/cli/resources-vectors.json) and [`starters.json`](../../contracts/workspace/starters.json). Throughout this specification a
+short form such as `whr ws create`, `whr open` or `whr offboard` names the same command as its canonical spelling
+`whr workspace create`, `whr workspace open` or `whr host offboard`.
+
 ### Prerequisites
 
 Implementation MUST NOT start before all of the following exist:
@@ -79,6 +136,12 @@ Implementation MUST NOT start before all of the following exist:
 - The versioned in-container session interface contract under `contracts/` (issue #71).
 - A reconciliation of Feature 001's terminal cleanup rule with the console persistence model of FR-007a, recorded
   in the Feature 001 spec or an ADR.
+
+The first increment (FR-061, H77) needs only the constitution (v1.1.0), [ADR 0010](../../docs/adr/0010-go-whr-cli-layout.md)
+and [ADR 0013](../../docs/adr/0013-whr-exit-codes.md) (both Accepted 2026-10-16, H69:a) and the proposed
+[ADR 0014](../../docs/adr/0014-whr-command-structure.md); it uses neither the session interface contract (#71) nor
+the console reconciliation, which gate the interactive and agent commands. This amendment does not verify the state
+of the documentation reconciliation issues (#66, #68, #75); the workpad of the foundation work item records it.
 
 ### Local workspace initialization (owner request, 2026-10-16)
 
@@ -277,7 +340,7 @@ service and later offboards the host without leaving credentials behind.
 **Why this priority**: Host enrollment is required before any workspace exists, but the browser can already
 display enrollment codes; the CLI makes the host side repeatable.
 **Independent Test**: On a disposable Linux Docker host, run `whr setup --dry-run`, `whr setup`, `whr doctor`,
-`whr service status` and `whr offboard host`, including injected failures between offboarding steps; inspect
+`whr service status` and `whr offboard`, including injected failures between offboarding steps; inspect
 changes, credentials on disk and the control-plane host list.
 
 **Acceptance Scenarios**:
@@ -292,10 +355,10 @@ changes, credentials on disk and the control-plane host list.
    skipped or unknown with a remediation, and a missing tool is never reported as passing.
 5. **Given** an unattended invocation, **When** a step requires a human decision (trust, destructive removal,
    offboarding), **Then** the CLI refuses rather than assuming consent and exits with the needs-human code.
-6. **Given** an enrolled host and confirmation, **When** `whr offboard host` runs and every step succeeds,
+6. **Given** an enrolled host and confirmation, **When** `whr offboard` (canonically `whr host offboard`) runs and every step succeeds,
    **Then** it reports success only after the control plane confirms revocation and the service and local host
    credentials are removed; workspace data is deleted only with a separate flag and confirmation.
-7. **Given** the control plane is unreachable or a step fails, **When** `whr offboard host` stops, **Then** it
+7. **Given** the control plane is unreachable or a step fails, **When** `whr offboard` stops, **Then** it
    exits with a partial-failure status listing completed and remaining steps, keeps the agent stopped and keeps
    the credentials needed to request revocation; rerunning resumes from the first incomplete step.
 8. **Given** the owner revoked the host from the browser while offboarding was incomplete, **When** offboarding is
@@ -323,6 +386,17 @@ output; validate each output against the published schema and each exit status a
 4. **Given** any failure, **When** the CLI exits, **Then** the status matches the published exit-code table.
 5. **Given** `whr version --json`, **When** it runs, **Then** it reports the release version, source revision, build
    date, client platform and supported contract versions.
+6. **Given** a command typed as a short form (`whr validate`), a group alias (`whr ws validate`) or canonically
+   (`whr workspace validate`), **When** each runs with `--json`, **Then** all three execute the same command and
+   report `command` as the canonical `workspace.validate`; logs and error lines use the canonical name.
+7. **Given** `whr --help` and `whr host --help`, **When** they print, **Then** each command with a short form shows
+   it as a hint, `host ls` and `host show` show none, and completion scripts for bash, zsh and fish offer both
+   spellings of every available command.
+8. **Given** the command table, **When** the freeze tests run, **Then** a changed, added, removed or conflicting
+   command, group alias or short form fails them, including a short form for a verb that exists in two groups.
+9. **Given** a command that is specified but unavailable in this release (for example `whr ls`), **When** it runs,
+   **Then** it exits with the usage code and one line naming the dependency it waits for, performs no network
+   access and creates no profile or file; with `--json` the same appears as the envelope error.
 
 ---
 
@@ -382,6 +456,106 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 
 ---
 
+### User Story 7 - Validate a workspace configuration repository locally (Priority: P1, first increment)
+
+A developer or a CI job checks a workspace configuration repository on their own machine, before any control plane,
+login or Docker daemon exists, and learns what is wrong and how to fix it.
+
+**Why this priority**: It is the first command that works without the owner API (H77) and it protects the later
+trust and provisioning path from malformed or hostile configuration.
+**Independent Test**: Run `whr validate` on the admitted image and Dockerfile fixtures, on the historical example,
+and on a corpus of hostile directories (below); check exit status, `--json` against the published schema,
+that the directory tree (names, size, mode, inode, mtime and ctime; not atime) is unchanged, that no marker file from a hostile hook was
+created and that no network connection was attempted.
+
+**Acceptance Scenarios**:
+
+1. **Given** a directory with a valid `workharbor.json`, a regular devcontainer file inside it and a `projects`
+   directory, **When** `whr validate <dir>` runs, **Then** it exits 0, reports `valid: true`, lists warnings (for
+   example `git.not_repository`) and states `provider_admission: not_evaluated`; it never claims the configuration
+   is provisionable.
+2. **Given** a directory without `workharbor.json`, **When** it runs, **Then** it exits with the conflict/wrong-state
+   code and one `manifest.missing` finding with a remediation naming `whr init`; **Given** a path that does not
+   exist, **Then** it exits with the not-found code; **Given** a path that is a file, **Then** it exits with the
+   usage code.
+3. **Given** a manifest with an unknown or missing field, a `schema_version` other than 1, a non-empty `bundles`
+   list, or an absolute, traversing, backslash-bearing, glob-bearing, `.git`-containing or empty path, **When** it
+   runs, **Then** every such defect is reported as its own error finding in one run (bounded to 200 findings), and
+   the exit code is the conflict/wrong-state code.
+4. **Given** a manifest or devcontainer file that is larger than its limit, not UTF-8, begins with a byte-order
+   mark, contains NUL, has a duplicate key at any depth, is nested deeper than the limit, or is not valid JSON
+   (JSONC for the devcontainer file), **When** it runs, **Then** it reports a finding without reading beyond the
+   limit, without echoing file content other than a truncated, escaped key or path, and without hanging.
+5. **Given** `workharbor.json`, the devcontainer file, any directory on the way to them, or `projects_path` is a
+   symbolic link, a FIFO, a socket, a device or a directory where a file is expected, **When** it runs, **Then** it
+   reports an unsafe-path error, never opens or follows the link or special file and does not disclose the link
+   target.
+6. **Given** a devcontainer file that uses features outside the admitted provider subset (Features, Compose,
+   `initializeCommand`, `postAttachCommand`, `mounts`, `runArgs`, a tag instead of a digest, non-numeric users),
+   **When** it runs, **Then** each is a warning that names the capability matrix and the result remains valid.
+7. **Given** a Git repository root with `.gitmodules` and gitlinks, **When** it runs, **Then** each submodule is
+   reported with its pinned commit; a `.gitmodules` entry with credentials in the URL (reported redacted), a
+   non-HTTPS/SSH or relative or `ext::`/`file:` URL, an `update = !command` or a path outside `projects_path`, and
+   a gitlink with no `.gitmodules` entry are errors; an entry without a gitlink is an error (the resolver rejects it) and a gitlink that differs from
+   `HEAD` is a warning.
+8. **Given** a hostile repository whose configuration would run code when processed by an unhardened Git or
+   container tool (`core.fsmonitor`, hooks, filters, aliases, `.gitmodules` update commands, devcontainer
+   commands), **When** `whr validate` runs, **Then** no repository-provided code executes (a marker file is not
+   created) and nothing in the directory, including `.git`, is modified.
+9. **Given** `--json`, **When** it runs in any case above, **Then** standard output carries exactly one envelope that
+   validates against the published schema and the result carries counts and findings; in human mode every
+   untrusted name, path or URL is rendered inert (FR-022).
+10. **Given** a version 2 manifest with valid or invalid settings (unknown enum, traversing `start_dir`, credential in
+    `project.url`, bad `name`) and a version 1 manifest carrying a version 2 field, **When** it runs, **Then** each defect
+    is its own error finding without echoing the credential, a valid declaration without a pinned gitlink is the
+    warning `project.declared_not_pinned`, and the shared vectors give the same codes.
+11. **Given** a repository whose HEAD is unborn with a staged submodule, **When** it runs, **Then** it reports
+    `git.head_missing`, reads `.gitmodules` from the index and validates the staged submodule; any other Git failure
+    is `git.listing_failed`.
+12. **Given** interruption (SIGINT or SIGTERM) while it runs, **When** it stops, **Then** it exits with the interrupted code and
+    has changed nothing.
+
+---
+
+### User Story 8 - Diagnose the local environment (Priority: P1, first increment)
+
+An operator or developer runs `whr doctor` to see whether this machine has what WorkHarbor needs, with checks that
+require the control plane clearly marked as not run.
+
+**Why this priority**: Host diagnostics are useful before enrollment and give `validate` a natural place in daily
+use; the control-plane checks cannot run until the owner API exists.
+**Independent Test**: Run `whr doctor` on a Linux Docker host, on macOS with OrbStack, on a host without a
+Docker-compatible socket, with an old or missing Git, with a nearly full filesystem (injected measurement port) and
+in a directory with valid and invalid `workharbor.json`; compare status, evidence redaction and exit status.
+
+**Acceptance Scenarios**:
+
+1. **Given** a host with Git at or above the minimum, a connectable Docker-compatible socket and enough free disk,
+   **When** `whr doctor` runs, **Then** `platform.host`, `container.socket`, `git.version` and `disk.working_directory`
+   report `pass` with measured evidence (`disk.container_storage` is `pass` only where the storage path is readable and
+   known, otherwise `unknown`), the control-plane and host-credential checks report `skipped` with a reason,
+   the verdict is `incomplete` and the exit status is 0.
+2. **Given** no socket among the documented candidates, a refused or permission-denied connection, an absent or old
+   Git, or free space below the threshold, **When** it runs, **Then** each is `fail` with a remediation (the socket
+   remediation links the container-runtime page), the verdict is `failed` and the exit status is the
+   conflict/wrong-state code; an absent tool is never `pass`.
+3. **Given** `DOCKER_HOST` with a non-`unix` scheme, **When** it runs, **Then** `container.socket` is `unknown` and the
+   remote daemon is not contacted.
+4. **Given** the current directory contains `workharbor.json`, **When** it runs, **Then** `config.valid` equals the
+   validate result for that directory (`fail` on any error finding); **Given** no `workharbor.json`, **Then** it is
+   `skipped` with the reason `precondition_absent`. Parent directories are not searched.
+5. **Given** a platform that is not in the host-platform matrix, **When** it runs, **Then** `platform.host` is
+   `unknown`, the other read-only checks still run, and the mutating host commands (`setup`, `service`,
+   `offboard`) still refuse that platform.
+6. **Given** `--json`, **When** it runs, **Then** the output is one envelope that validates against the schema and
+   contains no home directory path (shown as `~`), user name, host name, environment value or credential, so that
+   it can be shared.
+7. **Given** any run, **When** it finishes, **Then** it has created no file, started no process other than the fixed
+   `git --version` and, when `workharbor.json` is present, the fixed read-only invocations of FR-055, installed or configured no container runtime, and made no network connection other than
+   connecting to the discovered local socket.
+
+---
+
 ### Edge Cases
 
 - Control plane unreachable: commands fail with a distinct error and never report cached state as current.
@@ -399,9 +573,9 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   supported channels.
 - Standard output is not a terminal: colors and progress animations are disabled by default.
 - Dimensions outside 1–500 columns or 1–200 rows are clamped or rejected per Feature 001 limits.
-- `whr setup` or `whr offboard host` interrupted midway: rerunning resumes or reports partial state; neither ever
+- `whr setup` or `whr offboard` interrupted midway: rerunning resumes or reports partial state; neither ever
   reports success for incomplete work.
-- Host commands on an unsupported host platform fail with an unsupported-platform error before any change.
+- Mutating host commands (`setup`, `service`, `offboard`) on an unsupported host platform fail with an unsupported-platform error before any change; `doctor` runs read-only and reports the platform `unknown`.
 - Unknown flag or argument: usage error with a short hint, no side effects.
 
 - Init on a nonterminal never prompts; JSON mode also suppresses prompts on a terminal.
@@ -411,16 +585,33 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - A selected shell/herdr is unavailable, a starting directory is missing, or bundle
   attachment is unimplemented: report the specific missing capability without substitution.
 
+- `validate` or `doctor` pointed at a hostile directory (FR-055): a symlinked or special `workharbor.json`, a FIFO
+  that would block a read, a sparse file of enormous apparent size, non-UTF-8 or NUL bytes, a byte-order mark,
+  duplicate or very deeply nested keys, very many `.gitmodules` entries or index paths, a `.git` file that
+  redirects elsewhere, Unicode control or bidirectional characters in names, and repository configuration that would
+  execute code (fsmonitor, hooks, filters, update commands) are bounded findings; nothing is executed, followed,
+  echoed raw or modified.
+- `doctor` without any Docker-compatible socket (a fresh machine) fails `container.socket` with a link to the
+  container-runtime page and installs nothing; with a remote `DOCKER_HOST` it is `unknown`.
+- A command that is specified but unavailable in the first increment (FR-061) exits with the usage code and names what it waits for.
+- `init` write races and partial states (FR-057): a path created or replaced by another process after the preview, a full disk and
+  interruption at every step leave the complete valid result or exactly the previous state, or report a partial failure
+  with the remaining paths.
+
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
 **Command surface**
 
-- **FR-001**: `whr` MUST provide `auth` (`login`, `status`, `logout`), `ws` (`init`, `ls`, `show`, `create`, `start`,
-  `stop`, `rebuild`, `rm`), `op` (`show`, `wait`), `open`, `shell`, `console`, `ssh`, `agent` (`ls`, `attach`,
-  `status`, `send`, `stop`), `setup`, `doctor`, `offboard host`, `service` (`install`, `uninstall`, `status`),
-  `version` and shell completion. Bare `whr` and `--help` print help; `--version` equals `version`.
+- **FR-001**: `whr` MUST provide the commands of the command table (FR-051): the group `workspace` (alias `ws`) with
+  `init`, `validate`, `ls`, `show`, `create`, `start`, `stop`, `rebuild`, `rm`, `shell`, `console`, `ssh` and `open`;
+  the group `host` with `setup`, `doctor`, `offboard`, `service` (`install`, `uninstall`, `status`), `ls` and `show`;
+  the group `auth` with `login`, `status` and `logout`; the group `op` with `show` and `wait`; the group `agent` with
+  `ls`, `attach`, `status`, `send` and `stop`; and the top-level `version`, `completion` and `help`. Short forms
+  follow FR-052. Bare `whr` and `--help` print help; `--version` equals `version`. Only the commands and parts marked
+  as first increment in the table are available before the owner API exists (FR-061); the others are specified by
+  this feature and registered, but unavailable.
 - **FR-002**: Every remote workspace command MUST act through the same owner-authenticated application operations as the
   browser, with identical authorization, idempotency, trust, audit and confirmation rules.
   `ws init` is a local configuration-authoring exception: it requires no client
@@ -459,10 +650,12 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   with the pinned server key and a short-lived credential reference, and MUST state that connections made with it
   are neither relayed nor filtered by `whr` (FR-022a does not apply to them).
 - **FR-009**: `whr setup` MUST support dry-run, list every intended change, consume a one-time enrollment code and
-  install the host agent service; it MUST be resumable after interruption.
+  install the host agent service; it MUST be resumable after interruption. The dry run is not part of the first
+  increment (FR-061) and arrives with `setup` itself.
 - **FR-010**: `whr doctor` MUST report each check as pass, fail, skipped or unknown with a remediation, support a
-  shareable redacted report, and never report an absent tool or unmeasured check as passing.
-- **FR-011**: `whr offboard host` MUST be confirmed interactively, refuse unattended mode, and proceed in resumable
+  shareable redacted report, and never report an absent tool or unmeasured check as passing. The local subset available in the first increment
+  is defined by FR-060.
+- **FR-011**: `whr host offboard` (short form `whr offboard`) MUST be confirmed interactively, refuse unattended mode, and proceed in resumable
   steps: stop the agent, request revocation, confirm revocation with the control plane, delete local host
   credentials, uninstall the service. It MUST report success only after revocation is confirmed and local
   cleanup is complete. On any failure it MUST exit with a partial-failure status listing completed and remaining
@@ -577,6 +770,202 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   trust/attachment verification. CPU/memory and host selection belong to `ws create`,
   not this local wizard.
 
+**Command table, local commands and the first increment (H77)**
+
+- **FR-051**: `whr` MUST define one command table in code, mirrored by the language-neutral contract
+  [`contracts/cli/commands.json`](../../contracts/cli/commands.json), from which command registration, help, shell
+  completion and the `--json` `command` field are generated. The table lists for every command its canonical id,
+  group path, optional short form, increment, dependency (none, control plane or host-local), whether it writes,
+  its `--json` mode and its flags where this specification fixes them (`workspace.init`, `workspace.create`).
+  Automated offline tests MUST freeze the table against the contract file, as the exit-code table is frozen
+  (FR-018), so that any difference fails.
+- **FR-052**: Short forms follow these rules, enforced by the table test: (a) a short form is an alias of the same
+  command object, never a second implementation, and behaves identically including flags, output and exit
+  status; (b) short forms exist only for the verbs listed in H77 (1), which is an allowlist; as a constraint on it, a
+  verb that exists in more than one group (`ls`, `show`, `status`, `stop`) has a short form only for the `workspace`
+  group, so `host ls`, `host show`, `auth status`, `op show` and every `agent` verb have none (`whr service
+  install|uninstall|status` keeps its `service` prefix, so it is not a bare `status`); (c) short forms are unique and
+  do not equal a group name or a top-level command, except the `service` prefix itself; (d) `ws` is an alias of the
+  group `workspace` only, so upstream text such as `ws init` and `ws create` names `workspace init` and
+  `workspace create`; (e) `--help` of a command shows its short form as a hint, and shell completion offers both
+  spellings of every available command; (f) adding or changing a short form needs a table change, a freeze-test
+  change and an owner-reviewed amendment of this specification.
+- **FR-053**: The canonical command id (`workspace.ls`, `workspace.init`, `host.service.install`, `auth.login`) MUST
+  be the value of the `--json` `command` field, and MUST be the name used in logs and error messages, whichever
+  spelling the caller typed. An unknown command or alias fails with the usage code and a one-line hint naming the
+  nearest valid spelling.
+- **FR-054**: `whr workspace validate [dir]` (short form `whr validate`) MUST read a workspace configuration
+  directory (default: the current directory) without writing, without network access and without credentials, and
+  report findings, each with a stable code, a severity (`error`, `warning`, `info`), an optional subject path
+  relative to the directory, a message and a remediation. The result is `valid` exactly when no finding has
+  severity `error`. The authoritative, fully qualified list of codes and severities is
+  [`contracts/cli/validate-findings.json`](../../contracts/cli/validate-findings.json); the checks are:
+  - the manifest `workharbor.json` against [its schema](../../contracts/workspace/workharbor.schema.json) with the
+    strict-JSON profile of ADR 0010 (`manifest.*`: `missing`, `unsafe_path`, `too_large`, `encoding`, `syntax`,
+    `duplicate_key`, `schema`, `path_invalid`, `bundles_deferred`; an unreadable manifest is `manifest.unsafe_path`);
+  - the devcontainer file named by the manifest (`devcontainer.*`): errors `missing`, `unsafe_path`,
+    `too_large`, `encoding`, `syntax`, `duplicate_key`; warnings `unsupported_key`, `image_not_digest_pinned`,
+    `users_not_numeric`, `host_command` for content outside the provider subset of the
+    [capability matrix](../../docs/development/devcontainer-matrix.md);
+  - the version 2 settings of the manifest (FR-058) as `manifest.schema`, `manifest.path_invalid` (`start_dir`) and
+    `manifest.url_credentials` (`project.url`, never echoed); a project declaration without a pinned gitlink is the
+    warning `project.declared_not_pinned`;
+  - `projects_path` (`projects.*`): errors `missing`, `unsafe_path`; warning `not_a_submodule` for committed
+    regular files under it other than `.gitkeep`;
+  - Git state, only when the directory itself contains `.git` (`git.*`, `gitmodules.*`, `submodule.*`): an unsafe
+    `.git` (symbolic link or gitfile), a failed, timed-out or unparsable Git call (an error, so Git failure never
+    hides submodule errors), a listing beyond its bound (an error), non-canonical or case-folded `.git` components in
+    the `HEAD` tree, the committed `.gitmodules` blob (mode, size, syntax, duplicate fields, keys other than `path`
+    and `url`, which the resolver rejects), and each submodule: URL form (`https://`, `ssh://` or the scp-like
+    `user@host:path` the resolver admits; relative, `file:` and `ext::` refused), credentials (any userinfo in an
+    `https` URL or a password, never echoed), an `update` value that is a command, a gitlink without an entry, an
+    entry without a gitlink (the resolver rejects it), a path outside `projects_path`, nested or overlapping paths,
+    an index gitlink that differs from `HEAD` (warning) and the pinned commit (info). Git-derived checks read the
+    index, the `HEAD` tree and the committed blob, as the resolver does; the other checks read the working tree.
+    HEAD is unborn exactly when `git rev-parse --verify --quiet HEAD` exits 1 with empty standard error and `.git/HEAD`
+    is a symbolic reference to a missing ref; then `git.head_missing` is reported, `ls-tree` and `cat-file HEAD:` are
+    skipped, `.gitmodules` is read from the index (`cat-file blob :.gitmodules`, only when the index lists it) and the
+    submodule checks run against the index. Every other non-zero exit, a timeout or unparsable output is
+    `git.listing_failed`. With a `HEAD`, `unlisted` and `not_pinned` compare `HEAD`-tree gitlinks with the committed
+    `.gitmodules` blob (read only when the `HEAD` tree lists it); staged-only differences are the warnings
+    `submodule.not_committed` and `gitmodules.uncommitted_change`.
+  Path rules refuse any case variant of `.git`, as the resolver does, and `schema_version` must be the integer 1 (not
+  `1.0`). The result states `provider_admission: not_evaluated`: validation never claims a configuration is
+  provisionable, because admission is the host agent's decision at trust time. Findings beyond 200 are counted but
+  not listed (`truncated`). All independent defects are reported in one run. `--json` follows the
+  [output schema](../../contracts/cli/output.schema.json).
+- **FR-055**: `validate` MUST treat the directory as hostile. It MUST NOT execute, source, interpolate or follow
+  any content of the directory: no repository hook, filter, alias, `core.fsmonitor`, `.gitmodules` update command or
+  devcontainer command runs, and no devcontainer or `.gitmodules` value is expanded. It MUST open only
+  the manifest, the devcontainer file, the `.gitmodules` file and the directory entries named by
+  the manifest, walking each path component without following symbolic links, requiring a regular file (or
+  directory) by `fstat` on the opened descriptor, never blocking on a FIFO, socket or device, and reading at most
+  64 KiB (manifest), 256 KiB (devcontainer file) and 64 KiB (`.gitmodules`, at most 256 entries) plus
+  bounded depth, key counts and index listing size. It MUST NOT reveal a link target, a file's content beyond a
+  truncated escaped key, path or redacted URL, or a credential contained in a URL. Git is used only through a fixed,
+  read-only invocation with a freshly built environment (no inherited `GIT_*` variables, no system or global
+  configuration, no trace output, no optional locks, no pager, no prompts, neutral working directory, empty
+  standard input) and `-c` overrides of `core.fsmonitor`, `core.hooksPath` and `protocol.allow` (the repository's own
+  `.git/config`, including includes, is still parsed, so the override list and a minimum Git version carry the
+  protection; `safe.directory` is never set) that lists the index and `HEAD` tree; an absent, too old or unusable Git
+  yields `git.unavailable`, not a pass. A `.git` that is a symbolic link or a file (gitfile) yields `git.unsafe_path`
+  and no Git call. On macOS a Git that would open the Command Line Tools installer is detected without executing it
+  and reported as unavailable. It MUST NOT modify any file or directory, including `.git`.
+- **FR-056**: `whr workspace init` (short form `whr init`) implements FR-043 to FR-050 as specified by the owner,
+  as configuration authoring only, in two waves (owner decision of 2026-10-17). Wave 1a (D1, the non-interactive core):
+  the proposal model, the preview of every file with contents or diff, `--dry-run`, `--non-interactive`, `--yes`,
+  `--overwrite <relative-path>`, the flags `--name`, `--project-url`, `--start-dir`, `--human-shell`, `--console-mode` and
+  `--shortcuts`, detection of changes since the preview, restore-or-report-partial rollback, the no-op rerun, preserved
+  existing settings, validation with the code of `validate` (FR-054), and reuse of an existing devcontainer at the
+  manifest's `devcontainer_path` (default `.devcontainer/devcontainer.json`); without one, unattended init exits
+  needs-human naming what to supply. Wave 1b: the interactive wizard (D2: back, review, cancel; its terminal test
+  harness is its own work item) and `--devcontainer <path>` selection with devcontainer reuse in the wizard (D3).
+  Wave 2: `--template` and the starter catalog, which stay listed as unsupported (FR-058) until the provider admits
+  them; `--template` refuses with that explanation. The settings, including `--name`, are written to the manifest (FR-058). Because init only authors configuration (FR-043), the runtime parts of FR-047 and FR-048
+  (launching fish or herdr, console grants, availability checks at creation or session launch) and every bundle
+  selection (FR-050: empty list only) are not in the first increment and are labelled so in the output
+  (`runtime_enforcement: not_in_this_release`). init runs no Git command, makes no network connection and never fetches a
+  project: `--project-url` (`https://` or `ssh://`, no `https` userinfo) is written as the manifest's `project`
+  declaration with the path `projects/<name>` derived from its last path component, and the next steps tell the owner to
+  `git init -b main`, add and pin the project as a submodule and commit; until pinned the project is not creation-ready
+  (validate warns `project.declared_not_pinned`). Exit codes follow FR-063. This reconciliation is the human review
+  input that the owner's text requires for the plan, task scope, configuration schema and launcher contracts; it is not
+  their approval.
+- **FR-057**: `init` MUST add these safety properties to FR-046: (a) it validates the complete proposal with the code
+  of `validate` (FR-054) in memory before the first write and the written result on disk after the last write, and
+  reuses the same findings for `--dry-run`; an error finding in generated files rolls back and exits with the
+  unclassified code, an error caused by content it preserved is the conflict code, detected before the first write
+  where possible; (b) targets are created with exclusive no-follow creation relative to a no-follow-opened target
+  directory, so a path created or replaced by another process after the preview is a conflict; existing real
+  directories (`.devcontainer`, `projects`) are reused and never removed by rollback; a symbolic link,
+  file or special file at a target path is refused unless the file is named by `--overwrite` and is a regular file;
+  (c) an overwrite writes a temporary file in the same directory and renames it, keeps the old bytes until the
+  rename and restores them on failure; (d) rollback removes exactly the paths this run created, and restores
+  overwritten files, verifying device and inode before each removal, never removes the target directory unless this
+  run created it, and an incomplete rollback is a partial failure (73) listing the remaining paths and recovery steps,
+  taking precedence over the original failure code; (e) SIGINT and SIGTERM trigger the rollback and exit 72; SIGKILL or a
+  crash is not rolled back and the next run refuses on the leftover paths with the conflict code; (f) wizard
+  cancellation changes nothing; (g) files are created 0644 and directories 0755 subject to the umask; no secret is
+  accepted, written or printed.
+- **FR-058**: The settings that FR-044 collects extend the manifest `workharbor.json`, as the owner decided on
+  2026-10-17. [`workharbor.schema.json`](../../contracts/workspace/workharbor.schema.json) defines the accepted
+  `schema_version` 1 (exactly four fields, unchanged) and the proposed `schema_version` 2: the same four fields plus
+  optional `name` (lowercase letters, digits and hyphens, 1-64 characters), `start_dir`, `human_shell` (`fish`, `bash`, `zsh`, `nu`), `console_mode` (`herdr`, `plain`), `shortcuts`
+  (`on`, `off`) and `project` (`url`, `path`), with the defaults of FR-047 to FR-049 when a field is absent (`start_dir`
+  `.`, fish, herdr, on); the agent-command shell is fixed to bash by policy and is not a field. Version 2 is
+  fail-closed: the host-agent resolver rejects any manifest whose field set is not exactly version 1's until a separate,
+  reviewed resolver change (coordinated with T009) accepts version 2, so an init-authored manifest is not
+  creation-ready on its own. The manifest vectors ([`vectors.json`](../../contracts/workspace/vectors.json)) are shared by
+  `validate`, `init`, `scripts/check_repo.py` and, after that change, the resolver. The starter catalog
+  [`starters.json`](../../contracts/workspace/starters.json) lists starters with an id, kind, immutable digest and status;
+  every starter is `unsupported` until the provider admits it (owner decision of 2026-10-17), and init never executes a
+  starter. Reading and enforcing the settings at creation and session launch is later work (Feature 007 and the
+  launcher contracts).
+- **FR-059**: For `workspace create` resources the first increment ships only a pure library and shared vectors, as the
+  owner decided on 2026-10-17: strict parsing and canonicalization of CPU (integer thousandths of a CPU equivalent) and
+  memory (integer bytes) per FR-039, the rejection classes (empty, sign, exponent, nonfinite, syntax, excess precision,
+  missing or bad unit, not positive, overflow above 2^63-1) and the per-field resolution of FR-040 (explicit flag, then
+  host profile, else needs-human or prompt), with the vectors in
+  [`resources-vectors.json`](../../contracts/cli/resources-vectors.json), written so that the Elixir control plane can use
+  the same file later. There is no command wiring, flag, prompt, summary output or submission in the first increment:
+  `--cpus` and `--memory`, the interactive prompts, the creation request, the idempotency freeze of FR-042, observed
+  versus desired display and the server-side validation of FR-041 are wave 2, blocked on the typed TLS owner client and
+  the owner API's resource fields.
+- **FR-060**: `whr host doctor` (short form `whr doctor`) in the first increment MUST run these local checks, each
+  reported `pass`, `fail`, `skipped` or `unknown` with measured evidence and, for `fail`, a remediation
+  (FR-010; catalogue and thresholds in [`doctor-checks.json`](../../contracts/cli/doctor-checks.json)):
+  `platform.host`; `container.socket` (when `DOCKER_HOST` is set it is the only candidate, as the Docker CLI would use
+  it; otherwise it discovers an existing Docker-compatible socket from the documented candidates, connects and sends
+  nothing; never installs or configures a container runtime; the failure remediation links the
+  [container-runtime page](../../docs/container-runtime.md), which recommends OrbStack on macOS); `git.version` (on
+  macOS a Git shim that would open the Command Line Tools installer is detected without being executed and reported
+  `fail` with a remediation); `disk.working_directory`; `disk.container_storage` (measured on `/var/lib/docker` only if
+  readable and the runtime's data root is known to be the default, otherwise `unknown` with the measured path or the
+  reason); and `config.valid`, which equals the `validate` result when the current directory (not a parent) contains
+  `workharbor.json` and is otherwise `skipped`. Checks that need the control plane or host credentials
+  (`control_plane.reachable`, `host.identity`, `host.credentials_permissions`, `service.agent`) MUST report `skipped`
+  with a reason. The verdict is `failed` when any check fails, `incomplete` when none fails but some are skipped or
+  unknown, and `ok` only when all pass. Exit status is 0 unless a check failed (FR-063); owner decision of 2026-10-17:
+  `incomplete` exits 0. Evidence is redacted (home directory as `~`; the user name and host name replaced wherever
+  they occur in a path; no environment value or credential), so `--json` output is the shareable report of FR-010; a
+  separate report file option is not part of the first increment. Doctor is read-only on every platform; FR-026's
+  refusal of unsupported host platforms applies to the mutating host commands, and doctor reports an unlisted
+  platform as `unknown` and continues (owner decision of 2026-10-17: allowed). `platform.host` is `pass` for Linux on
+  amd64 or arm64 and `unknown` otherwise.
+- **FR-061**: The first increment (H77 (4), extended by the owner on 2026-10-17) is delivered in waves. Wave 1a: A
+  foundation (the command table of FR-051 with aliases, the `--json` envelope of FR-015, the `whr:` error line of FR-017,
+  color of FR-016, the exit codes of ADR 0013 frozen by tests, terminal-text escaping of FR-022, `version` per FR-027,
+  `completion` and `help`), then in parallel B `validate`, C local `doctor` and the manifest-schema extension of FR-058
+  (checker rules, vectors, `scripts/check_repo.py`), then D1 `workspace init` non-interactive core; independently the
+  resource library of FR-059. Wave 1b: the terminal test harness, the interactive wizard D2 and devcontainer reuse D3.
+  Wave 2: `workspace create` wiring and persistence with the owner API, and the starter catalog after provider
+  admission. Each part is a work item that can run in its own worktree, branch and pull request (tasks). It needs no
+  control plane, login or Docker daemon. `setup --dry-run` is not included (owner decision of 2026-10-16): FR-009
+  requires the dry run to list every intended change and neither an agent service unit nor a typed change plan exists
+  before T015. Excluded, specified and blocked on the owner API (verified 2026-10-16: the router serves only
+  `/api/v1/hosts` with enrollment issue, revoke and `GET /:id` status, and `/api/v1/auth` login, status, logout,
+  revoke and dashboard credentials): `workspace ls|show|create|start|stop|rebuild|rm|open|shell|console|ssh`, `host ls`,
+  `op` and `agent`; `host show` and `auth login|status|logout` are blocked on the typed TLS owner client and credential
+  storage work item (T011), not on missing endpoints. Registered but unavailable commands exit with the usage code
+  (FR-063) until their work items are accepted; they never fake a result or contact an endpoint.
+- **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
+  credential or provider account (FR-028). No secret is accepted, read, stored or printed by them: a
+  `--project-url` containing userinfo or a token and a `.gitmodules` URL containing credentials are refused or
+  reported redacted (FR-020), and no credential is written to generated files, output or logs.
+- **FR-063**: The new failures map to the codes of ADR 0013 without changing that table: success, including warnings
+  only, 0; unknown flag, invalid or missing flag value, mutually exclusive flags, a traversing or credential-bearing
+  input, `--template` while starters are unsupported, a `dir` that is a file, an unavailable command, `--json` where
+  unsupported 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
+  (including a missing devcontainer) and an overwrite without explicit permission 70 (needs-human, with the flag names);
+  invalid configuration (`validate`), an existing or symlinked target path, a file changed since preview, pre-existing
+  content that fails validation, a `doctor` run with a failed check, an unsupported platform for a mutating host
+  command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
+  or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback 73, which takes precedence over 72 and over
+  the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
+  74. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
+  increment. Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
+  `exit_code` in the exit-code table (`conflict` for 68, `needs_human` for 70, and so on).
+
 **Authentication and owner API**
 
 - **FR-035**: `whr auth login` MUST select a control-plane endpoint, verify its server identity before sending any
@@ -653,7 +1042,9 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
   human; prereleases MUST NOT be published to stable package channels.
 - **FR-026**: Each release MUST publish two separate matrices with verified and unverified entries: client
   platforms (where `whr` runs owner, workspace, access and agent commands) and host platforms (where `setup`,
-  `doctor`, `service` and `offboard` are supported). Host commands MUST refuse unsupported host platforms.
+  `doctor`, `service` and `offboard` are supported). The mutating host commands (`setup`, `service`, `offboard`) MUST
+  refuse unsupported host platforms; `doctor` is read-only, runs on any platform and reports an unlisted one as
+  `unknown` (FR-060).
 - **FR-027**: `whr version` MUST report version, source revision, build date, client platform and supported
   contract versions, in human and JSON form.
 
@@ -685,6 +1076,12 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - **Workspace resource selection**: desired CPU thousandths and memory bytes,
   value origins, selected host/profile, and separately timestamped observed limits.
 
+- **Command table**: the single list of canonical commands, group aliases, short forms, increments, flags and `--json`
+  modes (FR-051), mirrored by `contracts/cli/commands.json`.
+- **Validation result**: valid flag, counts, bounded findings (code, severity, subject, message, remediation) and
+  `provider_admission: not_evaluated` for one configuration directory.
+- **Manifest settings**: the version 2 fields of `workharbor.json` (FR-058) authored by `init`; read by no runtime
+  component in the first increment.
 - **Client profile**: endpoint, verified server identity, owner identity, credential scope, expiry and local
   credential location for one owner.
 - **Operation reference**: durable operation identifier, idempotency key (caller- or CLI-generated) and status.
@@ -697,7 +1094,8 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - **Agent session**: an agent process inside one workspace, reached only through the session interface contract.
 - **API credential scope**: owner (full) or dashboard (read-only), enforced by the control plane's owner API.
 - **Dashboard view**: a read-only projection of Git-revisioned Spec Kit artifacts, review evidence and status.
-- **Doctor report**: ordered checks with status, evidence and remediation, redacted for sharing.
+- **Doctor report**: ordered checks with status, evidence and remediation, redacted for sharing; verdict ok,
+  failed or incomplete.
 - **Output envelope / stream event**: schema version, typed data or error, exit kind and code, operation reference.
 - **Platform matrix**: client and host platforms, each marked verified or unverified per release.
 - **Release artifact set**: archives, checksums, bill of materials, provenance and release notes for one tag.
@@ -736,6 +1134,35 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - **SC-012**: Automated tests map every exit path (missing and incompatible session interface, unattended refusals,
   remote statuses 0, 1 and 255 for `shell`, `console`, `ssh` and `agent attach`) to the code the exit-code ADR
   assigns.
+- **SC-016**: The command-table freeze tests (FR-051/FR-052) fail on any difference from
+  `contracts/cli/commands.json`; a table-driven test proves that every available short form and group alias
+  executes the same command and yields identical output, exit status and canonical `command` value as the
+  canonical spelling, and that no verb present in two groups has more than one short form.
+- **SC-017**: A hostile corpus for `validate` and `doctor` (FR-055 and the edge case above, including FIFO, sparse
+  10 GiB file, symlinks at every path position, invalid UTF-8, duplicate keys, depth bombs, 100,000-entry
+  `.gitmodules` and index, credential-bearing URLs, partial-clone repositories, and fsmonitor, hook, filter and
+  update-command repositories) completes within 5 seconds and 256 MiB resident memory per run, executes nothing (no
+  marker file), modifies nothing (tree compared before and after by names, size, mode, inode, mtime and ctime,
+  including `.git`), makes no network connection and yields the documented findings and exit codes; every `--json`
+  output validates against the schema. Device-node cases and the bounds are verified on a real host only.
+- **SC-018**: For `init`, in addition to SC-014, an exhaustive failure-injection and race test (a failure, SIGINT or
+  SIGTERM after each step, a full disk, a path appearing or being replaced after the preview, an overwrite target that
+  is a symbolic link) ends in exactly one of three outcomes: the complete result whose `validate` result has no error,
+  exactly the pre-run tree, or a partial failure (73) listing every remaining path; pre-existing files not named by
+  `--overwrite` are byte-identical in every run; no run follows a symbolic link, runs Git, touches the network or
+  leaves a credential; `--dry-run` changes nothing; wizard (wave 1b) and unattended runs with equivalent inputs produce
+  byte-identical files.
+- **SC-019**: For `doctor`, injected measurement ports prove that every check yields the documented status for
+  present, absent, old, denied and unmeasurable inputs, that an absent tool or an unmeasured value is never
+  `pass`, that every control-plane check is `skipped` with a reason, and that no home path, user name, host name or
+  environment value appears in the output; real-host runs on a Linux Docker host and on macOS with OrbStack record
+  exact versions and results (SC-007).
+- **SC-020**: The first increment passes its tests with the network disabled and with no profile, credential or
+  Docker daemon present, and the same binary reports every owner-API command as unavailable without a connection attempt.
+- **SC-021**: The resource library and its shared vectors (FR-059) pass offline: every CPU and memory case of
+  `resources-vectors.json` yields the listed canonical value or error class, equivalent spellings share canonical
+  values, per-field resolution gives the listed origin or needs-human, and the same file is consumable by a second
+  implementation; SC-013 remains unverified until the owner API and real-host enforcement evidence exist.
 - **SC-011**: A lost-response test (drop the reply to a workspace lifecycle mutation) yields exactly one operation, retrievable
   with `whr op show --key`. A lost `agent send` response reports unknown delivery without an automatic resend.
 
@@ -770,7 +1197,13 @@ verify host-key pinning, credential lifetime, exit status and refusal for foreig
 - The agent session interface assumes no herdr protocol or dependency; its wire
   format belongs to the contract of issue #71. FR-048 separately proposes herdr as
   the default human-console backend, subject to reviewed integration and availability.
-- Init's starter catalog and configuration schema are planning deliverables. Existing
-  manifests remain at their accepted schema until separately reviewed changes; this
-  specification adds no unrecognized fields to examples or accepted provider inputs.
+- The first increment (FR-061) runs entirely on the user's machine. `validate` and `doctor` read local files and
+  discover a local socket; `init` writes a local directory and runs no Git command. Thresholds of `doctor` and the
+  limits of FR-055 are owner-confirmed values (H77 (6), 2026-10-17).
+- The `provider_admission` of a configuration is decided only by the host agent's resolver at trust time (Feature
+  006 T009); `validate` mirrors a subset as warnings and is not an authority.
+- Existing version 1 manifests and the examples keep their accepted schema. The proposed manifest `schema_version` 2
+  (FR-058) adds fields only for new manifests authored by `init`; the resolver rejects it until a separate reviewed
+  change, and no accepted provider input is widened. The starter catalog is listed as unsupported until provider
+  admission (owner decision of 2026-10-17).
 - The dashboard reads Spec Kit artifacts at an identified Git revision.
