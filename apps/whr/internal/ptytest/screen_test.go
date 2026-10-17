@@ -3,6 +3,7 @@
 package ptytest
 
 import (
+	"fmt"
 	"runtime"
 	"strings"
 	"testing"
@@ -185,18 +186,49 @@ func TestInsertAndDeleteClampToTheScreen(t *testing.T) {
 }
 
 func FuzzScreenFeed(f *testing.F) {
+	long := strings.Repeat("x", maxSeq+10)
 	for _, s := range []string{"", "a\x1b[1;1H", "\x1b[99999999999999999999L", "\x1b[?1049h\x1b[1000000000@",
-		"\x1b]0;x", "\x1bP", "\x1b[", "\xe2\x82", "中\b中x\x1b7\x1b8", "a\x1b[2J\x1b[3A\x1b[9999D"} {
-		f.Add([]byte(s), uint8(80), uint8(24))
+		"\x1b]0;x", "\x1bP", "\x1b[", "\xe2\x82", "\u4e2d\b\u4e2dx\x1b7\x1b8", "a\x1b[2J\x1b[3A\x1b[9999D",
+		"\u4e2da\u4e2d\x1b[3G\x1b[2Px", "ab\u4e2d\x1b[1G\x1b[@",
+		"A\x1b]0;" + long + "\x18B", "A\x1b]0;" + long + "\\yyy\x07B", "A\x1b" + strings.Repeat(" ", maxSeq+5) + "(BC",
+		"A\x1b[" + strings.Repeat("1", maxSeq+5) + "HB"} {
+		f.Add([]byte(s), uint8(80), uint8(24), uint16(len(s)/2))
 	}
-	f.Fuzz(func(t *testing.T, in []byte, w, h uint8) {
-		s := newScreen(int(w)%100, int(h)%30)
-		s.feed(in)
-		_ = s.text()
-		_ = s.tail()
-		project(in, nil)
-		if s.h > 0 && len(s.rows) > s.h {
-			t.Fatalf("%d rows on a %d row screen", len(s.rows), s.h)
+	f.Fuzz(func(t *testing.T, in []byte, w, h uint8, split uint16) {
+		whole := newScreen(int(w)%100, int(h)%30)
+		n := whole.feed(in)
+		_ = whole.tail()
+		if whole.h > 0 && len(whole.rows) > whole.h {
+			t.Fatalf("%d rows on a %d row screen", len(whole.rows), whole.h)
+		}
+		if err := invariant(whole); err != nil {
+			t.Fatal(err)
+		}
+		// The same bytes read in two pieces draw the same screen.
+		cut := int(split) % (len(in) + 1)
+		parts := newScreen(int(w)%100, int(h)%30)
+		var buf []byte
+		var m int
+		for _, c := range [][]byte{in[:cut], in[cut:]} {
+			buf = append(buf, c...)
+			k := parts.feed(buf)
+			m += k
+			buf = buf[k:]
+		}
+		if m != n || parts.text() != whole.text() {
+			t.Fatalf("split at %d: %q (%d bytes) != %q (%d bytes)", cut, parts.text(), m, whole.text(), n)
+		}
+		var st skipState
+		p1, _, _ := project(in, nil)
+		var b2, p2 []byte
+		for _, c := range [][]byte{in[:cut], in[cut:]} {
+			b2 = append(b2, c...)
+			p, _, k := project(b2, &st)
+			p2 = append(p2, p...)
+			b2 = b2[k:]
+		}
+		if string(p1) != string(p2) {
+			t.Fatalf("split at %d: plain %q != %q", cut, p2, p1)
 		}
 	})
 }
@@ -272,20 +304,30 @@ func projectChunks(chunks ...string) string {
 func TestChunkingNeverChangesTheResult(t *testing.T) {
 	long := func(n int, f string) string { return strings.Repeat(f, n) }
 	cases := map[string]string{
-		"long OSC with BEL":      "A\x1b]0;" + long(maxSeq+500, "x") + "\x07B",
-		"long OSC with ST":       "A\x1b]0;" + long(maxSeq+500, "x") + "\x1b\\B",
-		"long OSC, ESC inside":   "A\x1b]0;" + long(maxSeq+10, "x") + "\x1bQ" + long(20, "y") + "\x07B",
-		"long DCS with clear":    "A\x1bP" + long(maxSeq, "q") + "\x1b[2J" + long(30, "z") + "\x1b\\B",
-		"long APC":               "A\x1b_" + long(maxSeq+1, "a") + "\x07B",
-		"long CSI cursor":        "AB\x1b[" + long(maxSeq+100, "1") + "HC",
-		"long CSI SGR":           "A\x1b[" + long(maxSeq+5, "1") + ";31mB",
-		"long CSI final at-sign": "AB\x1b[" + long(maxSeq+5, "1") + "@C",
-		"long CSI final tilde":   "AB\x1b[" + long(maxSeq+5, "1") + "~C",
-		"long CSI bad final":     "A\x1b[" + long(maxSeq+5, "1") + "\x80B",
-		"long CSI intermediate":  "A\x1b[" + long(maxSeq, "1") + " qB",
-		"just under the cap":     "A\x1b]0;" + long(maxSeq-10, "x") + "\x07B",
-		"unterminated OSC":       "A\x1b]0;" + long(maxSeq+5, "x") + "TAIL",
-		"short sequences":        "A\x1b[31mB\x1b]0;t\x07C\x1b[2KD\r\nE",
+		"long OSC with BEL":            "A\x1b]0;" + long(maxSeq+500, "x") + "\x07B",
+		"long OSC with ST":             "A\x1b]0;" + long(maxSeq+500, "x") + "\x1b\\B",
+		"long OSC, ESC inside":         "A\x1b]0;" + long(maxSeq+10, "x") + "\x1bQ" + long(20, "y") + "\x07B",
+		"long DCS with clear":          "A\x1bP" + long(maxSeq, "q") + "\x1b[2J" + long(30, "z") + "\x1b\\B",
+		"long APC":                     "A\x1b_" + long(maxSeq+1, "a") + "\x07B",
+		"long CSI cursor":              "AB\x1b[" + long(maxSeq+100, "1") + "HC",
+		"long CSI SGR":                 "A\x1b[" + long(maxSeq+5, "1") + ";31mB",
+		"long CSI final at-sign":       "AB\x1b[" + long(maxSeq+5, "1") + "@C",
+		"long CSI final tilde":         "AB\x1b[" + long(maxSeq+5, "1") + "~C",
+		"ESC and many intermediates":   "A\x1b" + long(maxSeq+396, " ") + "(BC",
+		"ESC and many bangs":           "A\x1b" + long(maxSeq+396, "!") + "(BC",
+		"ESC intermediates then bad":   "A\x1b" + long(maxSeq+5, " ") + "\x01BC",
+		"long OSC with lone backslash": "A\x1b]0;" + long(maxSeq+10, "x") + "\\yyy\x07B",
+		"long OSC ended by CAN":        "A\x1b]0;" + long(maxSeq+10, "x") + "\x18B\r\nC",
+		"long OSC ended by SUB":        "A\x1b]0;" + long(maxSeq+10, "x") + "\x1aB",
+		"long OSC ended by C1 ST":      "A\x1b]0;" + long(maxSeq+10, "x") + "\u009cB",
+		"long OSC ended by new ESC":    "A\x1b]0;" + long(maxSeq+10, "x") + "\x1b[31mB",
+		"long OSC, C2 not ST":          "A\x1b]0;" + long(maxSeq+10, "x") + "\xc2\xa0yy\x07B",
+		"long OSC, ESC ESC ST":         "A\x1b]0;" + long(maxSeq+10, "x") + "\x1b\x1b\\B",
+		"long CSI bad final":           "A\x1b[" + long(maxSeq+5, "1") + "\x80B",
+		"long CSI intermediate":        "A\x1b[" + long(maxSeq, "1") + " qB",
+		"just under the cap":           "A\x1b]0;" + long(maxSeq-10, "x") + "\x07B",
+		"unterminated OSC":             "A\x1b]0;" + long(maxSeq+5, "x") + "TAIL",
+		"short sequences":              "A\x1b[31mB\x1b]0;t\x07C\x1b[2KD\r\nE",
 	}
 	for name, in := range cases {
 		whole := newScreen(80, 24)
@@ -322,7 +364,7 @@ func TestChunkingNeverChangesTheResult(t *testing.T) {
 	// The visible results themselves, not only their agreement.
 	for in, want := range map[string]string{
 		"A\x1b]0;" + long(maxSeq+500, "x") + "\x07B":          "AB",
-		"A\x1bP" + long(maxSeq, "q") + "\x1b[2J" + "z\x1b\\B": "AB",
+		"A\x1bP" + long(maxSeq, "q") + "\x1b[2J" + "z\x1b\\B": " zB", // ESC aborts the DCS, so its CSI 2J clears the screen like a real one
 		"AB\x1b[" + long(maxSeq+100, "1") + "HC":              "ABC",
 		"A\x1b[" + long(maxSeq+5, "1") + ";31mB":              "AB",
 	} {
@@ -348,5 +390,54 @@ func TestEditsBreakWideCharactersAtTheirEdges(t *testing.T) {
 		if got := draw(0, 0, c.in); got != c.want {
 			t.Errorf("%s: got %q want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// invariant fails if a row holds an orphaned half of a wide character.
+func invariant(s *screen) error {
+	for ri, l := range s.rows {
+		for i, c := range l {
+			if c.r == -1 && !(i > 0 && l[i-1].r > 0 && width(l[i-1].r) == 2) {
+				return fmt.Errorf("row %d col %d: orphaned right half", ri, i)
+			}
+			if c.r > 0 && width(c.r) == 2 && !(i+1 < len(l) && l[i+1].r == -1) {
+				return fmt.Errorf("row %d col %d: orphaned left half", ri, i)
+			}
+		}
+	}
+	return nil
+}
+
+func TestWideEditsLeaveNoOrphanedHalf(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		w, h int
+		in   string
+		want string
+	}{
+		{"delete ending between halves, then write", 0, 0, "\u4e2da\u4e2d\x1b[3G\x1b[2Px", "\u4e2dx"},
+		{"insert pushes the right half off", 4, 3, "ab\u4e2d\x1b[1G\x1b[@", " ab"},
+		{"erase to start ending on a left half", 0, 0, "ab\u4e2d\x1b[3G\x1b[1K", ""},
+		{"erase chars ending on a left half", 0, 0, "ab\u4e2d\x1b[1G\x1b[3X", ""},
+		{"delete ending on a right half", 0, 0, "ab\u4e2dc\x1b[1G\x1b[3P", " c"},
+		{"insert between the halves", 0, 0, "\u4e2dab\x1b[2G\x1b[@", "   ab"},
+	} {
+		s := newScreen(c.w, c.h)
+		s.feed([]byte(strings.ReplaceAll(c.in, "\n", "\r\n")))
+		if err := invariant(s); err != nil {
+			t.Errorf("%s: %v", c.name, err)
+		}
+		if got := s.text(); got != c.want {
+			t.Errorf("%s: got %q want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestCSILengthCapBoundary(t *testing.T) {
+	// One byte under the cap is executed, the cap itself is ignored.
+	exec := draw(0, 0, "ABC\x1b["+strings.Repeat("0", maxSeq-4)+"1GX")
+	ign := draw(0, 0, "ABC\x1b["+strings.Repeat("0", maxSeq-3)+"1GX")
+	if exec != "XBC" || ign != "ABCX" {
+		t.Errorf("executed %q ignored %q", exec, ign)
 	}
 }

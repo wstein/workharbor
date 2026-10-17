@@ -242,8 +242,9 @@ func fixtureWinchWide([]string) int {
 	return 0
 }
 
-// fixtureFloodSeq writes the hex-decoded args[0] (an unterminated escape
-// sequence), args[1] bytes of filler, then END.
+// fixtureFloodSeq writes the hex-decoded args[0] (an escape sequence start),
+// args[1] bytes of filler, the hex-decoded optional args[2] (what ends the
+// sequence), then "\nEND\n". Without args[2] the sequence is never terminated.
 func fixtureFloodSeq(args []string) int {
 	b, _ := hex.DecodeString(args[0])
 	n, _ := strconv.Atoi(args[1])
@@ -257,11 +258,11 @@ func fixtureFloodSeq(args []string) int {
 	for written := 0; written < n; written += len(chunk) {
 		w.WriteString(chunk)
 	}
-	end := "\x07" // terminate the sequence so END is visible text
-	if len(b) > 1 && b[1] == '[' {
-		end = "m"
+	if len(args) > 2 {
+		end, _ := hex.DecodeString(args[2])
+		w.Write(end)
 	}
-	w.WriteString(end + "\nEND\n")
+	w.WriteString("\nEND\n")
 	w.Flush()
 	return 0
 }
