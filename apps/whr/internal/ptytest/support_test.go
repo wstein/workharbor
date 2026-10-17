@@ -48,12 +48,29 @@ func (f *fakeTB) run(fn func()) {
 		defer close(f.done)
 		fn()
 	}()
-	<-f.done
+	select {
+	case <-f.done:
+	case <-time.After(watchdog):
+		f.TB.Fatalf("harness call hung for %v: a deadline is not enforced", watchdog)
+	}
 }
 
+// watchdog turns a hung harness call (a mutant that ignores a deadline or
+// never kills a child) into a prompt failure instead of the go test timeout.
+const watchdog = 30 * time.Second
+
 func (f *fakeTB) cleanup() {
-	for i := len(f.cleanups) - 1; i >= 0; i-- {
-		f.cleanups[i]()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := len(f.cleanups) - 1; i >= 0; i-- {
+			f.cleanups[i]()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(watchdog):
+		f.TB.Fatalf("cleanup hung for %v", watchdog)
 	}
 	f.cleanups = nil
 }

@@ -36,6 +36,7 @@ var fixtures = map[string]func(args []string) int{
 	"redraw":       fixtureRedraw,
 	"winch-wide":   fixtureWinchWide,
 	"floodseq":     fixtureFloodSeq,
+	"split":        fixtureSplit,
 	"late":         fixtureLate,
 	"flood":        fixtureFlood,
 	"emit":         fixtureEmit,
@@ -257,5 +258,19 @@ func fixtureFloodSeq(args []string) int {
 	}
 	w.WriteString("\nEND\n")
 	w.Flush()
+	return 0
+}
+
+// fixtureSplit writes a prefix and the start of a needle, waits for a line,
+// then writes the rest of the needle.
+func fixtureSplit([]string) int {
+	restore, err := ptytest.MakeRaw(os.Stdin.Fd()) // no echo between the flushes
+	if err != nil {
+		return 1
+	}
+	defer restore()
+	fmt.Print("xxxxxxxxABC")
+	os.Stdin.Read(make([]byte, 1))
+	fmt.Print("D\r\n")
 	return 0
 }

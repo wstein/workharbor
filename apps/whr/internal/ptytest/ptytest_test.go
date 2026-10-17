@@ -598,7 +598,7 @@ func TestResizeChangesScreenWidth(t *testing.T) {
 	}
 }
 
-// The next three tests fail fast (well under the 90 s binary timeout) when
+// The next three tests fail fast (seconds, enforced by the fakeTB watchdog) when
 // the matching deadline, the exit deadline or the cleanup kill is missing.
 
 func TestPTYExpectDeadlineHonored(t *testing.T) {
@@ -651,4 +651,37 @@ func TestOversizedWindowIsRefused(t *testing.T) {
 	f.run(func() { ptytest.StartFunc(f, "quiet", ptytest.Options{Rows: 5000}) })
 	f.wantFatal("exceeds")
 	f.cleanup()
+}
+
+// TestExpectFindsNeedleCompletedByLaterOutput pins the rescan overlap: the
+// text before the needle was already searched when the last byte arrives.
+func TestExpectFindsNeedleCompletedByLaterOutput(t *testing.T) {
+	f := newFakeTB(t)
+	f.run(func() {
+		s := ptytest.StartFunc(f, "split", ptytest.Options{})
+		go func() {
+			// Release the rest only after Expect searched "xxxxxxxxABC".
+			deadline := time.Now().Add(10 * time.Second)
+			for s.Pending() < len("xxxxxxxxABC") && time.Now().Before(deadline) {
+				time.Sleep(time.Millisecond)
+			}
+			s.Send("\n")
+		}()
+		s.Expect("ABCD")
+		s.ExpectExit(0)
+	})
+	if len(f.fatals) != 0 {
+		t.Fatalf("needle completed by later output not found: %q", f.fatals)
+	}
+	f.cleanup()
+}
+
+func TestExpectRegexpWorkIsBounded(t *testing.T) {
+	s := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(4 << 20)}, Timeout: 120 * time.Second})
+	s.ExpectRegexp(`END`)
+	s.ExpectExit(0)
+	// Each wake-up searches at most the 64 KiB window, never the whole backlog.
+	if w, out := s.Work(), len(s.Transcript()); w > uint64(40*out) {
+		t.Fatalf("regexp work %d for %d bytes of output: window not applied", w, out)
+	}
 }
