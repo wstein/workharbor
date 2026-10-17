@@ -793,7 +793,9 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateDirectorySwappedAroundOneGitCall",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateDirectorySwappedBeforeGit",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateGitWalkBudgetMessage",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealIncrementalMultiPackIndex"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealIncrementalMultiPackIndex",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateGitWalkBudgetIsShared",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateMultiPackIndexDirectoryIsNarrow"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

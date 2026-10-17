@@ -102,7 +102,7 @@ func (r *run) gitLinks() string {
 			if !strings.HasPrefix(rel, ".git/objects") {
 				hint = "run git pack-refs --all"
 			}
-			return nil, fmt.Sprintf("%s has more entries than the %d that can be inspected; %s", rel, maxGitWalkEntries, hint)
+			return nil, fmt.Sprintf(".git has more than %d entries in the parts that are inspected (stopped in %s); %s", maxGitWalkEntries, rel, hint)
 		}
 		budget -= len(entries)
 		return entries, ""
