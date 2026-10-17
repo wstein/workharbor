@@ -1168,7 +1168,95 @@
     "manifest.path_invalid",
     "manifest.bundles_deferred"
    ],
-   "note": "several findings are reported once each, in the order of the manifest.* catalogue of validate-findings.json: schema, path_invalid, url_credentials, bundles_deferred"
+   "note": "several findings are reported once each; the set of codes is compared, order is not part of the contract (check_repo.py lists them in the catalogue order of validate-findings.json)"
+  },
+  {
+   "id": "path-dot-git-trailing-space",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": ".git ",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ],
+   "note": "trailing dots and spaces are trimmed from a component before the .git comparison (Windows-style normalization, fail-closed)"
+  },
+  {
+   "id": "path-dot-git-trailing-dot-case",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a/.GIT./b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-dot-git-trailing-dots",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": ".git..",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-dot-git-mixed-trailing",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "a/.Git. ./b",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "path-ok-git-prefix-dot",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": ".gitx.",
+    "bundles": []
+   },
+   "expect_codes": [],
+   "note": "only a component that is .git after trimming is refused"
+  },
+  {
+   "id": "v3-and-abs-path",
+   "document": {
+    "schema_version": 3,
+    "devcontainer_path": "/abs",
+    "projects_path": "projects",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "an unsupported schema_version ends validation: no path findings are reported"
+  },
+  {
+   "id": "raw-surrogate-and-duplicate",
+   "raw_text": "{\"a\":\"\\ud800\",\"a\":1}",
+   "expect_codes": [
+    "manifest.encoding"
+   ],
+   "note": "a lone surrogate outranks a repeated key"
+  },
+  {
+   "id": "raw-surrogate-key-and-duplicate",
+   "raw_text": "{\"\\ud800\":1,\"a\":1,\"a\":1}",
+   "expect_codes": [
+    "manifest.encoding"
+   ]
   }
  ]
 }
