@@ -51,3 +51,30 @@ end-to-end signature/checksum/SBOM/provenance verification for SC-006, is a sepa
 follow-up outside internal-pilot acceptance. Unsigned local artifacts do not satisfy
 SC-006. Full Feature 006 completion remains open until SC-006 passes; no release
 publication, tag or package-channel update is authorized by this pilot handoff.
+
+## First increment validation (H77; future acceptance, nothing run yet)
+
+Needs no control plane, login or Docker daemon beyond what `doctor` measures. After T034, on a built
+binary (ordinary `go build` into a temporary directory; no archive or release):
+
+```sh
+whr --help                      # short-form hints; unavailable commands in a separate block
+whr version --json
+mkdir -p /tmp/ws/.devcontainer && cp <a valid devcontainer.json> /tmp/ws/.devcontainer/   # wave 1a reuses an existing file
+whr init --dry-run --non-interactive --name demo --human-shell fish /tmp/ws             # preview only, writes nothing
+whr init --non-interactive --yes --name demo --human-shell fish /tmp/ws                 # writes workharbor.json (version 2) and projects/.gitkeep
+whr init --non-interactive --yes --name demo --human-shell fish /tmp/ws                 # rerun is a no-op
+whr validate /tmp/ws --json     # canonical command workspace.validate; also: whr ws validate, whr workspace validate
+(cd /tmp/ws && whr doctor --json)   # control-plane checks skipped; verdict incomplete
+whr ls; echo $?                 # unavailable in this release: usage exit 64, no network
+```
+
+Record exact binary revision, OS, architecture, Git and runtime versions, and the commands and exit codes
+for each: a Linux Docker host, macOS with OrbStack, a machine without a Docker socket (expect
+`container.socket` fail with the container-runtime link), the hostile corpus of SC-017, the `init`
+failure-injection matrix of SC-018 and an offline run (SC-020). Mock-only or injected-port results are labelled as
+such and do not replace the real runs (SC-007). Owner-API commands are not exercised: they are blocked on the
+control plane (router: only `/api/v1/hosts` and `/api/v1/auth` today).
+
+Wave 1b adds the interactive wizard (`whr init` on a terminal, with PTY transcripts as evidence) and `--devcontainer`
+selection. The wizard's fish and herdr choices are recorded as configuration only; launching them is not exercised.

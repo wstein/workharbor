@@ -13,6 +13,12 @@ Status: proposed extension of Feature 001 domain contracts.
 | HostCheckpoint | host/operation, completed/remaining steps, confirmed revocation; private, atomic, no embedded secrets, incomplete never success. |
 | ArtifactProjection | repository/feature/task, commit/paths/content hashes, parser capability, evidence source/time and availability; checkbox never approval. |
 | Envelope/Event | schema version, typed data or redacted error, operation/key where known, CLI/remote exit kind; base64 stream bytes. |
+| CommandTable | canonical id, group path, optional short form, group aliases, increment, dependency, writes, `--json` mode; frozen against `contracts/cli/commands.json`; a short form is an alias of one command, never a copy. |
+| ManifestV2 | proposed schema_version 2 of workharbor.json: the four version 1 fields plus optional name, start_dir, human_shell, console_mode, shortcuts, project (url, path); defaults fish, herdr, on, '.'; fail-closed until the resolver accepts it. |
+| ResourceSelection | CPU integer thousandths and memory integer bytes from the pure library; per-field origin (flag, host_default, missing); no wiring in the first increment. |
+| ValidationResult | directory as supplied, valid, counts, at most 200 findings (code, severity, subject, message, remediation), truncated, `provider_admission` always `not_evaluated`; never contains file content or a credential. |
+| InitProposal | ordered file actions (create, overwrite, reuse, skip_existing) with content hash and diff, the effective manifest settings with origin (flag, existing, default), dry-run flag, created and overwritten path list with device and inode for rollback, validation result; no credential. |
+| DoctorCheck | catalogue id, status pass/fail/skipped/unknown, reason when skipped or unknown, redacted evidence, remediation when failed; verdict ok/failed/incomplete. |
 | PlatformEvidence | exact source, command, client/host versions, observed results/date; a build target is not verified platform support. |
 
 Retain Feature 001 ownership, separate storage lifecycle, desired/observed state,
