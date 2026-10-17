@@ -248,10 +248,10 @@ func (d *dir) lstat(rel string) (fs.FileInfo, *accessError) {
 	return info, nil
 }
 
-// readDir lists the directory rel without following links: rel itself and
+// readDir lists up to limit+1 entries of the directory rel without following links: rel itself and
 // every component above it must be real directories. The entries are lstat
 // based, so a link is reported as a link and never followed.
-func (d *dir) readDir(rel string) ([]fs.DirEntry, *accessError) {
+func (d *dir) readDir(rel string, limit int) ([]fs.DirEntry, *accessError) {
 	cur, leaf, done, err := d.walk(rel)
 	if err != nil {
 		return nil, err.(*accessError)
@@ -280,7 +280,12 @@ func (d *dir) readDir(rel string) ([]fs.DirEntry, *accessError) {
 		return nil, unsafeErr("cannot be opened")
 	}
 	defer f.Close()
-	entries, rerr := f.ReadDir(-1)
+	// At most limit+1 entries are read: the caller sees an overflow, a hostile
+	// directory is never read whole.
+	entries, rerr := f.ReadDir(limit + 1)
+	if rerr == io.EOF {
+		rerr = nil
+	}
 	if rerr != nil {
 		return nil, unsafeErr("cannot be read")
 	}

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"strings"
 )
@@ -70,11 +71,14 @@ func (r *run) gitUnsafe() (reason string, missing bool) {
 	return "", false
 }
 
+// unsafeDirMsg is the reason when the path handed to Git no longer names the opened directory.
+const unsafeDirMsg = "the directory path no longer names the opened directory"
+
 // Bounds of the .git link walk: a hostile repository cannot make it unbounded.
-const (
-	maxGitWalkEntries = 100000
-	maxGitWalkDepth   = 32
-)
+const maxGitWalkDepth = 32
+
+// maxGitWalkEntries is a variable only so that a test can lower it.
+var maxGitWalkEntries = 100000
 
 // gitLinks refuses any symbolic link in the parts of .git that Git reads
 // through directory entries: the first level of .git/objects (pack, info and
@@ -83,47 +87,62 @@ const (
 // records whether the repository uses the reftable format.
 func (r *run) gitLinks() string {
 	budget := maxGitWalkEntries
-	walkObjects := func(rel string) string {
-		entries, aerr := r.d.readDir(rel)
+	// list reads at most the remaining budget (plus one, to see the overflow) so that a
+	// hostile directory is never read whole.
+	list := func(rel string) ([]fs.DirEntry, string) {
+		entries, aerr := r.d.readDir(rel, budget)
 		if aerr != nil {
 			if aerr.kind == accMissing {
-				return ""
+				return nil, ""
 			}
-			return rel + " " + aerr.why
+			return nil, rel + " " + aerr.why
+		}
+		if len(entries) > budget {
+			hint := "run git gc to pack loose objects"
+			if !strings.HasPrefix(rel, ".git/objects") {
+				hint = "run git pack-refs --all"
+			}
+			return nil, fmt.Sprintf("%s has more entries than the %d that can be inspected; %s", rel, maxGitWalkEntries, hint)
+		}
+		budget -= len(entries)
+		return entries, ""
+	}
+	var walkObjects func(rel string, nested bool) string
+	walkObjects = func(rel string, nested bool) string {
+		entries, reason := list(rel)
+		if reason != "" {
+			return reason
 		}
 		for _, e := range entries {
-			if budget--; budget < 0 {
-				return rel + " has more entries than can be inspected"
-			}
+			child := rel + "/" + e.Name()
 			switch {
 			case e.Type()&fs.ModeSymlink != 0:
-				return rel + "/" + e.Name() + " is a symbolic link"
+				return child + " is a symbolic link"
+			case !nested && e.IsDir() && e.Name() == "multi-pack-index.d" && strings.HasSuffix(rel, "/pack"):
+				// The incremental multi-pack-index chain: files only.
+				if reason := walkObjects(child, true); reason != "" {
+					return reason
+				}
 			case !e.Type().IsRegular():
-				return rel + "/" + e.Name() + " is not a regular file"
+				return child + " is not a regular file"
 			}
 		}
 		return ""
 	}
 	var walk func(rel string, depth int) string
 	walk = func(rel string, depth int) string {
-		entries, aerr := r.d.readDir(rel)
-		if aerr != nil {
-			if aerr.kind == accMissing {
-				return ""
-			}
-			return rel + " " + aerr.why
+		entries, reason := list(rel)
+		if reason != "" {
+			return reason
 		}
 		for _, e := range entries {
-			if budget--; budget < 0 {
-				return rel + " has more entries than can be inspected"
-			}
 			child := rel + "/" + e.Name()
 			switch {
 			case e.Type()&fs.ModeSymlink != 0:
 				return child + " is a symbolic link"
 			case rel == ".git/objects" && e.IsDir() && (e.Name() == "pack" || isFanout(e.Name())):
 				// Pack files and loose objects are read by Git: they must be regular files.
-				if reason := walkObjects(child); reason != "" {
+				if reason := walkObjects(child, false); reason != "" {
 					return reason
 				}
 			case e.IsDir() && depth < maxGitWalkDepth && !strings.HasPrefix(rel, ".git/objects"):
@@ -219,7 +238,7 @@ func (r *run) git() {
 	}
 	r.gitRan = true
 	if reason == "" && !r.d.stillAtAbs() {
-		reason = "the directory path no longer names the opened directory"
+		reason = unsafeDirMsg
 	}
 	if reason != "" {
 		r.c.add("git.unsafe_path", ".git", reason+"; Git did not run", "")
@@ -231,7 +250,7 @@ func (r *run) git() {
 		// The directory moved while Git ran: nothing Git printed can be trusted.
 		r.c.list = r.c.list[:before]
 		r.gitState = nil
-		r.c.add("git.unsafe_path", ".git", "the directory path no longer names the opened directory; Git results were discarded", "")
+		r.c.add("git.unsafe_path", ".git", unsafeDirMsg+"; Git results were discarded", "")
 		return
 	}
 	if f != nil {
@@ -334,11 +353,22 @@ func (g *gitSession) call(maxOut int, sub ...string) (GitOut, *gitFailure) {
 	if len(sub) > 0 && sub[0] != "--version" {
 		args = gitArgs(g.gitDir, g.workTree, sub...)
 	}
+	// The absolute path in args must still name the held directory. This narrows the
+	// window in which the path could name another directory to one Git call; a swap
+	// to another directory and back inside a single call is not detectable (Git is
+	// handed a path, not the open descriptor, because os/exec cannot pass a Go root
+	// as a /proc/self/fd path portably).
+	if !r.d.stillAtAbs() {
+		return GitOut{}, &gitFailure{"git.unsafe_path", unsafeDirMsg}
+	}
 	out, err := g.runner.Run(r.ctx, GitCmd{
 		Path: g.path, Args: args, Env: gitEnv(), Dir: "/", MaxOutput: maxOut, Timeout: remaining,
 	})
 	if cerr := r.ctx.Err(); cerr != nil {
 		return GitOut{}, &gitFailure{}
+	}
+	if !r.d.stillAtAbs() {
+		return GitOut{}, &gitFailure{"git.unsafe_path", unsafeDirMsg}
 	}
 	if err != nil {
 		msg := "git " + subName(sub) + " failed"
