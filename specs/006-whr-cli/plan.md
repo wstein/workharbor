@@ -152,6 +152,138 @@ owner-controlled inputs required for pilot acceptance; signer allowlist and
 release authorization are inputs to the later release exercise. A configured
 Docker context establishes none of them.
 
+## Amendment H77: first local `whr` increment
+
+Status: proposed with [ADR 0014](../../docs/adr/0014-whr-command-structure.md); the amendment text needs an
+independent review CLEAR for its exact head and then explicit owner approval of that head (tracker or PR link).
+Werner's chat direction and implementation go-ahead of 2026-10-16 are the recorded decision H77, not text approval.
+
+Scope: spec FR-051 to FR-063 together with the owner's initialization and resource revisions (US0, US1a, FR-039 to
+FR-050), as work items T025 to T032 in [tasks](tasks.md). Everything needing the owner API (verified 2026-10-16: the
+router serves only `/api/v1/hosts` and `/api/v1/auth`) stays with T009 onward. The first-increment series (T025 to
+T032) touches `apps/whr`, `contracts/` and docs only; T011, T016 and T017 consume its foundation instead of
+re-creating it. Owner decisions of 2026-10-16/17 (H77 (5)): the series runs on its own branches and pull requests,
+one pull request per work item, outside the T001-T024 chain; renewed approval of `tasks.md` from T009 onward is the
+owner's to give. After the foundation T025 the work items can proceed in parallel worktrees (see the dependency graph
+in tasks.md); shared files (`internal/commands` registration, `ci-acceptance.json`, `go.mod`) are the only expected
+merge points, resolved by rebasing in merge order. The initialization revision requires human review of the plan, task
+scope, configuration schema and launcher contracts before implementation; this document and its contracts
+(`workharbor.schema.json` version 2, `vectors.json`, `starters.json`, `resources-vectors.json`) are the input to that review, not an approval.
+
+### Design
+
+Layout in `apps/whr` (ADR 0010; `cmd/whr` stays a thin entry point):
+
+| Package | Responsibility |
+| --- | --- |
+| `internal/commands` | command table (the Go mirror of `contracts/cli/commands.json`), Cobra registration generated from it, help hints, completion |
+| `internal/exitcode` | ADR 0013 table, error-to-code mapping, freeze tests |
+| `internal/output` | envelope (`contracts/cli/output.schema.json`), human renderer, color, `whr:` error line |
+| `internal/terminal` | FR-022 text escaping now; the stream filter of FR-022a remains T014 |
+| `internal/workspacecfg` | manifest, devcontainer, project and Git-state checks shared by `validate`, `doctor` and `init`; safe file access |
+| `internal/doctor` | check catalogue (`contracts/cli/doctor-checks.json`) behind measurement ports |
+| `internal/scaffold` | `init` proposal model, preview and diff, writer with rollback, starter catalog (D1, D3) |
+| `internal/wizard` | interactive wizard with back, review and cancel on top of the proposal model (D2) |
+| `internal/resources` | strict CPU and memory parsing, canonical values, origin summary (E) |
+| `internal/version` | build metadata (FR-027) |
+
+Cobra 1.10.2/pflag as already planned. `ws` is a native Cobra `Aliases` entry of the `workspace` group. Cobra aliases
+only rename siblings, so the root short forms are generated root commands sharing one handler; they stay visible
+in a custom help template (hint form, "not yet available" block for unavailable commands), are offered by a root
+`ValidArgsFunction` that reads the table (Hidden commands are excluded from Cobra completion), and flag errors go
+through `SetFlagErrorFunc` so messages and the `command` field use the canonical id. Unavailable commands share one
+handler that returns the usage error (FR-049) before any I/O.
+
+Strict JSON for the manifest uses `apps/api_client/wirejson` (unchanged; this series does not touch `apps/api_client`),
+which reports only `invalid-json` or `input-limit-exceeded`. `whr` therefore classifies first (size, UTF-8, BOM,
+NUL), runs a whr-local duplicate-key and depth scan to produce `manifest.encoding`, `syntax` and `duplicate_key`,
+and then calls wirejson as the final strict gate. The devcontainer file is JSONC: the host agent's parser shells out to
+Node (`JSONC{NodePath}`) and is `internal` to its module, so `whr` carries a small bounded strict-JSONC reader
+(comments, trailing commas, duplicate keys rejected, size and depth limits). It is a pre-flight, not the authority; the
+host agent re-parses at trust time, which is why `provider_admission` is `not_evaluated`. No JSON Schema library is
+added to product code; the manifest checker is hand-written and frozen against vectors in
+`contracts/workspace/vectors.json`, which T026 creates before the checker; the schema's lookahead pattern (not RE2)
+is shown equivalent to the Go checker by the positive and negative path vectors, so no Python or JavaScript test runner
+is added. Divergence between this checker,
+the resolver and `check_repo.py` (severity of an entry without a gitlink, scp-like origins, https userinfo, case-folded
+`.git`, `1.0`) is closed by those vectors on the whr side; running the same vectors in the host agent test is a
+follow-up test-only change to be sequenced with T009.
+
+Hostile input (FR-043): the target directory itself is opened with a no-follow, directory-only open and its
+device and inode are compared with a prior `Lstat`; every further component is opened relative to the previous
+descriptor with `O_NOFOLLOW|O_DIRECTORY` (Linux additionally `openat2` with `RESOLVE_NO_SYMLINKS`), the type is
+checked by `Lstat` before any `open` so a device or FIFO is never opened, files are opened non-blocking and `fstat`ed
+for a regular file, and reads go through a size-capped reader. Ancestors of the given `dir` are followed (macOS `/tmp`
+is a symbolic link); only the directory and below are held to no-follow. A user directory is never listed, only named
+entries are opened. Git is invoked only for `.git`-bearing directories whose `.git` is a real directory (never a
+symbolic link or gitfile), with a freshly built environment (only `PATH` for locating git, `HOME` set to a fixed, never created
+path such as `/nonexistent`, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_OPTIONAL_LOCKS=0`,
+`GIT_TERMINAL_PROMPT=0`, `GIT_NO_LAZY_FETCH=1` (Git 2.44+), `GIT_PAGER=cat`; every other inherited `GIT_*` variable such as
+`GIT_TRACE*`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY`, `GIT_ALTERNATE_OBJECT_DIRECTORIES`, `GIT_CONFIG_COUNT`,
+`GIT_CONFIG_PARAMETERS` and `GIT_EXEC_PATH` is dropped), neutral `cmd.Dir`, empty stdin, `--git-dir` and `--work-tree`
+arguments, `-c` flags (not `GIT_CONFIG_COUNT`, which needs Git 2.31) for `core.fsmonitor=false`,
+`core.hooksPath=/dev/null` and `protocol.allow=never`, a 5 second deadline, a capped output reader, a minimum Git version
+check (below it: `git.unavailable`), `exec.ErrDot` treated as Git absent, and exactly six argument vectors:
+`--version`, `ls-files --stage -z`, `rev-parse --verify HEAD`, `ls-tree -r -z HEAD`, `cat-file blob HEAD:.gitmodules` and, when HEAD is unborn, `cat-file blob :.gitmodules`. With an unborn HEAD the last two HEAD vectors are skipped (FR-042). `GIT_NO_LAZY_FETCH` needs Git 2.44; on the 2.39.5 minimum `protocol.allow=never` is what prevents a promisor fetch, and the corpus includes a partial-clone repository asserting no fetch. An explicit `--git-dir` skips discovery
+and the ownership check, and `.git/config` (with includes) is still parsed; the `-c` list and the minimum version carry
+the protection and `safe.directory` is never set. No `status`, `diff`, `submodule` or checkout command ever runs on
+the validated directory. On macOS the Git binary is first checked without executing it: the `/usr/bin/git` shim with
+no developer directory (`xcode-select -p` equivalent via the path check) is reported unavailable so the Command Line
+Tools installer never opens. `.gitmodules` is parsed in process by a bounded INI subset reader; no `git config` call reads it. A
+corpus test runs real Git against repositories carrying fsmonitor, hook, filter, alias, include and update-command payloads
+and asserts that no marker appears.
+
+`doctor` uses ports (environment, stat, unix dial, fixed exec of `git --version`, statfs via `syscall`, platform) so unit
+tests inject every status; real-host evidence supplements, never replaces, them. The socket check dials and closes. The
+redaction function is shared and tested with a canary home directory, user and host name.
+
+`init` (D1, wave 1a) builds a proposal in memory: the manifest `workharbor.json` (version 2, FR-058, explicit values for
+every setting, defaults filling only missing ones), the existing devcontainer file at the manifest's path (reused
+unchanged and only validated; wave 1a never generates one) and `projects/.gitkeep`, each marked create, overwrite, reuse or
+skip_existing, with a unified diff for overwrites. The same proposal model feeds the wizard (D2, wave 1b), the unattended
+flags and `--dry-run`, which gives wizard and flag parity by construction. The proposal is validated with the `validate`
+code (in-memory content checks before the first write, the full checker on the written result), preflighted, and
+written with `O_EXCL|O_NOFOLLOW` relative to a no-follow-opened target; overwrites go through a same-directory
+temporary file and rename, with the old bytes kept until the rename. Each created path is recorded with device and
+inode for reverse-order rollback, which restores overwritten files and removes a path only when the identity still
+matches; the preview carries a content hash per file, re-checked immediately before writing to detect change since
+preview. `init` runs no Git command and makes no network connection (FR-056); `--project-url` is written to the manifest
+only. The wizard (D2) uses a prompt port (stderr for prompts, terminal check on stdin and stderr, `--non-interactive`,
+`--json` and non-terminals suppress it) so unit tests drive it with scripted answers; a separate work item builds a PTY
+test harness for end-to-end terminal behavior (raw mode, line editing, cancel by interrupt), which D2 then uses for its
+acceptance. Devcontainer reuse (D3, wave 1b) adds `--devcontainer <path>` and the wizard step; the starter catalog is
+listed unsupported and `--template` refuses (wave 2). Failure injection is a test seam on the step runner, not a flag.
+SIGINT and SIGTERM trigger rollback; SIGKILL does not, and the next run refuses on the leftover paths. Runtime
+enforcement of the shell and console choices is out of scope and reported as `runtime_enforcement: not_in_this_release`.
+
+`workspace create` resources (E, wave 1a) is only a pure parsing and resolution library in `apps/whr/internal/resources`
+tested against `contracts/cli/resources-vectors.json`; the host profile is an input to the resolver, there is no
+command wiring, flag or prompt until wave 2.
+
+The manifest-schema extension (wave 1a) updates the checker rules, `contracts/workspace/vectors.json` and
+`scripts/check_repo.py` (Python reads the same vectors); the host-agent resolver change that accepts version 2 is a separate
+reviewed work item sequenced with T009, so version 2 stays fail-closed until then.
+
+### Verification
+
+Per work item: tests first with recorded absent-implementation RED, then `gofmt`, `go vet`, `go build`,
+`go test -count=1` in `apps/whr` through `make check-apps` (`apps/whr` reaches `apps/api_client` through the root
+`go.work` only, as `host_agent` does, without a `require` line; a standalone build outside the workspace fails the same way), plus `make check`;
+required test IDs are appended to `docs/development/ci-acceptance.json` without changing earlier IDs. Real evidence
+for T032: the built binary run on the owner's macOS with OrbStack and on Linux (arm64 or amd64), exact versions
+and commands recorded in the quickstart; mocks are labelled. Building artifacts for evidence uses ordinary
+`go build` into a temporary directory under the repository's application checks; no archive, image, release or
+publication is produced or authorized. Independent Sol review of each WI's exact head, with the hostile corpus rerun
+by the reviewer for T026 and T028 (and the wizard transcript and PTY tests of T032).
+
+### Risks
+
+- Divergence from the host agent's admitted subset (mitigated: warnings only, `not_evaluated`, vectors).
+- Git as an attack surface on hostile repositories (mitigated: fixed read-only argument vectors, isolated environment,
+  corpus test; residual risk is a Git bug and is stated in the T026 evidence).
+- Cobra alias semantics (mitigated: generated root commands and the equivalence test).
+- Windows is unsupported; no path or permission claim is made for it.
+
 ## T005 accepted foundation and verification
 
 Independent Sol design CLEAR covers the consolidated V3 contract in the
@@ -174,3 +306,23 @@ immutable terminal replay; audit rollback/redaction; process crash and file reop
 per-writer effective pragmas. Run Phoenix format/compile warnings-as-errors/tests
 and pristine source/manifest/repository/whitespace checks. Assets need no change.
 Full combined-head canonical and live pilot evidence remain later required gates.
+
+## Open questions for the owner (H77 amendment)
+
+Decided by the owner in chat on 2026-10-16/17: own branches and pull requests for the first increment (renewed approval of
+`tasks.md` from T009 onward is the owner's to give); `setup --dry-run` excluded; a superseding ADR for "remote
+unreachable" before owner-API client work; `doctor` exit 0 with verdict `incomplete`; read-only `doctor` on macOS;
+thresholds Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s, 256 MiB ("seems to be fine from my side", 2026-10-17).
+
+Still open:
+
+1. Manifest `schema_version` 2 adds `name` and `project` beyond the fields the owner listed (`start_dir`, `human_shell`,
+   `console_mode`, `shortcuts`), because the wizard collects them and no other file is permitted; confirm or move them.
+   A resolver and provider change to accept version 2 is needed and is not scheduled here (coordinate with T009).
+2. `--template` refuses with exit 64 while starters are unsupported; confirm the code.
+3. Wizard cancellation exits 72 (interrupted) and an overwrite without permission or a missing unattended input exits 70;
+   confirm against ADR 0013 intent.
+4. Exit 68 for an invalid configuration and for a failed doctor check (rather than 64 or a new code).
+5. `init` runs no Git command and never adds the project submodule; the owner pins the project with Git after init
+   (FR-049). Confirm that a `.gitkeep` and a printed next-step list are sufficient.
+6. In wave 1a, unattended init needs an existing devcontainer file; devcontainer relocation and wizard reuse arrive in 1b.
