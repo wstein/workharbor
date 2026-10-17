@@ -238,33 +238,59 @@ def manifest_document_findings(data, schema=None):
                 isinstance(data[field], str) and data[field] in properties[field]['enum']):
             add('manifest.schema', field)
     if 'project' in data and 'project' in properties:
-        findings.extend(_project_findings(data['project'], data.get('projects_path'), properties['project']))
+        findings.extend(_project_findings(data['project'], data.get('projects_path'), properties['project'],
+                                          canonical(data.get('projects_path'))))
     return findings
 
 
-_URL_PARTS = re.compile(r'(?:https|ssh)://(?:[^/@]*@)?[^/:@]+(?::([0-9]+))?(/.*)')
+_URL_PARTS = re.compile(r'(?:https|ssh)://(?:[^/@]*@)?([^/:@]+)(?::([0-9]+))?(/.*)')
 
 
-def _project_findings(project, projects_path, project_schema):
+def _url_authority(url):
+    """(scheme, userinfo-with-@ or '', host-with-port, rest) of scheme://authority/rest, or None."""
+    index = url.find('://')
+    if index <= 0:
+        return None
+    scheme, tail = url[:index], url[index + 3:]
+    cut = re.search('[/?#]', tail)
+    auth, rest = (tail[:cut.start()], tail[cut.start():]) if cut else (tail, '')
+    at = auth.rfind('@')
+    if at < 0:
+        return scheme, '', auth, rest
+    return scheme, auth[:at + 1], auth[at + 1:], rest
+
+
+def _has_credentials(url):
+    """Any http(s) userinfo, or an ssh user part with a password; the scheme is case-insensitive."""
+    parts = _url_authority(url)
+    if parts is None or not parts[1]:
+        return False
+    scheme = parts[0].lower()
+    return scheme in ('https', 'http') or (scheme == 'ssh' and ':' in parts[1])
+
+
+def _project_findings(project, projects_path, project_schema, path_ok=True):
     if not isinstance(project, dict) or set(project) != {'url', 'path'}:
         return [('manifest.schema', 'project', 'require exactly url and path')]
     url, path = project['url'], project['path']
     if not isinstance(url, str) or not isinstance(path, str):
         return [('manifest.schema', 'project', 'require strings')]
-    userinfo = re.match(r'(?:https|ssh)://([^/?#]*)@', url)
-    if userinfo and (url.startswith('https://') or ':' in userinfo.group(1)):
+    if _has_credentials(url):
         return [('manifest.url_credentials', 'project.url', '')]
     problems = []
     url_schema = project_schema['properties']['url']
     parts = _URL_PARTS.fullmatch(url)
+    authority = _url_authority(url)
     if (not re.fullmatch(url_schema['pattern'], url) or len(url) > url_schema['maxLength']
             or re.search(r'%(?![0-9A-Fa-f]{2})', url) or parts is None
-            or (parts.group(1) is not None and not 1 <= int(parts.group(1)) <= 65535)
-            or '//' in parts.group(2)):
+            or (parts.group(2) is not None and not 1 <= int(parts.group(2)) <= 65535)
+            or '//' in parts.group(3)
+            or authority[1].startswith('-') or authority[2].startswith('-')):
         problems.append(('manifest.schema', 'project.url', ''))
     last = '' if url.endswith('/') else url.rsplit('/', 1)[-1]
     name = last[:-4] if last.endswith('.git') else last
-    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or path != f'{projects_path}/{name}':
+    # With an unusable projects_path (already reported) there is nothing to compare against.
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or (path_ok and path != f'{projects_path}/{name}'):
         problems.append(('manifest.schema', 'project.path', ''))
     return problems
 
