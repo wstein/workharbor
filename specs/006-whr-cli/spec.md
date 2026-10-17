@@ -122,8 +122,8 @@ Numbering: the highest decision number recorded in the repository is H76:a, so t
   68 for invalid configuration and a failed doctor check, 72 for wizard cancellation, 73 taking precedence over 72 and
   the original code on an incomplete rollback, and 70 only in unattended mode; (3) the host-agent resolver work item
   that accepts manifest version 2 is added now (T035); (4) the 5 s value is the per-Git-call deadline and the per-run
-  bound of the hostile corpus, as interpreted in H77 (6), implemented as one shared per-run budget (FR-055); (5) renewed approval of `tasks.md` from T009 onward, recorded
-  under H77 (5). None of this approves the amendment text of a head; that needs an independent review CLEAR for its
+  bound of the hostile corpus, as interpreted in H77 (6), (5) the chat answer "5approved" (2026-10-17), recorded as decision H77 (5), not approval of any head's text. Implementation note, not
+  part of the answers: the 5 s bound is realised as one shared per-run budget (FR-055). None of this approves the amendment text of a head; that needs an independent review CLEAR for its
   exact head and the owner's approval with a tracker or PR link.
 - **H77 (6) - Thresholds (owner confirmation, chat 2026-10-17)**: "Git >= 2.39.5, 2 GiB, 64/256/64 KiB, 5 s,
   256 MiB seems to be fine from my side." These are the minimum Git version, the free-disk threshold, the manifest,
@@ -826,7 +826,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   - `projects_path` (`projects.*`): errors `missing`, `unsafe_path`; warning `not_a_submodule` for committed
     regular files under it other than `.gitkeep`;
   - Git state, only when the directory itself contains `.git` (`git.*`, `gitmodules.*`, `submodule.*`): an unsafe
-    `.git` (symbolic link or gitfile), a failed, timed-out or unparsable Git call (an error, so Git failure never
+    `.git` (symbolic link, gitfile, `commondir`, `objects/info/alternates`, or a non-regular `.git/HEAD`, `.git/index` or `.git/config`), a failed, timed-out or unparsable Git call (an error, so Git failure never
     hides submodule errors), a listing beyond its bound (an error), non-canonical or case-folded `.git` components in
     the `HEAD` tree, the committed `.gitmodules` blob (mode, size, syntax, duplicate fields, keys other than `path`
     and `url`, which the resolver rejects), and each submodule: URL form (`https://`, `ssh://` or the scp-like
@@ -882,7 +882,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   needs-human (70) whose remediation names `.devcontainer/devcontainer.json`. By the owner's decision of 2026-10-17 (starters
   unsupported) US0 scenario 4 ("in a new directory") is accepted in wave 1a only for a directory that already contains a
   devcontainer file; this narrows the scenario until wave 1b/2, it does not change it. `--non-interactive` without `--yes` and
-  without `--dry-run` exits 70 naming `--yes`; `--devcontainer` in wave 1a exits 64 ("not in this release"). Without `--non-interactive` and without `--dry-run`, wave 1a (no wizard yet) exits 70 naming `--non-interactive --yes`, on a terminal or not. The placeholder file
+  without `--dry-run` exits 70 naming `--yes`; `--devcontainer` in wave 1a exits 64 ("not in this release"). Without `--non-interactive` and without `--dry-run`, wave 1a (no wizard yet) exits 64 ("not in this release"; the interactive case is the wave 1b wizard), on a terminal or not. The placeholder file
   is `<projects_path>/.gitkeep`. Wave 1b: the interactive wizard (D2: back, review, cancel; its terminal test
   harness is its own work item) and `--devcontainer <path>` selection with devcontainer reuse in the wizard (D3).
   Wave 2: `--template` and the starter catalog, which stay listed as unsupported (FR-058) until the provider admits
@@ -918,11 +918,15 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   run created it, and an incomplete rollback is a partial failure (73) listing the remaining paths and recovery steps,
   taking precedence over the original failure code; (e) SIGINT and SIGTERM trigger the rollback and exit 72; SIGKILL or a
   crash is not rolled back and the next run refuses on the leftover paths with the conflict code; (f) wizard
-  cancellation changes nothing; (g) an existing manifest of `schema_version` 1 is preserved unchanged only by a run that uses defaults alone (exit 0 with a
-  not-persisted warning listing `settings_not_persisted` and that the result is not creation-ready); when explicit flags
-  would need the manifest edited, unattended init exits 70 naming `--overwrite workharbor.json`, and rewriting it to version 2
-  with that flag warns that the result is not creation-ready until the resolver accepts version 2 (FR-058). A defaults-only run with `--overwrite workharbor.json` still preserves the manifest unless the owner also passes a setting; an explicit flag equal to its default counts as explicit; `--dry-run` with flags reports the same exit 70 or 0 without writing; an unchanged version 1 manifest remains creation-ready, which the warning states only when settings were not persisted; because both versions require `bundles: []`, a manifest
-  with bundle declarations is left unchanged and reported (FR-050), never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
+  cancellation changes nothing; (g) an existing manifest of `schema_version` 1 is preserved unchanged only by a run that uses defaults alone: exit 0, and since a
+  version 1 manifest cannot hold `start_dir`, `human_shell`, `console_mode` or `shortcuts`, `settings_not_persisted` then lists
+  exactly those four defaults (never `name` or `project`, which need flags); the manifest stays creation-ready, as the resolver
+  reads only its four fields. When explicit flags would need the manifest edited, unattended init exits 70 naming
+  `--overwrite workharbor.json`; rewriting it to version 2 with that flag warns that the result is not creation-ready until
+  the resolver accepts version 2 (FR-058). A defaults-only run with `--overwrite workharbor.json` still preserves the manifest;
+  an explicit flag equal to its default counts as explicit; `--dry-run` with flags reports the same exit 70 or 0 without
+  writing; because both versions require `bundles: []`, a manifest with bundle declarations is left unchanged and reported
+  (FR-050), never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
   accepted, written or printed.
 - **FR-058**: The settings that FR-044 collects extend the manifest `workharbor.json`, as the owner decided on
   2026-10-17. [`workharbor.schema.json`](../../contracts/workspace/workharbor.schema.json) defines the accepted
@@ -991,7 +995,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   URL containing credentials are refused or reported redacted (FR-020), and no credential is written to generated files, output or logs.
 - **FR-063**: The new failures map to the codes of ADR 0013 without changing that table: success, including warnings
   only, 0; unknown flag, invalid or missing flag value, mutually exclusive flags, a traversing or credential-bearing
-  input, `--template` while starters are unsupported, a `dir` that is a file, an unavailable command, `--json` where
+  input, `--template` while starters are unsupported, `--devcontainer` or plain `init` (no `--non-interactive`, no `--dry-run`) in wave 1a, a `dir` that is a file, an unavailable command, `--json` where
   unsupported 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
   edited, and a regular file that existed at preview time without `--overwrite` 70, in unattended mode only (needs-human,

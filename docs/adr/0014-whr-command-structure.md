@@ -78,7 +78,7 @@ are outside this ADR and the increment.
 
 No new code: the [ADR 0013 table](0013-whr-exit-codes.md) is unchanged and
 `contracts/cli/exit-codes.json` is not edited. The mapping is FR-063: success 0; bad flags or values, a target that is a
-file, an unavailable command 64; missing directory 65; a required input or overwrite permission for an existing regular file missing in unattended
+file, an unavailable command, `--devcontainer` or plain `init` in wave 1a 64; missing directory 65; a required input or overwrite permission for an existing regular file missing in unattended
 `init` 70; invalid configuration, non-regular, symlinked or concurrently replaced target, file
 changed since preview, pre-existing content failing validation, failed doctor check, unsupported platform for a mutating
 host command 68; SIGINT, SIGTERM and wizard cancellation 72; an incomplete rollback 73, which takes precedence over 72 and

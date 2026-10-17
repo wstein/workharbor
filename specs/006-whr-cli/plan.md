@@ -163,7 +163,7 @@ FR-050), as work items T025 to T035 in [tasks](tasks.md). Everything needing the
 router serves only `/api/v1/hosts` and `/api/v1/auth`) stays with T009 onward. The first-increment series (T025 to
 T035) touches `apps/whr`, `contracts/`, `scripts/check_repo.py`, `tests/` and docs, and T035 alone the host agent; T011, T016 and T017 consume its foundation instead of
 re-creating it. Owner decisions of 2026-10-16/17 (H77 (5)): the series runs on its own branches and pull requests,
-one pull request per work item, outside the T001-T024 chain; 
+one pull request per work item, outside the T001-T024 chain;
 Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5); it is not approval of any head's text, and the edits take effect only with approval at one exact head with a tracker or PR link. After the foundation T025 the work items can proceed in parallel worktrees (see the dependency graph
 in tasks.md); shared files (`internal/commands` registration, `ci-acceptance.json`, `go.mod`) are the only expected
 merge points, resolved by rebasing in merge order. The initialization revision requires human review of the plan, task
