@@ -309,7 +309,7 @@ def vector_bytes(case):
     return template + b' ' * (spec['total'] - len(template))
 
 
-MIN_VECTOR_CASES = 124
+MIN_VECTOR_CASES = 126
 
 
 def vector_case_errors(cases):
