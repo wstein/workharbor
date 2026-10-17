@@ -1570,6 +1570,174 @@
     "manifest.schema"
    ],
    "note": "128 levels are within the bound; the document is then not a manifest"
+  },
+  {
+   "id": "v2-project-host-trailing-dot",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://h./o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [],
+   "note": "the resolver admits one trailing dot"
+  },
+  {
+   "id": "v2-project-host-trailing-hyphen",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://h-/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-host-leading-dot",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://.h/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-host-empty-label",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://h..x/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-host-two-trailing-dots",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://h../o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-host-label-leading-hyphen",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://a.-b/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-ssh-host-trailing-dot",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "ssh://git@h./o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-project-ssh-host-leading-dot",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "ssh://git@.h/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-ssh-host-trailing-hyphen",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "ssh://h-/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-host-labels-ok",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://a-b.c1.example:8443/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "path-dot-git-byte-order-mark",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": ".git\ufeff",
+    "bundles": []
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ],
+   "note": "U+FEFF is dropped before the comparison"
   }
  ]
 }

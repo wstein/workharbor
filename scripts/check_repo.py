@@ -244,6 +244,8 @@ def manifest_document_findings(data, schema=None):
     return findings
 
 
+# The resolver's host name rule (hostName in the host agent), one optional trailing dot included.
+_HOST_NAME = re.compile(r'[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.?')
 _URL_PARTS = re.compile(r'(?:https|ssh)://(?:[^/@]*@)?([^/:@]+)(?::([0-9]+))?(/.*)')
 
 
@@ -286,7 +288,7 @@ def _project_findings(project, projects_path, project_schema, path_ok=True):
             or re.search(r'%(?![0-9A-Fa-f]{2})', url) or parts is None
             or (parts.group(2) is not None and not 1 <= int(parts.group(2)) <= 65535)
             or '//' in parts.group(3)
-            or authority[1].startswith('-') or authority[2].startswith('-')):
+            or authority[1].startswith('-') or _HOST_NAME.fullmatch(parts.group(1)) is None):
         problems.append(('manifest.schema', 'project.url', ''))
     last = '' if url.endswith('/') else url.rsplit('/', 1)[-1]
     name = last[:-4] if last.endswith('.git') else last
@@ -309,7 +311,7 @@ def vector_bytes(case):
     return template + b' ' * (spec['total'] - len(template))
 
 
-MIN_VECTOR_CASES = 126
+MIN_VECTOR_CASES = 137
 
 
 def vector_case_errors(cases):
