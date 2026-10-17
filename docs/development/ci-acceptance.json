@@ -566,7 +566,12 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/terminal/TestEscapeKeepsSafeText",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/version/TestContractVersionsMatchContractFiles",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/version/TestHumanEscapesInjectedFields",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/version/TestVersionBuildMetadataIsInjectable"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/version/TestVersionBuildMetadataIsInjectable",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestPTYDrivesPromptAndCapturesTranscript",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestPTYInterruptDelivered",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestPTYTimeoutFailsTest",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestPTYNoLeakedProcess",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/ptytest/TestPTYUnsupportedPlatformSkipsExplicitly"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
