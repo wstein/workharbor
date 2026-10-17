@@ -667,6 +667,7 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorDockerHostMalformedUnix",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorRedactionWindowsUnicodeSinglePass",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorSystemWordsComplete",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorRedactionFoldingAndBytes",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorVersionEvidenceUntouched",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorDaemonJSONReadBound"
     ],

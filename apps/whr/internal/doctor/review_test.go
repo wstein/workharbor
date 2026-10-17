@@ -543,3 +543,26 @@ func TestDoctorSystemWordsComplete(t *testing.T) {
 		}
 	}
 }
+
+// Unicode case folding, longest name, combining marks and invalid UTF-8.
+func TestDoctorRedactionFoldingAndBytes(t *testing.T) {
+	cases := []struct{ user, host, in, want string }{
+		{"İlker", "box", "/srv/İLKER/x", "/srv/<user>/x"},
+		{"İlker", "box", "/srv/İlker", "/srv/<user>"},
+		{"kelvin", "box", "/srv/Kelvin/x", "/srv/<user>/x"},
+		{"sam", "box", "/srv/ſam/x", "/srv/<user>/x"},
+		{"straße", "box", "/srv/STRAßE", "/srv/<user>"},
+		{"werner", "werner-pc", "/srv/werner-pc/x", "/srv/<host>/x"},
+		{"werner-pc", "werner", "/srv/werner-pc/x", "/srv/<user>/x"},
+		{"werner", "werner-pc", "/srv/werner/x", "/srv/<user>/x"},
+		{"werner", "box", "/srv/werneŕ/x", "/srv/werneŕ/x"},
+		{"werner", "box", "/srv/́werner/x", "/srv/́werner/x"},
+		{"werner", "box", "/srv/\xff\xfe/werner/\xc3", "/srv/\xff\xfe/<user>/\xc3"},
+		{"werner", "box", "\xff", "\xff"},
+	}
+	for _, c := range cases {
+		if got := doctor.NewRedactor("/h", c.user, c.host).String(c.in); got != c.want {
+			t.Errorf("user %q host %q: %q -> %q, want %q", c.user, c.host, c.in, got, c.want)
+		}
+	}
+}
