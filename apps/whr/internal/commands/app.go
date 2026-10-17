@@ -84,7 +84,7 @@ func Execute(ctx context.Context, args []string, env Env, handlers map[string]Ha
 	a := &app{env: env, handlers: handlers, jsonScanned: scanJSON(args), colorFlag: string(output.ColorAuto)}
 	a.build()
 	a.root.SetArgs(args)
-	c, err := a.root.ExecuteC()
+	c, err := a.root.ExecuteContextC(ctx)
 	if err != nil {
 		id := "unknown"
 		if c != nil {
