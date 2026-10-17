@@ -53,13 +53,8 @@ type dir struct {
 
 // openDir opens path as the root of the walk.
 func openDir(path string) (*dir, error) {
-	// A path with a .. component is read by the kernel, so the directory itself is
-	// reached physically; but when its lexical spelling names a link (rlink/x/.. with
-	// rlink a link) the caller passed a link, which is refused like rlink itself.
-	if hasDotDot(path) {
-		if lex, lerr := os.Lstat(filepath.Clean(path)); lerr == nil && lex.Mode()&fs.ModeSymlink != 0 {
-			return nil, &accessError{accUnsafe, "is a symbolic link", "pass the real directory, not a link"}
-		}
+	if hasDotDot(path) && dotDotThroughLink(path) {
+		return nil, &accessError{accUnsafe, "is a symbolic link", "pass the real directory, not a link"}
 	}
 	path = walkPath(path)
 	info, err := os.Lstat(path)
@@ -87,6 +82,55 @@ func openDir(path string) (*dir, error) {
 		return nil, &accessError{accUnsafe, "path cannot be resolved", "pass an absolute or relative path that exists"}
 	}
 	return &dir{root: root, abs: abs}, nil
+}
+
+// dotDotThroughLink walks a path with .. components the way the kernel does and
+// reports a .. that undoes a component other than a link after the walk went
+// through a link: rlink/projects/.. is the target of rlink, which is refused like
+// rlink itself, and so is any longer chain that gets back to a link target.
+// plink/.. alone (the parent of the link's target) is the physical reading the
+// shell gives and stays valid. Every prefix is resolved physically, so earlier
+// .. components cannot hide a link from the check. A link among the ancestors of
+// an absolute path (macOS /tmp) counts as a link too: a .. after it is refused.
+// A component that does not exist ends the check; the later lstat reports it.
+func dotDotThroughLink(path string) bool {
+	cur := "."
+	if strings.HasPrefix(path, "/") {
+		cur = "/"
+	}
+	sawLink, lastLink := false, false
+	for _, part := range strings.Split(path, "/") {
+		switch part {
+		case "", ".":
+		case "..":
+			if sawLink && !lastLink {
+				return true
+			}
+			// cur is already physical, so the kernel's reading of cur/.. is its parent.
+			parent, err := filepath.EvalSymlinks(cur + "/..")
+			if err != nil {
+				return false
+			}
+			cur, lastLink = parent, false
+		default:
+			next := cur + "/" + part
+			info, err := os.Lstat(next)
+			if err != nil {
+				return false
+			}
+			lastLink = info.Mode()&fs.ModeSymlink != 0
+			sawLink = sawLink || lastLink
+			if lastLink {
+				resolved, rerr := filepath.EvalSymlinks(next)
+				if rerr != nil {
+					return false
+				}
+				next = resolved
+			}
+			cur = next
+		}
+	}
+	return false
 }
 
 // hasDotDot reports a .. component, which the kernel resolves against the

@@ -79,3 +79,46 @@ func TestValidateRefusesLinkReachedThroughDotDot(t *testing.T) {
 		}
 	}
 }
+
+// Every .. is resolved physically: an earlier rlink/projects/.. cannot hide the
+// link that a later .. passes through, and multiple .., link chains and . components
+// are read the way the kernel reads them.
+func TestValidateDotDotThroughLinkVariants(t *testing.T) {
+	real := validDir(t)
+	cwd := t.TempDir() // holds no manifest
+	for name, target := range map[string]string{"rlink": real, "plink": real + "/projects", "chain": cwd + "/rlink"} {
+		if err := os.Symlink(target, filepath.Join(cwd, name)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(cwd, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old, _ := os.Getwd()
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chdir(old)
+	base := filepath.Base(cwd)
+	refused := []string{
+		"rlink/projects/../../" + base + "/rlink/projects/..",
+		"rlink/projects/../../../" + base + "/rlink/projects/..",
+		"./rlink/./projects/./..",
+		"chain/projects/..",
+		"chain/projects/../",
+		"plink/../..",
+		"plink/../projects/..",
+		"rlink/projects/../projects/..",
+		"rlink/./projects/../projects/../.",
+	}
+	for _, arg := range refused {
+		if r, err := workspacecfg.Validate(context.Background(), arg, workspacecfg.Options{GitFree: true}); err != nil || errorCodes(r) != "manifest.unsafe_path" {
+			t.Errorf("%q must be refused: %v %+v", arg, err, r)
+		}
+	}
+	for _, arg := range []string{"plink/..", "./plink/./..", "plink/../", "sub/..", "sub/../sub/.."} {
+		if r, err := workspacecfg.Validate(context.Background(), arg, workspacecfg.Options{GitFree: true}); err != nil || has(r, "manifest.unsafe_path") {
+			t.Errorf("%q must be read: %v %+v", arg, err, r)
+		}
+	}
+}
