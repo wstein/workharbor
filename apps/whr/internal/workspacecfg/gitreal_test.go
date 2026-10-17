@@ -10,7 +10,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -522,42 +524,110 @@ func noNetworkChild() int {
 // first: an unprivileged user namespace, then passwordless sudo with the
 // privileges dropped back to the invoking user before bin runs (runners that
 // restrict unprivileged user namespaces, such as GitHub's ubuntu-24.04, allow
-// sudo). Either way bin runs as the invoking user with no network at all.
-func netnsCandidates(bin string, uid, gid int, home, path, tmp string) [][]string {
-	return [][]string{
-		{"unshare", "-rn", bin},
-		{"sudo", "-n", "unshare", "--net", "--", "setpriv",
-			fmt.Sprintf("--reuid=%d", uid), fmt.Sprintf("--regid=%d", gid), "--clear-groups",
-			"env", "WHR_NO_NETWORK_CHILD=1", "HOME=" + home, "PATH=" + path, "TMPDIR=" + tmp, bin},
+// sudo). Either way bin runs as the invoking user with no network at all. look
+// resolves a program name to an absolute path ("" when it is not installed); the
+// candidates use absolute paths only, also inside the sudo command.
+func netnsCandidates(look func(string) string, bin string, uid, gid int, home, path, tmp string) [][]string {
+	unshare, sudo, setpriv, env := look("unshare"), look("sudo"), look("setpriv"), look("env")
+	var out [][]string
+	if unshare != "" {
+		out = append(out, []string{unshare, "-rn", bin})
 	}
+	if unshare != "" && sudo != "" && setpriv != "" && env != "" {
+		out = append(out, []string{sudo, "-n", unshare, "--net", "--", setpriv,
+			fmt.Sprintf("--reuid=%d", uid), fmt.Sprintf("--regid=%d", gid), "--clear-groups",
+			env, "WHR_NO_NETWORK_CHILD=1", "HOME=" + home, "PATH=" + path, "TMPDIR=" + tmp, bin})
+	}
+	return out
 }
 
-// netnsRequired reports that a run without the namespace proof must fail: on CI
+// skipForbidden reports that a run without its proof (namespace, device node) must fail: on CI
 // (CI is set by GitHub Actions) or when WHR_REQUIRE_NETNS=1. Elsewhere the test
 // still says SKIPPED, NOT PASSED.
-func netnsRequired(env func(string) string) bool {
+func skipForbidden(env func(string) string) bool {
 	return env("WHR_REQUIRE_NETNS") == "1" || env("CI") != ""
 }
 
+func lookPath(name string) string {
+	p, err := exec.LookPath(name)
+	if err != nil || !filepath.IsAbs(p) {
+		return ""
+	}
+	return p
+}
+
+// runBounded runs argv with an empty standard input in its own process group and
+// kills the whole group when timeout passes, so a stuck sudo or namespace child
+// cannot hang the test binary.
+func runBounded(timeout time.Duration, env []string, argv ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd.Env = env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 2 * time.Second
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() != nil {
+		return string(out), fmt.Errorf("timed out after %v: %w", timeout, ctx.Err())
+	}
+	return string(out), err
+}
+
+func TestRunBoundedKillsTheGroupOnTimeout(t *testing.T) {
+	pidFile := filepath.Join(t.TempDir(), "pid")
+	start := time.Now()
+	_, err := runBounded(500*time.Millisecond, os.Environ(), "/bin/sh", "-c", "sleep 300 & echo $! > '"+pidFile+"'; wait")
+	if err == nil || !strings.Contains(err.Error(), "timed out") || time.Since(start) > 5*time.Second {
+		t.Fatalf("%v after %v", err, time.Since(start))
+	}
+	raw, _ := os.ReadFile(pidFile)
+	pid, _ := strconv.Atoi(strings.TrimSpace(string(raw)))
+	deadline := time.Now().Add(3 * time.Second)
+	for pid > 0 && alive(pid) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if pid <= 0 || alive(pid) {
+		syscall.Kill(pid, syscall.SIGKILL)
+		t.Errorf("the grandchild %d survived the timeout", pid)
+	}
+}
+
 func TestNetnsCandidatesDropPrivilegesAndRequirementIsSet(t *testing.T) {
-	c := netnsCandidates("/bin/x", 1001, 1002, "/home/u", "/usr/bin", "/tmp")
-	if len(c) != 2 || strings.Join(c[0], " ") != "unshare -rn /bin/x" {
+	look := func(n string) string { return "/abs/" + n }
+	c := netnsCandidates(look, "/bin/x", 1001, 1002, "/home/u", "/usr/bin", "/tmp")
+	if len(c) != 2 || strings.Join(c[0], " ") != "/abs/unshare -rn /bin/x" {
 		t.Fatalf("%v", c)
 	}
 	sudo := strings.Join(c[1], " ")
-	for _, want := range []string{"sudo -n unshare --net --", "setpriv --reuid=1001 --regid=1002 --clear-groups", "WHR_NO_NETWORK_CHILD=1", " /bin/x"} {
+	for _, want := range []string{"/abs/sudo -n /abs/unshare --net -- /abs/setpriv --reuid=1001 --regid=1002 --clear-groups /abs/env WHR_NO_NETWORK_CHILD=1", " /bin/x"} {
 		if !strings.Contains(sudo, want) {
 			t.Errorf("%q lacks %q", sudo, want)
+		}
+	}
+	for _, argv := range c {
+		for _, a := range argv[:1] {
+			if !filepath.IsAbs(a) {
+				t.Errorf("%q is not absolute", a)
+			}
 		}
 	}
 	if strings.Index(sudo, "setpriv") > strings.Index(sudo, "/bin/x") || strings.Index(sudo, "unshare --net") > strings.Index(sudo, "setpriv") {
 		t.Errorf("the privileges must be dropped inside the namespace, before the binary runs: %q", sudo)
 	}
+	if got := netnsCandidates(func(n string) string {
+		if n == "sudo" {
+			return ""
+		}
+		return "/abs/" + n
+	}, "/bin/x", 1, 1, "h", "p", "t"); len(got) != 1 {
+		t.Errorf("without sudo only the user namespace remains: %v", got)
+	}
 	for _, tc := range []struct {
 		env  map[string]string
 		want bool
 	}{{nil, false}, {map[string]string{"CI": "true"}, true}, {map[string]string{"WHR_REQUIRE_NETNS": "1"}, true}, {map[string]string{"WHR_REQUIRE_NETNS": "0"}, false}} {
-		if got := netnsRequired(func(k string) string { return tc.env[k] }); got != tc.want {
+		if got := skipForbidden(func(k string) string { return tc.env[k] }); got != tc.want {
 			t.Errorf("%v: %v", tc.env, got)
 		}
 	}
@@ -565,38 +635,36 @@ func TestNetnsCandidatesDropPrivilegesAndRequirementIsSet(t *testing.T) {
 
 // TestValidateNoNetworkUnshare re-runs a validation in a fresh network
 // namespace (Linux). It must really run on CI: when no namespace can be made
-// there, or WHR_REQUIRE_NETNS=1, it fails instead of skipping.
+// there, or WHR_REQUIRE_NETNS=1, it fails instead of skipping. Every attempt is
+// bounded and its process group killed on timeout.
 func TestValidateNoNetworkUnshare(t *testing.T) {
 	realGit(t)
 	bin, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
-	uid, gid := os.Getuid(), os.Getgid()
 	var reasons []string
-	for _, argv := range netnsCandidates(bin, uid, gid, os.Getenv("HOME"), os.Getenv("PATH"), os.TempDir()) {
-		if _, err := exec.LookPath(argv[0]); err != nil {
-			reasons = append(reasons, argv[0]+" is not available")
-			continue
-		}
-		cmd := exec.Command(argv[0], argv[1:]...)
-		cmd.Env = append(os.Environ(), "WHR_NO_NETWORK_CHILD=1")
-		out, err := cmd.CombinedOutput()
-		text := strings.TrimSpace(string(out))
-		if err != nil && (strings.HasPrefix(text, "unshare:") || strings.HasPrefix(text, "sudo:") || strings.HasPrefix(text, "setpriv:")) {
-			reasons = append(reasons, argv[0]+": "+text)
+	candidates := netnsCandidates(lookPath, bin, os.Getuid(), os.Getgid(), os.Getenv("HOME"), os.Getenv("PATH"), os.TempDir())
+	if len(candidates) == 0 {
+		reasons = append(reasons, "unshare is not available")
+	}
+	for _, argv := range candidates {
+		out, err := runBounded(2*time.Minute, append(os.Environ(), "WHR_NO_NETWORK_CHILD=1"), argv...)
+		text := strings.TrimSpace(out)
+		if err != nil && (strings.Contains(err.Error(), "timed out") || strings.HasPrefix(text, "unshare:") || strings.HasPrefix(text, "sudo:") || strings.HasPrefix(text, "setpriv:")) {
+			reasons = append(reasons, filepath.Base(argv[0])+": "+err.Error()+" "+text)
 			continue
 		}
 		if err != nil {
 			t.Fatalf("%v\n%s", err, out)
 		}
-		if !strings.Contains(string(out), "child ok") {
+		if !strings.Contains(out, "child ok") {
 			t.Errorf("%s", out)
 		}
 		return
 	}
 	msg := "the network-namespace run did not happen (cannot create one here): " + strings.Join(reasons, "; ")
-	if netnsRequired(os.Getenv) {
+	if skipForbidden(os.Getenv) {
 		t.Fatalf("FAILED, NOT SKIPPED: %s", msg)
 	}
 	t.Skip("SKIPPED, NOT PASSED: " + msg)
