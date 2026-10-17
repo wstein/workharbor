@@ -307,7 +307,8 @@ func (s *Session) advanceLocked() {
 	s.scanned += n
 	d := s.scr.feed(s.buf[s.fed:])
 	s.fed += d
-	s.work += uint64(n + d)
+	// Count the unterminated tail both consumers look at again next time.
+	s.work += uint64(n+d) + uint64(len(s.buf)-s.scanned) + uint64(len(s.buf)-s.fed)
 }
 
 // Screen renders the transcript so far as text (see the package comment).

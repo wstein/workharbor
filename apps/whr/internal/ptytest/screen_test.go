@@ -214,3 +214,27 @@ func TestNarrowCharacterOverWideCharacterBlanksTheOtherHalf(t *testing.T) {
 		}
 	}
 }
+
+func TestUnterminatedSequencesAreCapped(t *testing.T) {
+	for _, prefix := range []string{"\x1b]0;", "\x1bP", "\x1b_", "\x1b[1;", "\x1b[?"} {
+		filler := "x"
+		if strings.HasPrefix(prefix, "\x1b[") {
+			filler = "1" // digits keep a CSI unterminated
+		}
+		long := strings.Repeat(filler, maxSeq+1000)
+		s := newScreen(0, 0)
+		if n := s.feed([]byte(prefix + long)); n != len(prefix+long) {
+			t.Errorf("%q: long unterminated sequence not dropped (consumed %d)", prefix, n)
+		}
+		s.feed([]byte("END"))
+		if !strings.HasSuffix(s.text(), "END") {
+			t.Errorf("%q: text after the dropped sequence lost: %q", prefix, s.text())
+		}
+		if n := newScreen(0, 0).feed([]byte(prefix + filler + filler)); n != 0 {
+			t.Errorf("%q: a short incomplete sequence must wait (consumed %d)", prefix, n)
+		}
+		if _, _, n := project([]byte(prefix + long)); n != len(prefix+long) {
+			t.Errorf("%q: project kept a long unterminated sequence (%d)", prefix, n)
+		}
+	}
+}
