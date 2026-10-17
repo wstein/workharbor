@@ -5,9 +5,11 @@ package resources
 import (
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 )
 
@@ -64,29 +66,41 @@ type vectorFile struct {
 }
 
 // loadVectors finds the repository root by walking up from the test's working
-// directory (the package directory under go test), so it does not depend on
-// the depth of this package or on -trimpath.
+// directory (the package directory under go test), then from this source
+// file's directory (runtime.Caller) as a fallback. Only a missing file moves
+// the search on; any other read or decode error fails the test.
 func loadVectors(t *testing.T) vectorFile {
 	t.Helper()
-	dir, err := os.Getwd()
-	if err != nil {
-		t.Fatal(err)
+	var starts []string
+	if wd, err := os.Getwd(); err == nil {
+		starts = append(starts, wd)
 	}
-	for {
-		path := filepath.Join(dir, filepath.FromSlash(vectorsRel))
-		if raw, err := os.ReadFile(path); err == nil {
-			var v vectorFile
-			if err := json.Unmarshal(raw, &v); err != nil {
-				t.Fatalf("decode %s: %v", path, err)
+	if _, file, _, ok := runtime.Caller(0); ok {
+		starts = append(starts, filepath.Dir(file))
+	}
+	for _, dir := range starts {
+		for {
+			path := filepath.Join(dir, filepath.FromSlash(vectorsRel))
+			raw, err := os.ReadFile(path)
+			if err == nil {
+				var v vectorFile
+				if err := json.Unmarshal(raw, &v); err != nil {
+					t.Fatalf("decode %s: %v", path, err)
+				}
+				return v
 			}
-			return v
+			if !errors.Is(err, fs.ErrNotExist) {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			t.Fatalf("%s not found above the test directory", vectorsRel)
-		}
-		dir = parent
 	}
+	t.Fatalf("%s not found above the test directory or the source file", vectorsRel)
+	return vectorFile{}
 }
 
 func classOf(t *testing.T, err error) Class {
@@ -158,6 +172,10 @@ func TestResolutionVectors(t *testing.T) {
 		got, err := Resolve(Explicit{CPU: c.Flags.CPU, Memory: c.Flags.Memory}, host, Mode(c.Mode))
 		want := c.Expect
 		switch {
+		case want.Error == "invalid_profile":
+			if !errors.Is(err, ErrInvalidProfile) {
+				t.Errorf("%s: err = %v, want ErrInvalidProfile", c.ID, err)
+			}
 		case want.Error != "":
 			var pe *ParseError
 			if !errors.As(err, &pe) {
@@ -184,6 +202,9 @@ func TestResolutionVectors(t *testing.T) {
 			}
 			if int64(got.Memory.Value) != want.Memory.Value || string(got.Memory.Origin) != want.Memory.Origin {
 				t.Errorf("%s: memory %+v, want %+v", c.ID, got.Memory, *want.Memory)
+			}
+			if cpu, mem, err := got.Effective(); err != nil || int64(cpu) != want.CPU.Value || int64(mem) != want.Memory.Value {
+				t.Errorf("%s: Effective = %d %d %v", c.ID, cpu, mem, err)
 			}
 		}
 	}
