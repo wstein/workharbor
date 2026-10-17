@@ -465,6 +465,8 @@ func TestUnknownCommandHint(t *testing.T) {
 		{[]string{"ws", "valdate"}, `did you mean "whr workspace validate"?`},
 		{[]string{"host", "service", "instal"}, `did you mean "whr host service install"?`},
 		{[]string{"vrsion"}, `did you mean "whr version"?`},
+		// "lsh" is one edit from both ls and ssh: the first in table order wins, deterministically.
+		{[]string{"ws", "lsh"}, `did you mean "whr workspace ls"?`},
 		{[]string{"ws", "zzzzzzzz"}, ``},
 		{[]string{"zzzzzzzzzz"}, ``},
 	}
