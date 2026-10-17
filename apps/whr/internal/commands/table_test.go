@@ -3,11 +3,13 @@
 package commands_test
 
 import (
+	"bytes"
 	"context"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/commands"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
@@ -471,20 +473,21 @@ func TestUnknownCommandHint(t *testing.T) {
 		if got.code != 64 || got.stdout != "" {
 			t.Errorf("%v: exit %d stdout %q", tc.args, got.code, got.stdout)
 		}
-		line := strings.TrimSuffix(got.err, "\n")
-		if !strings.HasPrefix(line, "whr: unknown command ") || strings.Contains(line, "\n") {
-			t.Errorf("%v: stderr %q is not a one-line unknown-command error", tc.args, got.err)
+		lines := strings.Split(strings.TrimSuffix(got.err, "\n"), "\n")
+		if !strings.HasPrefix(lines[0], "whr: unknown command ") || strings.Contains(lines[0], "did you mean") {
+			t.Errorf("%v: first line %q is not a bare unknown-command error", tc.args, lines[0])
 		}
-		if tc.want != "" && !strings.Contains(line, tc.want) {
-			t.Errorf("%v: %q lacks %q", tc.args, line, tc.want)
-		}
-		if tc.want == "" && strings.Contains(line, "did you mean") {
-			t.Errorf("%v: unexpected hint in %q", tc.args, line)
+		if tc.want != "" {
+			if len(lines) != 2 || !strings.HasPrefix(lines[1], "  hint: ") || !strings.Contains(lines[1], tc.want) {
+				t.Errorf("%v: stderr %q lacks the hint line %q", tc.args, got.err, tc.want)
+			}
+		} else if len(lines) != 1 {
+			t.Errorf("%v: unexpected hint in %q", tc.args, got.err)
 		}
 	}
 	// A hostile word is quoted, not echoed raw.
 	got := run(t, nil, "bad\x1b]0;pwned\x07\nwhr: ok")
-	if got.code != 64 || strings.ContainsAny(got.err, "\x1b\x07") || strings.Count(got.err, "\n") != 1 {
+	if got.code != 64 || strings.ContainsAny(got.err, "\x1b\x07") || strings.Count(got.err, "\n") > 2 {
 		t.Errorf("hostile unknown command: exit %d stderr %q", got.code, got.err)
 	}
 	env := decodeEnvelope(t, run(t, nil, "--json", "bad\x1b\u202e").stdout)
@@ -555,3 +558,92 @@ func TestHandlerErrorsMapToExitCodes(t *testing.T) {
 type errString string
 
 func (e errString) Error() string { return string(e) }
+
+func TestRootFlagErrorHasNoDoubledPrefix(t *testing.T) {
+	got := run(t, nil, "--bogus")
+	if !strings.HasPrefix(got.err, "whr: unknown flag: --bogus\n") {
+		t.Errorf("stderr = %q", got.err)
+	}
+	if got := run(t, nil, "version", "--bogus"); !strings.HasPrefix(got.err, "whr: version: unknown flag") {
+		t.Errorf("stderr = %q", got.err)
+	}
+}
+
+func TestHumanErrorsAreBounded(t *testing.T) {
+	huge := strings.Repeat("x", 100000)
+	for _, args := range [][]string{{"--" + huge}, {"--color", huge, "version"}, {"completion", huge}, {huge}, {"ws", huge}, {"init", "--" + huge}} {
+		got := run(t, nil, args...)
+		if got.code != 64 || len(got.err) > 4000 {
+			t.Errorf("%.20q...: exit %d, stderr %d bytes", args[0], got.code, len(got.err))
+		}
+		js := run(t, nil, append(append([]string{}, args...), "--json")...)
+		if len(js.stdout) > 4000 {
+			t.Errorf("JSON stdout %d bytes", len(js.stdout))
+		}
+	}
+}
+
+func TestJSONWithHelpAndGroupsKeepsExitCode(t *testing.T) {
+	for _, args := range [][]string{{"--json"}, {"ws", "--json"}, {"host", "--json"}, {"host", "service", "--json"}, {"--help", "--json"},
+		{"ls", "--help", "--json"}, {"--json", "-h"}, {"help", "ls", "--json"}, {"service", "--json"}} {
+		got := run(t, stubHandlers(), args...)
+		env := decodeEnvelope(t, got.stdout)
+		if got.code != 64 || env["exit_code"] != float64(64) || env["ok"] != false {
+			t.Errorf("%v: exit %d, envelope %v", args, got.code, env)
+		}
+	}
+}
+
+func TestContextCancellationAndDeadline(t *testing.T) {
+	observe := func(ctx context.Context, _ commands.Call) (commands.Result, error) {
+		select {
+		case <-ctx.Done():
+			return commands.Result{}, ctx.Err()
+		default:
+			return commands.Result{Human: "ran\n"}, nil
+		}
+	}
+	h := stubHandlers()
+	h["workspace.ls"] = observe
+	exec := func(ctx context.Context, args ...string) (int, string) {
+		var out, errOut bytes.Buffer
+		code := commands.Execute(ctx, args, commands.Env{Stdout: &out, Stderr: &errOut}, h)
+		return code, out.String()
+	}
+	if code, _ := exec(context.Background(), "ls"); code != 0 {
+		t.Fatalf("live context: exit %d", code)
+	}
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if code, out := exec(cancelled, "ls", "--json"); code != 72 || !strings.Contains(out, `"code":"interrupted"`) {
+		t.Errorf("cancelled context: exit %d stdout %q, want 72 interrupted", code, out)
+	}
+	expired, stop := context.WithDeadline(context.Background(), time.Unix(1, 0))
+	defer stop()
+	if code, out := exec(expired, "ws", "ls", "--json"); code != 71 || !strings.Contains(out, `"code":"timeout"`) {
+		t.Errorf("expired deadline: exit %d stdout %q, want 71 timeout", code, out)
+	}
+}
+
+func TestCompletionOfArgumentsIsNotFiles(t *testing.T) {
+	for _, h := range []map[string]commands.Handler{nil, stubHandlers()} {
+		got := run(t, h, "__complete", "completion", "")
+		for _, shell := range []string{"bash", "zsh", "fish"} {
+			if !strings.Contains(got.stdout, shell+"\n") && !strings.Contains(got.stdout, shell+"\t") {
+				t.Errorf("completion argument lacks %s: %q", shell, got.stdout)
+			}
+		}
+		if !strings.Contains(got.stdout, ":4\n") {
+			t.Errorf("completion argument allows file completion: %q", got.stdout)
+		}
+		for _, args := range [][]string{{"ws", ""}, {"workspace", "ls", ""}, {"ls", ""}, {"help", ""}, {"version", ""}, {"host", "service", ""}} {
+			got := run(t, h, append([]string{"__complete"}, args...)...)
+			if !strings.Contains(got.stdout, ":4\n") && !strings.Contains(got.stdout, ":0\n") {
+				t.Errorf("%v: %q", args, got.stdout)
+			}
+			if strings.Contains(got.stdout, ":0\n") || strings.Contains(got.stdout, ":1\n") {
+				t.Errorf("%v falls back to file completion: %q", args, got.stdout)
+			}
+		}
+	}
+}

@@ -3,7 +3,6 @@
 package commands
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
@@ -13,18 +12,18 @@ import (
 const maxEcho = 64
 
 // unknown builds the usage error for an unknown word typed after parent
-// (canonical group path, empty for the top level), with a one-line hint
+// (canonical group path, empty for the top level), with a hint line
 // naming the nearest valid spelling (FR-053).
 func unknown(parent []string, typed string) *exitcode.Error {
 	word := typed
 	if r := []rune(word); len(r) > maxEcho {
 		word = string(r[:maxEcho]) + "..."
 	}
-	msg := fmt.Sprintf("unknown command %q", word)
+	e := exitcode.Errorf(exitcode.PathUnknownCommand, "unknown command %q", word)
 	if s := nearest(parent, typed); s != "" {
-		msg += fmt.Sprintf("; did you mean %q?", "whr "+s)
+		e.WithRemediation("did you mean %q?", "whr "+s)
 	}
-	return exitcode.Errorf(exitcode.PathUnknownCommand, "%s", msg)
+	return e
 }
 
 // nearest returns the closest valid spelling below parent, or "".

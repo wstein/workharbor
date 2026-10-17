@@ -52,11 +52,10 @@ func (a *app) build() {
 		return nil
 	}
 	root.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
-		name := c.Annotations[annotationID]
-		if name == "" {
-			name = "whr"
+		if name := c.Annotations[annotationID]; name != "" {
+			err = fmt.Errorf("%s: %w", name, err)
 		}
-		return exitcode.Errorf(exitcode.PathBadArguments, "%s: %v", name, err).
+		return exitcode.Errorf(exitcode.PathBadArguments, "%v", err).
 			WithRemediation("run %s --help", strings.TrimSpace(c.CommandPath()))
 	})
 	a.root = root
@@ -81,7 +80,7 @@ func (a *app) build() {
 		}
 		parent := group(path[:len(path)-1])
 		name := path[len(path)-1]
-		g := &cobra.Command{Use: name, Args: cobra.ArbitraryArgs, Annotations: map[string]string{annotationGroup: key}}
+		g := &cobra.Command{Use: name, Args: cobra.ArbitraryArgs, ValidArgsFunction: cobra.NoFileCompletions, Annotations: map[string]string{annotationGroup: key}}
 		if len(path) == 1 {
 			g.Aliases = groupAliases[name]
 		}
@@ -95,7 +94,20 @@ func (a *app) build() {
 		e := e
 		runE := func(c *cobra.Command, args []string) error { return a.run(c.Context(), e, args) }
 		leaf := func(use string) *cobra.Command {
-			c := &cobra.Command{Use: use, Args: cobra.ArbitraryArgs, RunE: runE, Annotations: map[string]string{annotationID: e.ID}}
+			c := &cobra.Command{Use: use, Args: cobra.ArbitraryArgs, RunE: runE, ValidArgsFunction: cobra.NoFileCompletions,
+				Annotations: map[string]string{annotationID: e.ID}}
+			if e.ID == "completion" {
+				c.ValidArgs = []string{"bash", "zsh", "fish"}
+				c.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
+					var out []cobra.Completion
+					for _, shell := range c.ValidArgs {
+						if len(args) == 0 && strings.HasPrefix(shell, toComplete) {
+							out = append(out, shell)
+						}
+					}
+					return out, cobra.ShellCompDirectiveNoFileComp
+				}
+			}
 			if e.ID == "workspace.init" {
 				addInitFlags(c, e)
 			} else if !a.available(e.ID) {
@@ -127,7 +139,7 @@ func (a *app) build() {
 			g := groups["short:"+joinPath(e.Short[:1])]
 			if g == nil {
 				g = &cobra.Command{
-					Use: e.Short[0], Args: cobra.ArbitraryArgs, Hidden: true,
+					Use: e.Short[0], Args: cobra.ArbitraryArgs, Hidden: true, ValidArgsFunction: cobra.NoFileCompletions,
 					Annotations: map[string]string{annotationGroup: joinPath(e.Path[:len(e.Path)-1])},
 				}
 				path := e.Path[:len(e.Path)-1]
