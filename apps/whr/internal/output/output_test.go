@@ -307,3 +307,26 @@ func TestColorMatrix(t *testing.T) {
 		}
 	})
 }
+
+func TestHumanFailureLinesAreBounded(t *testing.T) {
+	var out, errOut bytes.Buffer
+	w := &output.Writer{Out: &out, Err: &errOut}
+	huge := strings.Repeat("x", 100000)
+	w.Failure("workspace.ls", exitcode.Errorf(exitcode.PathBadArguments, "%s", huge).WithRemediation("%s", huge))
+	lines := strings.Split(strings.TrimSuffix(errOut.String(), "\n"), "\n")
+	if len(lines) != 2 || len([]rune(lines[0])) > len("whr: ")+1024 || len([]rune(lines[1])) > len("  hint: ")+1024 {
+		t.Fatalf("lines have %d and %d runes", len(lines[0]), len(lines[len(lines)-1]))
+	}
+	if !strings.HasSuffix(lines[0], "\u2026") {
+		t.Errorf("clipped line does not end with an ellipsis")
+	}
+}
+
+func TestHintLineEscapesAndKeepsSafeText(t *testing.T) {
+	var errOut bytes.Buffer
+	w := &output.Writer{Out: &bytes.Buffer{}, Err: &errOut}
+	w.Failure("x", exitcode.Errorf(exitcode.PathBadArguments, "caf\u00e9\u00a0ok").WithRemediation("a\u202eb\x1b"))
+	if errOut.String() != "whr: caf\u00e9\u00a0ok\n  hint: a<U+202E>b<U+001B>\n" {
+		t.Errorf("stderr = %q", errOut.String())
+	}
+}

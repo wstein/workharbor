@@ -4,6 +4,8 @@ package version_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -58,5 +60,47 @@ func TestVersionBuildMetadataIsInjectable(t *testing.T) {
 	}
 	if !strings.HasSuffix(text, "\n") || strings.Contains(strings.TrimSuffix(text, "\n"), "\n\n") {
 		t.Errorf("human text must end with one newline and have no blank line: %q", text)
+	}
+}
+
+func TestHumanEscapesInjectedFields(t *testing.T) {
+	oldV, oldR, oldD := version.Version, version.Revision, version.BuildDate
+	t.Cleanup(func() { version.Version, version.Revision, version.BuildDate = oldV, oldR, oldD })
+	version.Version, version.Revision, version.BuildDate = "1\x1b[2J", "r\u202ev", "d\nwhr: forged"
+	text := version.Current().Human()
+	if strings.ContainsAny(text, "\x1b\u202e") || strings.Count(text, "\n") != 5 {
+		t.Fatalf("injected fields reach the terminal raw: %q", text)
+	}
+}
+
+func TestContractVersionsMatchContractFiles(t *testing.T) {
+	files := map[string]string{"command_table": "commands.json", "exit_codes": "exit-codes.json", "output_schema": "output.schema.json"}
+	got := version.Current().ContractVersions
+	if len(got) != len(files) {
+		t.Fatalf("contract versions %v, want exactly %d entries", got, len(files))
+	}
+	for name, file := range files {
+		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "contracts", "cli", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc struct {
+			SchemaVersion int `json:"schema_version"`
+			Properties    struct {
+				SchemaVersion struct {
+					Const int `json:"const"`
+				} `json:"schema_version"`
+			} `json:"properties"`
+		}
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		want := doc.SchemaVersion
+		if want == 0 {
+			want = doc.Properties.SchemaVersion.Const
+		}
+		if want == 0 || got[name] != want {
+			t.Errorf("%s = %d, %s declares schema_version %d", name, got[name], file, want)
+		}
 	}
 }

@@ -3,6 +3,7 @@
 package terminal_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -77,7 +78,7 @@ func TestEscapeFR022Corpus(t *testing.T) {
 }
 
 func TestEscapeKeepsSafeText(t *testing.T) {
-	for _, s := range []string{"", "plain", "tab\tkept", "\u00fcn\u00efc\u00f6d\u00e9 \u2713 \u65e5\u672c\u8a9e \u2014 emoji \U0001f642", "~ and }"} {
+	for _, s := range []string{"", "plain", "tab\tkept", "nbsp\u00a0kept", "caf\u00e9", "\u00e9\u00df\u4e2d\U0001f642", "\u00fcn\u00efc\u00f6d\u00e9 \u2713 \u65e5\u672c\u8a9e \u2014 emoji \U0001f642", "~ and }"} {
 		if got := terminal.Escape(s); got != s {
 			t.Errorf("Escape(%q) = %q, want unchanged", s, got)
 		}
@@ -106,6 +107,9 @@ func TestEscapeJSONExhaustiveRuneRange(t *testing.T) {
 	for _, r := range scalarValues() {
 		raw, _ := json.Marshal(string(r))
 		got := terminal.EscapeJSON(raw)
+		if !terminal.IsUnsafe(r) && !bytes.Equal(got, raw) {
+			t.Fatalf("U+%04X is safe but EscapeJSON changed %q to %q", r, raw, got)
+		}
 		if terminal.IsUnsafe(r) && strings.ContainsRune(string(got), r) {
 			t.Fatalf("U+%04X survives raw in JSON output %q", r, got)
 		}
