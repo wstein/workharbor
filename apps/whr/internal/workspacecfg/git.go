@@ -28,9 +28,30 @@ func (r *run) gitUnsafe() (reason string, missing bool) {
 		}
 		return ".git is " + kindName(info.Mode()), false
 	}
+	// Directories Git descends into must be real directories: a link there would
+	// make Git read refs or objects from outside the validated directory.
+	for _, rel := range []string{".git/objects", ".git/objects/info", ".git/refs", ".git/refs/heads"} {
+		if info, aerr := r.d.lstat(rel); aerr != nil && aerr.kind != accMissing {
+			return rel + " " + aerr.why, false
+		} else if aerr == nil && info.Mode()&fs.ModeSymlink != 0 {
+			return rel + " is a symbolic link", false
+		}
+	}
 	for _, rel := range []string{".git/commondir", ".git/objects/info/alternates"} {
-		if _, aerr := r.d.lstat(rel); aerr == nil || aerr.kind != accMissing {
+		if _, aerr := r.d.lstat(rel); aerr == nil {
 			return rel[len(".git/"):] + " is present, which redirects Git to other storage", false
+		} else if aerr.kind != accMissing {
+			return rel + " " + aerr.why, false
+		}
+	}
+	if info, aerr := r.d.lstat(".git/packed-refs"); aerr == nil && info.Mode()&fs.ModeSymlink != 0 {
+		return ".git/packed-refs is a symbolic link", false
+	}
+	if ref := r.headRef(); ref != "" {
+		if info, aerr := r.d.lstat(".git/" + ref); aerr != nil && aerr.kind != accMissing {
+			return ".git/" + ref + " " + aerr.why, false
+		} else if aerr == nil && info.Mode()&fs.ModeSymlink != 0 {
+			return ".git/" + ref + " is a symbolic link", false
 		}
 	}
 	for _, f := range []struct {
@@ -49,6 +70,34 @@ func (r *run) gitUnsafe() (reason string, missing bool) {
 		}
 	}
 	return "", false
+}
+
+// headRef returns the reference .git/HEAD names ("refs/heads/main"), or "" when
+// HEAD is detached, unreadable or names something that is not a plain ref path.
+func (r *run) headRef() string {
+	raw, aerr := r.d.readFile(".git/HEAD", 4096)
+	if aerr != nil {
+		return ""
+	}
+	name, ok := strings.CutPrefix(strings.TrimRight(string(raw), "\r\n"), "ref: ")
+	if !ok || !validRefName(name) {
+		return ""
+	}
+	return name
+}
+
+// validRefName accepts refs/... names made of plain components, so that the
+// name is safe to join onto .git/.
+func validRefName(name string) bool {
+	if !strings.HasPrefix(name, "refs/") || strings.ContainsAny(name, "\\\x00\r\n\t ") {
+		return false
+	}
+	for _, part := range strings.Split(name, "/") {
+		if part == "" || part == "." || part == ".." {
+			return false
+		}
+	}
+	return true
 }
 
 // gitFailure aborts the Git stage with a finding.
@@ -213,8 +262,22 @@ func (g *gitSession) headExists() (bool, *gitFailure) {
 	if f != nil {
 		return false, f
 	}
-	if out.Exit != 0 || !strings.HasPrefix(strings.TrimSpace(string(out.Stdout)), "refs/") {
+	ref := strings.TrimSpace(string(out.Stdout))
+	if out.Exit != 0 || !validRefName(ref) {
 		return false, &gitFailure{"git.listing_failed", "HEAD is neither a commit nor an unborn branch"}
+	}
+	// Unborn means the named reference is absent, loose and packed.
+	if _, aerr := g.r.d.lstat(".git/" + ref); aerr == nil || aerr.kind != accMissing {
+		return false, &gitFailure{"git.listing_failed", "HEAD names a reference that exists but cannot be resolved"}
+	}
+	if packed, aerr := g.r.d.readFile(".git/packed-refs", MaxListingBytes); aerr == nil {
+		for _, line := range strings.Split(string(packed), "\n") {
+			if _, name, ok := strings.Cut(line, " "); ok && name == ref {
+				return false, &gitFailure{"git.listing_failed", "HEAD names a packed reference that cannot be resolved"}
+			}
+		}
+	} else if aerr.kind != accMissing {
+		return false, &gitFailure{"git.listing_failed", "packed-refs cannot be read"}
 	}
 	return false, nil
 }
@@ -253,6 +316,9 @@ func (g *gitSession) listing(sub ...string) ([]TreeEntry, *gitFailure) {
 		rec := string(data[:i])
 		data = data[i+1:]
 		e, ok := parseListingRecord(sub[0], rec)
+		if !ok && sub[0] == "ls-files" && isUnmergedRecord(rec) {
+			return nil, &gitFailure{"git.listing_failed", "the index has unmerged entries; finish or abort the merge"}
+		}
 		if !ok {
 			return nil, &gitFailure{"git.listing_failed", "git " + sub[0] + " printed an unparsable record"}
 		}
@@ -291,4 +357,11 @@ func parseListingRecord(kind, rec string) (TreeEntry, bool) {
 		return TreeEntry{}, false
 	}
 	return TreeEntry{Mode: f[0], SHA: sha, Path: path}, true
+}
+
+// isUnmergedRecord recognises an ls-files --stage record with a stage above 0.
+func isUnmergedRecord(rec string) bool {
+	meta, _, ok := strings.Cut(rec, "\t")
+	f := strings.Split(meta, " ")
+	return ok && len(f) == 3 && (f[2] == "1" || f[2] == "2" || f[2] == "3")
 }

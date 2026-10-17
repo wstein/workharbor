@@ -37,7 +37,7 @@ func CheckDevcontainer(raw []byte) []Finding {
 		return c.list
 	}
 	if len(raw) > MaxDevcontainerLen {
-		return fail("devcontainer.too_large", fmt.Sprintf("the devcontainer file is larger than %d bytes", MaxDevcontainerLen))
+		return fail("devcontainer.too_large", tooLarge(devcontainerWhat, MaxDevcontainerLen))
 	}
 	switch {
 	case bytes.HasPrefix(raw, []byte("\xef\xbb\xbf")):

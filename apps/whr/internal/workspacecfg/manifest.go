@@ -61,7 +61,7 @@ func CheckManifest(raw []byte) ManifestResult {
 		return ManifestResult{Findings: c.list}
 	}
 	if len(raw) > MaxManifestBytes {
-		return fail("manifest.too_large", fmt.Sprintf("%s is larger than %d bytes", ManifestFile, MaxManifestBytes))
+		return fail("manifest.too_large", tooLarge(ManifestFile, MaxManifestBytes))
 	}
 	switch {
 	case bytes.HasPrefix(raw, []byte("\xef\xbb\xbf")):

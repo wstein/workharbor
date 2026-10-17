@@ -523,14 +523,14 @@ func noNetworkChild() int {
 func TestValidateNoNetworkUnshare(t *testing.T) {
 	realGit(t)
 	if _, err := exec.LookPath("unshare"); err != nil {
-		t.Skip("unshare is not available")
+		t.Skip("SKIPPED, NOT PASSED: unshare is not available, so the network-namespace run did not happen")
 	}
 	cmd := exec.Command("unshare", "-rn", os.Args[0])
 	cmd.Env = append(os.Environ(), "WHR_NO_NETWORK_CHILD=1")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		if strings.Contains(string(out), "unshare:") {
-			t.Skipf("cannot create a network namespace here: %s", strings.TrimSpace(string(out)))
+			t.Skipf("SKIPPED, NOT PASSED: the network-namespace run did not happen (cannot create one here): %s", strings.TrimSpace(string(out)))
 		}
 		t.Fatalf("%v\n%s", err, out)
 	}
