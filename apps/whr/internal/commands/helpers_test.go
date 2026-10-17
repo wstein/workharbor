@@ -106,7 +106,7 @@ func stubHandlers() map[string]commands.Handler {
 	delete(h, "host.doctor") // the stub only reports arguments; doctor has its own tests
 	for _, e := range commands.Table() {
 		id := e.ID
-		if _, ok := h[id]; ok {
+		if id == "version" { // the one default handler that is not replaced by a stub
 			continue
 		}
 		h[id] = func(_ context.Context, call commands.Call) (commands.Result, error) {
@@ -134,4 +134,14 @@ func decodeEnvelope(t *testing.T, stdout string) map[string]any {
 
 func jsonUnmarshal(s string) (any, error) {
 	return jsonschema.UnmarshalJSON(bytes.NewReader([]byte(s)))
+}
+
+// runWithContext is run with a caller context and the production handlers.
+func runWithContext(ctx context.Context, out, errOut io.Writer, args ...string) int {
+	env := commands.Env{
+		Stdout: out, Stderr: errOut,
+		Getenv:     func(string) string { return "" },
+		IsTerminal: func(io.Writer) bool { return false },
+	}
+	return commands.Execute(ctx, args, env, commands.DefaultHandlers())
 }
