@@ -67,7 +67,9 @@ these accepted ports or approve runtime integration.
 (schema_version 1) as read today by the host agent resolver and `scripts/check_repo.py`; its version 1 definition adds no field.
 `whr validate` and `whr init` (Feature 006) are specified to validate against it. The schema also describes the
 proposed `schema_version` 2 (optional `name`, `start_dir`, `human_shell`, `console_mode`, `shortcuts`, `project`),
-which the resolver rejects until a separate reviewed change. The Go validator is hand-written and frozen against the
+which the resolver rejects until a separate reviewed change (work item T035; version 2 is fail-closed and not
+creation-ready until then). `scripts/check_repo.py` validates version 1 and 2 manifests, the examples and every vector
+type-exactly (`true`, `1.0` and `1e0` are not the integer 1). The Go validator is hand-written and frozen against the
 shared vectors [`workspace/vectors.json`](workspace/vectors.json); product code uses no JSON Schema library (a
 test-only validator may prove the output schema). [`workspace/starters.json`](workspace/starters.json) lists the
 `whr workspace init` starters, all unsupported until provider admission;
