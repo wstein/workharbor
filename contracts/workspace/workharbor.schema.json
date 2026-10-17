@@ -76,7 +76,8 @@
               "const": "."
             }
           ],
-          "description": "Workspace-relative starting directory; '.' is the workspace root. Existence is checked in the runtime before spawning, not here."
+          "description": "Workspace-relative starting directory; '.' is the workspace root. Existence is checked in the runtime before spawning, not here.",
+          "default": "."
         },
         "human_shell": {
           "enum": [
@@ -84,19 +85,25 @@
             "bash",
             "zsh",
             "nu"
-          ]
+          ],
+          "default": "fish",
+          "description": "Interactive human shell started by the console; default fish. Agent commands always run in bash by policy; that is not a field."
         },
         "console_mode": {
           "enum": [
             "herdr",
             "plain"
-          ]
+          ],
+          "default": "herdr",
+          "description": "herdr starts the terminal workspace manager; plain starts the shell directly. Default herdr."
         },
         "shortcuts": {
           "enum": [
             "on",
             "off"
-          ]
+          ],
+          "default": "on",
+          "description": "on loads the shared BundleDock shell shortcuts layer; off does not. Default on."
         },
         "project": {
           "type": "object",
