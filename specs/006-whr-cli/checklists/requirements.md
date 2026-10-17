@@ -84,6 +84,7 @@ unchanged. This revision is ready for human spec review, not implementation.
 
 ## Amendment H77 (2026-10-16/17) review state
 
+- Implementation-detail items above ("No implementation details") describe the original text; FR-055 and FR-057 of the H77 amendment deliberately prescribe file-access and Git invocation properties because they are the security requirement.
 - [ ] Independent review CLEAR for the exact head of the H77 amendment (spec FR-051–FR-063, US7–US8, SC-016–SC-021,
   plan, tasks T025–T034, ADR 0014 and the `commands.json`, `output.schema.json`, `doctor-checks.json`,
   `validate-findings.json`, `resources-vectors.json`, `workharbor.schema.json` (version 2), `vectors.json` and
@@ -93,6 +94,6 @@ unchanged. This revision is ready for human spec review, not implementation.
 - [ ] The owner's human review of the plan, task scope, configuration schema (manifest version 2) and launcher contracts
   required by the 2026-10-16 initialization and resource revisions. This reconciliation is the input to that review, not
   the review.
-- Requirements-quality notes: the findings catalogue and limits are owner-confirmed values (chat 2026-10-17); the
+- Requirements-quality notes: the thresholds and limits are owner-confirmed values (quote in H77 (6), chat 2026-10-17); the findings catalogue is proposed; the
   starters are listed as unsupported; `setup --dry-run` is excluded with a stated reason (FR-061); owner-API commands are
   specified and blocked, not removed; FR-051–FR-063 continue the numbering after the 2026-10-16 revisions.

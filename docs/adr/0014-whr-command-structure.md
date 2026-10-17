@@ -70,7 +70,7 @@ table, envelope, error line, color, frozen exit codes, terminal-text escaping, `
 library. Wave 1b: a terminal test harness, the interactive wizard D2 and devcontainer reuse D3. Wave 2: `workspace create`
 wiring and the starter catalog. Work items run in parallel worktrees, one pull request per work item. `setup --dry-run` is not included (the agent
 service unit and typed change plan do not exist, so a dry run would invent its plan). Everything that needs the owner
-API stays specified and is blocked on it; until then those commands are registered, listed as unavailable and exit 64
+API stays specified and is blocked on it (`auth` and `host show` on the typed TLS owner client, since their endpoints exist); until then those commands are registered, listed as unavailable and exit 64
 with a one-line explanation. The runtime parts of the wizard's preferences (launching fish or herdr, console grants)
 are outside this ADR and the increment.
 
@@ -78,8 +78,8 @@ are outside this ADR and the increment.
 
 No new code: the [ADR 0013 table](0013-whr-exit-codes.md) is unchanged and
 `contracts/cli/exit-codes.json` is not edited. The mapping is FR-063: success 0; bad flags or values, a target that is a
-file, an unavailable command 64; missing directory 65; a required input or overwrite permission missing in unattended
-`init`, or an omitted resource value without a default, 70; invalid configuration, existing or symlinked target, file
+file, an unavailable command 64; missing directory 65; a required input or overwrite permission for an existing regular file missing in unattended
+`init` 70; invalid configuration, non-regular, symlinked or concurrently replaced target, file
 changed since preview, pre-existing content failing validation, failed doctor check, unsupported platform for a mutating
 host command 68; SIGINT, SIGTERM and wizard cancellation 72; an incomplete rollback 73, which takes precedence over 72 and
 the original code; in `init` a failed self-validation of generated files or another unclassified failure 74. The

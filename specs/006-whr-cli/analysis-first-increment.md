@@ -1,6 +1,6 @@
 # Independent review record: H77 first-increment amendment
 
-Rounds 1 to 3 below reviewed the pre-rebase branch (backup/h77-pre-rebase); their FR, SC and work-item numbers are the old ones (FR-039..049, SC-013..017, T025..T029). After the owner's upstream revisions (US0, US1a, FR-039..FR-050, SC-013..SC-015, 2026-10-16) and the scope decisions of 2026-10-17 the amendment was reconciled on origin/main with new numbers: FR-051..FR-063, SC-016..SC-021, US7..US8, T025..T034. Round 4 and later review the reconciled text.
+Rounds 1 to 3 below reviewed the pre-rebase branch (backup/h77-pre-rebase); their FR, SC and work-item numbers are the old ones (FR-039..049, SC-013..017, T025..T029; US7..US9). After the owner's upstream revisions (US0, US1a, FR-039..FR-050, SC-013..SC-015, 2026-10-16) and the scope decisions of 2026-10-17 the amendment was reconciled on origin/main with new numbers: FR-051..FR-063, SC-016..SC-021, US7..US8, T025..T034. Round 4 and later review the reconciled text.
 
 Records review rounds of the amendment text (spec FR-039–FR-049, US7–US9, plan, tasks T025–T029, ADR 0014 and the
 CLI/workspace contracts). A READY verdict is not owner approval; owner approval of an exact head needs a tracker or PR
@@ -70,3 +70,22 @@ fetching and `init` runs no Git command (so the init Git-version preflight is mo
 starters (unsupported); settings moved from a separate preferences file to a proposed manifest `schema_version` 2 by the
 owner's decision; `workspace.create` is registered as `later` with only a pure resource library and shared vectors in
 the first increment.
+
+## Round 4 - reviewed revision 869f18f872071c732e2d8f7e0643bd0af84a95f7 (reconciled set) - NOT READY (2 high, 11 medium, 11 low)
+
+| # | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| 1 | high | Per-protocol `protocol.<name>.allow` in a hostile `.git/config` overrides `protocol.allow` (partial clone fetch) | `protocol.<name>.allow=never`, `GIT_ALLOW_PROTOCOL`, `GIT_NO_LAZY_FETCH`, commondir/alternates unsafe, corpus and tests (FR-055, plan, T026) |
+| 2 | high | "init runs no Git" vs validating the written result | Git-free validation profile for init, `git_checks: not_run`, `project.declared_not_pinned` always when declared (FR-057, schema, T030) |
+| 3 | med | Unborn HEAD not implementable within the vectors | Seven fixed vectors incl. `symbolic-ref -q HEAD`, `--quiet`, presence conditions |
+| 4 | med | Old numbering in plan | Renumbered |
+| 5 | med | False parallelism claims | vectors.json owned by T028; T027 uses a port; wizard step moved from T033 to T032 |
+| 6 | med | Existing version 1 manifests and creation-readiness | v1 preserved unless `--overwrite`, warning not creation-ready (FR-057 (g)) |
+| 7 | med | Version 2 contradictions in validate | "integer 1 or 2" |
+| 8 | med | `git.unavailable` was a warning | Error when `.git` is a real directory |
+| 9 | med | Exit code for existing target | 70 regular file without `--overwrite`; 68 non-regular, symlink, replaced |
+| 10 | med | init validation null on dry run; error.code mapping | In-memory result; `error.code` bound to `exit_code` by `allOf` |
+| 11 | med | project.url grammar and path derivation | Stricter URL pattern, derivation from `projects_path`, vectors |
+| 12 | med | No classification precedence in resource vectors | `classification_order` and added cases |
+| 13 | med | Approval overclaim in checklist | Thresholds only are owner-confirmed |
+| 14-24 | low | Labels, vector fidelity, leftovers, partial acceptance claims, 5 s meaning, overwrite races, scope overstatements, bundles, stale text, checklist wording, `.git` internals | Fixed in the same commit series |
