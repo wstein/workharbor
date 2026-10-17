@@ -116,7 +116,7 @@ func (w *Writer) envelope(e Envelope) error {
 // clip bounds text to the schema's maxLength, marking the cut.
 func clip(s string) string {
 	if r := []rune(s); len(r) > maxText {
-		return string(r[:maxText-1]) + "…"
+		return string(r[:maxText-1]) + "\u2026"
 	}
 	return s
 }

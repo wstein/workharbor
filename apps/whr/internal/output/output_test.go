@@ -228,7 +228,7 @@ func TestFailureLines(t *testing.T) {
 
 func TestEnvelopeEscapesAndBoundsText(t *testing.T) {
 	w, out, _ := jsonWriter()
-	long := strings.Repeat("\u00e4", 2000) + "\u202e\u009b\x7f"
+	long := "\u202e\u009b\x7f" + strings.Repeat("\u00e4", 2000)
 	w.Failure("workspace.ls", exitcode.Errorf(exitcode.PathBadArguments, "%s", long))
 	for _, r := range out.String() {
 		if r == 0x202e || r == 0x9b || r == 0x7f {
