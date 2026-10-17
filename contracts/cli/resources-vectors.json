@@ -4,7 +4,7 @@
  "decision": "H77",
  "status": "proposed",
  "spec": "specs/006-whr-cli/spec.md FR-039..FR-042, FR-059",
- "description": "Shared test vectors for CPU and memory parsing, canonicalization and per-field resolution, usable by the Go client library (apps/whr/internal/resources) and later by the Elixir control plane. CPU canonical value is integer thousandths of a CPU equivalent; memory is integer bytes (MiB = 1048576, GiB = 1073741824). Grammar: cpu = int [ '.' 1*3DIGIT ]; memory = int ( 'MiB' / 'GiB' ), int = '0' / nonzero *DIGIT, ASCII digits only, case-sensitive units, no whitespace. Rejections: empty, sign, exponent, nonfinite, syntax, excess_precision, missing_unit, bad_unit, not_positive, overflow (canonical value above 2^63-1). Spellings with equal canonical values share request identity. Resolution is per field: explicit flag, then host profile, else needs-human (unattended) or prompt (interactive); omission never means unlimited.",
+ "description": "Shared test vectors for CPU and memory parsing, canonicalization and per-field resolution, usable by the Go client library (apps/whr/internal/resources) and later by the Elixir control plane. CPU canonical value is integer thousandths of a CPU equivalent; memory is integer bytes (MiB = 1048576, GiB = 1073741824). Grammar: cpu = int [ '.' 1*3DIGIT ]; memory = int ( 'MiB' / 'GiB' ), int = '0' / nonzero *DIGIT, ASCII digits only, case-sensitive units, no whitespace. Rejections are classified by the first matching rule of classification_order. Spellings with equal canonical values share request identity. Resolution is per field: explicit flag, then host profile, else needs-human (unattended) or prompt (interactive); omission never means unlimited.",
  "limits": {
   "max_canonical": 9223372036854775807,
   "mib": 1048576,
@@ -64,7 +64,19 @@
    "error": "sign"
   },
   {
+   "input": "-0",
+   "error": "sign"
+  },
+  {
    "input": "+2",
+   "error": "sign"
+  },
+  {
+   "input": "+inf",
+   "error": "sign"
+  },
+  {
+   "input": "-inf",
    "error": "sign"
   },
   {
@@ -76,11 +88,27 @@
    "error": "exponent"
   },
   {
+   "input": "1.5e0",
+   "error": "exponent"
+  },
+  {
    "input": "NaN",
    "error": "nonfinite"
   },
   {
+   "input": "nan",
+   "error": "nonfinite"
+  },
+  {
    "input": "inf",
+   "error": "nonfinite"
+  },
+  {
+   "input": "Infinity",
+   "error": "nonfinite"
+  },
+  {
+   "input": "infinity",
    "error": "nonfinite"
   },
   {
@@ -89,10 +117,6 @@
   },
   {
    "input": "2.",
-   "error": "syntax"
-  },
-  {
-   "input": "\u200b.5",
    "error": "syntax"
   },
   {
@@ -138,6 +162,14 @@
   {
    "input": "1_0",
    "error": "syntax"
+  },
+  {
+   "input": "\u200b2",
+   "error": "syntax"
+  },
+  {
+   "input": "2\u200b",
+   "error": "syntax"
   }
  ],
  "memory_cases": [
@@ -174,11 +206,23 @@
    "error": "missing_unit"
   },
   {
+   "input": "007",
+   "error": "syntax"
+  },
+  {
    "input": "4GB",
    "error": "bad_unit"
   },
   {
    "input": "4gib",
+   "error": "bad_unit"
+  },
+  {
+   "input": "4Gi",
+   "error": "bad_unit"
+  },
+  {
+   "input": "4KiB",
    "error": "bad_unit"
   },
   {
@@ -194,6 +238,10 @@
    "error": "sign"
   },
   {
+   "input": "-0GiB",
+   "error": "sign"
+  },
+  {
    "input": "+4GiB",
    "error": "sign"
   },
@@ -202,11 +250,23 @@
    "error": "exponent"
   },
   {
+   "input": "1E3",
+   "error": "exponent"
+  },
+  {
    "input": "4.5GiB",
    "error": "syntax"
   },
   {
    "input": "NaN",
+   "error": "nonfinite"
+  },
+  {
+   "input": "nanGiB",
+   "error": "nonfinite"
+  },
+  {
+   "input": "inf",
    "error": "nonfinite"
   },
   {
@@ -219,7 +279,11 @@
   },
   {
    "input": "007GiB",
-   "error": "bad_unit"
+   "error": "syntax"
+  },
+  {
+   "input": "\uff18GiB",
+   "error": "syntax"
   },
   {
    "input": "8589934591GiB",
@@ -230,20 +294,16 @@
    "expect": 9223372036853727232
   },
   {
+   "input": "8796093022208MiB",
+   "error": "overflow"
+  },
+  {
    "input": "9007199254740992GiB",
    "error": "overflow"
   },
   {
-   "input": "4Gi",
-   "error": "bad_unit"
-  },
-  {
-   "input": "4KiB",
-   "error": "bad_unit"
-  },
-  {
-   "input": "\uff14GiB",
-   "error": "syntax"
+   "input": "99999999999999999999MiB",
+   "error": "overflow"
   }
  ],
  "resolution_cases": [
@@ -403,5 +463,17 @@
    "TestEquivalentSpellingsShareIdentity"
   ],
   "offline": true
- }
+ },
+ "classification_order": [
+  "empty: the empty string",
+  "sign: first character '+' or '-' (so '-0', '+inf' and '-inf' are sign)",
+  "nonfinite: starts with nan, inf or infinity, any case",
+  "exponent: digits and dots followed by e or E (so '1e3GiB' is exponent)",
+  "syntax: not matching the grammar, including leading zeros ('007', '007GiB'), a trailing or leading dot, whitespace, non-ASCII digits and zero-width characters",
+  "missing_unit (memory): a valid integer with no unit",
+  "bad_unit (memory): a valid integer followed by letters that are not exactly MiB or GiB",
+  "excess_precision (cpu): more than three fractional digits, even when they are zeros",
+  "not_positive: canonical value zero",
+  "overflow: canonical value above 2^63-1"
+ ]
 }

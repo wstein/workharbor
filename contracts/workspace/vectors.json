@@ -3,7 +3,7 @@
  "contract": "workspace-manifest-vectors",
  "decision": "H77",
  "status": "proposed",
- "description": "Shared positive and negative vectors for the manifest checker (schema_version 1 and proposed 2). Go (apps/whr), scripts/check_repo.py and, after a reviewed resolver change, the host agent read the same file. Cases with document are JSON values; bytes_hex are raw file bytes; __raw is a literal text to parse. expect_codes are the manifest.* finding codes of contracts/cli/validate-findings.json for the manifest alone (an empty list means valid). This initial set is authored with the spec amendment; work items extend it, and a change needs a reviewed decision.",
+ "description": "Shared positive and negative vectors for the manifest checker (schema_version 1 and proposed 2). Go (apps/whr), scripts/check_repo.py and, after a reviewed resolver change, the host agent read the same file. Cases with document are JSON values; bytes_hex are raw file bytes; raw_text is literal text to parse. expect_codes are the manifest.* finding codes of contracts/cli/validate-findings.json for the manifest alone (an empty list means valid). This initial set is authored with the spec amendment; work items extend it, and a change needs a reviewed decision.",
  "cases": [
   {
    "id": "v1-valid",
@@ -96,13 +96,11 @@
   },
   {
    "id": "version-float",
-   "document": {
-    "__raw": "{\"schema_version\":1.0,\"devcontainer_path\":\".devcontainer/devcontainer.json\",\"projects_path\":\"projects\",\"bundles\":[]}"
-   },
    "expect_codes": [
     "manifest.schema"
    ],
-   "note": "1.0 is not the integer 1"
+   "note": "1.0 is not the integer 1",
+   "raw_text": "{\"schema_version\":1.0,\"devcontainer_path\":\".devcontainer/devcontainer.json\",\"projects_path\":\"projects\",\"bundles\":[]}"
   },
   {
    "id": "version-string",
@@ -623,10 +621,15 @@
   },
   {
    "id": "size-over-limit",
-   "generate": "65537 bytes of spaces around a valid document",
    "expect_codes": [
     "manifest.too_large"
-   ]
+   ],
+   "generate_bytes": {
+    "total": 65537,
+    "template": "{\"schema_version\":1,\"devcontainer_path\":\".devcontainer/devcontainer.json\",\"projects_path\":\"projects\",\"bundles\":[]}",
+    "padding": "space",
+    "padding_after_template": true
+   }
   },
   {
    "id": "v2-name-ok",
@@ -690,6 +693,100 @@
    "expect_codes": [
     "manifest.schema"
    ]
+  },
+  {
+   "id": "v2-project-query-token",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a?token=1",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-fragment",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a#x",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-bidi",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a\u202e",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-port",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example:8443/o/a.git",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-project-custom-projects-path",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "repos",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/app.git",
+     "path": "repos/app"
+    }
+   },
+   "expect_codes": [],
+   "note": "path derives from projects_path"
+  },
+  {
+   "id": "v2-project-path-outside-projects-path",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/app.git",
+     "path": "projects/other/app"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "path must be projects_path/<name> with name derived from the url"
   }
  ]
 }

@@ -41,7 +41,7 @@
     {"id": "workspace.validate", "path": ["workspace", "validate"], "short": ["validate"], "increment": "first", "needs": "none", "writes": "none", "json": "envelope"},
     {"id": "host.setup", "path": ["host", "setup"], "short": ["setup"], "increment": "later", "needs": "host_local", "writes": "host", "json": "envelope", "blocked_on": "host_setup_wi", "note": "setup --dry-run is deferred with it"},
     {"id": "host.doctor", "path": ["host", "doctor"], "short": ["doctor"], "increment": "first", "needs": "none", "writes": "none", "json": "envelope", "note": "first-increment checks need no privileges; control-plane checks report skipped (doctor-checks.json)"},
-    {"id": "host.offboard", "path": ["host", "offboard"], "short": ["offboard"], "increment": "later", "needs": "host_local", "writes": "host", "json": "envelope", "blocked_on": "owner_api"},
+    {"id": "host.offboard", "path": ["host", "offboard"], "short": ["offboard"], "increment": "later", "needs": "host_local", "writes": "host", "json": "envelope", "blocked_on": "host_setup_wi"},
     {"id": "host.service.install", "path": ["host", "service", "install"], "short": ["service", "install"], "increment": "later", "needs": "host_local", "writes": "host", "json": "envelope", "blocked_on": "host_setup_wi"},
     {"id": "host.service.uninstall", "path": ["host", "service", "uninstall"], "short": ["service", "uninstall"], "increment": "later", "needs": "host_local", "writes": "host", "json": "envelope", "blocked_on": "host_setup_wi"},
     {"id": "host.service.status", "path": ["host", "service", "status"], "short": ["service", "status"], "increment": "later", "needs": "host_local", "writes": "none", "json": "envelope", "blocked_on": "host_setup_wi"},

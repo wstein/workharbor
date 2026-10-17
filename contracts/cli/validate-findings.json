@@ -8,7 +8,7 @@
   "rules": [
     "valid is true exactly when no finding has severity error",
     "every code is area.reason, lowercase with underscores",
-    "a Git failure never downgrades to a warning when .git is a real directory (git.listing_failed is an error)"
+    "a Git failure or an unavailable Git never downgrades to a warning when .git is a real directory (git.listing_failed and git.unavailable are errors)"
   ],
   "codes": [
     {
@@ -126,13 +126,13 @@
     },
     {
       "code": "git.unavailable",
-      "severity": "warning",
-      "note": "git absent, too old or macOS installer shim; Git checks skipped"
+      "severity": "error",
+      "note": "git absent or too old (or macOS installer shim) while .git is a real directory; Git-derived checks did not run, so the result is never valid"
     },
     {
       "code": "git.unsafe_path",
       "severity": "error",
-      "note": ".git is a symlink or gitfile"
+      "note": ".git is a symlink or gitfile, or contains commondir or objects/info/alternates"
     },
     {
       "code": "git.head_missing",
@@ -247,6 +247,7 @@
     ],
     "offline": true
   },
-  "unborn_head": "HEAD is unborn exactly when git rev-parse --verify --quiet HEAD exits 1 with empty stderr and .git/HEAD is a symbolic reference to a missing ref; every other non-zero exit, timeout or unparsable output is git.listing_failed. cat-file of .gitmodules runs only when the index (unborn HEAD) or the HEAD tree lists it.",
-  "manifest_vectors": "contracts/workspace/vectors.json"
+  "unborn_head": "HEAD is unborn exactly when rev-parse --verify --quiet HEAD exits 1 with empty stderr and symbolic-ref -q HEAD names a ref that does not exist; every other non-zero exit, timeout or unparsable output is git.listing_failed.",
+  "manifest_vectors": "contracts/workspace/vectors.json",
+  "git_invocation": "seven fixed vectors: --version, symbolic-ref -q HEAD, rev-parse --verify --quiet HEAD, ls-files --stage -z, ls-tree -r -z HEAD, cat-file blob HEAD:.gitmodules (only when the HEAD tree lists it), cat-file blob :.gitmodules (only with an unborn HEAD and when the index lists it); protocol.<name>.allow=never for file, git, ssh, http, https, ext; GIT_ALLOW_PROTOCOL set to a name matching no protocol; GIT_NO_LAZY_FETCH=1"
 }

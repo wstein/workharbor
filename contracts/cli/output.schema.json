@@ -280,6 +280,303 @@
         ],
         "description": "validation carries the pre-write validate result of existing content when findings caused the conflict"
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 64
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "usage"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 65
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "not_found"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 66
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "unauthenticated"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 67
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "forbidden"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 68
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "conflict"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 69
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "incompatible_contract"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 70
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "needs_human"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 71
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "timeout"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 72
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "interrupted"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 73
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "partial_failure"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "exit_code": {
+            "const": 74
+          },
+          "ok": {
+            "const": false
+          }
+        },
+        "required": [
+          "exit_code",
+          "ok"
+        ]
+      },
+      "then": {
+        "properties": {
+          "error": {
+            "properties": {
+              "code": {
+                "const": "internal"
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "$defs": {
@@ -496,7 +793,8 @@
         "dry_run",
         "actions",
         "validation",
-        "runtime_enforcement"
+        "runtime_enforcement",
+        "git_checks"
       ],
       "properties": {
         "directory": {
@@ -547,15 +845,8 @@
           }
         },
         "validation": {
-          "oneOf": [
-            {
-              "$ref": "#/$defs/validateResult"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Result of validating the written output with the same code as validate; null for a dry run and for a failure before validation."
+          "$ref": "#/$defs/validateResult",
+          "description": "Result of validating the proposal (dry run, in memory) or the written output with the Git-free profile of validate; Git-derived checks are not run."
         },
         "next_steps": {
           "type": "array",
@@ -580,9 +871,12 @@
         "runtime_enforcement": {
           "const": "not_in_this_release"
         },
-        "preferences": {
+        "git_checks": {
+          "const": "not_run"
+        },
+        "settings": {
           "type": "object",
-          "description": "Effective manifest settings (start_dir, human_shell, console_mode, shortcuts, project) with the origin of each value (flag, existing, default)."
+          "description": "Effective manifest settings (name, start_dir, human_shell, console_mode, shortcuts, project) with the origin of each value (flag, existing, default)."
         }
       },
       "allOf": [
