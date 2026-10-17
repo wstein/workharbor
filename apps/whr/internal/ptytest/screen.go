@@ -132,7 +132,7 @@ func next(b []byte) token {
 // incomplete is the token for a sequence cut off by the end of b. Beyond
 // maxSeq bytes it is dropped instead of waiting, so a program that never
 // terminates one cannot make every later chunk rescan it (quadratic work);
-// the rest of that sequence is then treated as text.
+// the rest of that sequence is then discarded up to where a real one ends.
 func incomplete(b []byte, mode discardMode) token {
 	if len(b) >= maxSeq {
 		return token{kind: tokOther, n: len(b), discard: mode}
@@ -146,6 +146,10 @@ func escape(b []byte) token {
 	}
 	switch b[1] {
 	case '[':
+		// Simplification: a C0 control inside a CSI (for example a newline)
+		// is not executed; it ends the sequence as malformed and is then
+		// handled as ordinary output, where a VT parser would run the control
+		// and keep parsing the sequence.
 		i := 2
 		for i < len(b) && b[i] >= 0x30 && b[i] <= 0x3f {
 			i++
@@ -202,6 +206,9 @@ func escape(b []byte) token {
 			}
 		}
 		return incomplete(b, discardString)
+	}
+	if b[1] == 0x1b { // ESC ESC: the first is void, the second starts the next sequence
+		return token{kind: tokOther, n: 1}
 	}
 	i := 1
 	for i < len(b) && b[i] >= 0x20 && b[i] <= 0x2f { // intermediates

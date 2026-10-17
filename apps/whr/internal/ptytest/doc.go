@@ -48,7 +48,8 @@
 //     scrolling with history, wide (two-cell) and combining characters and the
 //     alternate screen (?1047/?1049/?47). Colors, titles and other sequences
 //     are ignored. Scroll regions, tab stops, double-width line attributes and
-//     bidirectional text are not modeled. Transcript is the raw byte stream.
+//     bidirectional text are not modeled. A C0 control byte inside a CSI ends
+//     that sequence as malformed (a VT parser would execute it and go on). Transcript is the raw byte stream.
 //   - AssertNoRawControls waits for the child to exit and its output to end,
 //     then fails if the transcript holds any control character (FR-022
 //     classes), escape sequence or invalid UTF-8 byte except newline, carriage

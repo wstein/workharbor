@@ -462,7 +462,7 @@ func TestUnterminatedSequenceFloodIsMatchedLinearly(t *testing.T) {
 		s := ptytest.StartFunc(t, "floodseq", ptytest.Options{
 			Args: []string{hex.EncodeToString([]byte(seq)), strconv.Itoa(4 << 20)}, Timeout: 120 * time.Second})
 		if strings.HasPrefix(seq, "\x1b[") {
-			// A newline is no CSI final byte: it ends the dropped sequence.
+			// Simplification of the model: a newline ends a CSI as malformed (see doc.go).
 			s.ExpectRegexp(`\A\nEND`)
 		} else if s.ExpectExit(0); s.Screen() != "" {
 			t.Fatalf("%q: text visible after an unterminated string sequence: %.40q", seq, s.Screen())
