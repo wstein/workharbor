@@ -206,3 +206,84 @@ func TestNoUnlimitedOnOmission(t *testing.T) {
 		}
 	}
 }
+
+func TestEffectiveRefusesUnresolved(t *testing.T) {
+	cpu := CPU(1000)
+	for _, ex := range []Explicit{{}, {CPU: str("1")}, {Memory: str("1GiB")}} {
+		for _, mode := range []Mode{ModeUnattended, ModeInteractive} {
+			got, err := Resolve(ex, Profile{}, mode)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c, m, err := got.Effective(); !errors.Is(err, ErrIncomplete) || c != 0 || m != 0 {
+				t.Fatalf("Effective = %d %d %v", c, m, err)
+			}
+		}
+	}
+	got, _ := Resolve(Explicit{Memory: str("1GiB")}, Profile{CPU: &cpu}, ModeUnattended)
+	if c, m, err := got.Effective(); err != nil || c != 1000 || m != Memory(GiB) {
+		t.Fatalf("Effective = %d %d %v", c, m, err)
+	}
+	if _, _, err := (Resolution{}).Effective(); !errors.Is(err, ErrIncomplete) {
+		t.Fatalf("zero Resolution: %v", err)
+	}
+}
+
+func TestNonPositiveStringsDoNotParse(t *testing.T) {
+	for _, v := range []CPU{0, -1, -999, -1000, -1001, CPU(-1 << 63)} {
+		s := v.String()
+		if _, err := ParseCPU(s); err == nil {
+			t.Errorf("CPU(%d).String() = %q parses", v, s)
+		}
+	}
+	for _, v := range []Memory{0, -1, Memory(-MiB), Memory(-1 << 63)} {
+		s := v.String()
+		if _, err := ParseMemory(s); err == nil {
+			t.Errorf("Memory(%d).String() = %q parses", v, s)
+		}
+	}
+}
+
+func TestProfileMemoryMustBeWholeMiB(t *testing.T) {
+	bad := Memory(MiB + 1)
+	if _, err := Resolve(Explicit{}, Profile{Memory: &bad}, ModeUnattended); !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestErrorPrecedence(t *testing.T) {
+	zero := CPU(0)
+	_, err := Resolve(Explicit{CPU: str("-1"), Memory: str("x")}, Profile{CPU: &zero}, ModeUnattended)
+	if !errors.Is(err, ErrInvalidProfile) {
+		t.Fatalf("profile must win: %v", err)
+	}
+	_, err = Resolve(Explicit{CPU: str("-1"), Memory: str("x")}, Profile{}, Mode("x"))
+	if !errors.Is(err, ErrInvalidMode) {
+		t.Fatalf("mode must win: %v", err)
+	}
+}
+
+func TestOverflowAboveTwoToTheSixtyFour(t *testing.T) {
+	// 2^65+10 wraps to 10 if the 64-bit accumulator overflow is not detected.
+	for _, in := range []string{"36893488147419103242", "36893488147419103242.5"} {
+		if _, err := ParseCPU(in); err == nil || classOf(t, err) != ClassOverflow {
+			t.Errorf("ParseCPU(%q) = %v", in, err)
+		}
+	}
+	for _, in := range []string{"36893488147419103242MiB", "18446744073709551626GiB"} {
+		if _, err := ParseMemory(in); err == nil || classOf(t, err) != ClassOverflow {
+			t.Errorf("ParseMemory(%q) = %v", in, err)
+		}
+	}
+}
+
+func TestEffectiveChecksStatusItself(t *testing.T) {
+	r := Resolution{CPU: Value[CPU]{1000, OriginFlag}, Memory: Value[Memory]{Memory(GiB), OriginFlag}}
+	if _, _, err := r.Effective(); !errors.Is(err, ErrIncomplete) {
+		t.Fatalf("err = %v", err)
+	}
+	r.Status = StatusComplete
+	if _, _, err := r.Effective(); err != nil {
+		t.Fatal(err)
+	}
+}
