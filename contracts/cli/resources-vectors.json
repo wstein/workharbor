@@ -234,6 +234,58 @@
   {
    "input": "4{",
    "error": "syntax"
+  },
+  {
+   "input": "Inf",
+   "error": "nonfinite"
+  },
+  {
+   "input": "INF",
+   "error": "nonfinite"
+  },
+  {
+   "input": "InFiNiTy",
+   "error": "nonfinite"
+  },
+  {
+   "input": "inflate",
+   "error": "syntax"
+  },
+  {
+   "input": "Info5",
+   "error": "syntax"
+  },
+  {
+   "input": "nan5",
+   "error": "syntax"
+  },
+  {
+   "input": "nanx",
+   "error": "syntax"
+  },
+  {
+   "input": "infinityx",
+   "error": "syntax"
+  },
+  {
+   "input": "4inf",
+   "error": "syntax"
+  },
+  {
+   "input": ".e5",
+   "error": "syntax"
+  },
+  {
+   "input": "e5",
+   "error": "syntax"
+  },
+  {
+   "input": "infGiB",
+   "error": "nonfinite"
+  },
+  {
+   "input": "nanKiB",
+   "error": "syntax"
   }
  ],
  "memory_cases": [
@@ -455,6 +507,54 @@
   },
   {
    "input": "4GiB~",
+   "error": "syntax"
+  },
+  {
+   "input": "Inf",
+   "error": "nonfinite"
+  },
+  {
+   "input": "infinity",
+   "error": "nonfinite"
+  },
+  {
+   "input": "Infinity",
+   "error": "nonfinite"
+  },
+  {
+   "input": "infGiB",
+   "error": "nonfinite"
+  },
+  {
+   "input": "NaNMiB",
+   "error": "nonfinite"
+  },
+  {
+   "input": "inflate",
+   "error": "syntax"
+  },
+  {
+   "input": "Info5",
+   "error": "syntax"
+  },
+  {
+   "input": "nan5",
+   "error": "syntax"
+  },
+  {
+   "input": "nanKiB",
+   "error": "syntax"
+  },
+  {
+   "input": "4inf",
+   "error": "bad_unit"
+  },
+  {
+   "input": ".e5",
+   "error": "syntax"
+  },
+  {
+   "input": "e5GiB",
    "error": "syntax"
   }
  ],
@@ -767,5 +867,9 @@
     "02.5"
    ]
   }
+ ],
+ "classification_notes": [
+  "nonfinite: the whole string is exactly nan, inf or infinity in any case, optionally followed by exactly MiB or GiB; any other string starting with those letters (inflate, Info5, nan5) is syntax",
+  "exponent: starts with at least one ASCII digit, so '.e5' and 'e5' are syntax"
  ]
 }
