@@ -5,6 +5,7 @@ package workspacecfg_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"strings"
 	"syscall"
@@ -174,12 +175,35 @@ func TestValidateRootSymlinkAndLinkTargetsStayHidden(t *testing.T) {
 	}
 }
 
+// makeCharDevice creates /dev/zero's device node at path: directly when the
+// process may, otherwise through passwordless sudo (runners allow it; the node
+// is then owned by root inside a directory the test user owns, so cleanup works).
+func makeCharDevice(path string) error {
+	err := syscall.Mknod(path, syscall.S_IFCHR|0o600, int(1<<8|5))
+	if err == nil {
+		return nil
+	}
+	sudo, mknod := lookPath("sudo"), lookPath("mknod")
+	if sudo == "" || mknod == "" {
+		return err
+	}
+	out, serr := runBounded(30*time.Second, os.Environ(), sudo, "-n", mknod, "-m", "0600", path, "c", "1", "5")
+	if serr != nil {
+		return fmt.Errorf("%w; sudo mknod: %v %s", err, serr, strings.TrimSpace(out))
+	}
+	return nil
+}
+
 func TestValidateDevicesAreNeverOpened(t *testing.T) {
 	dir := validDir(t)
 	remove(t, dir, ".devcontainer/devcontainer.json")
 	// /dev/zero would never end if it were read.
-	if err := syscall.Mknod(dir+"/.devcontainer/devcontainer.json", syscall.S_IFCHR|0o600, int(1<<8|5)); err != nil {
-		t.Skipf("cannot create a device node here (needs a real host with privileges): %v", err)
+	if err := makeCharDevice(dir + "/.devcontainer/devcontainer.json"); err != nil {
+		msg := "cannot create a device node here (needs privileges or passwordless sudo): " + err.Error()
+		if skipForbidden(os.Getenv) {
+			t.Fatalf("FAILED, NOT SKIPPED: %s", msg)
+		}
+		t.Skip("SKIPPED, NOT PASSED: " + msg)
 	}
 	r := validate(t, dir, workspacecfg.Options{GitFree: true})
 	if errorCodes(r) != "devcontainer.unsafe_path" {
