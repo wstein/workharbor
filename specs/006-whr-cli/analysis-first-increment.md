@@ -89,3 +89,18 @@ the first increment.
 | 12 | med | No classification precedence in resource vectors | `classification_order` and added cases |
 | 13 | med | Approval overclaim in checklist | Thresholds only are owner-confirmed |
 | 14-24 | low | Labels, vector fidelity, leftovers, partial acceptance claims, 5 s meaning, overwrite races, scope overstatements, bundles, stale text, checklist wording, `.git` internals | Fixed in the same commit series |
+
+## Round 5 - reviewed revision 05864dabd8ec80de2e8ecfa5354e592326cd7399 - NOT READY (1 high, 6 medium, 14 low)
+
+| # | Sev | Finding | Resolution |
+| --- | --- | --- | --- |
+| H1 | high | Explicit flags vs preserved version 1 manifest undefined | Defaults-only run preserves (exit 0, `settings_not_persisted`); explicit flags exit 70 naming `--overwrite workharbor.json` (FR-057 (g), T030) |
+| M1 | med | classification_order inconsistent with vectors | Relaxed lexical form, leading zeros accepted, all vectors recomputed with a scratch classifier |
+| M2 | med | 5 s per call vs per run; hostile `.git` files | One shared 5 s budget per run, lstat pre-checks of `.git/HEAD`, `index`, `config` |
+| M3 | med | No resolver work item | T035 (after T009 and T028) |
+| M4 | med | US0-4 vs wave 1a | Owner-decided narrowing recorded; exit 70 names `.devcontainer/devcontainer.json` |
+| M5 | med | Rebasing vs single_task.py; vectors ownership | Rules in the plan; T028 owns vectors.json and adds only cases the T026 checker passes |
+| M6 | med | Approval preconditions | Stated in the status line, H77 (5), tasks header: renewed approval at one exact head before T009 or T025-T035 start |
+| L1-L14 | low | Wording, notes, type-exact vectors (`true`, `1e0`), README scope, Assumptions, leading zeros accepted, equivalence and partial-profile vectors, exit 70 clauses, structured init result fields, T030/T027 dependency, data-root evidence, `.gitkeep` path | Applied in the round 5 commits |
+
+Owner answers of 2026-10-17 ("1j 2j 3j 4j 5approved") are recorded as H77 (7) and under H77 (5); they approve no head's text.
