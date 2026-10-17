@@ -136,7 +136,7 @@ func scan(s string, f Field) (scanned, Class) {
 	if s[0] == '+' || s[0] == '-' {
 		return p, ClassSign
 	}
-	if hasFoldedPrefix(s, "nan") || hasFoldedPrefix(s, "inf") {
+	if isNonfinite(s) {
 		return p, ClassNonfinite
 	}
 	i := 0
@@ -147,7 +147,7 @@ func scan(s string, f Field) (scanned, Class) {
 	for j < len(s) && (isDigit(s[j]) || s[j] == '.') {
 		j++
 	}
-	if j < len(s) && (s[j] == 'e' || s[j] == 'E') && j > 0 {
+	if i > 0 && j < len(s) && (s[j] == 'e' || s[j] == 'E') {
 		return p, ClassExponent
 	}
 	if i == 0 {
@@ -216,6 +216,20 @@ func mulDigits(digits string, m uint64) (hi, lo uint64, ok bool) {
 
 func isDigit(c byte) bool  { return c >= '0' && c <= '9' }
 func isLetter(c byte) bool { return c|0x20 >= 'a' && c|0x20 <= 'z' }
+
+// isNonfinite reports whether s is exactly nan, inf or infinity (any case),
+// optionally followed by exactly MiB or GiB. Other strings that merely start
+// with those letters, such as inflate or nan5, are syntax errors.
+func isNonfinite(s string) bool {
+	for _, w := range [...]string{"nan", "inf", "infinity"} {
+		if hasFoldedPrefix(s, w) {
+			if rest := s[len(w):]; rest == "" || rest == "MiB" || rest == "GiB" {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func hasFoldedPrefix(s, lower string) bool {
 	if len(s) < len(lower) {
