@@ -36,32 +36,50 @@ type discardMode byte
 
 const (
 	discardNone   discardMode = iota
-	discardString             // OSC, DCS, APC, PM, SOS: until BEL or ST
-	discardStrESC             // as above, the previous byte was ESC
+	discardString             // OSC, DCS, APC, PM, SOS: until BEL, CAN, SUB, ST or a new ESC
+	discardStrC2              // as above, the previous byte was 0xC2 (first byte of C1 ST)
 	discardCSI                // until the final byte
+	discardESC                // ESC intermediates: until the final byte
 )
 
 // skipState carries a discard across reads so results never depend on where
 // the reads fall.
 type skipState struct{ mode discardMode }
 
-// skip consumes the part of b that belongs to a dropped sequence.
+// skip consumes the part of b that belongs to a dropped sequence. The
+// termination rules are those of escape(), applied byte by byte.
 func (st *skipState) skip(b []byte) int {
-	for i, c := range b {
+	for i := 0; i < len(b); {
+		c := b[i]
 		switch st.mode {
-		case discardString, discardStrESC:
-			switch {
-			case c == 0x07, c == '\\' && st.mode == discardStrESC:
+		case discardString:
+			switch c {
+			case 0x07, 0x18, 0x1a: // BEL, CAN, SUB
 				st.mode = discardNone
 				return i + 1
-			case c == 0x1b:
-				st.mode = discardStrESC
-			default:
-				st.mode = discardString
+			case 0x1b:
+				if i+1 >= len(b) {
+					return i // ST or a new sequence: decided by the next byte
+				}
+				st.mode = discardNone // ESC ends the string
+				if b[i+1] == '\\' {
+					return i + 2
+				}
+				return i // the ESC starts a new sequence
+			case 0xc2:
+				st.mode = discardStrC2
 			}
+			i++
+		case discardStrC2:
+			if c == 0x9c { // C1 ST
+				st.mode = discardNone
+				return i + 1
+			}
+			st.mode = discardString // the byte is read again as string content
 		case discardCSI:
 			switch {
 			case c >= 0x20 && c <= 0x3f:
+				i++
 			case c >= 0x40 && c <= 0x7e:
 				st.mode = discardNone
 				return i + 1
@@ -69,6 +87,19 @@ func (st *skipState) skip(b []byte) int {
 				st.mode = discardNone
 				return i
 			}
+		case discardESC:
+			switch {
+			case c >= 0x20 && c <= 0x2f:
+				i++
+			case c >= 0x30 && c <= 0x7e:
+				st.mode = discardNone
+				return i + 1
+			default:
+				st.mode = discardNone
+				return i
+			}
+		default:
+			return i
 		}
 	}
 	return len(b)
@@ -143,16 +174,29 @@ func escape(b []byte) token {
 		}
 		return token{kind: tokCSI, n: i + 1, params: parseParams(string(b[2:i])),
 			private: i > 2 && b[2] == '?', final: b[i]}
-	case ']', 'P', 'X', '^', '_': // string sequences end at BEL or ST
+	case ']', 'P', 'X', '^', '_':
+		// A string ends at BEL, CAN, SUB, C1 ST or ESC (ESC \ is ST; any
+		// other ESC aborts the string and starts a new sequence).
 		for i := 2; i < len(b); i++ {
-			if b[i] == 0x07 {
+			switch b[i] {
+			case 0x07, 0x18, 0x1a:
 				return token{kind: tokOther, n: i + 1}
-			}
-			if b[i] == 0x1b {
-				if i+1 >= len(b) {
-					return incomplete(b, discardStrESC)
+			case 0x1b:
+				if i+1 >= len(b) { // the next byte decides: leave the ESC unread
+					if len(b) >= maxSeq {
+						return token{kind: tokOther, n: i, discard: discardString}
+					}
+					return token{kind: tokIncomplete, n: len(b)}
 				}
 				if b[i+1] == '\\' {
+					return token{kind: tokOther, n: i + 2}
+				}
+				return token{kind: tokOther, n: i}
+			case 0xc2:
+				if i+1 >= len(b) {
+					return incomplete(b, discardStrC2)
+				}
+				if b[i+1] == 0x9c {
 					return token{kind: tokOther, n: i + 2}
 				}
 			}
@@ -163,11 +207,23 @@ func escape(b []byte) token {
 	for i < len(b) && b[i] >= 0x20 && b[i] <= 0x2f { // intermediates
 		i++
 	}
+	if i >= maxSeq { // too long to be real: ignore it, however it ends
+		switch {
+		case i >= len(b):
+			return incomplete(b, discardESC)
+		case b[i] >= 0x30 && b[i] <= 0x7e:
+			return token{kind: tokOther, n: i + 1}
+		}
+		return token{kind: tokOther, n: i}
+	}
 	if i >= len(b) {
 		return incomplete(b, discardNone)
 	}
 	if i == 1 {
 		return token{kind: tokESC, n: 2, final: b[1]}
+	}
+	if b[i] < 0x30 || b[i] > 0x7e { // malformed: drop the prefix
+		return token{kind: tokOther, n: i}
 	}
 	return token{kind: tokOther, n: i + 1}
 }
@@ -212,6 +268,9 @@ func project(b []byte, st *skipState) (plain []byte, ends []uint32, consumed int
 	for off < len(b) {
 		if st.mode != discardNone {
 			off += st.skip(b[off:])
+			if st.mode != discardNone {
+				break // all consumed, or an ESC waits for its next byte
+			}
 			continue
 		}
 		if c := b[off]; c >= 0x20 && c < 0x7f { // fast path: printable ASCII
@@ -438,6 +497,9 @@ func (s *screen) feed(b []byte) int {
 	for off < len(b) {
 		if s.skip.mode != discardNone {
 			off += s.skip.skip(b[off:])
+			if s.skip.mode != discardNone {
+				break // all consumed, or an ESC waits for its next byte
+			}
 			continue
 		}
 		if c := b[off]; c >= 0x20 && c < 0x7f { // fast path: printable ASCII

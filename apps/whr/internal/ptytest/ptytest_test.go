@@ -454,15 +454,42 @@ func TestLargeOutputIsMatchedLinearly(t *testing.T) {
 }
 
 // TestUnterminatedSequenceFloodIsMatchedLinearly: a never-terminated OSC, DCS,
-// APC or CSI must not be rescanned from its start on every chunk.
+// APC or CSI must not be rescanned from its start on every chunk, and
+// whatever follows an unterminated string sequence belongs to it (a terminal
+// swallows it too), so nothing of the flood or of END may become visible.
 func TestUnterminatedSequenceFloodIsMatchedLinearly(t *testing.T) {
 	for _, seq := range []string{"\x1b]0;", "\x1bP", "\x1b_", "\x1b[1;", "\x1b[?"} {
 		s := ptytest.StartFunc(t, "floodseq", ptytest.Options{
 			Args: []string{hex.EncodeToString([]byte(seq)), strconv.Itoa(4 << 20)}, Timeout: 120 * time.Second})
-		s.Expect("END")
+		if strings.HasPrefix(seq, "\x1b[") {
+			// A newline is no CSI final byte: it ends the dropped sequence.
+			s.ExpectRegexp(`\A\nEND`)
+		} else if s.ExpectExit(0); s.Screen() != "" {
+			t.Fatalf("%q: text visible after an unterminated string sequence: %.40q", seq, s.Screen())
+		}
 		s.ExpectExit(0)
 		if w, out := s.Work(), len(s.Transcript()); w > uint64(6*out) {
 			t.Fatalf("%q: work %d bytes for %d bytes of output: not linear", seq, w, out)
+		}
+	}
+}
+
+// TestTerminatedSequenceFloodAcrossReads: the same floods, ended by CAN (or a
+// final byte for CSI), are skipped across many reads and END is then visible
+// text with nothing of the flood before it.
+func TestTerminatedSequenceFloodAcrossReads(t *testing.T) {
+	for _, c := range []struct{ seq, end string }{
+		{"\x1b]0;", "\x18"}, {"\x1b]0;", "\x07"}, {"\x1b]0;", "\x1b\\"}, {"\x1b]0;", "\x1a"},
+		{"\x1b]0;", "\xc2\x9c"}, {"\x1bP", "\x18"}, {"\x1b_", "\x07"},
+		{"\x1b[1;", "m"}, {"\x1b[?", "h"},
+	} {
+		s := ptytest.StartFunc(t, "floodseq", ptytest.Options{
+			Args:    []string{hex.EncodeToString([]byte(c.seq)), strconv.Itoa(4 << 20), hex.EncodeToString([]byte(c.end))},
+			Timeout: 120 * time.Second})
+		s.ExpectRegexp(`\A\nEND`) // fails if any filler became visible
+		s.ExpectExit(0)
+		if w, out := s.Work(), len(s.Transcript()); w > uint64(6*out) {
+			t.Fatalf("%q+%q: work %d for %d bytes: not linear", c.seq, c.end, w, out)
 		}
 	}
 }
