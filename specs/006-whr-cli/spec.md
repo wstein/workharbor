@@ -176,6 +176,16 @@ reconcile and review those contracts, the browser path and the affected plan/tas
 Existing approvals and completion evidence retain their original source/scope;
 this revision does not expand them or authorize runtime operations.
 
+### Agent workflow block in `AGENTS.md` (owner request, 2026-10-17)
+
+The owner decided that the owner-workflow rules for agents (own-branch pushes and
+rewrites, Ready as mergeable, delegation, stack handling) belong to the workspace
+repository, not to every project repository, because contributors need not use
+WorkHarbor. `ws init` therefore authors that block in the workspace `AGENTS.md`
+(FR-064, US0 scenario 10). This revision specifies the outcome; it does not implement
+it, and it needs the same human spec review as the revision "Local workspace initialization" above before
+implementation. It changes no accepted task and approves no runtime operation.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 0 - Initialize workspace configuration locally (Priority: P1)
@@ -209,7 +219,9 @@ then validate shell/session preferences without provisioning a workspace.
    missing flag names. `--json` and nonterminal use never prompt.
 5. **Given** existing files that need edits, **When** unattended init lacks explicit
    per-file overwrite permission, **Then** it refuses without changing any files;
-   a file changed since preview also refuses before any write.
+   a file changed since preview also refuses before any write (exit 68); the only
+   exception to the missing-permission refusal is `AGENTS.md` (FR-064), which without the
+   flag is left unchanged with a warning and exit 0.
 6. **Given** fish for humans, **When** a new human shell or console starts after
    trusted creation, **Then** it runs fish; WorkHarbor-controlled noninteractive
    agent commands use bash and existing script interpreters remain unchanged.
@@ -226,6 +238,18 @@ then validate shell/session preferences without provisioning a workspace.
    **Then** it restores original files and removes newly generated files, or reports
    partial failure with exact remaining paths and recovery steps if restoration fails;
    it never reports a partially written configuration as successful.
+10. **Given** a workspace without or with an existing `AGENTS.md`, **When** init
+   runs (the block is on by default), **Then** an absent file is created without a flag;
+   for an existing file the block is appended or replaced only when an edit is requested
+   (`--overwrite AGENTS.md`, plus `--yes` unattended, or the owner's confirmation of that
+   path in the wizard), otherwise the file is left unchanged with a warning and exit 0;
+   the precedence is size (a file already over 64 KiB: `.too_large`), malformed
+   (`.malformed`), newer (never replaced), modified, older, current (no-op, no warning),
+   missing; a result over 64 KiB of a modified, older or missing edit gives `.too_large`
+   (68 with the flag); an edit requested by the flag that would be refused is 68 in every mode, and a
+   wizard edit without the flag that would be refused is not offered (warning printed);
+   every byte outside the markers is preserved; `--no-agents-block` skips the file; a
+   rerun is a no-op.
 
 ---
 
@@ -889,7 +913,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   them; `--template` refuses with that explanation. The settings, including `--name`, are written to the manifest (FR-058). Because init only authors configuration (FR-043), the runtime parts of FR-047 and FR-048
   (launching fish or herdr, console grants, availability checks at creation or session launch) and every bundle
   selection (FR-050: empty list only) are not in the first increment and are labelled so in the output
-  (`runtime_enforcement: not_in_this_release`). init runs no Git command, makes no network connection and never fetches a
+  (`runtime_enforcement: not_in_this_release`). The agent workflow block of FR-064 is on by default and is delivered by T036 in wave 1b after D1: it adds `AGENTS.md` to the D1 proposal output and changes the no-op-rerun baseline, so T036 updates the D1 (T030) tests and vectors, and until it lands D1 proposes no `AGENTS.md`. init runs no Git command, makes no network connection and never fetches a
   project: `--project-url` (`https://` or `ssh://`, no `https` userinfo, no query or fragment, no control or bidirectional characters, well-formed
   percent escapes) is written as the manifest's `project` declaration with the path `<projects_path>/<name>`, where
   `<name>` is the last path component of the URL with one trailing `.git` removed and must match
@@ -928,6 +952,56 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   writing; because both versions require `bundles: []`, a manifest with bundle declarations is left unchanged and reported
   (FR-050), never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
   accepted, written or printed.
+- **FR-064**: `ws init` MUST propose the workspace `AGENTS.md` through the proposal model of FR-046 and
+  FR-057 unless `--no-agents-block` is given; the block is on by default (owner decision of 2026-10-17). The
+  agent workflow block comes from one template shipped with `whr`. It covers: pushes of topic branches and PRs by
+  agents within the requested task; rewrites of agent-authored PR branches only after checks and an exact-SHA review
+  of the rewritten head, then only with an explicit expected-head lease; Ready meaning the owner can merge; Draft only
+  with a named blocker; owner-only merge, tag, release, publication and settings; an approval covering one named
+  operation with no standing approval; submodule gitlinks belonging to the owner; and delegation by model tier with
+  one worktree per parallel agent. It embeds no stack facts, names no Anchorage path, repository, remote,
+  gitlink, credential or vendor-specific model, and adds no automation mode (D57 unchanged). The Anchorage umbrella
+  `AGENTS.md` (sections "Pull requests and history" and "Delegation") is the source text from which the template is
+  derived, not its first instance: it has no versioned markers and holds Anchorage-specific text. The template is
+  authored configuration, not project policy.
+
+  *Markers.* The block is delimited by the exact LF-terminated lines `<!-- whr:agents-block begin v=<N> sha256=<hex> -->`
+  and `<!-- whr:agents-block end -->` at column 0; `<N>` is the template version and `<hex>` the SHA-256 of the body,
+  the bytes after the LF of the begin line up to and including the LF before the end line. Any other line that,
+  after removing a trailing CR, leading whitespace and a leading byte order mark, begins with `<!-- whr:agents-block`
+  is marker-like and makes the file malformed, wherever it is (including inside a code fence); quoting a marker
+  outside a block is unsupported. Malformed also covers a begin without an end, an end without a begin, an end before
+  its begin, a nested begin and more than one block. Bytes outside the markers (including CRLF and a BOM) are
+  preserved; the inserted block uses LF and an appended block follows one blank LF line. The shipped template body
+  contains no marker-like line.
+
+  *Classification, one predicate, one precedence.* An edit is requested when `--overwrite AGENTS.md` is given
+  (plus `--yes` unattended) or, in the wizard, the owner confirms that path; for `AGENTS.md` only, the flag also
+  pre-confirms the path in the wizard (no generalisation of FR-046). The file is opened without following links,
+  checked by `fstat` on the descriptor and read with a 64 KiB bound, never blocking on a FIFO; a symbolic link or
+  special file is refused (68). Classes, first match wins: size (the file is over 64 KiB by `fstat`; it is not
+  read), malformed, newer (version above the shipped one, whether or not edited), modified (hash differs from the
+  recorded one), older (lower version, hash matches), current, and missing (no block). Only for an edit of a
+  modified, older or missing file, a result that would exceed 64 KiB replaces that class's warning with
+  `agents_block.too_large` (no edit requested) or is refused (68, edit requested). Outcomes, each with exactly one
+  action in the `--json` `actions`: an absent file is created (`create`); a current block is `skip_existing` (a rerun
+  is a no-op); a newer block is always `left_unchanged` with `agents_block.newer`; every other class without a
+  requested edit, or with a wizard edit declined, is `left_unchanged` with `agents_block.too_large`, `.malformed`,
+  `.modified`, `.older` or `.missing` and exit 0, so a rerun after a template bump or on a pre-existing `AGENTS.md`
+  never fails; with a requested edit, size and malformed are refused (68, nothing written, rerun a no-op) and
+  modified, older and missing are `replace_block` or `append_block`. For `AGENTS.md` only, declining the wizard edit
+  is not a cancellation (72), and the wizard does not offer an edit without the flag that would be refused (it
+  prints the warning instead); an edit pre-confirmed by the flag that would be refused is 68 in every mode. The
+  general rule of FR-046 and FR-063 (a declined path is a cancellation, a refused edit is 68) stays unchanged for
+  every other file. `--no-agents-block` adds no `AGENTS.md` entry and leaves the file untouched; with
+  `--overwrite AGENTS.md` it is a usage error (64). `validate` never opens `AGENTS.md` (FR-055), so init checks
+  marker integrity itself, in memory before the first write and on the written result.
+
+  *Result.* T036 extends `contracts/cli/output.schema.json`: the `actions` enum gains `append_block`, `replace_block`
+  and `left_unchanged` (`applied` is false for `left_unchanged` and for the `skip_existing` of a current block, as for every action of a dry run), and `initResult`
+  gains `agents_block_warnings`, an always-present array (`maxItems` 1) of `{code, path}` with the codes
+  `agents_block.missing|older|modified|newer|too_large|malformed`; `settings_not_persisted` and `validation` keep
+  their fields. Exit codes follow FR-063.
 - **FR-058**: The settings that FR-044 collects extend the manifest `workharbor.json`, as the owner decided on
   2026-10-17. [`workharbor.schema.json`](../../contracts/workspace/workharbor.schema.json) defines the accepted
   `schema_version` 1 (exactly four fields, unchanged) and the proposed `schema_version` 2: the same four fields plus
@@ -978,7 +1052,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   color of FR-016, the exit codes of ADR 0013 frozen by tests, terminal-text escaping of FR-022, `version` per FR-027,
   `completion` and `help`), then in parallel B `validate`, C local `doctor` and the manifest-schema extension of FR-058
   (checker rules, vectors, `scripts/check_repo.py`), then D1 `workspace init` non-interactive core; independently the
-  resource library of FR-059. Wave 1b: the terminal test harness, the interactive wizard D2 and devcontainer reuse D3.
+  resource library of FR-059. Wave 1b: the terminal test harness, the interactive wizard D2, devcontainer reuse D3 and the agent workflow block of FR-064 (T036, after D1 and the wizard D2, which owns the per-path confirmation).
   Wave 2: `workspace create` wiring and persistence with the owner API, and the starter catalog after provider
   admission. Each part is a work item that can run in its own worktree, branch and pull request (tasks). It needs no
   control plane, login or Docker daemon. `setup --dry-run` is not included (owner decision of 2026-10-16): FR-009
@@ -996,16 +1070,16 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 - **FR-063**: The new failures map to the codes of ADR 0013 without changing that table: success, including warnings
   only, 0; unknown flag, invalid or missing flag value, mutually exclusive flags, a traversing or credential-bearing
   input, `--template` while starters are unsupported, `--devcontainer` or plain `init` (no `--non-interactive`, no `--dry-run`) in wave 1a, a `dir` that is a file, an unavailable command, `--json` where
-  unsupported 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
+  unsupported, `--no-agents-block` together with `--overwrite AGENTS.md` 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
-  edited, and a regular file that existed at preview time without `--overwrite` 70, in unattended mode only (needs-human,
+  edited, and a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0) 70, in unattended mode only (needs-human,
   with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72);
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview, pre-existing
-  content that fails validation, a `doctor` run with a failed check, an unsupported platform for a mutating host
+  content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a `doctor` run with a failed check, an unsupported platform for a mutating host
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
-  74. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
+  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
   increment. Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
   `exit_code` in the exit-code table (`conflict` for 68, `needs_human` for 70, and so on).
 
@@ -1206,6 +1280,17 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `resources-vectors.json` yields the listed canonical value or error class, equivalent spellings share canonical
   values, per-field resolution gives the listed origin or needs-human, and the same file is consumable by a second
   implementation; SC-013 remains unverified until the owner API and real-host enforcement evidence exist.
+- **SC-022**: Init with the agent workflow block (FR-064) passes offline on a table of cases, each with and without
+  an edit requested (`--overwrite AGENTS.md`) and for every class of the precedence list: absent file; file without the
+  block; current, older, modified, newer and edited-newer blocks; a file over 64 KiB and a result over 64 KiB
+  (`.too_large` with exit 0, or 68 with the edit; a file over 64 KiB that is also malformed is `.too_large`); duplicate, unclosed, nested and orphan markers and CRLF-, indented-
+  and BOM-prefixed marker-like lines, including inside a code fence (`.malformed` with exit 0, or 68; no second block
+  on a CRLF-converted file); CRLF and BOM files without markers; a symbolic-link and a FIFO target; `--no-agents-block`
+  (alone and with `--overwrite AGENTS.md`, 64); the single action per class and `agents_block_warnings` in the
+  `--json` result; an interactive PTY run (with T032) that declines only the `AGENTS.md` edit one where a wizard edit without the flag
+  would be refused (not offered, warning printed) and one where the flag pre-confirms an edit that would be
+  refused (68); the template body free of marker-like lines; and a rerun. Bytes outside the markers are identical, the exit code
+  is the one FR-063 lists, and the preview matches what is written.
 - **SC-011**: A lost-response test (drop the reply to a workspace lifecycle mutation) yields exactly one operation, retrievable
   with `whr op show --key`. A lost `agent send` response reports unknown delivery without an automatic resend.
 
