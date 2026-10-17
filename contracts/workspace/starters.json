@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "contract": "whr-starters",
+  "decision": "H77",
+  "status": "proposed",
+  "description": "Starter catalog of whr workspace init (FR-058). Owner decision of 2026-10-17: the catalog is listed but every starter is unsupported until the provider admits it; init refuses --template with an explanation, and devcontainer reuse (D3) is the only supported source. Starters use only inputs the provider subset would admit (digest-qualified image, explicit numeric users, fixed policies of docs/development/devcontainer-matrix.md); init never executes a starter.",
+  "fixed_devcontainer_fields": {
+    "containerUser": "0:0",
+    "remoteUser": "1000:1000",
+    "overrideCommand": true,
+    "userEnvProbe": "none",
+    "updateRemoteUserUID": false,
+    "waitFor": "postStartCommand",
+    "shutdownAction": "none"
+  },
+  "starters": [
+    {
+      "id": "buildpack-deps-image",
+      "kind": "image",
+      "status": "unsupported",
+      "image": "docker.io/library/buildpack-deps@sha256:4163ac2c58660c533f3cf3d178551287ddd0ac18269ef84f3a382d0698c89254",
+      "image_overridable_with": "--image",
+      "note": "Docker Official buildpack-deps noble-scm, the digest of examples/workspace/admitted-image; real-host acceptance is tracked in the capability matrix.",
+      "reason": "pending provider admission and real-host acceptance (wave 2)"
+    },
+    {
+      "id": "buildpack-deps-dockerfile",
+      "kind": "dockerfile",
+      "status": "unsupported",
+      "image": "docker.io/library/buildpack-deps@sha256:4163ac2c58660c533f3cf3d178551287ddd0ac18269ef84f3a382d0698c89254",
+      "dockerfile": "FROM docker.io/library/buildpack-deps@sha256:4163ac2c58660c533f3cf3d178551287ddd0ac18269ef84f3a382d0698c89254 AS workspace\n",
+      "build": {
+        "dockerfile": "Dockerfile",
+        "context": "..",
+        "target": "workspace"
+      },
+      "note": "Same base as examples/workspace/admitted-dockerfile without its test-only RUN and LABEL.",
+      "reason": "pending provider admission and real-host acceptance (wave 2)"
+    }
+  ],
+  "unsupported": [
+    {
+      "id": "features",
+      "reason": "Dev Container Features are outside the provider subset"
+    },
+    {
+      "id": "compose",
+      "reason": "Compose is outside the provider subset"
+    }
+  ],
+  "freeze": {
+    "test_file": "apps/whr/internal/scaffold/starters_test.go",
+    "test_ids": [
+      "TestStartersMatchContract",
+      "TestTemplateRefusedWhileUnsupported"
+    ],
+    "offline": true
+  }
+}

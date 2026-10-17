@@ -29,6 +29,7 @@
 - [Read-only Spec Kit dashboard](adr/0011-readonly-spec-dashboard.md)
 - [Persistent workspace console](adr/0012-persistent-workspace-console.md)
 - [Fresh whr exit-code table](adr/0013-whr-exit-codes.md)
+- [whr command structure, aliases and first increment (proposed)](adr/0014-whr-command-structure.md)
 
 ## Background and references
 
@@ -36,4 +37,5 @@
 - [Proposed external orchestrator adapters (wave two, outside pilot)](design/orchestrator-adapters.md)
 - [BundleDock workspace shell integration (proposal)](papers/bundledock-workspace-shell.md)
 - [Bounded workspace shell policy contract (candidate)](../contracts/workspace-shell-policy.md)
+- [Container runtime prerequisite](container-runtime.md)
 - [Source references](references.md)
