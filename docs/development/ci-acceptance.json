@@ -782,7 +782,11 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateReadsDotDotPhysically",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerEndsWithinItsTimeout",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestManifestDepthCountsObjects",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestManifestProjectURLHyphenAuthority"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestManifestProjectURLHyphenAuthority",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateDirectoryMovedDuringGitIsUnsafe",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateObjectFilesFakeGit",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealObjectFilesMustBeRegular",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRealReftableTableLinkIsUnsafe"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
