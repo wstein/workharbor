@@ -167,6 +167,26 @@ def _versions(schema):
     return result
 
 
+# Characters that Windows or macOS file systems drop or fold before comparing a name.
+_IGNORED = re.compile('[\u200b-\u200f\u202a-\u202e\u206a-\u206f\ufeff]')
+_FOLDED = str.maketrans({'\uff0e': '.', '\u00a0': ' ', '\u3000': ' '})
+
+
+def _windows_alias(component):
+    """True for a component that a Windows-style file system may map to . , .. or .git.
+
+    Mirrors isWindowsAlias in apps/whr/internal/workspacecfg/paths.go: after dropping
+    ignorable format characters and folding U+FF0E, U+00A0 and U+3000, a component of
+    only dots and spaces, or whose stream-free base (text before the first colon) is .git
+    or the 8.3 short name GIT~1 once trailing dots and spaces are removed, is refused.
+    """
+    folded = _IGNORED.sub('', component).translate(_FOLDED)
+    if not folded.strip('. '):
+        return True
+    base = folded.split(':', 1)[0].rstrip('. ').casefold()
+    return base in ('.git', 'git~1')
+
+
 def manifest_document_findings(data, schema=None):
     """(code, field, detail) tuples for a parsed manifest value."""
     schema = schema or _schema()
@@ -191,7 +211,7 @@ def manifest_document_findings(data, schema=None):
 
     def canonical(value):
         return (isinstance(value, str) and path_pattern.fullmatch(value) is not None
-                and '.git' not in (part.rstrip('. ').casefold() for part in value.split('/')))
+                and not any(_windows_alias(part) for part in value.split('/')))
 
     for field in ('devcontainer_path', 'projects_path'):
         if field in data:
