@@ -62,9 +62,15 @@ type ExecRunner struct{}
 // Run executes c with its own deadline, an empty standard input and capped
 // output. The process (group) is killed on timeout, cancellation or overflow.
 func (ExecRunner) Run(ctx context.Context, c GitCmd) (GitOut, error) {
+	// The kill delay is part of the caller's budget: the process is cancelled
+	// early enough that the run still ends within c.Timeout.
+	waitDelay := 500 * time.Millisecond
 	if c.Timeout > 0 {
+		if c.Timeout <= 2*waitDelay {
+			waitDelay = c.Timeout / 4
+		}
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, c.Timeout-waitDelay)
 		defer cancel()
 	}
 	cmd := exec.CommandContext(ctx, c.Path, c.Args...)
@@ -73,7 +79,7 @@ func (ExecRunner) Run(ctx context.Context, c GitCmd) (GitOut, error) {
 	cmd.Stdin = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
-	cmd.WaitDelay = 500 * time.Millisecond
+	cmd.WaitDelay = waitDelay
 	var errBuf limitedBuffer
 	errBuf.limit = maxStderr
 	cmd.Stderr = &errBuf
@@ -130,6 +136,15 @@ func (b *limitedBuffer) Bytes() []byte { return b.buf.Bytes() }
 // gitProtocols are the transports whose use is denied with -c overrides.
 var gitProtocols = []string{"file", "git", "ssh", "http", "https", "ext"}
 
+// GIT_ALLOW_PROTOCOL is load-bearing. The -c protocol.<name>.allow=never list
+// covers the six built-in transports only: a remote helper (foo::url) with
+// protocol.foo.allow=always in the hostile .git/config is stopped solely by
+// GIT_ALLOW_PROTOCOL, which outranks per-protocol configuration, and by
+// GIT_NO_LAZY_FETCH on Git 2.44 and newer. Between 2.39.5 and 2.43 the
+// environment allow-list is the only barrier to a promisor fetch through a helper
+// (TestValidateRemoteHelperPromisorNeedsAllowProtocol runs it without
+// GIT_NO_LAZY_FETCH).
+//
 // gitEnv builds the environment from scratch: only PATH is inherited (to find
 // helper programs of Git itself), no GIT_* variable of the caller, no system or
 // global configuration, no pager, no prompt, no optional lock, no lazy fetch and

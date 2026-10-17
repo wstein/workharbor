@@ -32,12 +32,13 @@ const (
 type accessError struct {
 	kind accessKind
 	why  string
+	fix  string // remediation, when the default does not fit
 }
 
 func (e *accessError) Error() string { return e.why }
 
 func unsafeErr(format string, args ...any) *accessError {
-	return &accessError{accUnsafe, fmt.Sprintf(format, args...)}
+	return &accessError{kind: accUnsafe, why: fmt.Sprintf(format, args...)}
 }
 
 // dir is a validated directory held open for no-follow access. Every path below
@@ -52,29 +53,32 @@ type dir struct {
 
 // openDir opens path as the root of the walk.
 func openDir(path string) (*dir, error) {
+	// A trailing slash or a trailing /. would make lstat follow a link in the
+	// last component, so the walk starts from the cleaned spelling.
+	path = filepath.Clean(path)
 	info, err := os.Lstat(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
 		return nil, ErrNotFound
 	case err != nil:
-		return nil, unsafeErr("the directory cannot be inspected")
+		return nil, &accessError{accUnsafe, "cannot be inspected", "check that the directory and its parents can be read"}
 	case info.Mode()&fs.ModeSymlink != 0:
-		return nil, unsafeErr("the directory is a symbolic link; pass the real directory")
+		return nil, &accessError{accUnsafe, "is a symbolic link", "pass the real directory, not a link"}
 	case !info.IsDir():
 		return nil, ErrNotDirectory
 	}
 	root, err := os.OpenRoot(path)
 	if err != nil {
-		return nil, unsafeErr("the directory cannot be opened")
+		return nil, &accessError{accUnsafe, "cannot be opened", "check that the directory can be read"}
 	}
 	if now, err := root.Stat("."); err != nil || !os.SameFile(info, now) {
 		root.Close()
-		return nil, unsafeErr("the directory changed while it was opened")
+		return nil, &accessError{accUnsafe, "changed while it was opened", "run validate again"}
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		root.Close()
-		return nil, unsafeErr("the directory path cannot be resolved")
+		return nil, &accessError{accUnsafe, "path cannot be resolved", "pass an absolute or relative path that exists"}
 	}
 	return &dir{root: root, abs: abs}, nil
 }
@@ -125,7 +129,7 @@ func (d *dir) walk(rel string) (*os.Root, string, func(), error) {
 
 func classify(err error) *accessError {
 	if errors.Is(err, fs.ErrNotExist) {
-		return &accessError{accMissing, "does not exist"}
+		return &accessError{kind: accMissing, why: "does not exist"}
 	}
 	return unsafeErr("cannot be inspected")
 }
@@ -179,12 +183,12 @@ func (d *dir) readFile(rel string, limit int64) ([]byte, *accessError) {
 		return nil, unsafeErr("is %s, not a regular file", kindName(info.Mode()))
 	}
 	if info.Size() > limit {
-		return nil, &accessError{accTooLarge, "is larger than its limit"}
+		return nil, &accessError{kind: accTooLarge, why: "is larger than its limit"}
 	}
 	f, oerr := cur.OpenFile(leaf, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if oerr != nil {
 		if errors.Is(oerr, fs.ErrNotExist) {
-			return nil, &accessError{accMissing, "does not exist"}
+			return nil, &accessError{kind: accMissing, why: "does not exist"}
 		}
 		return nil, unsafeErr("cannot be opened")
 	}
@@ -198,7 +202,7 @@ func (d *dir) readFile(rel string, limit int64) ([]byte, *accessError) {
 		return nil, unsafeErr("cannot be read")
 	}
 	if int64(len(data)) > limit {
-		return nil, &accessError{accTooLarge, "is larger than its limit"}
+		return nil, &accessError{kind: accTooLarge, why: "is larger than its limit"}
 	}
 	return data, nil
 }

@@ -70,7 +70,7 @@ func Validate(ctx context.Context, dirPath string, opt Options) (*Report, error)
 	if err != nil {
 		var ae *accessError
 		if errors.As(err, &ae) {
-			r.c.add("manifest.unsafe_path", "", "the directory "+ae.why, "pass the real directory, not a link")
+			r.c.add("manifest.unsafe_path", "", "the directory "+ae.why, ae.fix)
 			return newReport(dirPath, r.c.list), nil
 		}
 		return nil, err
@@ -101,7 +101,11 @@ func (r *run) fileFinding(area, rel string, e *accessError, missingOK bool) {
 	case accMissing:
 		r.c.add(area+".missing", rel, rel+" does not exist", "")
 	case accTooLarge:
-		r.c.add(area+".too_large", rel, rel+" is larger than its limit", "")
+		if area == "manifest" {
+			r.c.add("manifest.too_large", rel, tooLarge(ManifestFile, MaxManifestBytes), "")
+		} else {
+			r.c.add("devcontainer.too_large", rel, tooLarge(devcontainerWhat, MaxDevcontainerLen), "")
+		}
 	default:
 		r.c.add(area+".unsafe_path", rel, fmt.Sprintf("%s %s", rel, e.why), "")
 	}
@@ -208,4 +212,12 @@ func ValidateMemory(directory string, in MemoryInput) *Report {
 		declaredNotPinned(&c, m.Project.Path)
 	}
 	return newReport(directory, c.list)
+}
+
+// devcontainerWhat names the devcontainer file in messages, so the disk and the
+// in-memory forms report the same text.
+const devcontainerWhat = "the devcontainer file"
+
+func tooLarge(what string, limit int) string {
+	return fmt.Sprintf("%s is larger than %d bytes", what, limit)
 }
