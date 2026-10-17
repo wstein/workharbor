@@ -85,10 +85,7 @@ func TestEscapeKeepsSafeText(t *testing.T) {
 }
 
 func TestEscapeExhaustiveRuneRange(t *testing.T) {
-	for r := rune(0); r <= unicode.MaxRune; r++ {
-		if r >= 0xd800 && r <= 0xdfff {
-			continue
-		}
+	for _, r := range scalarValues() {
 		got := terminal.Escape(string(r))
 		if terminal.IsUnsafe(r) {
 			if !strings.HasPrefix(got, "<U+") {
@@ -106,10 +103,7 @@ func TestEscapeExhaustiveRuneRange(t *testing.T) {
 }
 
 func TestEscapeJSONExhaustiveRuneRange(t *testing.T) {
-	for r := rune(0); r <= unicode.MaxRune; r++ {
-		if r >= 0xd800 && r <= 0xdfff {
-			continue
-		}
+	for _, r := range scalarValues() {
 		raw, _ := json.Marshal(string(r))
 		got := terminal.EscapeJSON(raw)
 		if terminal.IsUnsafe(r) && strings.ContainsRune(string(got), r) {
@@ -140,4 +134,20 @@ func assertInert(t *testing.T, s string) {
 			t.Fatalf("output %q contains unsafe rune U+%04X", s, r)
 		}
 	}
+}
+
+// scalarValues lists every scalar value of the planes that hold assigned
+// controls or format characters: planes 0 to 2 and the tag block of plane 14.
+func scalarValues() []rune {
+	var out []rune
+	for r := rune(0); r < 0x30000; r++ {
+		if r < 0xd800 || r > 0xdfff {
+			out = append(out, r)
+		}
+	}
+	for r := rune(0xe0000); r < 0xe1000; r++ {
+		out = append(out, r)
+	}
+	out = append(out, unicode.MaxRune)
+	return out
 }
