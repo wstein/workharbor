@@ -155,3 +155,42 @@ func scalarValues() []rune {
 	out = append(out, unicode.MaxRune)
 	return out
 }
+
+func TestEscapeClip(t *testing.T) {
+	const max = 1024
+	runes := func(s string) int { return utf8.RuneCountInString(s) }
+	for _, tc := range []struct {
+		name, in  string
+		exact     bool
+		minRunes  int
+		wantExact string
+	}{
+		{"ascii", strings.Repeat("x", 100000), true, max, ""},
+		{"accent", strings.Repeat("\u00e9", 100000), true, max, ""},
+		{"control", strings.Repeat("\x01", 100000), false, max - 8, ""},
+		{"bidi", strings.Repeat("\u202e", 100000), false, max - 8, ""},
+		{"invalid utf-8", strings.Repeat("\xff", 100000), false, max - 6, ""},
+	} {
+		got := terminal.EscapeClip(tc.in, max)
+		n := runes(got)
+		if n > max || n < tc.minRunes || (tc.exact && n != max) {
+			t.Errorf("%s: %d runes, want %d..%d", tc.name, n, tc.minRunes, max)
+		}
+		if !strings.HasSuffix(got, "\u2026") {
+			t.Errorf("%s: clipped text does not end with an ellipsis", tc.name)
+		}
+		body := strings.TrimSuffix(got, "\u2026")
+		if strings.Count(body, "<") != strings.Count(body, ">") {
+			t.Errorf("%s: a placeholder was cut in half", tc.name)
+		}
+		assertInert(t, got)
+	}
+	for _, s := range []string{"", "short", "tab\tok", strings.Repeat("y", max)} {
+		if got := terminal.EscapeClip(s, max); got != terminal.Escape(s) {
+			t.Errorf("EscapeClip(%.10q) = %.20q, want unchanged escape", s, got)
+		}
+	}
+	if got := terminal.EscapeClip(strings.Repeat("y", max+1), max); runes(got) != max {
+		t.Errorf("one rune over the limit gives %d runes", runes(got))
+	}
+}

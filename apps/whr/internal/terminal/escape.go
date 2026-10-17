@@ -113,3 +113,31 @@ func appendU(b []byte, r rune) []byte {
 	h := strings.ToLower(hex(uint64(r), 4))
 	return append(b, h...)
 }
+
+// EscapeClip is Escape bounded to max runes of output. It escapes first and
+// then cuts at a rune or placeholder boundary, so a placeholder is never split
+// and the result, including the closing ellipsis (U+2026), has at most max
+// runes (exactly max when no placeholder is involved).
+func EscapeClip(s string, max int) string {
+	if utf8.RuneCountInString(s) <= max && utf8.RuneCountInString(Escape(s)) <= max {
+		return Escape(s)
+	}
+	var b strings.Builder
+	n := 0
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		tok := s[i : i+size]
+		if (r == utf8.RuneError && size == 1) || IsUnsafe(r) {
+			tok = Escape(tok)
+		}
+		w := utf8.RuneCountInString(tok)
+		if n+w > max-1 {
+			break
+		}
+		b.WriteString(tok)
+		n += w
+		i += size
+	}
+	b.WriteString("\u2026")
+	return b.String()
+}
