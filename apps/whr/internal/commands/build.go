@@ -97,10 +97,10 @@ func (a *app) build() {
 			c := &cobra.Command{Use: use, Args: cobra.ArbitraryArgs, RunE: runE, ValidArgsFunction: cobra.NoFileCompletions,
 				Annotations: map[string]string{annotationID: e.ID}}
 			if e.ID == "completion" {
-				c.ValidArgs = []string{"bash", "zsh", "fish"}
+				shells := []string{"bash", "zsh", "fish"} // not ValidArgs: Cobra would then skip ValidArgsFunction
 				c.ValidArgsFunction = func(_ *cobra.Command, args []string, toComplete string) ([]cobra.Completion, cobra.ShellCompDirective) {
 					var out []cobra.Completion
-					for _, shell := range c.ValidArgs {
+					for _, shell := range shells {
 						if len(args) == 0 && strings.HasPrefix(shell, toComplete) {
 							out = append(out, shell)
 						}

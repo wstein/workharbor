@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/commands"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
@@ -512,6 +513,9 @@ func TestGlobalFlagsAndVersion(t *testing.T) {
 	if got := run(t, nil, "--version", "setup"); got.code != 64 || got.stdout != "" {
 		t.Errorf("--version setup: %+v", got)
 	}
+	if got := run(t, nil, "--version", "extra"); got.code != 64 || got.err != "whr: --version takes no other arguments\n" {
+		t.Errorf("--version extra: %+v", got)
+	}
 	if got := run(t, nil, "version", "extra"); got.code != 64 || got.stdout != "" {
 		t.Errorf("version extra: %+v", got)
 	}
@@ -572,19 +576,87 @@ func TestRootFlagErrorHasNoDoubledPrefix(t *testing.T) {
 }
 
 func TestHumanErrorsAreBounded(t *testing.T) {
+	for _, tc := range []struct {
+		name, unit string
+		min        int // minimum message runes (placeholders may stop short of the limit)
+	}{{"ascii", "x", 1024}, {"accent", "\u00e9", 1024}, {"control", "\x01", 1016}, {"bidi", "\u202e", 1016}} {
+		huge := strings.Repeat(tc.unit, 100000)
+		for _, args := range [][]string{{"--" + huge}, {"--color", huge, "version"}, {"completion", huge}} {
+			got := run(t, nil, args...)
+			line := strings.SplitN(got.err, "\n", 2)[0]
+			n := utf8.RuneCountInString(strings.TrimPrefix(line, "whr: "))
+			if got.code != 64 || n > 1024 || n < tc.min || (tc.min == 1024 && n != 1024) {
+				t.Errorf("%s %.12q: exit %d, message of %d runes (want %d..1024)", tc.name, args[0], got.code, n, tc.min)
+			}
+			if len(got.err) > 9000 {
+				t.Errorf("%s: stderr %d bytes", tc.name, len(got.err))
+			}
+			js := run(t, nil, append(append([]string{}, args...), "--json")...)
+			if len(js.stdout) > 9000 || utf8.RuneCountInString(strings.SplitN(js.err, "\n", 2)[0]) > 5+1024 {
+				t.Errorf("%s: JSON run wrote %d stdout bytes, stderr line of %d runes", tc.name, len(js.stdout), len(strings.SplitN(js.err, "\n", 2)[0]))
+			}
+		}
+	}
+	// The echoed unknown word is bounded by maxEcho, not only by the line limit.
 	huge := strings.Repeat("x", 100000)
-	for _, args := range [][]string{{"--" + huge}, {"--color", huge, "version"}, {"completion", huge}, {huge}, {"ws", huge}, {"init", "--" + huge}} {
-		got := run(t, nil, args...)
-		if got.code != 64 || len(got.err) > 4000 {
-			t.Errorf("%.20q...: exit %d, stderr %d bytes", args[0], got.code, len(got.err))
-		}
-		js := run(t, nil, append(append([]string{}, args...), "--json")...)
-		if len(js.stdout) > 4000 {
-			t.Errorf("JSON stdout %d bytes", len(js.stdout))
-		}
+	want := "whr: unknown command \"" + strings.Repeat("x", 64) + "...\"\n"
+	if got := run(t, nil, huge); got.err != want {
+		t.Errorf("unknown word echo = %q, want %q", got.err, want)
 	}
 }
 
+func TestScanJSONForms(t *testing.T) {
+	isJSON := func(args ...string) bool { return strings.HasPrefix(run(t, nil, args...).stdout, "{") }
+	for _, args := range [][]string{{"ls", "--json"}, {"ls", "--json=true"}, {"ls", "--json=T"}, {"ls", "--json=TRUE"}, {"ls", "--json=1"}, {"ls", "--json=True"}, {"ls", "--json=t"}} {
+		if !isJSON(args...) {
+			t.Errorf("%v is not JSON mode", args)
+		}
+	}
+	for _, args := range [][]string{{"ls", "--json=false"}, {"ls", "--json=0"}, {"ls", "--", "--json"}, {"ls", "--no-json"}} {
+		if got := run(t, nil, args...); isJSON(args...) || got.code != 64 {
+			t.Errorf("%v: JSON mode or wrong exit: %+v", args, got)
+		}
+	}
+	// A flag error before --json is parsed is still an envelope.
+	for _, form := range []string{"--json", "--json=true", "--json=T", "--json=TRUE", "--json=True", "--json=t", "--json=1"} {
+		if !isJSON("version", "--bogus", form) {
+			t.Errorf("a flag error before %s is not an envelope", form)
+		}
+	}
+	if isJSON("version", "--bogus", "--", "--json") {
+		t.Error("--json after the -- terminator must not select JSON mode")
+	}
+	if !isJSON("version", "--bogus", "--json") || !isJSON("--bogus", "--json") {
+		t.Error("flag errors with --json must be envelopes")
+	}
+}
+
+func TestFlagErrorKeepsHintAndCommandID(t *testing.T) {
+	got := run(t, nil, "version", "--bogus")
+	if got.err != "whr: version: unknown flag: --bogus\n  hint: run whr version --help\n" {
+		t.Errorf("stderr = %q", got.err)
+	}
+	if env := decodeEnvelope(t, run(t, nil, "version", "--bogus", "--json").stdout); env["command"] != "version" {
+		t.Errorf("flag error command = %v, want the canonical id", env["command"])
+	}
+	if env := decodeEnvelope(t, run(t, nil, "--bogus", "--json").stdout); env["command"] != "unknown" {
+		t.Errorf("root flag error command = %v, want unknown", env["command"])
+	}
+}
+
+func TestSuggestionThresholds(t *testing.T) {
+	hint := func(args ...string) bool { return strings.Contains(run(t, nil, args...).err, "did you mean") }
+	for _, ok := range [][]string{{"ws", "lx"}, {"ws", "creat"}, {"ws", "crxate"}, {"ws", "rbuild"}} {
+		if !hint(ok...) {
+			t.Errorf("%v: expected a hint (distance within 2)", ok)
+		}
+	}
+	for _, none := range [][]string{{"ws", "creatxyz"}, {"ws", "l"}, {"ws", "q"}, {"ws", "xxxxxx"}} {
+		if hint(none...) {
+			t.Errorf("%v: unexpected hint", none)
+		}
+	}
+}
 func TestJSONWithHelpAndGroupsKeepsExitCode(t *testing.T) {
 	for _, args := range [][]string{{"--json"}, {"ws", "--json"}, {"host", "--json"}, {"host", "service", "--json"}, {"--help", "--json"},
 		{"ls", "--help", "--json"}, {"--json", "-h"}, {"help", "ls", "--json"}, {"service", "--json"}} {
@@ -637,6 +709,9 @@ func TestCompletionOfArgumentsIsNotFiles(t *testing.T) {
 		}
 		if !strings.Contains(got.stdout, ":4\n") {
 			t.Errorf("completion argument allows file completion: %q", got.stdout)
+		}
+		if after := run(t, h, "__complete", "completion", "bash", ""); after.stdout != ":4\n" {
+			t.Errorf("completion after the shell argument: %q", after.stdout)
 		}
 		for _, args := range [][]string{{"ws", ""}, {"workspace", "ls", ""}, {"ls", ""}, {"help", ""}, {"version", ""}, {"host", "service", ""}} {
 			got := run(t, h, append([]string{"__complete"}, args...)...)
