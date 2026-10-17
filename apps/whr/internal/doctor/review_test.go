@@ -80,8 +80,16 @@ func TestDoctorSharedBudgetDialsAndGit(t *testing.T) {
 	if g := statusOf(r, "container.socket"); g.Status != doctor.StatusPass {
 		t.Fatalf("socket: %+v", g)
 	}
-	if w.gitRuns != 1 || w.gitDeadline <= 0 || w.gitDeadline > 400*time.Millisecond {
+	if w.gitRuns != 1 || w.gitDeadline <= 0 || w.gitDeadline > 160*time.Millisecond {
 		t.Errorf("git deadline %v with 400ms left (runs %d)", w.gitDeadline, w.gitRuns)
+	}
+	// the second dial sees only the 200 ms that are left
+	w = healthy()
+	w.sockets = nil
+	w.dialAdvance = 4800 * time.Millisecond
+	run(w)
+	if len(w.dialDeadlines) != 2 || w.dialDeadlines[1] > 210*time.Millisecond {
+		t.Errorf("dial deadlines %v, want the second within the 200ms remainder", w.dialDeadlines)
 	}
 	// git's own cap
 	w = healthy()
