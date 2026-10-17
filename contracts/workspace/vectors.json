@@ -1417,6 +1417,143 @@
     "bundles": []
    },
    "expect_codes": []
+  },
+  {
+   "id": "v2-project-https-leading-hyphen-host",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://-h/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-ssh-leading-hyphen-host",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "ssh://u@-h/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-ssh-leading-hyphen-user",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "ssh://-u@h/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-project-uppercase-scheme-userinfo",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "HTTPS://u@h/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.url_credentials"
+   ],
+   "note": "the scheme is compared case-insensitively before the credential test"
+  },
+  {
+   "id": "v2-project-http-userinfo-password",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "http://u:p@h/o/a",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.url_credentials"
+   ]
+  },
+  {
+   "id": "v2-project-bad-escape-in-owner",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o%zz/a.git",
+     "path": "projects/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "malformed percent escape alone; the name is valid"
+  },
+  {
+   "id": "v2-project-path-ignored-for-invalid-projects-path",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "../x",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a.git",
+     "path": "x/a"
+    }
+   },
+   "expect_codes": [
+    "manifest.path_invalid"
+   ],
+   "note": "no project.path comparison against an unusable projects_path"
+  },
+  {
+   "id": "raw-surrogate-then-trailing-comma",
+   "raw_text": "{\"a\":\"\\ud800\",}",
+   "expect_codes": [
+    "manifest.syntax"
+   ],
+   "note": "a syntax error outranks a lone surrogate"
+  },
+  {
+   "id": "raw-surrogate-then-missing-comma",
+   "raw_text": "[\"\\ud800\" 1]",
+   "expect_codes": [
+    "manifest.syntax"
+   ]
+  },
+  {
+   "id": "raw-surrogate-then-depth-129",
+   "raw_text": "[\"\\ud800\",[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+   "expect_codes": [
+    "manifest.syntax"
+   ]
   }
  ]
 }
