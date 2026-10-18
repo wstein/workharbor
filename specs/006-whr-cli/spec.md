@@ -775,6 +775,44 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   make no changes. Write failures MUST restore the prior state; failed restoration
   MUST return partial failure and exact remaining paths/recovery guidance. A rerun
   with identical settings MUST be a no-op. No hidden bootstrap side effects.
+- **FR-046a**: Any future init proposal that generates or edits installation-PATH
+  setup MUST use one shared, configurable installation-directory policy across
+  the supported shells (FR-047), with adapters in their existing startup files.
+  Absolute `$HOME/bin` MUST precede `$HOME/.local/bin`, each exactly once, and
+  both MUST precede every BundleDock executable entry, including
+  `/opt/bundledock/toolbox/codex-path`. Go's actual install directory (`GOBIN`,
+  otherwise the first `GOPATH` entry's `bin`) and explicitly configured absolute
+  executable directories MUST also precede all BundleDock entries. Preserve the
+  user's explicit directory order where compatible with these constraints; do
+  not prescribe an additional fixed ordering of toolchains. Remove duplicate,
+  empty and relative entries before tool discovery as well as in the resulting
+  PATH, handle spaces in HOME and prefixes, and do not add the working directory.
+  Startup adapters MUST invoke their helper through a known absolute interpreter
+  path; Go settings lookup MUST use the sanitized absolute-only PATH. Neither
+  lookup nor adapter startup may execute a project-local `go` or `sh` through an
+  empty or relative PATH entry. The shared configuration accepts absolute bin
+  directories, including a tool's actual installation root plus `bin`; it MUST
+  NOT require separate configuration mechanisms for each language. An existing
+  absolute `CARGO_INSTALL_ROOT`, otherwise `CARGO_HOME`, MUST automatically add
+  that root's `bin` before all BundleDock entries without redundant shared-config
+  opt-in. A relative selected root MUST be ignored without resolving it against
+  CWD or guessing a lower-priority root. `CARGO_HOME` can be `/usr/local/cargo`;
+  do not assume it is home-relative. A selected `--root` or `install.root` uses
+  the shared explicit-bin mechanism ahead of environment-derived entries; no
+  Cargo invocation or parsing of flags/project configuration is required. With
+  neither environment variable set, the actual root (Cargo's default `~/.cargo`
+  unless configured otherwise) uses the same explicit mechanism. Crystal shard
+  `./bin` and Zig `zig-out/bin` MUST NOT
+  be added globally: only an explicit trusted project or user opt-in may add
+  their absolute output directory. No toolchain installation is part of init.
+  All affected files and exact contents/diffs remain inspectable in the FR-046
+  proposal, with per-path overwrite consent, unrelated settings preserved and
+  no silent rewriting of existing JSONC. Wave 1a T030 and wave 1b T033 continue
+  to reuse existing devcontainers byte-for-byte; this requirement does not
+  enable starter generation, startup-file editing or runtime activation in
+  either task. They may offer next-step guidance through existing output fields.
+  Generation/editing and its acceptance remain future work requiring owner
+  approval of the exact amended spec, plan and tasks; this text grants none.
 - **FR-047**: Default missing human-shell preference to fish, and retain bash for
   WorkHarbor-controlled noninteractive agent command execution. These are separate
   policies: human preferences MUST NOT change script shebangs, hook interpreters,
@@ -1348,6 +1386,22 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   configuration, no-op rerun, zero changes on cancel/refusal/dry-run, and truthful
   recovery after injected write/restore failures. No init path provisions, runs
   hooks, fetches projects or grants trust.
+- **SC-014a**: Before any future installation-PATH authoring is accepted, execute
+  colliding temporary commands through each offered shell's actual startup and
+  the remote environment before startup. Prove the FR-046a ordering, command
+  selection and deduplication after repeated startup, including HOME with spaces,
+  custom GOBIN, GOPATH fallback, automatic absolute `CARGO_INSTALL_ROOT` and
+  `CARGO_HOME` roots (including their precedence, deduplication and rejection of
+  relative roots without a CWD fallback), explicit install roots and inherited
+  `codex-path`. Marker-based fixtures MUST prove no project-local `go` or `sh`
+  executes through dot/empty PATH entries during lookup or startup, across every
+  offered shell; isolate Go lookup with GOBIN/GOPATH unset and adapter lookup
+  with a safe explicit GOBIN. Reject empty/relative/CWD entries and verify trusted project
+  outputs appear only after explicit opt-in. Proposal tests MUST show every
+  changed path, unchanged unrelated fields, per-path overwrite refusal,
+  no-write dry-run and byte-identical devcontainer reuse. These are future
+  acceptance requirements, not evidence of implemented generation or live
+  activation; T030/T033's existing reuse acceptance stays in force.
 - **SC-015**: On supported real environments, every offered human shell works for
   new sessions while noninteractive agent commands retain their declared interpreter;
   unsupported environments refuse. Both console modes pass FR-007a reconnect/end
