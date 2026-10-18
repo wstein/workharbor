@@ -245,6 +245,20 @@ and asserts that no marker appears.
 tests inject every status; real-host evidence supplements, never replaces, them. The socket check dials and closes. The
 redaction function is shared and tested with a canary home directory, user and host name.
 
+The proposed shared installation-PATH contract (FR-046a, SC-014a) is future
+generation/editing work, not an expansion of D1 or D3: existing devcontainers,
+JSONC and startup files remain byte-preserved. D1/D3 may explain the policy in
+existing next-step output. A later owner-approved proposal must share one policy
+across the supported shell adapters, preview every affected file and preserve
+per-path overwrite consent and unrelated settings. Environment-derived Cargo
+roots and pre-lookup PATH sanitization follow FR-046a, with marker-based future
+acceptance under SC-014a; no Cargo invocation or project-config parsing is needed.
+Do not introduce a new user
+configuration filename or per-language mechanism without demonstrated need.
+The exact amended spec, plan and task text still require owner approval before
+implementation; neither this proposal nor existing init flags authorize generation,
+toolchain installation or live activation.
+
 `init` (D1, wave 1a) builds a proposal in memory: the manifest `workharbor.json` (version 2, FR-058, explicit values for
 every setting, defaults filling only missing ones), the existing devcontainer file at the manifest's path (reused
 unchanged and only validated; wave 1a never generates one) and `<projects_path>/.gitkeep`, each marked create, overwrite, reuse or
