@@ -15,6 +15,14 @@ REQUIRED = [WORKSPACE_MANIFEST, 'README.md', 'AGENTS.md', '.specify/memory/const
             'specs/001-workspace-lifecycle/plan.md',
             'specs/001-workspace-lifecycle/tasks.md']
 
+# Verbatim historical copies keep their original links, which cannot resolve in this tree.
+ARCHIVE_PREFIX = 'docs/archive/workharbor-old/docs/content/'
+
+def link_checked(name):
+    if name.startswith(ARCHIVE_PREFIX) or not name.endswith('.md'):
+        return False
+    return name.startswith(('docs/', 'specs/', 'contracts/', 'examples/')) or name in ('README.md', 'AGENTS.md')
+
 def document_errors(root, path):
     errors = []
     text = path.read_text()
@@ -432,7 +440,7 @@ def check(root):
                 data = json.loads(path.read_text())
             except (ValueError, UnicodeError, RecursionError) as exc:
                 errors.append(f'{name}: invalid JSON; repair syntax ({exc})')
-        if name.endswith('.md') and (name.startswith(('docs/', 'specs/', 'contracts/', 'examples/')) or name in ('README.md','AGENTS.md')):
+        if link_checked(name):
             errors.extend(document_errors(root, path))
         if name.startswith('apps/') and path.suffix in ('.go', '.ex', '.exs'):
             errors.extend(boundary_errors(Path(name), path.read_text()))

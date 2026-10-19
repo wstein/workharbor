@@ -20,6 +20,17 @@ class HarnessTests(unittest.TestCase):
             (root/'absent.md').write_text('present')
             self.assertEqual([], checks.document_errors(root, doc))
 
+    def test_archived_documents_are_not_link_checked(self):
+        self.assertFalse(checks.link_checked('docs/archive/workharbor-old/docs/content/docs/requirements.md'))
+        self.assertFalse(checks.link_checked('docs/archive/workharbor-old/docs/content/x.md'))
+        self.assertTrue(checks.link_checked('docs/archive/workharbor-old/README.md'))
+        self.assertTrue(checks.link_checked('docs/archive-evil/x.md'))
+        self.assertTrue(checks.link_checked('docs/archived.md'))
+        self.assertTrue(checks.link_checked('docs/archive/workharbor-old/docs/content-x/x.md'))
+        self.assertTrue(checks.link_checked('docs/index.md'))
+        self.assertTrue(checks.link_checked('README.md'))
+        self.assertFalse(checks.link_checked('apps/whr/notes.txt'))
+
     def test_workspace_path_traversal_rejected(self):
         base = dict(schema_version=1, devcontainer_path='.devcontainer/devcontainer.json', projects_path='projects', bundles=[])
         self.assertEqual([], checks.workspace_errors(base))
