@@ -1,0 +1,325 @@
+From 973c007a66808a95aa43567d4590b4197a5fed26 Mon Sep 17 00:00:00 2001
+From: Werner Stein <werner.stein@gmail.com>
+Date: Sun, 11 Oct 2026 19:20:13 +0000
+Subject: [PATCH] feat(cli): inspect agent topic push forge controls
+
+Expose the existing read-only inspector so operators can identify missing
+forge enforcement before using agent topic push. Keep unknown identity and
+denial evidence explicit without enabling pushes or changing admission.
+
+Refs: #538
+Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>
+---
+ internal/cli/doctor.go                |  68 +++++++++-
+ internal/cli/doctor_agentpush_test.go | 182 ++++++++++++++++++++++++++
+ 2 files changed, 243 insertions(+), 7 deletions(-)
+ create mode 100644 internal/cli/doctor_agentpush_test.go
+
+diff --git a/internal/cli/doctor.go b/internal/cli/doctor.go
+index bca30cb1..223e3a4f 100644
+--- a/internal/cli/doctor.go
++++ b/internal/cli/doctor.go
+@@ -9,6 +9,7 @@ import (
+ 
+ 	"github.com/spf13/cobra"
+ 
++	"github.com/wstein/workharbor/internal/config"
+ 	"github.com/wstein/workharbor/internal/doctor"
+ 	"github.com/wstein/workharbor/internal/exitcode"
+ 	"github.com/wstein/workharbor/internal/render"
+@@ -23,19 +24,24 @@ import (
+ // non-zero exit. It never fixes anything.
+ func newDoctor(st *state) *cobra.Command {
+ 	var (
+-		skip    []string
+-		whrUser string
+-		prefix  string
+-		plain   bool
+-		verbose bool
+-		report  bool
+-		logFile string
++		skip           []string
++		whrUser        string
++		prefix         string
++		plain          bool
++		verbose        bool
++		report         bool
++		logFile        string
++		agentTopicPush bool
++		agentAppID     int64
+ 	)
+ 	cmd := &cobra.Command{
+ 		Use:   "doctor",
+ 		Short: "check the configuration, the host and the supervisor; say what is not verified",
+ 		Args:  cobra.NoArgs,
+ 		RunE: func(cmd *cobra.Command, _ []string) error {
++			if agentAppID < 0 || (cmd.Flags().Changed("agent-app-id") && !agentTopicPush) {
++				return usageError{"--agent-app-id needs --agent-topic-push and a non-negative App ID"}
++			}
+ 			// the user is printed in each repair line, which a human may paste:
+ 			// refused here as `whr setup` does, not escaped on print (#280)
+ 			if err := plainFlag("--user", whrUser); err != nil {
+@@ -92,6 +98,9 @@ func newDoctor(st *state) *cobra.Command {
+ 			for _, c := range checks {
+ 				names[c.Name] = true
+ 			}
++			if agentTopicPush {
++				names["agent-push-ruleset"] = true
++			}
+ 			skipped := map[string]bool{}
+ 			for _, n := range skip {
+ 				if n == "whr-user" {
+@@ -103,6 +112,9 @@ func newDoctor(st *state) *cobra.Command {
+ 				skipped[n] = true
+ 			}
+ 			rs := doctor.Run(cmd.Context(), checks, skipped)
++			if agentTopicPush {
++				rs = append(rs, inspectAgentTopicPush(cmd.Context(), path, agentAppID, skipped["agent-push-ruleset"]))
++			}
+ 			repair := repairContext{Account: whrUser}
+ 			if cmd.Flags().Changed("prefix") {
+ 				repair.Prefix = prefix
+@@ -160,6 +172,8 @@ func newDoctor(st *state) *cobra.Command {
+ 			return nil
+ 		},
+ 	}
++	cmd.Flags().BoolVar(&agentTopicPush, "agent-topic-push", false, "inspect forge rules for agent topic push (diagnostic only; does not enable pushes)")
++	cmd.Flags().Int64Var(&agentAppID, "agent-app-id", 0, "agent GitHub App ID for the topic-push diagnostic (unknown when omitted)")
+ 	cmd.Flags().BoolVar(&report, "report", false, "save a private, redacted setup report in the state directory")
+ 	cmd.Flags().BoolVar(&plain, "plain", false, "no colour and no symbols beyond ASCII, as when the output is not a terminal")
+ 	cmd.Flags().BoolVar(&verbose, "verbose", false, "also show the raw text of the tools a check ran")
+@@ -193,3 +207,43 @@ func printDoctor(w io.Writer, rs []doctor.Result) {
+ func shellArgument(s string) string {
+ 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+ }
++
++// inspectAgentTopicPush is an explicit diagnostic until runtime configuration
++// exposes agent topic-push activation and its distinct identity. Its results
++// never enter admission or change the supervisor's policy.
++func inspectAgentTopicPush(ctx context.Context, path string, appID int64, skip bool) doctor.Result {
++	result := doctor.Result{Check: "agent-push-ruleset", Step: 2, Status: doctor.Warn}
++	if skip {
++		result.Status, result.Detail = doctor.Skipped, "skipped on request"
++		return result
++	}
++	cfg, err := config.Load(path)
++	if err != nil {
++		result.Status = doctor.NotVerified
++		result.Detail = "needs a valid configuration; diagnostic only: does not waive R-30 or authorize a run"
++		result.Fix = "whr setup"
++		return result
++	}
++	// The supervisor App only reads the evidence. Never substitute its App ID
++	// for the agent identity supplied by the operator.
++	var src doctor.AgentPushRuleSource
++	if gh, err := doctor.NewGitHub(cfg); err == nil {
++		src = gh
++	}
++	var details, fixes []string
++	for _, repo := range cfg.Repositories {
++		integration := repo.IntegrationBranch
++		if integration == "" && !repo.Preset().ToDefaultBranch() {
++			integration = repo.Target("")
++		}
++		evidence := doctor.InspectAgentPush(ctx, src, repo.Name, integration, appID)
++		if evidence.Status == doctor.NotVerified {
++			result.Status = doctor.NotVerified
++		}
++		details = append(details, repo.Name+": "+evidence.Detail)
++		fixes = append(fixes, evidence.Fix)
++	}
++	result.Detail = strings.Join(details, "; ")
++	result.Fix = strings.Join(fixes, " ")
++	return result
++}
+diff --git a/internal/cli/doctor_agentpush_test.go b/internal/cli/doctor_agentpush_test.go
+new file mode 100644
+index 00000000..f0d5d4ec
+--- /dev/null
++++ b/internal/cli/doctor_agentpush_test.go
+@@ -0,0 +1,182 @@
++package cli
++
++import (
++	"bytes"
++	"context"
++	"crypto/rand"
++	"crypto/rsa"
++	"crypto/x509"
++	"encoding/json"
++	"encoding/pem"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"strings"
++	"testing"
++
++	"github.com/wstein/workharbor/internal/config"
++	"github.com/wstein/workharbor/internal/doctor"
++	"github.com/wstein/workharbor/internal/exitcode"
++)
++
++func TestDoctorAgentTopicPushDiagnostics(t *testing.T) {
++	key, err := rsa.GenerateKey(rand.Reader, 2048)
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, tc := range []struct {
++		name, status, detail                                  string
++		missing, bypass, incomplete, offline, unknownIdentity bool
++	}{
++		{name: "required policy", status: "warn", detail: "required pull request and approving review observed"},
++		{name: "missing policy", status: "warn", detail: "missing required pull request", missing: true},
++		{name: "agent bypass", status: "warn", detail: "agent App bypasses ruleset 4", bypass: true},
++		{name: "incomplete visibility", status: "not_verified", detail: "bypass actors unavailable", incomplete: true},
++		{name: "unknown agent identity", status: "not_verified", detail: "agent App identity unavailable", unknownIdentity: true},
++		{name: "forge unreachable", status: "not_verified", detail: "default branch unavailable", offline: true},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			r := newServiceRig(t)
++			var cfg config.Config
++			b, err := os.ReadFile(r.cfg)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if err := json.Unmarshal(b, &cfg); err != nil {
++				t.Fatal(err)
++			}
++			cfg.Repositories[0].IntegrationBranch = "integration"
++			var branches []string
++			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
++				w.Header().Set("Content-Type", "application/json")
++				var body any
++				switch {
++				case req.URL.Path == "/repos/wstein/workharbor/installation":
++					body = map[string]any{"id": 5}
++				case req.URL.Path == "/app/installations/5/access_tokens":
++					body = map[string]any{"token": "fake-inspection-token", "expires_at": "2099-01-01T00:00:00Z"}
++				case tc.offline:
++					w.WriteHeader(http.StatusServiceUnavailable)
++					return
++				case req.URL.Path == "/repos/wstein/workharbor":
++					body = map[string]any{"default_branch": "main"}
++				case strings.Contains(req.URL.Path, "/rules/branches/"):
++					branches = append(branches, strings.TrimPrefix(req.URL.Path, "/repos/wstein/workharbor/rules/branches/"))
++					body = []any{}
++					if !tc.missing {
++						body = []any{map[string]any{"type": "pull_request", "ruleset_id": 4, "parameters": map[string]int{"required_approving_review_count": 1}}}
++					}
++				case req.URL.Path == "/repos/wstein/workharbor/rulesets/4":
++					body = map[string]any{}
++					if !tc.incomplete {
++						actors := []any{}
++						if tc.bypass {
++							actors = append(actors, map[string]any{"actor_id": 77, "actor_type": "Integration"})
++						}
++						body = map[string]any{"bypass_actors": actors}
++					}
++				default:
++					t.Errorf("unexpected request %s %s", req.Method, req.URL.Path)
++					w.WriteHeader(404)
++					return
++				}
++				if req.Method != http.MethodGet && req.URL.Path != "/app/installations/5/access_tokens" {
++					t.Errorf("forge mutation: %s %s", req.Method, req.URL.Path)
++				}
++				_ = json.NewEncoder(w).Encode(body)
++			}))
++			defer server.Close()
++			cfg.GitHub.APIURL = server.URL
++			if err := os.WriteFile(cfg.GitHub.KeyFile, pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}), 0o600); err != nil {
++				t.Fatal(err)
++			}
++			b, err = json.Marshal(cfg)
++			if err != nil {
++				t.Fatal(err)
++			}
++			if err := os.WriteFile(r.cfg, b, 0o600); err != nil {
++				t.Fatal(err)
++			}
++			setup := newSetupRig(t)
++			var out, errOut bytes.Buffer
++			env := Env{Stdout: &out, Stderr: &errOut, Getenv: func(string) string { return "" }, Setup: setup.env}
++			args := []string{"doctor", "--config", r.cfg, "--json", "--agent-topic-push"}
++			if !tc.unknownIdentity {
++				args = append(args, "--agent-app-id", "77")
++			}
++			for _, check := range doctor.Checks(doctor.Deps{}) {
++				if !check.SetupOnly {
++					args = append(args, "--skip", check.Name)
++				}
++			}
++			code := Execute(context.Background(), env, args)
++			if code != exitcode.OK {
++				t.Fatalf("exit %d: %s", code, errOut.String())
++			}
++			var report struct{ Checks []doctor.Result }
++			if err := json.Unmarshal(out.Bytes(), &report); err != nil {
++				t.Fatal(err)
++			}
++			var found bool
++			for _, result := range report.Checks {
++				if result.Check == "agent-push-ruleset" {
++					found = true
++					if string(result.Status) != tc.status || !strings.Contains(result.Detail, tc.detail) || result.Fix != "https://github.com/wstein/workharbor/settings/rules" {
++						t.Errorf("diagnostic: %+v", result)
++					}
++					for _, boundary := range []string{"tag restrictions not_verified", "release/deployment denial not_verified", "does not waive R-30 or authorize a run"} {
++						if !strings.Contains(result.Detail, boundary) {
++							t.Errorf("missing %s", boundary)
++						}
++					}
++				}
++			}
++			if !found {
++				t.Fatalf("missing agent-push-ruleset: %s", out.String())
++			}
++			if !tc.offline && strings.Join(branches, ",") != "main,integration" {
++				t.Errorf("branches = %v", branches)
++			}
++			if len(setup.host.ran) != 0 || len(setup.host.opened) != 0 || setup.host.asked != 0 {
++				t.Fatal("doctor changed host or requested approval")
++			}
++		})
++	}
++}
++
++func TestDoctorAgentTopicPushFlagsAndSkip(t *testing.T) {
++	for _, args := range [][]string{
++		{"doctor", "--agent-app-id", "77"},
++		{"doctor", "--agent-topic-push", "--agent-app-id", "-1"},
++		{"doctor", "--skip", "agent-push-ruleset"},
++	} {
++		r := newSetupRig(t)
++		if code, _, _ := r.run(args...); code != exitcode.Usage {
++			t.Errorf("%v: exit %d", args, code)
++		}
++	}
++	r := newSetupRig(t)
++	args := []string{"doctor", "--agent-topic-push", "--skip", "agent-push-ruleset", "--json"}
++	for _, check := range doctor.Checks(doctor.Deps{}) {
++		if !check.SetupOnly {
++			args = append(args, "--skip", check.Name)
++		}
++	}
++	code, out, errOut := r.run(args...)
++	if code != exitcode.OK {
++		t.Fatalf("skip: exit %d: %s", code, errOut)
++	}
++	var report struct{ Checks []doctor.Result }
++	if err := json.Unmarshal([]byte(out), &report); err != nil {
++		t.Fatal(err)
++	}
++	for _, result := range report.Checks {
++		if result.Check == "agent-push-ruleset" {
++			if result.Status != doctor.Skipped || result.Fix != "" {
++				t.Fatalf("skip result %+v", result)
++			}
++			return
++		}
++	}
++	t.Fatal("missing skipped diagnostic")
++}
+-- 
+2.56.0
+
