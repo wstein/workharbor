@@ -10,9 +10,10 @@ architecture (Go `whr` rewrite, Spec Kit); see [product](../../product.md),
 The old repository was renamed to `wstein/workharbor-old`, and on 2026-10-11 the
 name `wstein/workharbor` was reused for the current repository, so GitHub no
 longer redirects old links. Inside this archive, every
-`https://github.com/wstein/workharbor/...` URL (196 links in 35 files) and every
-bare `#N` issue or pull request reference (including `Refs: #538` in the
-patches) means the same item in `wstein/workharbor-old`. Read such links with
+`https://github.com/wstein/workharbor/...` URL (196 links in 35 files under
+`docs/content`) and every bare `#N` issue or pull request reference, unless
+another repository is named (as in `crewbook #11`), including `Refs: #538` in the
+patches, means the same item in `wstein/workharbor-old`. Read such links with
 `-old` substituted. For example, `.../workharbor/issues/7` in the archive is old
 issue 7, "Route agent approvals from inside a container to the supervisor", while
 the same URL now opens the current repository's #7, "T006: Implement strict
@@ -36,12 +37,13 @@ All Markdown files under `docs/content/` were copied byte-for-byte to the same
 relative path under `docs/content/` in this directory. No file was edited.
 The copies keep their original links and Hugo front matter and shortcodes, so
 `scripts/check_repo.py` does not check links below `docs/archive/workharbor-old/docs/content/`;
-this README and any other authored file here are checked.
+this README and any other authored Markdown file here is checked.
 
 License and authorship: the documents were published under EUPL-1.2 in the old
-repository, written by Werner Stein plus one Codex commit and one Dependabot
-commit. Both repositories are EUPL-1.2. The two LICENSE files differ byte-wise
-(13,792 versus 13,827 bytes; line wrapping and list-marker formatting only).
+repository, committed by Werner Stein (708 commits on `docs/content`) plus one Codex commit
+and one Dependabot commit; 184 of the 710 commits also carry AI `Co-Authored-By`
+trailers (Claude Sonnet 5.5, Claude Opus 5.5, Codex). Both repositories are EUPL-1.2. The two LICENSE files differ byte-wise
+(old 13,792 bytes; current 13,827 bytes; line wrapping and list-marker formatting only).
 
 ## Contents (original path = path relative to `docs/content/docs/`)
 
