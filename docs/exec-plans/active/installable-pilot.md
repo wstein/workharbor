@@ -1253,7 +1253,7 @@ The marker binds the ORIGINAL storage reservation/descriptor/numeric owner. A kn
 provider handle whose final path is missing refuses before copy or repair. Existing
 valid final data is reused without traversal, recopy, reset, chmod or chown. Current
 native authorization is checked before filesystem work, inside the storage lock
-and before publication/receipt. Maintained x/sys v0.48.0 supplies Linux/Darwin
+and before publication/receipt. Maintained x/sys v0.49.0 supplies Linux/Darwin
 no-replace primitives; unsupported platforms/filesystems refuse without fallback.
 
 The native suite includes competing independent publishers, six actual own-child

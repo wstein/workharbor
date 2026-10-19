@@ -172,7 +172,7 @@ The host companion package lock pins CLI0.89.0 and jsonc-parser3.3.1. The CLI np
 artifact is bundled with no runtime npm dependencies. Dockerfile parser is
 Moby/BuildKit v0.34.0 (Apache-2.0), selected maintained release with Go1.26.8 minimum,
 compatible with pinned Go1.27.2; its dependency graph is locked in go.mod/go.sum.
-The reviewed direct low-level dependency golang.org/x/sys v0.48.0 matches that
+The reviewed direct low-level dependency golang.org/x/sys v0.49.0 matches that
 BuildKit requirement and supplies maintained Linux Renameat2/RENAME_NOREPLACE and
 Darwin RenameatxNp/RENAME_EXCL wrappers. No overwrite or emulated fallback; other
 platforms refuse. Extracted official companion runtime file SHA256 values are
