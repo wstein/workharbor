@@ -39,3 +39,4 @@
 - [Bounded workspace shell policy contract (candidate)](../contracts/workspace-shell-policy.md)
 - [Container runtime prerequisite](container-runtime.md)
 - [Source references](references.md)
+- [Archive of the superseded workharbor-old documents](archive/workharbor-old/README.md)
