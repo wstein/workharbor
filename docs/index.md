@@ -35,6 +35,7 @@
 
 - [Concept paper: optional AI execution board](papers/optional-ai-execution.md)
 - [Proposed external orchestrator adapters (wave two, outside pilot)](design/orchestrator-adapters.md)
+- [Proposed local devcontainer and temporary container lifecycle in `whr`](design/local-devcontainer-lifecycle.md)
 - [BundleDock workspace shell integration (proposal)](papers/bundledock-workspace-shell.md)
 - [Bounded workspace shell policy contract (candidate)](../contracts/workspace-shell-policy.md)
 - [Container runtime prerequisite](container-runtime.md)
