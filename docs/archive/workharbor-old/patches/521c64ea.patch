@@ -1,0 +1,61 @@
+From 521c64ea4170b79dd6835920f0b3285c91f1fb4e Mon Sep 17 00:00:00 2001
+From: Werner Stein <werner.stein@gmail.com>
+Date: Sun, 11 Oct 2026 19:21:00 +0000
+Subject: [PATCH] docs(manual): explain agent push doctor diagnostics
+
+Explain the explicit inspection flags and warning semantics so operators
+can act on missing forge evidence without treating a diagnostic result as
+permission to run or a waiver of mandatory enforcement.
+
+Refs: #538
+Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>
+---
+ .../content/docs/manual/run-the-supervisor.md | 32 +++++++++++++++++++
+ 1 file changed, 32 insertions(+)
+
+diff --git a/docs/content/docs/manual/run-the-supervisor.md b/docs/content/docs/manual/run-the-supervisor.md
+index a135ada0..4bb45d88 100644
+--- a/docs/content/docs/manual/run-the-supervisor.md
++++ b/docs/content/docs/manual/run-the-supervisor.md
+@@ -27,6 +27,38 @@ and `whr doctor --user <your-account>`. The doctor warns, and does not fail, whe
+ from outside an administrator-owned prefix. See the [source installation](install-upgrade-release.md)
+ for the alpha policy and the service behavior.
+ 
++For an installation using agent topic push, request its read-only forge diagnostic:
++
++```text
++whr doctor --agent-topic-push --agent-app-id <agent-app-id>
++```
++
++`--agent-topic-push` requests inspection; it does not enable pushes. Automatic
++activation from runtime configuration is pending a configuration contract. The
++optional `--agent-app-id` identifies the agent's GitHub App, independently of the
++supervisor App that reads the evidence. Omit it when that identity is unknown;
++the check then reports `not_verified`. It does not establish a non-App agent's
++identity or token permissions.
++
++The `agent-push-ruleset` check reads each configured repository's default and
++integration branches (including the default `develop` for the integration
++workflow). It reports observed requirements for a pull request and an approving
++review, plus the agent App's bypass coverage. Missing policy, an agent bypass,
++or enforcement that remains unconfirmed produces `warn`; an unreachable forge,
++unavailable identity or incomplete visibility produces `not_verified`. Neither
++status causes a failing exit by itself. The report names repository rules settings
++links for human follow-up and changes no forge settings. To omit this inspection
++for one report, use `--skip agent-push-ruleset` with `--agent-topic-push`.
++
++Observed branch rules do not prove that a reviewer is human. Outside-topic branch
++restrictions, tag restrictions and release/deployment denial remain explicitly
++`not_verified`; this diagnostic does not measure them. Live visibility and denial
++with the actual agent identity remain {{< status unverified >}} (#230, #542 and
++#27). A warning, a `not_verified` result, or a skipped check does not waive the
++mandatory [R-30 forge controls](../requirements.md), admit a runtime, authorize
++agent merge/tag/release/deploy, or start or resume a run. Existing admission
++controls and [D57 human initiation](../design/security.md) still apply.
++
+ ## First-time setup: `whr setup` (provisional)
+ 
+ Two wizards, each checking a step first, showing the exact commands of its fix and running them only after you answer `y`:
+-- 
+2.56.0
+

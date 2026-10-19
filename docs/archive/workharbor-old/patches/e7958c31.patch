@@ -1,0 +1,472 @@
+From e7958c3122783fa2ff11ddc5e51ed41b11e35891 Mon Sep 17 00:00:00 2001
+From: Werner Stein <werner.stein@gmail.com>
+Date: Sun, 11 Oct 2026 15:51:08 +0000
+Subject: [PATCH] feat(web): allow an explicit VPN listen address
+
+Keep the JSON API on its private unix socket and preserve web sign-in. Refuse wildcard, named and non-unicast addresses and keep direct VPN access subject to the existing remote account checks.
+
+Refs: #539
+Co-Authored-By: Codex gpt-6.1-sol <noreply@openai.com>
+---
+ internal/config/config.go                 | 28 +++++++---
+ internal/config/config_test.go            |  9 ++--
+ internal/doctor/account.go                |  8 ++-
+ internal/doctor/listen_test.go            | 65 +++++++++++++++++++++++
+ internal/doctor/publicurl.go              | 19 ++++---
+ internal/serve/serve.go                   |  6 +--
+ internal/serve/serve_test.go              |  6 +--
+ internal/web/listen.go                    | 33 ++++++++++++
+ internal/web/listen_routes_test.go        | 33 ++++++++++++
+ internal/web/listen_test.go               | 54 +++++++++++++++++++
+ schemas/config.v0-provisional.schema.json |  2 +-
+ 11 files changed, 237 insertions(+), 26 deletions(-)
+ create mode 100644 internal/doctor/listen_test.go
+ create mode 100644 internal/web/listen.go
+ create mode 100644 internal/web/listen_routes_test.go
+ create mode 100644 internal/web/listen_test.go
+
+diff --git a/internal/config/config.go b/internal/config/config.go
+index 6f2b9bbc..c3099b4a 100644
+--- a/internal/config/config.go
++++ b/internal/config/config.go
+@@ -204,7 +204,8 @@ type Config struct {
+ 	// it, and its value never affects loading or validation.
+ 	Schema   string          `json:"$schema,omitempty"`
+ 	SkillSet skillset.Config `json:"skill_set,omitzero"`
+-	// Listen is the address `whr serve` binds: a loopback address (D29).
++	// Listen is the web UI address: loopback by default, or one explicit VPN
++	// interface IP. The JSON API stays on its private unix socket (D29).
+ 	Listen string `json:"listen"`
+ 	// PublicURL is whr's HTTPS name behind the forwarder (D29), for example
+ 	// https://whr.tailnet.example. Passkeys (D45) are bound to its host name, so
+@@ -819,23 +820,36 @@ func within(path, dir string) bool {
+ 	}
+ }
+ 
+-// checkListen accepts host:port where the host is a loopback address: the API
+-// listens on loopback (D29), and a name is not resolved, so what is bound is
+-// what is written.
++// checkListen checks the web UI address and a nonzero TCP port.
+ func checkListen(addr string) string {
+-	host, port, err := net.SplitHostPort(addr)
++	_, port, err := net.SplitHostPort(addr)
+ 	if err != nil {
+ 		return fmt.Sprintf("%q is not host:port", addr)
+ 	}
+ 	if n, err := strconv.Atoi(port); err != nil || n < 1 || n > 65535 {
+ 		return fmt.Sprintf("port %q is not a port", port)
+ 	}
+-	if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+-		return fmt.Sprintf("%q is not a loopback address: a guest reaches every other address of the host (D29), so the API listens on 127.0.0.1 or ::1", host)
++	if _, err := WebListenIP(addr); err != nil {
++		return err.Error()
+ 	}
+ 	return ""
+ }
+ 
++// WebListenIP returns the explicit unicast IP of the web listener. Names and
++// unspecified addresses are refused so binding never expands to all interfaces.
++// The operator chooses the VPN interface; an IP alone cannot prove VPN isolation.
++func WebListenIP(addr string) (net.IP, error) {
++	host, _, err := net.SplitHostPort(addr)
++	if err != nil {
++		return nil, fmt.Errorf("%q is not host:port", addr)
++	}
++	ip := net.ParseIP(host)
++	if ip == nil || !ip.IsLoopback() && !ip.IsGlobalUnicast() {
++		return nil, fmt.Errorf("%q is not an explicit unicast IP address (names, unspecified and multicast addresses are refused)", host)
++	}
++	return ip, nil
++}
++
+ // CheckStateDir refuses a state directory that another user could enter or
+ // replace things in: it must be a real directory (not a link) owned by this user,
+ // with no permission for group or others. The configuration check and the start of
+diff --git a/internal/config/config_test.go b/internal/config/config_test.go
+index 9757b07e..1ba40c01 100644
+--- a/internal/config/config_test.go
++++ b/internal/config/config_test.go
+@@ -123,7 +123,7 @@ func TestEveryProblemIsReportedWithItsKey(t *testing.T) {
+ 	_, err := r.parse(t)
+ 	got := problems(err)
+ 	for _, want := range []string{
+-		"listen: \"0.0.0.0\" is not a loopback address",
++		"listen: \"0.0.0.0\" is not an explicit unicast IP address",
+ 		"repositories[0].name: \"no-slash\"",
+ 		"repositories[2].name: \"wstein/workharbor\" is the same repository as repositories[1]",
+ 		"repositories[3].clone_depth: -1",
+@@ -138,10 +138,13 @@ func TestEveryProblemIsReportedWithItsKey(t *testing.T) {
+ 	}
+ }
+ 
+-func TestOnlyLoopbackListens(t *testing.T) {
++func TestWebListenAddresses(t *testing.T) {
+ 	for addr, ok := range map[string]bool{
+ 		"127.0.0.1:8787": true, "[::1]:8787": true, "127.0.0.2:80": true,
+-		"0.0.0.0:8787": false, "192.168.1.5:8787": false, "localhost:8787": false, "[::]:8787": false,
++		"192.168.1.5:8787": true, "10.44.0.1:8787": true, "[fd42::1]:8787": true,
++		"0.0.0.0:8787": false, "[::]:8787": false, "[::ffff:0.0.0.0]:8787": false,
++		"localhost:8787": false, "224.0.0.1:8787": false, "255.255.255.255:8787": false,
++		"169.254.1.1:8787": false, "[fe80::1]:8787": false, "[fe80::1%en0]:8787": false,
+ 		"8787": false, "": false, "127.0.0.1:0": false, "127.0.0.1:70000": false, "127.0.0.1:x": false,
+ 	} {
+ 		r := newRig(t)
+diff --git a/internal/doctor/account.go b/internal/doctor/account.go
+index 5b73bde0..09ecda1c 100644
+--- a/internal/doctor/account.go
++++ b/internal/doctor/account.go
+@@ -92,9 +92,13 @@ func (d Deps) accountConfig() (accountView, error) {
+ 	str := func(m map[string]any, k string) string { s, _ := m[k].(string); return s }
+ 	sub := func(k string) map[string]any { v, _ := m[k].(map[string]any); return v }
+ 	// remote access (D49): a forwarder's public URL (the web UI over the VPN,
+-	// D29) or the console's SSH authority (`whr ssh`); the tailscale step cannot
++	// D29), a direct non-loopback web listener, or the console's SSH authority
++	// (`whr ssh`); the tailscale step cannot
+ 	// be read and does not count
+ 	remote := str(m, "public_url") != "" || str(sub("board"), "public_url") != "" || str(sub("console"), "ssh_ca_key_file") != ""
++	if ip, err := config.WebListenIP(str(m, "listen")); err == nil && !ip.IsLoopback() {
++		remote = true
++	}
+ 	// only an absent key or exactly "dedicated" is dedicated; any other value
+ 	// (a typo, another case, a wrong type) is read as shared, the safe side
+ 	acct, present := m["account"]
+@@ -173,7 +177,7 @@ func (d Deps) accountCheck() func(context.Context) (Status, string) {
+ 		gave := " It gives up that " + strings.Join(gives, " and that ") + "."
+ 		on, unknownRemote := d.hostRemote(ctx)
+ 		if c.remote || len(on) > 0 {
+-			via := "whr is configured to be reached from other devices (public_url or the console's SSH)"
++			via := "whr is configured to be reached from other devices (public_url, a non-loopback web listener or the console's SSH)"
+ 			if len(on) > 0 {
+ 				via = "the Mac's " + strings.Join(on, " and ") + " is on"
+ 				if c.remote {
+diff --git a/internal/doctor/listen_test.go b/internal/doctor/listen_test.go
+new file mode 100644
+index 00000000..82fb323c
+--- /dev/null
++++ b/internal/doctor/listen_test.go
+@@ -0,0 +1,65 @@
++package doctor
++
++import (
++	"context"
++	"strings"
++	"testing"
++)
++
++func TestDoctorReportsWebListenAddress(t *testing.T) {
++	for _, tt := range []struct {
++		listen string
++		status Status
++	}{
++		{"127.0.0.1:8787", OK}, {"10.44.0.1:8787", OK}, {"[fd42::1]:8787", OK}, {"0.0.0.0:8787", Fail}, {"[::]:8787", Fail},
++	} {
++		t.Run(tt.listen, func(t *testing.T) {
++			r := newRig(t)
++			r.cfg.Listen = tt.listen
++			r.write(t)
++			var check Check
++			for _, c := range Checks(r.deps()) {
++				if c.Name == "config" {
++					check = c
++				}
++			}
++			status, detail := check.Run(context.Background())
++			if status != tt.status || !strings.Contains(detail, tt.listen) && status == OK {
++				t.Errorf("config = %s %q, want %s and effective listen address", status, detail, tt.status)
++			}
++		})
++	}
++}
++
++func TestPublicURLAcceptsSpecificVPNListener(t *testing.T) {
++	d := publicDeps(t, `{"listen":"10.44.0.1:8787","public_url":"https://w.example"}`, scripted{})
++	status, detail := d.publicURLStep().Run(context.Background())
++	if status == Fail || !strings.Contains(detail, "10.44.0.1:8787") || !strings.Contains(detail, "not checked") || strings.Contains(detail, "listening on loopback") {
++		t.Fatalf("public-url = %s %q", status, detail)
++	}
++}
++
++func TestPublicURLWithoutANameKeepsAppSetupOnLoopback(t *testing.T) {
++	d := publicDeps(t, `{"listen":"10.44.0.1:8787"}`, scripted{})
++	status, detail := d.publicURLStep().Run(context.Background())
++	if status != NotVerified || !strings.Contains(detail, "--listen 127.0.0.1:8787 --local") {
++		t.Fatalf("public-url = %s %q, want the loopback app setup override", status, detail)
++	}
++}
++
++func TestDirectVPNListenerCountsAsRemoteAccessWithoutPublicURL(t *testing.T) {
++	for _, address := range []string{"10.44.0.1:8787", "[fd42::1]:8787"} {
++		for _, tc := range []struct {
++			account, membership string
++			want                Status
++		}{
++			{"dedicated", notAdmin, OK}, {"dedicated", isAdmin, Fail}, {"shared", notAdmin, Fail}, {"shared", isAdmin, Fail},
++		} {
++			d := accountDeps(t, scripted{adminKey: tc.membership}, map[string]any{"listen": address, "account": tc.account})
++			got, detail := status(steps(t, d)["account"])
++			if got != tc.want {
++				t.Errorf("%s %s %s: %s %q, want %s", address, tc.account, tc.membership, got, detail, tc.want)
++			}
++		}
++	}
++}
+diff --git a/internal/doctor/publicurl.go b/internal/doctor/publicurl.go
+index 3c387da0..cd4f0912 100644
+--- a/internal/doctor/publicurl.go
++++ b/internal/doctor/publicurl.go
+@@ -5,7 +5,6 @@ import (
+ 	"encoding/json"
+ 	"errors"
+ 	"io/fs"
+-	"net"
+ 	"strings"
+ 
+ 	"github.com/wstein/workharbor/internal/config"
+@@ -16,13 +15,13 @@ import (
+ const defaultListen = "127.0.0.1:8787"
+ 
+ // publicURLStep is the step `public-url` (issue #396): whr's public name is in
+-// the configuration, well formed, and the listener behind the forwarder is on
+-// loopback. It reads only: the configuration and, on a Mac, `socketfilterfw
++// the configuration, well formed, and the web listener names an explicit IP.
++// It reads only: the configuration and, on a Mac, `socketfilterfw
+ // --getglobalstate`, which needs no sudo. Whether the forwarder serves the name
+ // to the port, and whether a browser reaches it, needs the network and is never
+ // claimed. The firewall is named only because it is the usual suspect: the
+ // application firewall does not filter a loopback connection, so it cannot be
+-// why a request to the listener on this Mac fails.
++// why a request to a loopback listener on this Mac fails.
+ func (d Deps) publicURLStep() Check {
+ 	return Check{
+ 		Name: "public-url", Phase: PhaseUser, Step: 2, Title: "whr's public name in the configuration (manual step 7)",
+@@ -35,12 +34,15 @@ func (d Deps) publicURLStep() Check {
+ 			if listen == "" {
+ 				listen = defaultListen
+ 			}
+-			host, _, err := net.SplitHostPort(listen)
+-			if ip := net.ParseIP(host); err != nil || ip == nil || !ip.IsLoopback() {
+-				return Fail, "listen " + textsafe.Escape(listen) + " is not a loopback address: the forwarder reaches whr on loopback (D29)"
++			ip, err := config.WebListenIP(listen)
++			if err != nil {
++				return Fail, "listen " + textsafe.Escape(listen) + " is not a loopback or explicit unicast address: " + err.Error()
+ 			}
+ 			raw, _ := m["public_url"].(string)
+ 			if raw == "" {
++				if !ip.IsLoopback() {
++					return NotVerified, "no public_url: configured web listener " + listen + "; set the trusted HTTPS name for remote passkeys, or run whr github app create --listen " + defaultListen + " --local to set up the App in a browser on this Mac"
++				}
+ 				return NotVerified, "no public_url: whr github app create has no link a phone can open. Set it with this step, or open the link on this Mac with the --local flag of the github app create command (http://" + listen + ")"
+ 			}
+ 			n, err := config.NormalizePublicURL(raw)
+@@ -50,6 +52,9 @@ func (d Deps) publicURLStep() Check {
+ 				}
+ 				return Fail, "public_url " + textsafe.Escape(raw) + ": " + oneLine(err.Error())
+ 			}
++			if !ip.IsLoopback() {
++				return OK, "public_url " + n + ", configured web listener " + listen + "; web sign-in is required and the JSON API stays on its private unix socket; VPN reachability, HTTPS termination and host firewall rules are not checked"
++			}
+ 			return OK, "public_url " + n + ", listening on loopback " + listen + "; " + d.firewallNote(ctx) + "; whether the forwarder serves the name to that port is not checked (it needs the network); the tailscale-serve step shows the mapping (read-only) and creates it as workharbor, never a public funnel"
+ 		},
+ 		Fix: &Fix{
+diff --git a/internal/serve/serve.go b/internal/serve/serve.go
+index 30d8284d..c4c91968 100644
+--- a/internal/serve/serve.go
++++ b/internal/serve/serve.go
+@@ -1,5 +1,5 @@
+ // Package serve runs the supervisor: the service, its reconciler and the JSON
+-// API on a loopback address (design §5.3, §9.7). It is wiring: everything it
++// API on a private unix socket (design §5.3, §9.7). It is wiring: everything it
+ // does is in the packages it joins, so a test can run it on the fakes.
+ package serve
+ 
+@@ -301,7 +301,7 @@ func Run(ctx context.Context, d Deps) error {
+ 		return err
+ 	}
+ 	// Bind before the first reconcile: a wrong address is the quickest failure. The
+-	// API gets a private unix socket, the web UI the forwarded loopback address.
++	// API gets a private unix socket, the web UI its configured TCP address.
+ 	if d.SocketPath == "" {
+ 		return errors.New("serve: no socket path for the API")
+ 	}
+@@ -309,7 +309,7 @@ func Run(ctx context.Context, d Deps) error {
+ 	if err != nil {
+ 		return err
+ 	}
+-	ln, err := api.Listen(d.Config.Listen)
++	ln, err := web.Listen(d.Config.Listen)
+ 	if err != nil {
+ 		_ = apiLn.Close()
+ 		return err
+diff --git a/internal/serve/serve_test.go b/internal/serve/serve_test.go
+index 95c76a11..66f89908 100644
+--- a/internal/serve/serve_test.go
++++ b/internal/serve/serve_test.go
+@@ -173,11 +173,11 @@ func TestRunRefusesASocketDirectoryOthersCanEnter(t *testing.T) {
+ 	}
+ }
+ 
+-func TestRunRefusesANonLoopbackAddress(t *testing.T) {
++func TestRunRefusesAWildcardAddress(t *testing.T) {
+ 	d, _ := newDeps(t)
+ 	d.Config.Listen = "0.0.0.0:0"
+-	if err := Run(context.Background(), d); err == nil || !strings.Contains(err.Error(), "loopback") {
+-		t.Errorf("Run = %v, want a loopback refusal", err)
++	if err := Run(context.Background(), d); err == nil || !strings.Contains(err.Error(), "unspecified") {
++		t.Errorf("Run = %v, want a wildcard refusal", err)
+ 	}
+ }
+ 
+diff --git a/internal/web/listen.go b/internal/web/listen.go
+new file mode 100644
+index 00000000..485157f0
+--- /dev/null
++++ b/internal/web/listen.go
+@@ -0,0 +1,33 @@
++package web
++
++import (
++	"context"
++	"fmt"
++	"net"
++
++	"github.com/wstein/workharbor/internal/config"
++)
++
++// Listen binds only the web UI's configured IP. It serves no JSON API routes;
++// those remain on the host-only unix socket. A non-loopback IP requires the
++// operator's VPN and HTTPS setup, and keeps the same web sign-in checks.
++func Listen(addr string) (net.Listener, error) {
++	var lc net.ListenConfig
++	return listen(context.Background(), addr, lc.Listen)
++}
++
++func listen(ctx context.Context, addr string, bind func(context.Context, string, string) (net.Listener, error)) (net.Listener, error) {
++	ip, err := config.WebListenIP(addr)
++	if err != nil {
++		return nil, fmt.Errorf("web: %w", err)
++	}
++	ln, err := bind(ctx, "tcp", addr)
++	if err != nil {
++		return nil, err
++	}
++	if tcp, ok := ln.Addr().(*net.TCPAddr); !ok || !tcp.IP.Equal(ip) {
++		_ = ln.Close()
++		return nil, fmt.Errorf("web: bound %s instead of configured IP %s", ln.Addr(), ip)
++	}
++	return ln, nil
++}
+diff --git a/internal/web/listen_routes_test.go b/internal/web/listen_routes_test.go
+new file mode 100644
+index 00000000..cc0c34ec
+--- /dev/null
++++ b/internal/web/listen_routes_test.go
+@@ -0,0 +1,33 @@
++package web
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"testing"
++)
++
++func TestConfiguredWebAddressesKeepSignInAndExcludeJSONAPI(t *testing.T) {
++	r := newRig(t)
++	for _, host := range []string{"127.0.0.1:8787", "10.44.0.1:8787", "[fd42::1]:8787"} {
++		for _, bearer := range []string{"", "Bearer " + token} {
++			for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodDelete} {
++				for _, path := range []string{"/v1", "/v1/", "/v1/health", "/v1/tasks", "/v1/passkeys/enrolments", "/v1/decisions/d1/answer"} {
++					req := httptest.NewRequestWithContext(bg, method, "http://"+host+path, nil)
++					req.Header.Set("Authorization", bearer)
++					rec := httptest.NewRecorder()
++					r.srv.Config.Handler.ServeHTTP(rec, req)
++					if rec.Code != http.StatusNotFound {
++						t.Errorf("%s %s on %s (token %v) = %d", method, path, host, bearer != "", rec.Code)
++					}
++				}
++			}
++			req := httptest.NewRequestWithContext(bg, http.MethodGet, "http://"+host+"/", nil)
++			req.Header.Set("Authorization", bearer)
++			rec := httptest.NewRecorder()
++			r.srv.Config.Handler.ServeHTTP(rec, req)
++			if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != "/login" {
++				t.Errorf("web without session on %s = %d %s", host, rec.Code, rec.Header().Get("Location"))
++			}
++		}
++	}
++}
+diff --git a/internal/web/listen_test.go b/internal/web/listen_test.go
+new file mode 100644
+index 00000000..0077b242
+--- /dev/null
++++ b/internal/web/listen_test.go
+@@ -0,0 +1,54 @@
++package web
++
++import (
++	"context"
++	"errors"
++	"net"
++	"testing"
++)
++
++type addressListener struct {
++	net.Listener
++	address *net.TCPAddr
++	closed  bool
++}
++
++func (l *addressListener) Addr() net.Addr { return l.address }
++func (l *addressListener) Close() error   { l.closed = true; return nil }
++
++func TestListenBindsOnlyTheConfiguredWebAddress(t *testing.T) {
++	for _, address := range []string{"127.0.0.1:8787", "10.44.0.1:8787", "[fd42::1]:8787"} {
++		t.Run(address, func(t *testing.T) {
++			host, _, _ := net.SplitHostPort(address)
++			want := &addressListener{address: &net.TCPAddr{IP: net.ParseIP(host), Port: 8787}}
++			got, err := listen(context.Background(), address, func(_ context.Context, network, addr string) (net.Listener, error) {
++				if network != "tcp" || addr != address {
++					t.Fatalf("bind %s %s", network, addr)
++				}
++				return want, nil
++			})
++			if err != nil || got != want {
++				t.Fatalf("listen = %v, %v", got, err)
++			}
++		})
++	}
++}
++
++func TestListenRefusesWildcardNamesAndUnexpectedBoundAddresses(t *testing.T) {
++	for _, address := range []string{"0.0.0.0:8787", "[::]:8787", ":8787", "localhost:8787", "224.0.0.1:8787", "255.255.255.255:8787", "169.254.1.1:8787", "[fe80::1]:8787", "[fe80::1%en0]:8787"} {
++		_, err := listen(context.Background(), address, func(context.Context, string, string) (net.Listener, error) {
++			t.Fatalf("attempted to bind %s", address)
++			return nil, errors.New("unexpected bind")
++		})
++		if err == nil {
++			t.Errorf("accepted %s", address)
++		}
++	}
++	for _, host := range []string{"0.0.0.0", "127.0.0.1"} {
++		bound := &addressListener{address: &net.TCPAddr{IP: net.ParseIP(host), Port: 8787}}
++		_, err := listen(context.Background(), "10.44.0.1:8787", func(context.Context, string, string) (net.Listener, error) { return bound, nil })
++		if err == nil || !bound.closed {
++			t.Errorf("unexpected bound address %s: err=%v closed=%v", host, err, bound.closed)
++		}
++	}
++}
+diff --git a/schemas/config.v0-provisional.schema.json b/schemas/config.v0-provisional.schema.json
+index 3c845770..05aadf58 100644
+--- a/schemas/config.v0-provisional.schema.json
++++ b/schemas/config.v0-provisional.schema.json
+@@ -21,7 +21,7 @@
+         "package": { "$ref": "#/$defs/skillPin" }
+       }
+     },
+-    "listen": { "type": "string", "description": "Loopback address of the web UI, for example 127.0.0.1:8787." },
++    "listen": { "type": "string", "description": "Web UI IP and port: loopback by default (127.0.0.1:8787), or one literal unicast VPN interface IP. Wildcard addresses and host names are refused. The JSON API stays on its private unix socket." },
+     "public_url": { "type": "string", "pattern": "^[hH][tT][tT][pP][sS]://" },
+     "repositories": {
+       "type": "array",
+-- 
+2.56.0
+
