@@ -310,12 +310,11 @@
       "fd",
       "fzf",
       "zoxide",
+      "bat",
       "jj",
       "herdr"
     ],
-    "selected_by_default_false": [
-      "bat"
-    ],
+    "selected_by_default_false": [],
     "config_marker_on": [
       "starship",
       "fzf",
