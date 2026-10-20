@@ -243,7 +243,7 @@ func checkProject(c *collector, p jvalue, projectsPath string) *Project {
 		schema("project.url does not end in a usable project name")
 		return nil
 	}
-	if len(path) < 3 {
+	if utf8.RuneCountInString(path) < 3 {
 		schema("project.path is too short")
 		return nil
 	}
