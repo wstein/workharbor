@@ -25,5 +25,5 @@ Status: researched choices for review; nothing claimed implemented. Inputs: IDEA
 
 ## Decisions still needed
 
-OD-1 to OD-5 in [plan.md](plan.md#open-owner-decisions). Provider kinds beyond standard Docker, credential mediation,
+OD-1 to OD-5 in [plan.md](plan.md#owner-decisions). Provider kinds beyond standard Docker, credential mediation,
 egress enforcement and recovery need their own specifications and are not decided here.

@@ -52,7 +52,7 @@ on `main`: T011, T012, T013, T014, then T015; T016 only after the owner approves
 ## Stop and ask
 
 Stop and ask the owner when: a task text contradicts the code, the spec or another task; 006/T038 or T025 is not on `main`; a real
-Docker, host or network action seems necessary; a requirement, frozen contract or ADR must change; OD-5 (open) or an unapproved amendment blocks the work; a
+Docker, host or network action seems necessary; a requirement, frozen contract or ADR must change; an unapproved amendment blocks the work; a
 test needs real credentials; the real git behavior differs from a spec statement (for example `user.useConfigOnly` with the
 identity variables); scope grows beyond the task or a PR beyond about 1,500 lines. Do not work around a blocker.
 
