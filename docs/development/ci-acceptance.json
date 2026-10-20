@@ -818,7 +818,22 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestNativeDirectoryIdentityUsesDeviceAndInode",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestNativeDirectoryLstatNeverFollowsLeafLink",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestDirectoryHandlesDoNotLeakFDs",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenDirAcceptsSymlinkedAncestor"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenDirAcceptsSymlinkedAncestor",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitCreatesExpectedManifest",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitOutputValidates",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitMissingInputNeedsHuman",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitTemplateRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPreservesExistingSettings",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitProjectURLRules",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRefusesUnsafeInputs",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRejectsInvalidUTF8Flags",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitInputDiagnosticsDeterministic",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPreviewDeterministic",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRerunIsNoOp",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPreviewTruncatesOnlyDisplay",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitJSONMatchesSchema",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRefusesFileRoleCollisions",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPreservesNearLimitManifestWithoutEdit"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
