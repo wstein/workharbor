@@ -851,7 +851,22 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoverySpecialFileRefused",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRootSuffixCannotHideSymlink",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitProposalWizardFlagParity",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitModes"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitModes",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitFileChangedSincePreview",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyCreatesAndValidates",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitFailureInjectionRollback",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRollbackRestoresOverwriteModeAndBytes",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRollbackIncompleteExits73",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyNoOpAndDryRunPreserveFiles",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPathAppearingAfterPreviewRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitOverwritePreservesModeBeyondUmask",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyRejectsModeChange",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitOverwriteTemporaryReplacementRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitOverwriteFailureInjectionEveryStep",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitOverwriteTargetChangeBeforeRenameRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPermissionFailureNamesTarget",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRollbackRefusesReplacedDirectory",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyHostileTargetsRefused"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
