@@ -16,8 +16,10 @@ Supported profile: `/opt/bundledock/toolbox`; `sha256:` plus 64 lowercase hex;
 40/64 lowercase hex source revision; `linux/amd64` or `linux/arm64`; read-only;
 `bin` directory and regular files `share/shell/init.bash`, `share/shell/init.zsh`,
 `share/fish/vendor_conf.d/bdock-shell.fish`,
-`share/nushell/vendor/autoload/bdock-shell.nu`. Missing or unsupported description
-returns `unsupported_attachment`. This is a layout compatibility check, not a
+`share/nushell/vendor/autoload/bdock-shell.nu`. A nil description explicitly means
+absent attachment and produces the removal/Starship-off plan without rc fragments.
+A non-nil description with missing or unsupported fields returns
+`unsupported_attachment`. This is a layout compatibility check, not a
 filesystem check; symlink resolution/integrity belong to the future attacher.
 
 Environment map keys must be nonempty and contain neither `=` nor NUL; values

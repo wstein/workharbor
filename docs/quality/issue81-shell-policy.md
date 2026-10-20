@@ -60,3 +60,18 @@ Always disabling BundleDock Starship avoids choosing the open shared-HOME trust
 mode. It does not isolate same-user agents from user rc edits or existing prompts.
 No carrier is built/published, attachment installed, shell launched for a user,
 runtime/dispatch activated, or deployment performed by this policy slice.
+
+## Current source observation (2026-10-20)
+
+At reviewed baseline `ce3cfc83f766aa4f41be092f6b55dee1d98b2754`, policy
+last-modification commit `b2b725eedfad22bc50e2d69563b38694becc2e25` is an ancestor
+of main; policy and contract bytes match that ancestor. The original pilot object
+is unavailable locally. The dated dependency account above is historical, not a
+current requirement to obtain that pilot before continuing the pure port.
+
+Offline local Go verification at that baseline passed the full policy package,
+the isolated temporary-file Bash surrogate, focused vet, formatting (empty output)
+and `git diff --check`. These source checks do not establish full repository
+acceptance: `make check` was not run because its application/assets builds require
+explicit authorization. T001 remains unchecked, and runtime/adoption acceptance
+remains unverified.
