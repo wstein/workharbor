@@ -435,6 +435,16 @@ func TestInitFlagsMatchContract(t *testing.T) {
 				t.Errorf("%v: exit %d stderr %q, want the unavailable refusal, not a flag error", args, got.code, got.err)
 			}
 		}
+		for _, flags := range [][]string{{"--overwrite=workharbor.json"}, {"--overwrite=workharbor.json", "--overwrite=AGENTS.md"}} {
+			got := run(t, nil, append(append([]string{}, sp...), flags...)...)
+			if got.code != 64 || !strings.Contains(got.err, "workspace.init is not available") {
+				t.Errorf("%v %v: want unavailable refusal, got %+v", sp, flags, got)
+			}
+		}
+		missing := run(t, nil, append(append([]string{}, sp...), "--overwrite")...)
+		if missing.code != 64 || !strings.Contains(missing.err, "flag needs an argument") {
+			t.Errorf("%v --overwrite: want missing path usage error, got %+v", sp, missing)
+		}
 		bogus := run(t, nil, append(append([]string{}, sp...), "--bogus")...)
 		if bogus.code != 64 || !strings.Contains(bogus.err, "unknown flag") || !strings.Contains(bogus.err, "workspace.init") {
 			t.Errorf("%v --bogus: exit %d stderr %q", sp, bogus.code, bogus.err)
@@ -448,7 +458,7 @@ func TestInitFlagsMatchContract(t *testing.T) {
 
 func isBoolFlag(flag string) bool {
 	switch flag {
-	case "--non-interactive", "--yes", "--dry-run", "--overwrite", "--no-agents-block", "--json":
+	case "--non-interactive", "--yes", "--dry-run", "--no-agents-block", "--json":
 		return true
 	}
 	return false
