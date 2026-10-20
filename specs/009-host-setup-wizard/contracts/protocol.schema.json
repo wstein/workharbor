@@ -2,34 +2,317 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://workharbor.invalid/specs/009-host-setup-wizard/contracts/protocol.schema.json",
   "title": "Run protocol record, one JSON object per line (proposed)",
-  "description": "Append-only `<state>/protocols/<run-id>.jsonl` for a real run of `whr setup` or `whr doctor --fix`; `<run-id>.txt` renders it (FR-019). Mode 0600 in a 0700 directory. No password, token, git value or environment content. Not written for `no`, --dry-run or plain doctor.",
+  "description": "Append-only real-run audit record. Confirmed no-op runs also log; no, --dry-run and plain doctor do not. JSON is authoritative and text renders it. Type-specific payloads are required and unrelated payload fields are rejected. Sequence, secret redaction, 0600/0700 modes, append-only durability and no-follow creation remain behavioral acceptance; schema validity alone proves none of them.",
   "type": "object",
-  "required": ["type", "run_id", "time"],
+  "required": [
+    "type",
+    "run_id",
+    "time"
+  ],
   "properties": {
-    "type": {"enum": ["run_start", "selection", "step", "backup", "diff", "run_end"]},
-    "run_id": {"type": "string", "pattern": "^[0-9a-f]{16}$"},
-    "time": {"type": "string", "format": "date-time"},
-    "command": {"enum": ["setup", "doctor_fix"]},
-    "platform": {"type": "string"},
-    "catalogue_version": {"type": "string"},
-    "answer": {"enum": ["yes", "customize", "flags"]},
-    "selected": {"type": "array", "items": {"type": "string"}},
-    "opted_out": {"type": "array", "items": {"type": "string"}},
-    "step_id": {"type": "string"},
-    "kind": {"type": "string"},
-    "item": {"type": "string"},
-    "argv": {"type": "array", "items": {"type": "string"}},
-    "sudo": {"type": "boolean"},
-    "network": {"type": "boolean"},
-    "exit_status": {"type": ["integer", "null"]},
-    "result": {"type": "string"},
-    "path": {"type": "string", "description": "~-relative"},
-    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-    "added_lines": {"type": "integer"},
-    "removed_lines": {"type": "integer"},
-    "exit_code": {"type": "integer"},
-    "applied": {"type": "array", "items": {"type": "string"}},
-    "remaining": {"type": "array", "items": {"type": "string"}}
+    "type": {
+      "enum": [
+        "run_start",
+        "selection",
+        "step",
+        "backup",
+        "diff",
+        "run_end"
+      ]
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{16}$"
+    },
+    "time": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$",
+      "description": "UTC timestamp; validators must assert date-time format."
+    },
+    "command": {
+      "enum": [
+        "setup",
+        "doctor_fix"
+      ]
+    },
+    "platform": {
+      "type": "string",
+      "minLength": 1
+    },
+    "catalogue_version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+    },
+    "answer": {
+      "enum": [
+        "yes",
+        "customize",
+        "flags"
+      ]
+    },
+    "selected": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{1,31}$"
+      }
+    },
+    "opted_out": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9-]{1,31}$"
+      }
+    },
+    "step_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "detect",
+        "brew_install",
+        "brew_upgrade",
+        "dotfile_create",
+        "dotfile_replace",
+        "git_config_move",
+        "socket_verify",
+        "privileged_exec",
+        "profile_write"
+      ]
+    },
+    "item": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$"
+    },
+    "argv": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "sudo": {
+      "type": "boolean"
+    },
+    "network": {
+      "type": "boolean"
+    },
+    "exit_status": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 255,
+      "description": "Child exit status when available; null if no child status exists, including interruption before a status."
+    },
+    "result": {
+      "enum": [
+        "applied",
+        "unchanged",
+        "declined",
+        "opted_out",
+        "blocked",
+        "failed",
+        "skipped",
+        "rolled_back"
+      ]
+    },
+    "path": {
+      "type": "string",
+      "pattern": "^~/",
+      "not": {
+        "pattern": "(^|/)\\.\\.?(/|$)|//"
+      },
+      "description": "Home-relative backup path, with no traversal or double slash."
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "added_lines": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "removed_lines": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "exit_code": {
+      "enum": [
+        0,
+        64,
+        68,
+        70,
+        71,
+        72,
+        73,
+        74
+      ]
+    },
+    "applied": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "remaining": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "properties": {
+        "type": {
+          "const": "run_start"
+        }
+      },
+      "required": [
+        "command",
+        "platform",
+        "catalogue_version"
+      ],
+      "propertyNames": {
+        "enum": [
+          "type",
+          "run_id",
+          "time",
+          "command",
+          "platform",
+          "catalogue_version"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "selection"
+        }
+      },
+      "required": [
+        "answer",
+        "selected",
+        "opted_out"
+      ],
+      "propertyNames": {
+        "enum": [
+          "type",
+          "run_id",
+          "time",
+          "answer",
+          "selected",
+          "opted_out"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "step"
+        }
+      },
+      "required": [
+        "step_id",
+        "kind",
+        "item",
+        "argv",
+        "sudo",
+        "network",
+        "exit_status",
+        "result"
+      ],
+      "propertyNames": {
+        "enum": [
+          "type",
+          "run_id",
+          "time",
+          "step_id",
+          "kind",
+          "item",
+          "argv",
+          "sudo",
+          "network",
+          "exit_status",
+          "result"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "backup"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "propertyNames": {
+        "enum": [
+          "type",
+          "run_id",
+          "time",
+          "path",
+          "sha256"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "diff"
+        }
+      },
+      "required": [
+        "step_id",
+        "item",
+        "added_lines",
+        "removed_lines"
+      ],
+      "propertyNames": {
+        "enum": [
+          "type",
+          "run_id",
+          "time",
+          "step_id",
+          "item",
+          "added_lines",
+          "removed_lines"
+        ]
+      }
+    },
+    {
+      "properties": {
+        "type": {
+          "const": "run_end"
+        }
+      },
+      "required": [
+        "exit_code",
+        "applied",
+        "remaining"
+      ],
+      "propertyNames": {
+        "enum": [
+          "type",
+          "run_id",
+          "time",
+          "exit_code",
+          "applied",
+          "remaining"
+        ]
+      }
+    }
+  ]
 }

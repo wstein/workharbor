@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "description": "Offline TEST ONLY protocol records; never executed. Full sequence and secret/redaction evidence remain T006 acceptance.",
+  "positive": [
+    {
+      "id": "run_start",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_start",
+        "command": "setup",
+        "platform": "darwin",
+        "catalogue_version": "2026.10.1"
+      }
+    },
+    {
+      "id": "selection",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "selection",
+        "answer": "customize",
+        "selected": [
+          "jq",
+          "git-config"
+        ],
+        "opted_out": [
+          "bat"
+        ]
+      }
+    },
+    {
+      "id": "step",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step",
+        "step_id": "jq.brew_install",
+        "item": "jq",
+        "kind": "brew_install",
+        "argv": [
+          "/opt/homebrew/bin/brew",
+          "install",
+          "jq"
+        ],
+        "sudo": false,
+        "network": true,
+        "exit_status": 0,
+        "result": "applied"
+      }
+    },
+    {
+      "id": "backup",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "backup",
+        "path": "~/.local/state/whr/backups/0123456789abcdef/starship.toml",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "diff",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "diff",
+        "step_id": "starship.dotfile_replace",
+        "item": "starship",
+        "added_lines": 1,
+        "removed_lines": 1
+      }
+    },
+    {
+      "id": "run_end",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_end",
+        "exit_code": 0,
+        "applied": [
+          "jq.brew_install"
+        ],
+        "remaining": []
+      }
+    }
+  ],
+  "negative": [
+    {
+      "id": "run_start_payload_absent",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_start"
+      }
+    },
+    {
+      "id": "selection_payload_absent",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "selection"
+      }
+    },
+    {
+      "id": "step_payload_absent",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step"
+      }
+    },
+    {
+      "id": "backup_payload_absent",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "backup"
+      }
+    },
+    {
+      "id": "diff_payload_absent",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "diff"
+      }
+    },
+    {
+      "id": "run_end_payload_absent",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_end"
+      }
+    },
+    {
+      "id": "step_kind_open",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step",
+        "step_id": "jq.brew_install",
+        "item": "jq",
+        "kind": "docker_vm_modify",
+        "argv": [
+          "/opt/homebrew/bin/brew",
+          "install",
+          "jq"
+        ],
+        "sudo": false,
+        "network": true,
+        "exit_status": 0,
+        "result": "applied"
+      }
+    },
+    {
+      "id": "step_result_open",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step",
+        "step_id": "jq.brew_install",
+        "item": "jq",
+        "kind": "brew_install",
+        "argv": [
+          "/opt/homebrew/bin/brew",
+          "install",
+          "jq"
+        ],
+        "sudo": false,
+        "network": true,
+        "exit_status": 0,
+        "result": "probably_ok"
+      }
+    },
+    {
+      "id": "step_negative_status",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step",
+        "step_id": "jq.brew_install",
+        "item": "jq",
+        "kind": "brew_install",
+        "argv": [
+          "/opt/homebrew/bin/brew",
+          "install",
+          "jq"
+        ],
+        "sudo": false,
+        "network": true,
+        "exit_status": -1,
+        "result": "applied"
+      }
+    },
+    {
+      "id": "step_status_too_large",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step",
+        "step_id": "jq.brew_install",
+        "item": "jq",
+        "kind": "brew_install",
+        "argv": [
+          "/opt/homebrew/bin/brew",
+          "install",
+          "jq"
+        ],
+        "sudo": false,
+        "network": true,
+        "exit_status": 256,
+        "result": "applied"
+      }
+    },
+    {
+      "id": "diff_negative_added",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "diff",
+        "step_id": "starship.dotfile_replace",
+        "item": "starship",
+        "added_lines": -1,
+        "removed_lines": 1
+      }
+    },
+    {
+      "id": "diff_negative_removed",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "diff",
+        "step_id": "starship.dotfile_replace",
+        "item": "starship",
+        "added_lines": 1,
+        "removed_lines": -1
+      }
+    },
+    {
+      "id": "diff_fractional_count",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "diff",
+        "step_id": "starship.dotfile_replace",
+        "item": "starship",
+        "added_lines": 1.5,
+        "removed_lines": 1
+      }
+    },
+    {
+      "id": "run_end_reserved_exit",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_end",
+        "exit_code": 75,
+        "applied": [
+          "jq.brew_install"
+        ],
+        "remaining": []
+      }
+    },
+    {
+      "id": "backup_absolute_path",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "backup",
+        "path": "/tmp/backup",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "backup_parent_escape",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "backup",
+        "path": "~/../backup",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "selection_duplicate_id",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "selection",
+        "answer": "customize",
+        "selected": [
+          "jq",
+          "jq"
+        ],
+        "opted_out": [
+          "bat"
+        ]
+      }
+    },
+    {
+      "id": "selection_unknown_answer",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "selection",
+        "answer": "maybe",
+        "selected": [
+          "jq",
+          "git-config"
+        ],
+        "opted_out": [
+          "bat"
+        ]
+      }
+    },
+    {
+      "id": "step_unrelated_payload",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step",
+        "step_id": "jq.brew_install",
+        "item": "jq",
+        "kind": "brew_install",
+        "argv": [
+          "/opt/homebrew/bin/brew",
+          "install",
+          "jq"
+        ],
+        "sudo": false,
+        "network": true,
+        "exit_status": 0,
+        "result": "applied",
+        "answer": "yes"
+      }
+    },
+    {
+      "id": "run_start_invalid_catalogue",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_start",
+        "command": "setup",
+        "platform": "darwin",
+        "catalogue_version": "latest"
+      }
+    },
+    {
+      "id": "run_start_non_utc",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T20:00:00+02:00",
+        "type": "run_start",
+        "command": "setup",
+        "platform": "darwin",
+        "catalogue_version": "2026.10.1"
+      }
+    },
+    {
+      "id": "run_start_bad_timestamp",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "not-a-date",
+        "type": "run_start",
+        "command": "setup",
+        "platform": "darwin",
+        "catalogue_version": "2026.10.1"
+      }
+    },
+    {
+      "id": "unknown_property",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_start",
+        "command": "setup",
+        "platform": "darwin",
+        "catalogue_version": "2026.10.1",
+        "unknown": true
+      }
+    },
+    {
+      "id": "run_start_null_command",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "run_start",
+        "command": null,
+        "platform": "darwin",
+        "catalogue_version": "2026.10.1"
+      }
+    },
+    {
+      "id": "step_null_sudo",
+      "record": {
+        "run_id": "0123456789abcdef",
+        "time": "2026-10-20T18:00:00Z",
+        "type": "step",
+        "step_id": "jq.brew_install",
+        "item": "jq",
+        "kind": "brew_install",
+        "argv": [
+          "/opt/homebrew/bin/brew",
+          "install",
+          "jq"
+        ],
+        "sudo": null,
+        "network": true,
+        "exit_status": 0,
+        "result": "applied"
+      }
+    }
+  ]
+}
