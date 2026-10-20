@@ -1793,6 +1793,42 @@
     "manifest.schema",
     "manifest.path_invalid"
    ]
+  },
+  {
+   "id": "depth-brackets-inside-string",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "x": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[["
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "brackets inside a JSON string do not increase structural depth"
+  },
+  {
+   "id": "depth-escaped-quote-and-backslash-inside-string",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "x": "\"[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\\"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ],
+   "note": "escaped quotes and backslashes preserve string state during the depth scan"
+  },
+  {
+   "id": "raw-top-level-array-lone-surrogate",
+   "raw_text": "[\"\\ud800\"]",
+   "expect_codes": [
+    "manifest.encoding"
+   ],
+   "note": "array-only input still rejects a lone surrogate before checking the object shape"
   }
  ]
 }
