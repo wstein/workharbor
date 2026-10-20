@@ -1,5 +1,32 @@
 # Implementation Plan: WorkHarbor installable pilot
 
+## Owner delivery order (2026-10-20)
+
+Deliver validator/CLI foundation → usable init core → wizard/devcontainer reuse/
+generic agent templates → developer and agent sandbox integration. This is delivery
+priority, not a change to any task's dependency table, scope or approval gate.
+
+| Milestone | Existing work and required result |
+| --- | --- |
+| 1 | 006/T025–T028: consistent command/error/output contracts and validator safety/current-format evidence; retain required coverage bindings. |
+| 2 | 006/T030: usable init with preview, no-write dry-run, per-path overwrite consent, stale-preview guards, rollback/partial failure and no-op rerun. |
+| 3 | 006/T031–T033, T036/T037: wizard/flag parity, byte-preserving devcontainer reuse and generic authored agent configuration; no native-agent launch or credential relay. |
+| 4 | Existing [008 handoff](../008-workspace-sandbox/HANDOFF.md): Stage 1/T001–T010 is library/admission/profile/fake-provider work; Stage 2/T011–T016 reuses 006/T038 and retains 008/T008 plus 006/T038-on-main prerequisites. 006/T038 lifecycle and T039 drift support integration and do not take delivery priority over init. |
+
+006/T034 retains its own prerequisites/acceptance scope and does not by itself
+certify T036/T037 or the whole third milestone. Feature 008 is Draft; main inclusion
+is not exact-head feature or implementation approval. Its actual single-task and
+spec/plan/task approval gates remain, including T017's owner-approved ADR 0014
+amendment and the concrete error.refusal schema approval before T016 registration.
+OD-1–OD-5 are recorded decisions. OD-5 is resolved by [Feature 009](../009-host-setup-wizard/plan.md)
+DP-4/AP-8: doctor check `git.global_config` and the `git-config` step of macOS setup/
+`doctor --fix`, with no separate move command. Do not restart these decisions or invent a parallel M0.
+Opaque argv exec remains a later semantic ADR proposal, outside Stage 1 and T016;
+006/FR-030 native-agent launch/credential boundaries remain. Fake-provider tests
+prove no real Docker, host or isolation acceptance. Builds, live acceptance,
+activation, publication and release retain their explicit owner-operation gates.
+
+
 Branch: `feat/installable-pilot` | Date: 2026-10-14
 Spec: [spec.md](spec.md)
 Baseline: `f02250fc75b1e72a1d949edaee128e31fffbaa53`
