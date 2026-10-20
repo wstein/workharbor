@@ -531,6 +531,8 @@
   "retained_assertion_failures": [],
   "application_tests": {
     "whr": [
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile/TestProtocolAcceptsRequiredAuditPayload",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile/TestProtocolRejectsMissingAuditPayloadAndInvalidValues",
       "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestScaffoldRefusesProductCommands",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/resources/TestCPUVectors",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/resources/TestMemoryVectors",
