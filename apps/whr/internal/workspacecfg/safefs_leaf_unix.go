@@ -13,16 +13,11 @@ import (
 
 // openLeafNoFollow opens one component relative to an already-held parent.
 // Root.OpenFile deliberately resolves in-root links even with O_NOFOLLOW.
-func openLeafNoFollow(parent *os.Root, leaf string) (*os.File, error) {
+func openLeafNoFollow(parent *directoryHandle, leaf string) (*os.File, error) {
 	if leaf == "" || leaf == "." || leaf == ".." || strings.Contains(leaf, "/") {
 		return nil, os.ErrPermission
 	}
-	directory, err := parent.Open(".")
-	if err != nil {
-		return nil, err
-	}
-	defer directory.Close()
-	raw, err := directory.SyscallConn()
+	raw, err := parent.file.SyscallConn()
 	if err != nil {
 		return nil, err
 	}
