@@ -37,8 +37,8 @@ func (o Options) validate() error {
 	if o.Template != nil {
 		return exitcode.Errorf(exitcode.PathBadArguments, "--template: starters are unsupported")
 	}
-	if o.Devcontainer != nil {
-		return exitcode.Errorf(exitcode.PathBadArguments, "--devcontainer is not in this release")
+	if o.Devcontainer != nil && !relativePath(*o.Devcontainer) {
+		return exitcode.Errorf(exitcode.PathBadArguments, "--devcontainer needs a safe relative file path")
 	}
 	for _, setting := range []struct {
 		name  string

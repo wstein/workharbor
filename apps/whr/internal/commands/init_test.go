@@ -92,7 +92,7 @@ func TestInitPublicInvalidFlagsBeforeFilesystemOrConsent(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "absent")
 	for _, flags := range [][]string{
 		{"--non-interactive", "--template=unsupported"},
-		{"--non-interactive", "--devcontainer=custom.json"},
+		{"--non-interactive", "--devcontainer=../custom.json"},
 		{"--dry-run", "--name=BAD!"}, {"--dry-run", "--human-shell=unknown"},
 		{"--dry-run", "--project-url=file:///tmp/project"},
 		{"--dry-run", "--overwrite=../escape"},
