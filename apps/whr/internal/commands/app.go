@@ -17,6 +17,8 @@ import (
 // Env is everything a run reads from its surroundings, so tests can fix it.
 type Env struct {
 	Stdout, Stderr io.Writer
+	Stdin          io.Reader
+	InputTerminal  bool
 	// Getenv reads an environment variable (NO_COLOR, TERM).
 	Getenv func(string) string
 	// IsTerminal reports whether a stream is an interactive terminal.
