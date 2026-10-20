@@ -802,7 +802,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestValidateRenderReportEscapesEachUntrustedField",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRefusesInternalSymlinkComponents",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapWriter",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapStopsWriter"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapStopsWriter",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestManifestProjectPathMinimumCountsUnicodeCharacters"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
