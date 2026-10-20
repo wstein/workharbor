@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package plan builds and seals typed host setup steps; it never applies them.
+// Package plan builds, seals and orchestrates host setup steps through injected ports.
 package plan
 
 import (
