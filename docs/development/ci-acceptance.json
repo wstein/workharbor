@@ -797,7 +797,12 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateGitWalkBudgetIsShared",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateMultiPackIndexDirectoryIsNarrow",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestNetnsCandidatesDropPrivilegesAndRequirementIsSet",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestRunBoundedKillsTheGroupOnTimeout"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestRunBoundedKillsTheGroupOnTimeout",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestValidateHumanReportEscapesDirectorySubjectAndMessage",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestValidateRenderReportEscapesEachUntrustedField",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRefusesInternalSymlinkComponents",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapWriter",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapStopsWriter"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
