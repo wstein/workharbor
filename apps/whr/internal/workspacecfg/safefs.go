@@ -49,6 +49,9 @@ func unsafeErr(format string, args ...any) *accessError {
 type dir struct {
 	root *os.Root
 	abs  string
+	// beforeFileOpen is a per-directory synchronization seam for package tests.
+	// Production leaves it nil. It runs after leaf inspection, before open.
+	beforeFileOpen func()
 }
 
 // openDir opens path as the root of the walk.
@@ -329,7 +332,10 @@ func (d *dir) readFile(rel string, limit int64) ([]byte, *accessError) {
 	if info.Size() > limit {
 		return nil, &accessError{kind: accTooLarge, why: "is larger than its limit"}
 	}
-	f, oerr := cur.OpenFile(leaf, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if d.beforeFileOpen != nil {
+		d.beforeFileOpen()
+	}
+	f, oerr := openLeafNoFollow(cur, leaf)
 	if oerr != nil {
 		if errors.Is(oerr, fs.ErrNotExist) {
 			return nil, &accessError{kind: accMissing, why: "does not exist"}

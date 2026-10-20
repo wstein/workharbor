@@ -803,7 +803,12 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestValidateRefusesInternalSymlinkComponents",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapWriter",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestExecRunnerOutputCapStopsWriter",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestManifestProjectPathMinimumCountsUnicodeCharacters"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestManifestProjectPathMinimumCountsUnicodeCharacters",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestReadFileRefusesLeafIdentityReplacement",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestReadFileNoFollowRefusesLinkToInspectedInode",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestReadFileLeafOpenUsesHeldParent",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenLeafNoFollowReturnsBlockingFile",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenLeafNoFollowRefusesNonLeafNames"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

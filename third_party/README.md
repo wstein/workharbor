@@ -30,3 +30,6 @@ heroicons/daisyUI Git revisions are recorded in the control-plane `mix.lock`.
 
 The `whr` CLI's Cobra, pflag and mousetrap notices and the test-only schema validator
 are described in [cobra/PROVENANCE.md](cobra/PROVENANCE.md).
+
+The `whr` CLI's Unix no-follow leaf helper uses Go x/sys; its license and
+patent-grant notices are recorded in [x-sys/PROVENANCE.md](x-sys/PROVENANCE.md).
