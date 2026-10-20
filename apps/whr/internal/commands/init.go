@@ -44,7 +44,7 @@ func initWithApply(ctx context.Context, call Call, apply func(context.Context, *
 	if len(call.Args) == 1 {
 		directory = call.Args[0]
 	}
-	snapshot, err := scaffold.Discover(ctx, directory)
+	snapshot, err := scaffold.DiscoverWithOptions(ctx, directory, invocation.options)
 	if err != nil {
 		return Result{}, initFailure(ctx, directory, invocation.options.DryRun, nil, err)
 	}

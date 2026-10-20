@@ -84,7 +84,7 @@ func TestInitProjectURLRules(t *testing.T) {
 }
 
 func TestInitRefusesUnsafeInputs(t *testing.T) {
-	for _, o := range []scaffold.Options{{DryRun: true, Name: str("Upper")}, {DryRun: true, HumanShell: str("csh")}, {DryRun: true, StartDir: str("../outside")}, {DryRun: true, Overwrite: []string{".git/config"}}, {DryRun: true, Overwrite: []string{"../a"}}, {DryRun: true, Devcontainer: str("custom.json")}, {DryRun: true, Name: str("")}} {
+	for _, o := range []scaffold.Options{{DryRun: true, Name: str("Upper")}, {DryRun: true, HumanShell: str("csh")}, {DryRun: true, StartDir: str("../outside")}, {DryRun: true, Overwrite: []string{".git/config"}}, {DryRun: true, Overwrite: []string{"../a"}}, {DryRun: true, Devcontainer: str("../custom.json")}, {DryRun: true, Name: str("")}} {
 		_, err := scaffold.Build(snapshot(), o)
 		if int(exitcode.FromError(err)) != 64 {
 			t.Errorf("invalid input accepted: %v", err)

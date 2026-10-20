@@ -143,6 +143,10 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 			p.preview.Settings["project"] = Setting{*doc.Project, "existing"}
 		}
 	}
+	selectionChanged := o.Devcontainer != nil && *o.Devcontainer != doc.DevcontainerPath
+	if o.Devcontainer != nil {
+		doc.DevcontainerPath = *o.Devcontainer
+	}
 	flags := map[string]*string{"name": o.Name, "start_dir": o.StartDir, "human_shell": o.HumanShell, "console_mode": o.ConsoleMode, "shortcuts": o.Shortcuts}
 	values := map[string]*string{"name": &doc.Name, "start_dir": &doc.StartDir, "human_shell": &doc.HumanShell, "console_mode": &doc.ConsoleMode, "shortcuts": &doc.Shortcuts}
 	for key, flag := range flags {
@@ -170,13 +174,13 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 		}
 	}
 	var chosen []byte
-	if exists && !o.requestsEdit() {
+	if exists && !o.requestsEdit() && !selectionChanged {
 		chosen = old.Data
 	} else {
 		chosen, _ = json.MarshalIndent(doc, "", "  ")
 		chosen = append(chosen, '\n')
 		if checked := workspacecfg.CheckManifest(chosen); len(checked.Findings) != 0 {
-			if !o.requestsEdit() {
+			if !o.requestsEdit() && !selectionChanged {
 				return nil, exitcode.Errorf(exitcode.PathUnclassified, "generated proposal failed self-validation")
 			}
 			return nil, exitcode.Errorf(exitcode.PathBadArguments, "init settings fail current manifest validation; check --name, --project-url, --start-dir, --human-shell, --console-mode and --shortcuts")

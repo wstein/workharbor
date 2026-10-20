@@ -24,6 +24,10 @@ func discoveryConflict() error {
 }
 
 func discover(ctx context.Context, directory string, beforeOpen func(string)) (Snapshot, error) {
+	return discoverSelected(ctx, directory, beforeOpen, nil)
+}
+
+func discoverSelected(ctx context.Context, directory string, beforeOpen func(string), selected *string) (Snapshot, error) {
 	s := Snapshot{Directory: directory, Entries: map[string]Entry{}}
 	if err := ctx.Err(); err != nil {
 		return s, err
@@ -90,6 +94,9 @@ func discover(ctx context.Context, directory string, beforeOpen func(string)) (S
 		}
 		dc = m.Manifest.DevcontainerPath
 		projects = m.Manifest.ProjectsPath
+	}
+	if selected != nil {
+		dc = *selected
 	}
 	for _, target := range []struct {
 		name, kind string
