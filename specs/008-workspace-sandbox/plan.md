@@ -30,8 +30,8 @@ later provider specification that adds a provider and its tests and changes no c
 | T025 foundation (`exitcode`, `output`) | exit table and envelope types | prerequisite of 008 T004 |
 | T038 local lifecycle (`localdocker`: 5 s bounded inspection, ownership gate, volume protection) | the `DockerAPI` port, label gate and `bundledock-*` protection | 008 Stage 2 reuses it; if T038 is not on `main`, stop and ask instead of reimplementing |
 | T039 drift reporting | none; tool-mount drift stays there | no overlap: 008 only forbids writable tool mounts |
-| T027 doctor catalogue, T016 | the read-only git-config check (OD-5, option B) would be a catalogue section | wiring is owner gate OG-5; T005 ships the library only |
-| T015 host setup | none; FR-026's Mac-host step is not T015 | OD-5 (recommended B) keeps `setup` unchanged; T015 and FR-009 are not changed here |
+| T027 doctor catalogue, T016 | the read-only git-config check is the doctor check `git.global_config` (OD-5, resolved by Feature 009) | wiring is owner gate OG-5, Feature 009 T011; T005 ships the library only |
+| T015 host setup | none; FR-026's Mac-host step is not T015 | OD-5 (resolved by Feature 009): the Mac-host step is the macOS `setup` wizard of Feature 009; T015 and FR-009 stay Linux-only and are not changed here |
 
 ## Staging for Codex
 
@@ -80,14 +80,14 @@ Owner repository is `wstein/workharbor` for all rows except the Anchorage consum
 | FR-017, SC-007 | T013, 006/T038 | `TestCancelPreservesResults`, `TestCleanupOnlyTouchesLabelledObjects` | `apps/whr/internal/runtime/docker/*_test.go` |
 | FR-028, FR-029, FR-035, SC-008 | T003 | `TestExitMappingMatchesADR0013`; per-PR `git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr` empty | `apps/whr/internal/sandbox/exit_test.go`; PR description |
 | FR-014, FR-034, SC-010 | T009 | `TestConformanceSuiteSecondProvider`, `TestNoProviderKindBranchesInProductionCode` | `apps/whr/internal/runtime/conformance/` |
-| FR-026 | OD-5 | amendment proposal (T010); a check command and its test follow the decision | spec 006 amendment PR (later) |
+| FR-026 | OD-5 (resolved) | amendment proposal (T010); the check and the move are carried by Feature 009 (`git.global_config`, `git-config` step) | Feature 009 T005, T007, T011 |
 | Real Docker confirmation (EBUSY, mounts, cleanup) | owner authorization (OG-1) | out of this increment | owner-run record |
 | Anchorage devcontainer integration | owner | `make devcontainer-test` in Anchorage | Anchorage workflow |
 
 ## Owner decisions
 
 Resolved on 2026-10-20 and recorded in the spec: the git configuration profile, backend neutrality, the PR target (`main`), the
-owner statement on the Mac host and the Docker VM, and OD-1 to OD-4 below.
+owner statement on the Mac host and the Docker VM, and OD-1 to OD-5 below.
 
 | ID | Decision (owner, 2026-10-20) |
 | --- | --- |
@@ -95,18 +95,17 @@ owner statement on the Mac host and the Docker VM, and OD-1 to OD-4 below.
 | OD-2 | An additive optional `error.refusal` field in `contracts/cli/output.schema.json`, with a freeze test. Still an owner gate before any command registration. |
 | OD-3 | Agent git profile v1 and the host-only catalogue, including the five extension keys, are accepted as proposed (v1 "accepted by owner 2026-10-20"); the per-key rationale tables stay. The first tests still verify behavior against real git. |
 | OD-4 | A new `sandbox` group, option A. It needs an ADR 0014 amendment; commands are registered in Stage 2 only (T016). Stage 1 is library plus fake provider with no new command. |
+| OD-5 | The Mac-host git check and move are carried by Feature 009: doctor check `git.global_config` and the `git-config` step of the macOS `setup` wizard and `doctor --fix`; no `whr host git-config move` command (Feature 009 DP-4, AP-8; see below). |
 
-### Open: OD-5
+### OD-5 (resolved 2026-10-20)
 
-Which command carries the Mac-host git configuration check and the guided move. In Feature 006, `whr setup` is Linux/systemd
-host enrollment (FR-009, T015) that mutates the host receiving the host agent; on macOS only `whr doctor` (read-only, already
-runs there with OrbStack), `whr validate` and `whr init` exist. Option A: amend 006 so `setup` gains a Mac-host mode. Option B:
-keep `setup` as is, add the read-only host git-config check as a section of `whr doctor`, and make the guided move (backup,
-explicit confirmation, `--dry-run` as default) a separate step, proposed name `whr host git-config move` (ADR 0014 already has a
-`host` group; the name is a proposal). **Recommendation: B**, because it changes no accepted 006 contract and keeps the report
-separate from mutation. Proposed first Mac flow: install `whr`, `whr doctor`, `whr init <project>`, then optionally the guided
-move. Stage 1 depends on OD-5 only for the read-only doctor section (T005 library; catalogue wiring is an owner gate, OG-5);
-the move is a later specification.
+Which command carries the Mac-host git configuration check and the guided move. Resolved by [Feature 009](../009-host-setup-wizard/plan.md)
+(DP-4, amendment AP-8; owner chat approval 2026-10-20, PR #164): the read-only check is the doctor check `git.global_config`; the guided
+move (backup, explicit confirmation) is the `git-config` step of the macOS `whr setup` wizard and, with `--confirm git-config`, of
+`whr doctor --fix`. There is no separate `whr host git-config move` command (the earlier options A and B, and the proposed name, are
+withdrawn). Feature 006 `setup` becomes platform-selected through Feature 009's amendments AP-1 to AP-5; T015 and FR-009 stay
+Linux-only. Stage 1 depends on OD-5 only for the read-only doctor check (T005 library; catalogue wiring is an owner gate, OG-5, Feature
+009 T011).
 
 A-3 (analysis): the earlier reading of T015 as a control-plane server is withdrawn; T015 mutates the Linux host it enrolls and
 the owner statement concerns the Docker VM. No owner-decision note on T015 is needed beyond OD-5.

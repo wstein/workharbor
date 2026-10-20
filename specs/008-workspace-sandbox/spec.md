@@ -26,7 +26,7 @@ workspace, and no statement of what a container backend does and does not protec
 
 ### Terms
 
-- **Mac host**: the owner's macOS machine, which owns `~/.gitconfig` and `~/.config/git`. Which `whr` command acts there is open (OD-5).
+- **Mac host**: the owner's macOS machine, which owns `~/.gitconfig` and `~/.config/git`. The `whr` commands that act there are the macOS `whr setup` wizard step `git-config` and the doctor check `git.global_config` of [Feature 009](../009-host-setup-wizard/spec.md) (OD-5, resolved 2026-10-20).
 - **Docker VM**: the Linux VM of the container provider (for example OrbStack). `whr` never changes it and only reads and
   verifies from inside.
 - **Sandbox backend**: the per-job isolation chosen through a RuntimeProvider: a container sharing the Docker VM kernel
@@ -55,9 +55,12 @@ workspace, and no statement of what a container backend does and does not protec
   daemon or VM settings, kernel or VM-level mounts; inside the Docker VM and the sandbox backend `whr` only reads and verifies
   (preflight). The global git configuration check, and the optional move to `~/.config/git`, belong on the Mac host: the check
   always runs and is a read-only report; the move is only a guided step with a backup and explicit confirmation, never silent.
-  Which command carries them is open (OD-5; recommended: a read-only `doctor` section plus a separate guided move): Feature 006 FR-009/FR-026 and T015 define `whr setup` as Linux/systemd host
-  enrollment of the host that receives the host agent, and T015 mutates that host; the owner statement concerns the Docker VM,
-  not T015's host. This feature does not change T015 or FR-009.
+  OD-5 is resolved by [Feature 009](../009-host-setup-wizard/spec.md) (owner chat approval of AP-8 on 2026-10-20, PR #164): the check is the
+  read-only `doctor` check `git.global_config`; the guided move is the `git-config` step of the macOS `whr setup` wizard (and of
+  `whr doctor --fix` with `--confirm git-config`); there is no separate `whr host git-config move` command. Feature 006 FR-009/FR-026
+  and T015 define `whr setup` as Linux/systemd host enrollment of the host that receives the host agent, and T015 mutates that host;
+  the owner statement concerns the Docker VM, not T015's host. This feature does not change T015 or FR-009; Feature 006 is amended by
+  Feature 009 (AP-1 to AP-5) so that `setup` is platform-selected (macOS wizard, Linux enrollment).
 - **2026-10-20 (backend neutrality)**: microVMs are treated like containers later. One sandbox lifecycle, one command
   surface and one profile, ownership, retention and cleanup model serve every RuntimeProvider; a microVM is another provider
   that declares other capabilities (its own guest kernel), not a separate concept or command family. A protection the
@@ -257,8 +260,9 @@ outside the instance's own labelled set is touched.
   `developer` and absent in `cooperative_job` and `untrusted_job`; a canary in the agent profile is the reverse.
 - **FR-026**: Checking, and optionally moving, the host global git configuration to `~/.config/git` happens on the Mac host
   (owner statement, 2026-10-20): the check always runs and is a read-only report; the move is guided, makes a backup first,
-  needs explicit confirmation and is never silent. `whr` never alters the Docker VM. The carrying command is open (OD-5, recommended option B: a read-only `doctor` section and a separate guided move, proposed name `whr host git-config move`, `--dry-run` as default);
-  this increment ships only the check library (T005) and the amendment proposal (T010), not a command.
+  needs explicit confirmation and is never silent. `whr` never alters the Docker VM. The carrying commands are the doctor check `git.global_config` and the `git-config` step of the macOS `whr setup` wizard and of `whr doctor --fix`
+  (OD-5, resolved by [Feature 009](../009-host-setup-wizard/spec.md), DP-4; no separate `whr host git-config move` command); the move follows Feature 009 FR-014 (`--dry-run` previews it,
+  it needs explicit confirmation and a backup); this increment ships only the check library (T005) and the amendment proposal (T010), not a command.
 
 **Threat model**
 

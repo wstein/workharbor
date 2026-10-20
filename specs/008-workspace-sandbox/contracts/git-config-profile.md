@@ -41,15 +41,14 @@ creation result states the risk. A global `credential.helper=` in the agent prof
 earlier global and system config; it does not reset helpers in a repository-local config, which is why `cooperative_job`
 (shared local config) is acknowledged (FR-011) and `untrusted_job` gets a generated local config.
 
-## Where the check and the move run (owner statement 2026-10-20; command open, OD-5)
+## Where the check and the move run (owner statement 2026-10-20; OD-5 resolved by Feature 009)
 
 The owner stated that `whr setup` works on the Mac host and that `whr` never changes the Docker VM. The check runs on the Mac
 host every time and only reports. The move of `~/.gitconfig` to `~/.config/git/config` is guided: show the plan, write a
-backup first (`~/.gitconfig.whr-backup-<UTC timestamp>`, never overwritten), require explicit confirmation, refuse in
+verified backup first (in Feature 009's `<state>/backups/<run-id>/`, FR-013, FR-014), require explicit confirmation, refuse in
 unattended mode (needs-human, 70), verify afterwards that `git config --global --list` is unchanged in content. Inside the
 Docker VM and the sandbox backend `whr` only reads and verifies (preflight). Feature 006 defines `setup` as Linux/systemd
-enrollment of the host receiving the host agent (FR-009, T015), so which command carries the Mac-host step is decided by OD-5;
-no setup change is made here (Feature 008 T010 proposes options).
+enrollment of the host receiving the host agent (FR-009, T015), so the check is the doctor check `git.global_config` and the move is the `git-config` step of the macOS `setup` wizard and `doctor --fix` (Feature 009, DP-4).
 
 ## Preflight (before `ready`, `developer` only)
 

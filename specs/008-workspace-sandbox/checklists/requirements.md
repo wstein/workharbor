@@ -15,7 +15,7 @@ verification, review CLEAR or owner approval.
 
 ## Requirement Completeness
 
-- [x] No unresolved clarification markers; the only open item is OD-5 in the plan, with a recommendation.
+- [x] No unresolved clarification markers; OD-5 is resolved by Feature 009 (plan).
 - [x] Every FR group maps to an acceptance test and evidence location (plan: requirements to evidence).
 - [x] Success criteria SC-001 to SC-012 are testable offline.
 - [x] Edge cases listed.
@@ -34,4 +34,4 @@ verification, review CLEAR or owner approval.
 - [ ] Explicit owner approval of that head, evidenced by a tracker or PR link.
 - [x] Owner decisions OD-1 to OD-4 recorded as resolved on 2026-10-20 (plan).
 - [x] Agent git profile v1 and the host-only catalogue (including the extension keys) accepted by the owner on 2026-10-20 (OD-3).
-- [ ] Owner decision OD-5, still open (command carrying the Mac-host git configuration check) and confirmation that T015 needs no note (analysis A-3).
+- [x] Owner decision OD-5 resolved 2026-10-20 by Feature 009 (DP-4, AP-8): the Mac-host git configuration check and move are the doctor check `git.global_config` and the `git-config` step of the macOS `setup` wizard; T015 needs no note (analysis A-3).
