@@ -19,6 +19,8 @@ type Action struct {
 	DiffTruncated bool   `json:"diff_truncated,omitempty"`
 }
 type Preview struct {
+	Created                    []string             `json:"created,omitempty"`
+	Remaining                  []string             `json:"remaining,omitempty"`
 	Directory                  string               `json:"directory"`
 	DryRun                     bool                 `json:"dry_run"`
 	Actions                    []Action             `json:"actions"`
