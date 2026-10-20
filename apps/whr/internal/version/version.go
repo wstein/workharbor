@@ -72,12 +72,24 @@ func vcsRevision() string {
 	if !ok {
 		return ""
 	}
-	for _, s := range info.Settings {
-		if s.Key == "vcs.revision" {
-			return s.Value
+	return revisionFromSettings(info.Settings)
+}
+
+func revisionFromSettings(settings []debug.BuildSetting) string {
+	var revision string
+	var modified bool
+	for _, s := range settings {
+		switch s.Key {
+		case "vcs.revision":
+			revision = s.Value
+		case "vcs.modified":
+			modified = s.Value == "true"
 		}
 	}
-	return ""
+	if revision != "" && modified {
+		return revision + "-modified"
+	}
+	return revision
 }
 
 // Human renders the result for a terminal. Linker-injected fields are escaped
