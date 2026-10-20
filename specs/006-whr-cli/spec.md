@@ -1,5 +1,20 @@
 # Feature Specification: `whr` product command line
 
+## Pre-ready compatibility amendment (2026-10-20)
+
+Owner direction: implement the new requirements without premature historical
+migration/backward-compatibility obligations; schema versions remain useful for
+future evolution. Keep current `schema_version` values, strict numeric/type checks,
+closed v1/v2 shapes and all safety/conformance acceptance. Do not infer a schema
+merge, host-resolver input change, task-graph change or permission to run providers.
+Current `contract_versions` reporting, product/build identity and host/session
+protocols remain. "Freeze" tests check the current contract and required coverage;
+they do not freeze every historical accepted set or require new-version machinery
+solely for pre-ready compatibility. See the [bounded impact inventory](pre-ready-policy.md).
+This amendment changes requirements for pending init/template work; it claims no
+init implementation, prior review CLEAR, or approval of the full feature.
+
+
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
@@ -245,8 +260,8 @@ then validate shell/session preferences without provisioning a workspace.
    (`--overwrite AGENTS.md`, plus `--yes` unattended, or the owner's confirmation of that
    path in the wizard), otherwise the file is left unchanged with a warning and exit 0;
    the precedence is size (a file already over 64 KiB: `.too_large`), malformed
-   (`.malformed`), newer (never replaced), modified, older, current (no-op, no warning),
-   missing; a result over 64 KiB of a modified, older or missing edit gives `.too_large`
+   (`.malformed`), modified, current (no-op, no warning), different_template,
+   missing; a result over 64 KiB of a modified, different-template or missing edit gives `.too_large`
    (68 with the flag); an edit requested by the flag that would be refused is 68 in every mode, and a
    wizard edit without the flag that would be refused is not offered (warning printed);
    every byte outside the markers is preserved; `--no-agents-block` skips the file; a
@@ -989,15 +1004,20 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   run created it, and an incomplete rollback is a partial failure (73) listing the remaining paths and recovery steps,
   taking precedence over the original failure code; (e) SIGINT and SIGTERM trigger the rollback and exit 72; SIGKILL or a
   crash is not rolled back and the next run refuses on the leftover paths with the conflict code; (f) wizard
-  cancellation changes nothing; (g) an existing manifest of `schema_version` 1 is preserved unchanged only by a run that uses defaults alone: exit 0, and since a
-  version 1 manifest cannot hold `start_dir`, `human_shell`, `console_mode` or `shortcuts`, `settings_not_persisted` then lists
-  exactly those four defaults (never `name` or `project`, which need flags); the manifest stays creation-ready, as the resolver
-  reads only its four fields. When explicit flags would need the manifest edited, unattended init exits 70 naming
-  `--overwrite workharbor.json`; rewriting it to version 2 with that flag warns that the result is not creation-ready until
-  the resolver accepts version 2 (FR-058). A defaults-only run with `--overwrite workharbor.json` still preserves the manifest;
-  an explicit flag equal to its default counts as explicit; `--dry-run` with flags reports the same exit 70 or 0 without
-  writing; because both versions require `bundles: []`, a manifest with bundle declarations is left unchanged and reported
-  (FR-050), never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
+  cancellation changes nothing; (g) new manifests use schema_version 2. Existing manifests that pass the current
+  v1/v2 validator use the same proposal, preservation, preview and per-path overwrite rules as
+  any existing file: keep their bytes when no edit is requested, and never rewrite merely to
+  match a newer version or materialize missing defaults. An explicit requested change proposes
+  replacement using the current authoring format (v2), showing the entire diff and retaining
+  existing explicit settings; it requires ordinary per-path overwrite consent before any write.
+  A v2 proposal or written replacement MUST warn that it is not creation-ready until T035
+  makes the resolver accept version 2 (FR-058), in both preview and the reported result.
+  There is no separate defaults-only v1 workflow, automatic version bump, migration/upgrade mode
+  or `settings_not_persisted` emission. Do not claim missing/default settings were persisted when
+  their fields were not written. Explicit flags equal to defaults still count as explicit;
+  identical proposed bytes are a no-op; dry-run reports the same proposal/consent outcome without
+  writing. Both versions require `bundles: []`, so unsupported bundle declarations remain
+  byte-unchanged and refuse with 68 under FR-050, never rewritten; (h) files are created 0644 and directories 0755 subject to the umask; no secret is
   accepted, written or printed.
 - **FR-064**: `ws init` MUST propose the workspace `AGENTS.md` through the proposal model of FR-046 and
   FR-057 unless `--no-agents-block` is given; the block is on by default (owner decision of 2026-10-17). The
@@ -1030,16 +1050,20 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   pre-confirms the path in the wizard (no generalisation of FR-046). The file is opened without following links,
   checked by `fstat` on the descriptor and read with a 64 KiB bound, never blocking on a FIFO; a symbolic link or
   special file is refused (68). Classes, first match wins: size (the file is over 64 KiB by `fstat`; it is not
-  read), malformed, newer (version above the shipped one, whether or not edited), modified (hash differs from the
-  recorded one), older (lower version, hash matches), current, and missing (no block). Only for an edit of a
-  modified, older or missing file, a result that would exceed 64 KiB replaces that class's warning with
+  read), malformed, modified (body hash differs from the recorded one), current (version and intact
+  body equal the shipped template), different_template (an intact block differs from the shipped version
+  or body), and missing (no block). Keep the numeric template marker and validate its syntax; no
+  historical templates or older/newer negotiation are required. Only for an edit of a
+  modified, different-template or missing file, a result that would exceed 64 KiB replaces that class's warning with
   `agents_block.too_large` (no edit requested) or is refused (68, edit requested). Outcomes, each with exactly one
   action in the `--json` `actions`: an absent file is created (`create`); a current block is `skip_existing` (a rerun
-  is a no-op); a newer block is always `left_unchanged` with `agents_block.newer`; every other class without a
+  is a no-op); every other class without a
   requested edit, or with a wizard edit declined, is `left_unchanged` with `agents_block.too_large`, `.malformed`,
-  `.modified`, `.older` or `.missing` and exit 0, so a rerun after a template bump or on a pre-existing `AGENTS.md`
+  `.modified`, `.different_template` or `.missing` and exit 0, so a rerun after a template bump or on a pre-existing `AGENTS.md`
   never fails; with a requested edit, size and malformed are refused (68, nothing written, rerun a no-op) and
-  modified, older and missing are `replace_block` or `append_block`. For `AGENTS.md` only, declining the wizard edit
+  modified, different-template and missing are `replace_block` or `append_block`. A numeric version above
+  the shipped one has no special permanent-preservation promise before readiness; it still requires
+  explicit edit consent, full preview, stale-preview checks and all FR-057 rollback safeguards. For `AGENTS.md` only, declining the wizard edit
   is not a cancellation (72), and the wizard does not offer an edit without the flag that would be refused (it
   prints the warning instead); an edit pre-confirmed by the flag that would be refused is 68 in every mode. The
   general rule of FR-046 and FR-063 (a declined path is a cancellation, a refused edit is 68) stays unchanged for
@@ -1050,8 +1074,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   *Result.* T036 extends `contracts/cli/output.schema.json`: the `actions` enum gains `append_block`, `replace_block`
   and `left_unchanged` (`applied` is false for `left_unchanged` and for the `skip_existing` of a current block, as for every action of a dry run), and `initResult`
   gains `agents_block_warnings`, an always-present array (`maxItems` 1) of `{code, path}` with the codes
-  `agents_block.missing|older|modified|newer|too_large|malformed`; `settings_not_persisted` and `validation` keep
-  their fields. Exit codes follow FR-063.
+  `agents_block.missing|different_template|modified|too_large|malformed`; `validation` keeps its fields.
+  The reserved optional `settings_not_persisted` schema property imposes no emission obligation;
+  pre-ready init does not emit it. Exit codes follow FR-063.
 - **FR-058**: The settings that FR-044 collects extend the manifest `workharbor.json`, as the owner decided on
   2026-10-17. [`workharbor.schema.json`](../../contracts/workspace/workharbor.schema.json) defines the accepted
   `schema_version` 1 (exactly four fields, unchanged) and the proposed `schema_version` 2: the same four fields plus
@@ -1131,7 +1156,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 
   *Outcomes, one action each.* An absent file is created (`create`); a regular file with equal bytes is `skip_existing`
   (a rerun is a no-op). Any other existing regular file is never merged or edited by default: it is `left_unchanged`,
-  exit 0, no warning, and a defaults-only run preserves it as in FR-057(g). Without `--overwrite .claude/settings.json`,
+  exit 0, no warning; as for any existing file without a requested edit, its bytes are kept (FR-057(g)). Without `--overwrite .claude/settings.json`,
   a non-regular target (symbolic link, FIFO, special file) or a `.claude` that is not a real directory is also
   `left_unchanged` (exit 0; classified by no-follow `fstatat`, only a regular file is opened, nothing is followed, no
   `.claude` or file is created, and the only row is the one `left_unchanged` for `.claude/settings.json`, with no
@@ -1202,7 +1227,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   only, 0; unknown flag, invalid or missing flag value, mutually exclusive flags, a traversing or credential-bearing
   input, `--template` while starters are unsupported, `--devcontainer` or plain `init` (no `--non-interactive`, no `--dry-run`) in wave 1a, a `dir` that is a file, an unavailable command, `--json` where
   unsupported, `--no-agents-block` together with `--overwrite AGENTS.md`, missing or conflicting targets in local `rm` (FR-067) 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
-  (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
+  (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing manifest
   edited, a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0), and deleting a home volume without both `--force` and `--yes` (FR-067) 70, in unattended mode only (needs-human,
   with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72, except `AGENTS.md`, where a declined edit is not a cancellation (FR-064), and `.claude/settings.json`, which the wizard offers to replace only when `--overwrite .claude/settings.json` names it (FR-065));
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview (no such re-check applies to a path that is left unchanged and not written), pre-existing
@@ -1210,7 +1235,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; bundle drift detected (FR-069) 1 (or 68); SIGINT
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback or volume removal failure after container deletion (FR-067) 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
-  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
+  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
   increment. The macOS `setup` wizard and `doctor --fix` of [Feature 009](../009-host-setup-wizard/spec.md) use the same table without a new code: 0 success or an answer `no`; 64 usage; 68 refusal
   (unsupported platform, root start, run lock, blocked or failed with nothing applied, failed doctor check); 70 needs-human (unattended without
   confirmation, privileged step without terminal); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial
@@ -1417,7 +1442,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   implementation; SC-013 remains unverified until the owner API and real-host enforcement evidence exist.
 - **SC-022**: Init with the agent workflow block (FR-064) passes offline on a table of cases, each with and without
   an edit requested (`--overwrite AGENTS.md`) and for every class of the precedence list: absent file; file without the
-  block; current, older, modified, newer and edited-newer blocks; a file over 64 KiB and a result over 64 KiB
+  block; current, modified and different-template blocks (lower and higher numeric versions, same
+  version with a different intact body, each with and without edit consent); a file over 64 KiB and a result over 64 KiB
   (`.too_large` with exit 0, or 68 with the edit; a file over 64 KiB that is also malformed is `.too_large`); duplicate, unclosed, nested and orphan markers and CRLF-, indented-
   and BOM-prefixed marker-like lines, including inside a code fence (`.malformed` with exit 0, or 68; no second block
   on a CRLF-converted file); CRLF and BOM files without markers; a symbolic-link and a FIFO target; `--no-agents-block`
@@ -1500,10 +1526,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   limits of FR-055 are owner-confirmed values (H77 (6), 2026-10-17).
 - The `provider_admission` of a configuration is decided only by the host agent's resolver at trust time (Feature
   006 T009); `validate` mirrors a subset as warnings and is not an authority.
-- Existing version 1 manifests and the examples keep their accepted schema. The proposed manifest `schema_version` 2
-  (FR-058) is authored by `init` for new manifests, and for an existing version 1 manifest only with an explicit
-  `--overwrite workharbor.json`; the resolver rejects it until the reviewed resolver change T035, and no accepted provider
-  input is widened. This replaces the upstream assumption that accepted schemas gain no fields (Werner's decision of
-  2026-10-17: manifest extension). The starter catalog is listed as unsupported until provider
-  admission (owner decision of 2026-10-17).
+- Version 1 manifests and the examples keep their accepted current schema and provider admission.
+  New init manifests use version 2; existing v1/v2 manifests follow ordinary file proposal/consent
+  semantics (FR-057(g)), with no automatic version rewrite. The resolver still rejects version 2
+  until separately reviewed T035 after T009/T028; a v2 proposal/output is labelled not creation-ready
+  until then. No admitted provider input is widened; starters remain unsupported until admission.
 - The dashboard reads Spec Kit artifacts at an identified Git revision.

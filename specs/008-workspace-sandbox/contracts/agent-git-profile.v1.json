@@ -8,7 +8,7 @@
     "Declared by WorkHarbor policy; never derived from, merged with or read from the host.",
     "Rendered deterministically (this order, git config syntax, trailing newline) and delivered read-only; GIT_CONFIG_GLOBAL points to it and GIT_CONFIG_NOSYSTEM=1.",
     "No user.name or user.email: identity comes only from GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL supplied by the operator. user.useConfigOnly makes git fail instead of guessing.",
-    "A change of any key or value needs a new profile_version; the rendered hash is recorded in the instance labels and manifest."
+    "Before first usable release, review key/value, renderer and current conformance-test changes together; no new profile_version or historical reader is required solely for compatibility. Keep current profile metadata/type validation and record the exact rendered hash in instance labels and manifest."
   ],
   "entries": [
     {

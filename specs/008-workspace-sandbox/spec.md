@@ -1,5 +1,16 @@
 # Feature Specification: Workspace and sandbox execution model
 
+## Pre-ready compatibility clarification (2026-10-20)
+
+Keep current schema_version/profile_version metadata and exact shape/type/policy
+conformance, rendered content hashes, stale-input detection and backend/tool
+capability checks. Before first use there is no obligation for historical profile
+readers, numeric-age negotiation or automatic upgrades; coherent reviewed policy
+changes need no profile_version bump solely for compatibility. OD-1–OD-5 remain
+recorded decisions; OD-5 is resolved through Feature 009 DP-4/AP-8. Feature status stays Draft: neither this
+amendment nor main inclusion approves full spec/plan/tasks or 008 implementation.
+
+
 **Feature identifier**: `008-workspace-sandbox`
 **Feature Branch**: `docs/spec008-workspace-sandbox`
 **Created**: 2026-10-20

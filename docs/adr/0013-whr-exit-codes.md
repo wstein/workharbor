@@ -1,7 +1,9 @@
 # 0013-whr-exit-codes: A fresh `whr` exit-code table
 
 Date: 2026-10-14
-Status: Accepted 2026-10-16 (owner decision H69:a); owner decision H15:b recorded 2026-10-13
+Status: Original table accepted 2026-10-16 (H69:a; H15:b recorded 2026-10-13).
+Pre-ready change-procedure amendment proposed 2026-10-20 for independent exact-head review;
+the owner has requested its implementation, not certified a review CLEAR of this text.
 
 ## Context
 
@@ -22,7 +24,10 @@ Related: [ADR 0006](0006-optional-ai-execution.md),
 
 CLI-owned codes live in 64-79 (the BSD sysexits neighbourhood, clear of the
 ubiquitous 1 and 2, shell-reserved 126-127 and signal statuses 128+n). 75-79 stay
-reserved and unassigned; any change to this table needs a new ADR that supersedes it.
+reserved and unassigned in the current table. Before first usable release, breaking old
+pre-ready numbers alone does not require a superseding ADR. Review actual semantics and
+update spec/contract/source/tests coherently. H77's remote-unreachable semantic ADR
+requirement before owner-API client work remains.
 
 | Code | Name | Category and use |
 | --- | --- | --- |
@@ -81,8 +86,9 @@ in the CI acceptance manifest when implemented):
 - `TestCLIFailureAnnouncedOnStderrAndKindCLI`: CLI failures print `whr:` and mark
   `kind: cli`; remote statuses mark `kind: remote` and print no `whr:` line.
 
-A change to the contract file or these tests needs a new ADR that supersedes this
-table, not a silent edit.
+These tests enforce current values, mapping, passthrough and required coverage; none
+is waived. Coherent reviewed pre-ready changes need no new version machinery solely
+for historical compatibility and must never silently weaken the current contract.
 
 ## Owner confirmation
 

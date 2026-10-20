@@ -112,8 +112,9 @@ before owner-API client work (owner decision, 2026-10-17).
 - Short form for every verb: collisions (`ls`, `show`, `status`, `stop` exist in several
   groups). Rule 3 resolves them mechanically.
 - A new exit code for invalid configuration: avoided; "wrong state" (68) already covers a
-  configuration that does not satisfy its contract, and ADR 0013 requires a superseding ADR for
-  any table change.
+  configuration that does not satisfy its current contract. The pre-ready ADR 0013 change
+  procedure permits coherent reviewed changes without preserving old numbers; H77's
+  semantic remote-unreachable ADR requirement remains.
 
 ## Consequences
 
