@@ -25,8 +25,8 @@ independent review and not approval. Re-run `$speckit-analyze` before any task s
   it. That reading is withdrawn: FR-009 and T015 define `setup` as Linux/systemd enrollment that mutates the host receiving the
   host agent. The owner statement of 2026-10-20 ("whr setup arbeitet auf dem Mac host, der Linux VM host wird von whr nie
   veraendert") concerns the Docker VM. Which command carries the Mac-host git configuration step is OD-5 (still open; option B recommended); T015 is unchanged.
-- **A-4 (low)**: the preflight set-and-unset probe writes to the owner's real configuration; named as residual risk, not an
-  open decision. An owner who prefers a read-only preflight would change FR-022.
+- **A-4 (low)**: the preflight set-and-unset probe writes to the owner's real configuration (not an
+  open decision). An owner who prefers a read-only preflight would change FR-022.
 - **A-5 (low)**: T013 depends on 006/T038 being on `main`; if not, work stops (plan, handoff).
 - **A-6 (info)**: the 006 convention of `analysis-first-increment.md` is a review record; this file is an author analysis and
   gets review rounds appended when reviews occur.

@@ -8,7 +8,7 @@ Status: proposed; implements FR-019 to FR-026. Go package `apps/whr/internal/git
 | `cooperative_job`, `untrusted_job` | [agent-git-profile.v1.json](agent-git-profile.v1.json), never from the host | one generated file mounted read-only; `GIT_CONFIG_GLOBAL` points to it; `GIT_CONFIG_NOSYSTEM=1` | no | operator-supplied `GIT_AUTHOR_*`, `GIT_COMMITTER_*` |
 
 The repository-local `.git/config` travels with the repository: bind-mounted for `developer`, shared worktree metadata for
-`cooperative_job` (stated residual risk), generated for `untrusted_job` (FR-010).
+`cooperative_job`, generated for `untrusted_job` (FR-010).
 
 ## Why a directory
 
@@ -39,7 +39,7 @@ owner's account when the owner next runs git. Hence the mount exists only for th
 container of ADR 0009 and every job profile never get it. `whr` cannot detect an agent run in a `developer` sandbox; the
 creation result states the risk. A global `credential.helper=` in the agent profile resets only helpers inherited from
 earlier global and system config; it does not reset helpers in a repository-local config, which is why `cooperative_job`
-(shared local config) is acknowledged as residual risk and `untrusted_job` gets a generated local config.
+(shared local config) is acknowledged (FR-011) and `untrusted_job` gets a generated local config.
 
 ## Where the check and the move run (owner statement 2026-10-20; command open, OD-5)
 
@@ -57,7 +57,7 @@ Run inside the environment with fixed argv: (1) `git config --global --list --sh
 under the mounted directory; (2) `git config --global whr.preflight.<nonce> <nonce>` then `--unset` of the same key. Both
 must succeed. Failure names the cause (`read_failed`, `write_failed`, `rename_busy`, `origin_outside_mount`) and blocks
 readiness (`refused.git_config_not_ready`). A stale `whr.preflight.*` key from a crash is reported and removed by the next
-run. Residual: the probe writes to the owner's real configuration; it is namespaced and removed.
+run. The probe writes to the owner's real configuration; it is namespaced and removed.
 
 ## Canary tests
 

@@ -45,14 +45,14 @@ provider, egress, credential mediation, host gateway, IDE verification, snapshot
 
 Scope: a single-owner workstation or devcontainer host; the primary adversary is a less-trusted process in an instance
 (prompt-injected agent, compromised dependency), not a hostile local administrator. Claims are limited to what the canary
-tests show for the stated provider and stand with their residual risks.
+tests show for the stated provider.
 
 | Asset | developer | cooperative_job | untrusted_job |
 | --- | --- | --- | --- |
-| Primary refs, `.git/config`, hooks | writable by design | shared with the worktree (residual: refs, config and hooks are shared and writable) | not reachable; copy has generated config, no hooks from primary |
+| Primary refs, `.git/config`, hooks | writable by design | shared with the worktree (refs, config and hooks are shared and writable) | not reachable; copy has generated config, no hooks from primary |
 | Sibling workspaces | not mounted | not mounted | not mounted |
 | Primary home | the workspace's own home, writable by design | not mounted; scratch home | not mounted; scratch home |
-| Host global git configuration | mounted rw (owner decision). Residual: anything running there can write `credential.helper=!cmd`, `core.fsmonitor`, `core.sshCommand`, `core.hooksPath` or `alias.*`, which runs on the Mac host as the owner at the next git use; whr cannot detect an agent run here | not mounted | not mounted |
+| Host global git configuration | mounted rw (owner decision); anything running there can write `credential.helper=!cmd`, `core.fsmonitor`, `core.sshCommand`, `core.hooksPath` or `alias.*`, which runs on the Mac host as the owner at the next git use; whr cannot detect an agent run here | not mounted | not mounted |
 | Workspace container of ADR 0009 | not a sandbox; no host-config mount (FR-024) | | |
 | Host credentials (keychain, SSH agent, tokens) | not provided by whr; the checkout's local config and the host global config apply | not provided by whr; credentials, `insteadOf` rules and hooks in the shared primary `.git/config` are visible and writable (acknowledged) | not provided by whr; a credential an external runner adds is exposed to the instance |
 | Tool roots `/opt/bdock/<bundle>`, `bundledock-*` | read-only | read-only | read-only |
@@ -63,9 +63,7 @@ Attacker capabilities per profile: `developer` is trusted and can do anything th
 `cooperative_job` can write shared repository metadata (rewrite refs, add hooks that the human later runs); `untrusted_job`
 can read and write everything in its copy and scratch home and use the network, but only the copy. Canary acceptance tests
 (SC-005): the fake provider returns the `Plan`; fixtures name a canary path or value per asset; the test fails if the plan
-mounts it writable, mounts it at all for jobs, or passes it in the environment. Residual risks common to all profiles: shared
-kernel (container escape), no egress control, no credential mediation, a result patch can contain malicious code and must be
-reviewed, copy-policy secret patterns are heuristics, a shared Docker daemon is privileged infrastructure.
+mounts it writable, mounts it at all for jobs, or passes it in the environment.
 
 ## Requirements to evidence
 

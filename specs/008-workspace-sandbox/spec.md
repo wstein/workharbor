@@ -43,7 +43,7 @@ workspace, and no statement of what a container backend does and does not protec
 - Command registration: Stage 1 registers no command; task T016 (Stage 2, owner-gated) registers the `sandbox` group after the
   ADR 0014 amendment (T017).
 - No claim is made of universal containment, exfiltration prevention, performance or portability. Every protection is
-  stated with its scope and residual risk.
+  stated with its scope.
 
 ### Owner decisions
 
@@ -119,7 +119,7 @@ A request names a protection the provider cannot enforce. It is refused with a s
 ### User Story 4 - Cooperative job in a linked worktree (Priority: P2)
 
 A trusted cooperative job uses a linked worktree as an explicitly trusted convenience, with the shared Git control data
-stated as a residual risk. In this increment the operator supplies an existing linked worktree; `whr` never runs
+shared. In this increment the operator supplies an existing linked worktree; `whr` never runs
 `git worktree add`, `remove` or `prune` (FR-011).
 
 **Independent Test**: creation without the explicit acknowledgement is refused; with it the label and result record carry
@@ -203,7 +203,7 @@ outside the instance's own labelled set is touched.
 
 - **FR-012**: A RuntimeProvider MUST report capabilities for: kernel isolation; filesystem and Git access; git
   configuration profile per environment; home state; tool mounts; egress enforcement; credential mediation; host tools;
-  IDE access; cancellation and cleanup, each with a scope and a residual-risk statement
+  IDE access; cancellation and cleanup, each with a scope
   ([contract](contracts/runtime-provider.md)).
 - **FR-013**: Admission MUST be a pure function of request and capabilities. A request whose required protection is not
   `enforced` MUST be refused with a stable code from [refusal-codes.json](contracts/refusal-codes.json) before any
