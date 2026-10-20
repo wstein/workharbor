@@ -3,11 +3,15 @@
 Status: proposed for owner review; bounded direct-request implementation candidate.
 No revision-bound Symphony dispatch approval is asserted.
 
-Use the existing pilot host-agent Go module and standard library only. Depend on
-pilot `832dd63000257bad01656154b639251d643f2a2d` (T009 runtime source
-`90ea176`), which is not in main. Keep the main-target PR draft with this explicit
-dependency. Do not change Feature 006 tasks, the T009 closed config/provider schema,
-mount admission, Docker execution or transport fields.
+Use the existing host-agent Go module and standard library only. The policy source
+is already in main: its last modification,
+`b2b725eedfad22bc50e2d69563b38694becc2e25`, is an ancestor of the reviewed
+`ce3cfc83f766aa4f41be092f6b55dee1d98b2754` baseline. The original pilot
+`832dd63000257bad01656154b639251d643f2a2d` (T009 runtime source `90ea176`)
+is historical provenance; that pilot object is not available in this checkout.
+It is not a current prerequisite for continuing this pure port. Do not change
+Feature 006 tasks, the T009 closed config/provider schema, mount admission, Docker
+execution or transport fields.
 
 Add `internal/workspaceshell` as a pure policy port. It validates caller-supplied
 attachment description only; later trusted resolver/attacher establishes integrity,
