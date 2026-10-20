@@ -3,9 +3,7 @@
 **Feature identifier**: `009-host-setup-wizard`
 **Feature Branch**: `docs/spec009-host-setup-wizard`
 **Created**: 2026-10-20
-**Status**: Draft, proposed for independent review and owner approval; nothing is implemented. Approval of this text
-needs an independent review CLEAR for its exact head and explicit owner approval of that head, evidenced by a tracker
-or PR link (WORKFLOW.md). Owner requirements and decisions of 2026-10-20 are recorded as D-1 to D-9; OD-1 to OD-5 are confirmed
+**Status**: Source implementation is authorized under owner H37 (2026-10-20), using bounded manual per-work-item scope/evidence and independent exact-head review. H38 confirms DP-1 to DP-5 and confirmed no-op protocol bookkeeping. This is not full-feature acceptance, task completion, AP approval, live-operation or build authority. The H35 loader/proposal slice has its own earlier scoped CLEAR; later changes need their own review. Owner requirements and decisions of 2026-10-20 are recorded as D-1 to D-9; OD-1 to OD-5 are confirmed
 (2026-10-20, OD-2 amended).
 **Related**: [Feature 006](../006-whr-cli/spec.md) (FR-009, FR-026, FR-043 to FR-046, FR-060, FR-061, FR-063, T015, T027),
 [Feature 008](../008-workspace-sandbox/spec.md) (FR-019 to FR-022, FR-026, OD-5),
@@ -67,7 +65,7 @@ shipped by the project, and the owner confirms each step. The design defends aga
 - **D-8 (scope, 2026-10-20)**: the threat model above; this feature is cut to the essentials.
 - **D-9 (OD-1 to OD-5, confirmed 2026-10-20)**: OD-1 (Homebrew only plus the OrbStack cask), OD-3 (dotfile preview, backup, no silent overwrite), OD-4 (Linux enrollment kept) and OD-5 (R-40 superseded) as written in the plan. OD-2 is amended: the host catalogue is a small curated list owned by WorkHarbor (13 initial entries, FR-010; entries are added deliberately), each with a minimum version only. It is not a mirror of the BundleDock toolbox: no host install of toolbox tools, no version equality between host and toolbox, no toolbox sync. The same user experience means the same few DX tools and configs (starship, fish, git), not parity.
 
-OD-1 to OD-5 are in the [plan](plan.md#owner-decisions), confirmed 2026-10-20.
+OD-1 to OD-5 are in the [plan](plan.md#owner-decisions), confirmed 2026-10-20. Owner H38 (2026-10-20) also confirms the existing DP-1 to DP-5 defaults and the no-op bookkeeping choice in FR-021; AP decisions, measured production minima and AP-6 reason placement remain separate. H37 permits source-only dependents to use exact independently CLEAR local prerequisite parents with per-work-item evidence before owner merge, without treating open task/real-host acceptance as complete.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -96,7 +94,7 @@ The owner answers `customize` and decides item by item; a skip is remembered; pr
 2. **Given** an opted-out item, **Then** a rerun preselects it off, `doctor` reports it `skipped: opted_out` and `doctor --fix` never repairs it.
 3. **Given** `jq` below the minimum or a tool found outside Homebrew, **Then** an upgrade is a modify-class step needing its own confirmation, or
    the tool is only reported and never replaced.
-4. **Given** a completed run, **When** the identical run repeats, **Then** it makes no mutating call, no backup and no file change.
+4. **Given** a completed run, **When** the identical run repeats, **Then** it makes no install, managed configuration/profile change or backup; after confirmation it still creates the required protocol and uses run-lock bookkeeping (FR-019, FR-021).
 
 ### User Story 3 - Move the global git configuration (Priority: P1)
 
@@ -186,7 +184,7 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
   the step (`version_below_minimum`), reported, not rolled back.
 - **FR-010**: Every installable item is listed up front, before the question, with type, name, tap, minimum version, declared
   network destinations and purpose, and any privileged command. Each entry has a `selected_by_default` flag and, where it needs a
-  dotfile change, a `config` marker (`dotfile` or `shell_hook`). The initial catalogue has exactly 13 entries. Preselected core: `orbstack` (cask), `git`, `gh`, `jq`, `fish`, `starship`; preselected recommended: `ripgrep` (rg), `fd`, `fzf`, `zoxide`, `bat`, `jj`, `herdr` (all 13 entries preselected, each individually opt-out under FR-005). Entries needing a dotfile or shell hook: `starship`, `fzf`, `zoxide`, `fish`. Nothing else from the toolbox goes on the host (no scanners, linters, language tools, hugo, typst, delta, lazygit, direnv, mise, uv, tmux). More entries are added deliberately by the owner (OD-2, OG-7). The wizard shows the diff of every config change; it never touches git configuration (except the guided move of FR-014) or the login shell. It MUST NOT contain an entry that installs, configures or
+  dotfile change, a `config` marker (`dotfile` or `shell_hook`). The initial catalogue has exactly 13 entries. Preselected core: `orbstack` (cask), `git`, `gh`, `jq`, `fish`, `starship`; preselected recommended: `ripgrep` (rg), `fd`, `fzf`, `zoxide`, `bat`, `jj`, `herdr` (all 13 entries preselected, each individually opt-out under FR-005). Entries needing a dotfile or shell hook: `starship`, `fzf`, `zoxide`, `fish`. Nothing else from the toolbox goes on the host (no scanners, linters, language tools, hugo, typst, delta, lazygit, direnv, mise, uv, tmux). More entries are added deliberately by the owner (OD-2, OG-7). The wizard shows the diff of every dotfile config change (git move uses the structural preview of FR-014); it never touches git configuration (except the guided move of FR-014) or the login shell. It MUST NOT contain an entry that installs, configures or
   authenticates an AI agent tool (Feature 006 FR-030).
 - **FR-011**: `whr` refuses to start as root or with `SUDO_USER` set (darwin; `host_setup.running_as_root`) and never runs elevated itself.
   In real runs of `setup` and `doctor --fix` a step marked `privileged` in the catalogue runs as `/usr/bin/sudo -- <catalogue argv>`, fixed
@@ -209,7 +207,7 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
   directories under the home directory are created without following links. `--dry-run` shows the same preview and writes nothing.
 - **FR-014**: The wizard classifies the global git configuration with the Feature 008 classes (xdg, legacy_home_file, split, absent, symlink)
   and reports host-only keys by key, origin file and remedy, never by value. The move to `~/.config/git/config` is offered only for
-  `legacy_home_file` and `split`, needs explicit confirmation and a backup, and proceeds by staging the new content in a temporary file next
+  `legacy_home_file` and `split`, needs explicit confirmation and a backup, and shows only a structural move preview naming key names, redacted origin/destination paths and actions, never a content/value diff. It proceeds by staging the new content in a temporary file next
   to the target (for `split`, XDG content followed by legacy content), verifying with `git config --file <staged> --includes --list` that the
   effective key/value sequence equals the current one (compared in memory), then rename, removal of the legacy file and a final check. It is
   refused, with no change, on a symlink, a relative `include.path` or `includeIf` path, `GIT_CONFIG_GLOBAL` set, a different
@@ -234,20 +232,20 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
 **Run, protocol, output**
 
 - **FR-019**: A real run takes an exclusive run lock (`flock` in the state directory) from plan confirmation on; a second run is refused
-  (`host_setup.run_locked`, 68). It writes one protocol in `<state>/protocols/` (DP-1): a JSON Lines file `<run-id>.jsonl` and a readable
+  (`host_setup.run_locked`, 68). It writes one protocol in `~/.local/state/whr/protocols/` (DP-1, confirmed H38), including every confirmed no-op real run: a JSON Lines file `<run-id>.jsonl` and a readable
   `<run-id>.txt`, mode 0600 in a 0700 directory, append-only, created exclusively without following links. Records: time (UTC), run id,
   platform, catalogue version, the selection (answer, opt-outs), per step kind, item, exact argv, whether sudo and network were used, exit
   status and result, backup paths with SHA-256, and for dotfiles the diff size. It never contains a password, token, git configuration value
   or environment contents. `whr` never deletes protocols and warns on standard error when the directory holds more than 500. A `no` answer,
   `--dry-run` and plain `doctor` write no protocol and take no lock. A run without a writable protocol does not mutate
-  (`host_setup.protocol_unwritable`). The JSON journal is the single record of a run; the text file renders it.
+  (`host_setup.protocol_unwritable`). The JSON journal is the single record of a run; the text file renders it. Each record kind requires its own payload under the protocol schema; format validation asserts UTC date-time, while ordering, redaction, file modes and durability remain behavioral tests.
 - **FR-020**: With `--json` the result is one envelope of ADR 0013/0014 and Feature 006 FR-015 (`host.setup` or `host.doctor`), prompts and
   previews on standard error, evidence redacted as in Feature 006 FR-060. Exit codes use only the ADR 0013 table ([flow](contracts/wizard-flow.md#exit-codes)):
   0 success or `no`; 64 usage; 68 refusal, unsupported platform, root start, run lock, blocked or failed with nothing applied, failed doctor
   check; 70 needs-human (unattended without confirmation, privileged step without terminal); 71 deadline with nothing applied; 72 interrupt or
-  cancellation; 73 partial failure (something applied, something not; completed and remaining steps listed; precedence over 72, 71, 68); 74
+  cancellation; 73 partial failure (a mutation applied and selected work failed, blocked, timed out or was interrupted; completed and remaining steps listed; precedence over 72, 71, 68). Ordinary opt-outs and declines are successful unless they actually block a selected dependent; 74
   internal, including an invalid catalogue.
-- **FR-021**: A rerun with the same selection is a no-op (no mutating call, no backup, byte-identical files). Interruption or failure leaves
+- **FR-021**: A rerun with the same selection changes no managed tool installation, configuration, host profile or backup. Confirmed real no-op runs still create a fresh protocol and use run-lock bookkeeping (H38); those required protocol/lock effects are excluded from managed-state no-op comparisons. A `no` answer, plain doctor and dry-run remain entirely write-free. Interruption or failure leaves
   state that a rerun re-detects; it does only what remains.
 
 **Catalogue, tests, governance**
@@ -274,7 +272,7 @@ CatalogueItem, DetectionResult, Plan, Step, HostProfile, BackupRecord, Protocol 
   shim fixture is never executed (FR-004, FR-006, FR-007, FR-018).
 - **SC-002**: `yes`, `customize` and `no` give the expected plans and writes; every item can be deselected; opt-outs persist and are honored by
   `setup` and `doctor --fix` (FR-004, FR-005).
-- **SC-003**: For every existing-target fixture with different content, nothing is written without the per-item confirmation, bytes are
+- **SC-003**: For every existing dotfile-target fixture with different content, nothing is written without the per-item confirmation, bytes are
   identical after a refusal, and a verified backup precedes every replacement (FR-008, FR-013).
 - **SC-004**: The fake exec recorder shows only allowed fixed argv and environment, no shell, no `brew` under sudo, no forbidden flag or
   other tap, no downgrade, and refusal to start as root (FR-009, FR-011).
@@ -283,8 +281,8 @@ CatalogueItem, DetectionResult, Plan, Step, HostProfile, BackupRecord, Protocol 
   runs in `--dry-run` or plain `doctor` (FR-011, FR-017, FR-018).
 - **SC-006**: No step, argument or path touches the Docker VM or mounts the socket; the socket is only connected to (FR-002).
 - **SC-007**: Git move fixtures give the specified outcome per location class and per refusal; the effective key/value sequence is equal
-  before and after; a failure restores the original bytes; no value is printed; lock file or another run refuses (FR-014).
-- **SC-008**: An identical rerun is a no-op; injected failure, timeout and interrupt give exits 73, 71, 72 with completed and remaining steps
+  before and after; a failure restores the original bytes; preview, confirmation, errors and logs reveal only structural keys/redacted paths, never the git-value canary; lock file or another run refuses (FR-014).
+- **SC-008**: An identical rerun leaves installations, managed configuration/profile and backups unchanged, while confirmed protocol/lock bookkeeping still occurs; injected failure, timeout and interrupt give exits 73, 71, 72 with completed and remaining steps
   listed and a correct rerun (FR-020, FR-021).
 - **SC-009**: Unattended runs never prompt; `--yes` does not approve modify-class steps; exit 70 names the flags; exit codes equal FR-020 and
   the JSON envelope validates and contains no home path, user name, host name, environment value or git value (FR-017, FR-020).
@@ -303,4 +301,4 @@ CatalogueItem, DetectionResult, Plan, Step, HostProfile, BackupRecord, Protocol 
 - Feature 006 T025 (foundation), T027 (local doctor), T031 (terminal harness) and T032 (wizard framework) and Feature 008 T005 (git location
   check) are available when the tasks that need them start; if not, work stops and asks.
 - Homebrew and OrbStack facts (cask names, prefixes, Cellar and Caskroom layout) are measured on the owner's Mac in T002 and T003 (OG-1).
-- The owner confirms DP-1 to DP-5 before the tasks they affect start; the tasks name them.
+- DP-1 to DP-5 are confirmed by H38; the plan decision matrix records every consumer. AP-6 reason/result placement remains unselected and blocks only affected JSON-result/schema integration and registration; it does not block independent pure functions or source-only fixtures. AP applications and real Mac measurements keep their separate gates.

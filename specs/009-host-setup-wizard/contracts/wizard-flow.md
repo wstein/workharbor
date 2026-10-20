@@ -26,10 +26,10 @@ Status: proposed design baseline for Feature 009 (FR-004 to FR-021); not impleme
    | `present_other_source`, `present_unverifiable` | information only | none |
    | dotfile absent | `Create <target>? (preview shown)` | `create`, `skip` |
    | dotfile differs | `<target> differs. Replace it? (diff shown, backup first)` | `skip`, `replace` |
-   | git `legacy_home_file`, `split` | `Move the global git configuration to ~/.config/git/config? A backup is made first.` | `skip`, `show diff`, `yes` |
+   | git `legacy_home_file`, `split` | `Move the global git configuration to ~/.config/git/config? A backup is made first.` | `skip`, `show summary`, `yes` |
 
-   `skip` records an opt-out of that item (`git-config` for git).
-5. **Confirm** each modify-class step (also under `yes`): diff or command shown, `[yes / no]`, default `no`. A privileged step shows its exact
+   `skip` records an opt-out of that item (`git-config` for git). `show summary` for the git move shows only structural key names, redacted paths and actions; a git content/value diff is forbidden. The effective value sequence is compared only in memory.
+5. **Confirm** each modify-class step (also under `yes`): dotfile diff or command shown, `[yes / no]`, default `no`; the git move instead shows only structural key names, redacted origin/destination paths and actions, never git content/values. A privileged step shows its exact
    command and states that `sudo` asks for the password on this terminal.
 6. **Apply** (real run: run lock and protocol start here): the plan hash is rechecked; one status line per step; a failure blocks only dependents.
 7. **Report**: per step status and reason, backup paths with the note that restore is a manual copy, and next steps, for example
@@ -46,7 +46,7 @@ Status: proposed design baseline for Feature 009 (FR-004 to FR-021); not impleme
 | `--confirm <id>` | repeatable; confirm the modify-class or privileged step of this item (`git-config` for the git move) |
 | `--json` | one envelope on stdout; privileged steps are never run |
 
-Linux enrollment flags on macOS and unknown ids are usage errors (64).
+Accepted selection/confirmation IDs are catalogue item IDs plus reserved `git-config`; it is not a fourteenth catalogue entry. Linux enrollment flags on macOS and truly unknown IDs are usage errors (64). DP-3 flags/closed answer sets and DP-4 carrier are confirmed by H38.
 
 ## `whr doctor`
 
@@ -64,8 +64,8 @@ Linux enrollment flags on macOS and unknown ids are usage errors (64).
 
 ADR 0013 table only (FR-020): 0 success, nothing to do, or `no`; 64 usage; 68 unsupported platform, root start, run lock, refused target, git
 refusal, blocked or failed with nothing applied, failed doctor check; 70 unattended without `--yes` or `--confirm`, or privileged step without
-terminal (73 when other steps were applied); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial failure (precedence over
-72, 71, 68); 74 invalid catalogue or unclassified failure. Plain `doctor` keeps Feature 006 FR-060 (failed check 68, `incomplete` 0).
+terminal (73 when other steps were applied); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial failure after a mutation when selected work failed, was blocked, timed out or was interrupted (precedence over
+72, 71, 68); successful opt-outs/declines remain0 unless a selected dependent is actually blocked; 74 invalid catalogue or unclassified failure. Plain `doctor` keeps Feature 006 FR-060 (failed check 68, `incomplete` 0).
 
 ## Brew invocation
 
@@ -73,7 +73,7 @@ Only these forms, separate argv elements, no shell, stdin closed, `brew` at `/op
 `brew install <name>`, `brew install --cask <name>`, `brew upgrade <name>`, `brew upgrade --cask <name>`; `<name>` matches the schema pattern.
 Not used: `sudo` with brew, `--HEAD`, `--force`, `--ignore-dependencies`, `--no-quarantine`, `tap`, `update`, `shellenv`, URL or path arguments.
 Environment: `HOME`, `PATH` (prefix `bin` and system directories, absolute), `LANG`, `LC_*`, `TERM`, `TMPDIR`, `HTTP(S)_PROXY`, `NO_PROXY`, plus
-`HOMEBREW_NO_AUTO_UPDATE=1`, `HOMEBREW_NO_ANALYTICS=1`, `HOMEBREW_NO_ENV_HINTS=1`. Step deadline 900 s (DP-2): SIGINT, 30 s grace, then kill.
+`HOMEBREW_NO_AUTO_UPDATE=1`, `HOMEBREW_NO_ANALYTICS=1`, `HOMEBREW_NO_ENV_HINTS=1`. Step deadline 900 s (DP-2, confirmed H38): SIGINT, 30 s grace, then kill.
 
 ## Privileged step
 
@@ -84,6 +84,13 @@ prompts itself; `whr` never handles a password.
 
 Envelope per Feature 006 FR-015 with `command` `host.setup` or `host.doctor`; `result`: `platform`, `mode` (`setup`, `fix`), `dry_run`, `plan_hash`,
 `catalogue_version`, `git` (location class, finding keys; no values), `steps` (`step_id`, `item`, `kind`, `class`, `status`, `reason`,
-`exit_status`), `applied`, `remaining`, `backups` (`~`-relative), `protocol` (`~`-relative; absent for `--dry-run`, plain `doctor`, `no`). When
-`ok` is false, `result.reason` carries the code of [refusal-codes.json](refusal-codes.json) (the schema's `error` object has no field for it;
-AP-6).
+`exit_status`), `applied`, `remaining`, `backups` (`~`-relative), `protocol` (`~`-relative; absent for `--dry-run`, plain `doctor`, `no`). The stable failure reason uses the code of [refusal-codes.json](refusal-codes.json); its final envelope placement (`result.reason` or additive `error.refusal`) is the unselected AP-6 decision. Per-step reasons stay in `result.steps[].reason`. Do not register commands or freeze affected result-schema behavior before that choice; independent engine source is not blocked by it.
+
+
+## Confirmed paths and no-op bookkeeping
+
+H38 confirms the profile `~/.config/whr/host-profile.json` and state
+`~/.local/state/whr/{protocols,backups/<run-id>,run.lock}`. Every confirmed real
+run, including a no-op, creates its protocol and uses the run lock. No-op means
+no installation, managed configuration/profile or backup change; protocol/lock
+bookkeeping is excluded. `no`, plain doctor and dry-run still write nothing.
