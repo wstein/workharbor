@@ -378,7 +378,8 @@ single use, session limits, resize bounds, disconnect cleanup and console reatta
 ### User Story 3 - Prepare, diagnose and remove a host (Priority: P2)
 
 An operator on a Docker host prepares it for WorkHarbor, checks its health, installs or removes the host agent
-service and later offboards the host without leaving credentials behind.
+service and later offboards the host without leaving credentials behind. The scenarios below describe the Linux/systemd
+enrollment; on macOS `whr setup` is the host setup wizard of [Feature 009](../009-host-setup-wizard/spec.md) (FR-009).
 
 **Why this priority**: Host enrollment is required before any workspace exists, but the browser can already
 display enrollment codes; the CLI makes the host side repeatable.
@@ -593,9 +594,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 6. **Given** `--json`, **When** it runs, **Then** the output is one envelope that validates against the schema and
    contains no home directory path (shown as `~`), user name, host name, environment value or credential, so that
    it can be shared.
-7. **Given** any run, **When** it finishes, **Then** it has created no file, started no process other than the fixed
-   `git --version` and, when `workharbor.json` is present, the fixed read-only invocations of FR-055, installed or configured no container runtime, and made no network connection other than
-   connecting to the discovered local socket.
+7. **Given** any run, **When** it finishes, **Then** (plain `doctor`, without `--fix`) it has created no file, started no process other than the fixed
+   `git --version` and, when `workharbor.json` is present, the fixed read-only invocations of FR-055, installed or configured no container runtime, and, for the checks of FR-060, made no network connection other than
+   connecting to the discovered local socket (the host checks of [Feature 009](../009-host-setup-wizard/spec.md) may use the network, FR-015).
 
 ---
 
@@ -694,7 +695,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   are neither relayed nor filtered by `whr` (FR-022a does not apply to them).
 - **FR-009**: `whr setup` MUST support dry-run, list every intended change, consume a one-time enrollment code and
   install the host agent service; it MUST be resumable after interruption. The dry run is not part of the first
-  increment (FR-061) and arrives with `setup` itself.
+  increment (FR-061) and arrives with `setup` itself. On macOS `whr setup` is the host setup wizard of
+  [Feature 009](../009-host-setup-wizard/spec.md): it consumes no enrollment code, installs no host agent service and has its own dry run
+  (Feature 009 FR-018). On Linux this requirement is unchanged.
 - **FR-010**: `whr doctor` MUST report each check as pass, fail, skipped or unknown with a remediation, support a
   shareable redacted report, and never report an absent tool or unmeasured check as passing. The local subset available in the first increment
   is defined by FR-060.
@@ -1078,7 +1081,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (FR-010; catalogue and thresholds in [`doctor-checks.json`](../../contracts/cli/doctor-checks.json)):
   `platform.host`; `container.socket` (when `DOCKER_HOST` is set it is the only candidate, as the Docker CLI would use
   it; otherwise it discovers an existing Docker-compatible socket from the documented candidates, connects and sends
-  nothing; never installs or configures a container runtime; the failure remediation links the
+  nothing; plain `doctor` never installs or configures a container runtime (on macOS the [Feature 009](../009-host-setup-wizard/spec.md) setup wizard and `doctor --fix`, for a selected catalogue item, may install one); the failure remediation links the
   [container-runtime page](../../docs/container-runtime.md), which recommends OrbStack on macOS); `git.version` (on
   macOS a Git shim that would open the Command Line Tools installer is detected without being executed and reported
   `fail` with a remediation); `disk.working_directory`; `disk.container_storage` (measured on `/var/lib/docker` only if
@@ -1090,7 +1093,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   unknown, and `ok` only when all pass. Exit status is 0 unless a check failed (FR-063); owner decision of 2026-10-17:
   `incomplete` exits 0. Doctor has the same 5 second wall-clock budget per run (each socket dial, `git --version` and `daemon.json` read draws on it). Evidence is redacted (home directory as `~`; the user name and host name replaced wherever
   they occur in a path; no environment value or credential), so `--json` output is the shareable report of FR-010; a
-  separate report file option is not part of the first increment. Doctor is read-only on every platform; FR-026's
+  separate report file option is not part of the first increment. Plain `doctor` is read-only for the host on every
+  platform (no install, no write, no `sudo`, no protocol; it may use the network for the host checks of
+  [Feature 009](../009-host-setup-wizard/spec.md) FR-015, while the checks above make no network connection other than the local socket);
+  `doctor --fix` on macOS is the mutating real run of that feature. FR-026's
   refusal of unsupported host platforms applies to the mutating host commands, and doctor reports an unlisted
   platform as `unknown` and continues (owner decision of 2026-10-17: allowed). `platform.host` is `pass` for Linux on
   amd64 or arm64 and `unknown` otherwise.
@@ -1102,7 +1108,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   resource library of FR-059. Wave 1b: the terminal test harness, the interactive wizard D2, devcontainer reuse D3 and the agent workflow block of FR-064 (T036, after D1 and the wizard D2, which owns the per-path confirmation), and the Claude Code settings default of FR-065 (T037, after D1 and T036).
   Wave 2: `workspace create` wiring and persistence with the owner API, and the starter catalog after provider
   admission. Each part is a work item that can run in its own worktree, branch and pull request (tasks). It needs no
-  control plane, login or Docker daemon. `setup --dry-run` is not included (owner decision of 2026-10-16): FR-009
+  control plane, login or Docker daemon. `setup --dry-run` is not included for Linux (owner decision of 2026-10-16; the macOS wizard has its own dry run, [Feature 009](../009-host-setup-wizard/spec.md) FR-018): FR-009
   requires the dry run to list every intended change and neither an agent service unit nor a typed change plan exists
   before T015. Excluded, specified and blocked on the owner API (verified 2026-10-16: the router serves only
   `/api/v1/hosts` with enrollment issue, revoke and `GET /:id` status, and `/api/v1/auth` login, status, logout,
@@ -1205,7 +1211,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback or volume removal failure after container deletion (FR-067) 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
   74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
-  increment. Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
+  increment. The macOS `setup` wizard and `doctor --fix` of [Feature 009](../009-host-setup-wizard/spec.md) use the same table without a new code: 0 success or an answer `no`; 64 usage; 68 refusal
+  (unsupported platform, root start, run lock, blocked or failed with nothing applied, failed doctor check); 70 needs-human (unattended without
+  confirmation, privileged step without terminal); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial
+  failure, which takes precedence over 72, 71 and 68; 74 internal (Feature 009 FR-020). Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
   `exit_code` in the exit-code table (`conflict` for 68, `needs_human` for 70, and so on).
 
 **Authentication and owner API**
@@ -1285,8 +1294,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 - **FR-026**: Each release MUST publish two separate matrices with verified and unverified entries: client
   platforms (where `whr` runs owner, workspace, access and agent commands) and host platforms (where `setup`,
   `doctor`, `service` and `offboard` are supported). The mutating host commands (`setup`, `service`, `offboard`) MUST
-  refuse unsupported host platforms; `doctor` is read-only, runs on any platform and reports an unlisted one as
-  `unknown` (FR-060).
+  refuse unsupported host platforms; plain `doctor` is read-only for the host, runs on any platform and reports an unlisted
+  one as `unknown` (FR-060). macOS is a host platform for `setup` (the wizard of [Feature 009](../009-host-setup-wizard/spec.md)) and `doctor --fix`,
+  unverified until owner-run evidence exists; `service` and `offboard` still refuse macOS.
 - **FR-027**: `whr version` MUST report version, source revision, build date, client platform and supported
   contract versions, in human and JSON form.
 
@@ -1385,7 +1395,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `.gitmodules` and index, credential-bearing URLs, partial-clone repositories, and fsmonitor, hook, filter and
   update-command repositories) completes within the single 5 second budget and 256 MiB resident memory per run, including runs whose Git calls hit the deadline, executes nothing (no
   marker file), modifies nothing (tree compared before and after by names, size, mode, inode, mtime and ctime,
-  including `.git`), makes no network connection and yields the documented findings and exit codes; every `--json`
+  including `.git`), makes no network connection (for the checks of FR-060 and `validate`) and yields the documented findings and exit codes; every `--json`
   output validates against the schema. Device-node cases and the bounds are verified on a real host only.
 - **SC-018**: For `init`, in addition to SC-014, an exhaustive failure-injection and race test (a failure, SIGINT or
   SIGTERM after each step, a full disk, a path appearing or being replaced after the preview, an overwrite target that
@@ -1486,7 +1496,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   format belongs to the contract of issue #71. FR-048 separately proposes herdr as
   the default human-console backend, subject to reviewed integration and availability.
 - The first increment (FR-061) runs entirely on the user's machine. `validate` and `doctor` read local files and
-  discover a local socket; `doctor` reads the machine's state read-only and its thresholds are not host policy; `init` writes a local directory and runs no Git command. Thresholds of `doctor` and the
+  discover a local socket; plain `doctor` reads the machine's state read-only (`doctor --fix` is [Feature 009](../009-host-setup-wizard/spec.md)) and its thresholds are not host policy; `init` writes a local directory and runs no Git command. Thresholds of `doctor` and the
   limits of FR-055 are owner-confirmed values (H77 (6), 2026-10-17).
 - The `provider_admission` of a configuration is decided only by the host agent's resolver at trust time (Feature
   006 T009); `validate` mirrors a subset as warnings and is not an authority.
