@@ -531,6 +531,17 @@
   "retained_assertion_failures": [],
   "application_tests": {
     "whr": [
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectAncestorDirectoriesResolvedBeforeProbe",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectTerminalBudgetAndCancellation",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectStates",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectIsReadOnlyAndNeverRunsBrew",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectCLTGitShimNotExecuted",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectBudgetsSymlinksAndSources",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectProbeDeadlineIsNeverOK",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectSourceLookupConsumesProbeBudget",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestPlanHashAndClasses",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestPlanDependenciesAndConfigClasses",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestPlanSealingRefusalsAndDynamicSelections",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile/TestProtocolAcceptsRequiredAuditPayload",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile/TestProtocolRejectsMissingAuditPayloadAndInvalidValues",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestFirstIncrementInitOfflineSource",
