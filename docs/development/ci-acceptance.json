@@ -1087,7 +1087,14 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardAgentsPerPathConsent",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardAgentsRefusedEditNotOfferedAndFlagPreconfirms",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardAgentsFlaggedRefusalReturnsConflictDuringSettings",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardAgentsDifferentTemplateConsentR1"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardAgentsDifferentTemplateConsentR1",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeDescriptorRaceRefusals",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeDotfileLifecycle",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeDryRunLeavesTreeUnchanged",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeExclusiveIdentityAndAtomicity",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeNoFollowAndSpecialRefusals",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeRollbackAndStageOwnership",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeKernelNoReplacePreservesOccupiedDestination"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

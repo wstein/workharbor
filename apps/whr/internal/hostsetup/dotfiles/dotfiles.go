@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 // Package dotfiles implements the offline preview/backup/replace engine over a
-// rooted no-follow filesystem port. It has no native adapter and never discovers
-// HOME. A real adapter and its race/symlink acceptance remain separate work.
+// rooted no-follow filesystem port. Open supplies an explicit-root Linux/Darwin
+// adapter; it never discovers HOME. Native runtime evidence covers Linux temporary
+// fixtures; Darwin runtime acceptance remains pending.
 package dotfiles
 
 import (
