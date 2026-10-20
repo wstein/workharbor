@@ -808,7 +808,17 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestReadFileNoFollowRefusesLinkToInspectedInode",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestReadFileLeafOpenUsesHeldParent",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenLeafNoFollowReturnsBlockingFile",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenLeafNoFollowRefusesNonLeafNames"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenLeafNoFollowRefusesNonLeafNames",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenDirRefusesInspectedDirectorySwap",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestWalkRefusesInspectedDirectorySwap",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestReadDirRefusesInspectedDirectorySwap",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestDirectoryWalkUsesHeldNestedParent",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestReadDirEntriesNeverReadReplacementPath",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestNativeDirectoryMetadataModes",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestNativeDirectoryIdentityUsesDeviceAndInode",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestNativeDirectoryLstatNeverFollowsLeafLink",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestDirectoryHandlesDoNotLeakFDs",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestOpenDirAcceptsSymlinkedAncestor"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

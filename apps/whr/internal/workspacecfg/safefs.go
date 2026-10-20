@@ -47,20 +47,24 @@ func unsafeErr(format string, args ...any) *accessError {
 // directory itself and everything below it is held to no-follow; ancestors of
 // the given path are followed (macOS /tmp is a link).
 type dir struct {
-	root *os.Root
+	root *directoryHandle
 	abs  string
 	// beforeFileOpen is a per-directory synchronization seam for package tests.
 	// Production leaves it nil. It runs after leaf inspection, before open.
 	beforeFileOpen func()
+	beforeDirOpen  func(string) // private per-instance actor, nil in production
 }
 
 // openDir opens path as the root of the walk.
-func openDir(path string) (*dir, error) {
+func openDir(path string) (*dir, error) { return openDirBeforeOpen(path, nil) }
+
+// openDirBeforeOpen keeps the root actor private and nil in production.
+func openDirBeforeOpen(path string, beforeOpen func()) (*dir, error) {
 	if hasDotDot(path) && dotDotThroughLink(path) {
 		return nil, &accessError{accUnsafe, "is a symbolic link", "pass the real directory, not a link"}
 	}
 	path = walkPath(path)
-	info, err := os.Lstat(path)
+	info, err := lstatNativePath(path)
 	switch {
 	case errors.Is(err, fs.ErrNotExist), errors.Is(err, syscall.ENOTDIR):
 		return nil, ErrNotFound
@@ -71,11 +75,14 @@ func openDir(path string) (*dir, error) {
 	case !info.IsDir():
 		return nil, ErrNotDirectory
 	}
-	root, err := os.OpenRoot(path)
+	if beforeOpen != nil {
+		beforeOpen()
+	}
+	root, err := openRootDirectory(path)
 	if err != nil {
 		return nil, &accessError{accUnsafe, "cannot be opened", "check that the directory can be read"}
 	}
-	if now, err := root.Stat("."); err != nil || !os.SameFile(info, now) {
+	if now, err := root.stat(); err != nil || !sameNativeFile(info, now) {
 		root.Close()
 		return nil, &accessError{accUnsafe, "changed while it was opened", "run validate again"}
 	}
@@ -178,12 +185,12 @@ func absPath(path string) (string, error) {
 // directory held open: not a link, and the same file as the root. It guards the
 // window between resolving the path and handing it to Git, and the Git run.
 func (d *dir) stillAtAbs() bool {
-	info, err := os.Lstat(d.abs)
+	info, err := lstatNativePath(d.abs)
 	if err != nil || info.Mode()&fs.ModeSymlink != 0 {
 		return false
 	}
-	now, err := d.root.Stat(".")
-	return err == nil && os.SameFile(info, now)
+	now, err := d.root.stat()
+	return err == nil && sameNativeFile(info, now)
 }
 
 func (d *dir) Close() { d.root.Close() }
@@ -192,16 +199,16 @@ func (d *dir) Close() { d.root.Close() }
 // directory holding its last component, plus a function that closes what it
 // opened. A symbolic link, a non-directory or a component that changed identity
 // between lstat and open is unsafe.
-func (d *dir) walk(rel string) (*os.Root, string, func(), error) {
+func (d *dir) walk(rel string) (*directoryHandle, string, func(), error) {
 	parts := strings.Split(rel, "/")
 	cur := d.root
-	var opened []*os.Root
+	var opened []*directoryHandle
 	closeAll := func() {
 		for _, r := range opened {
 			r.Close()
 		}
 	}
-	for _, name := range parts[:len(parts)-1] {
+	for i, name := range parts[:len(parts)-1] {
 		info, err := cur.Lstat(name)
 		if err != nil {
 			closeAll()
@@ -215,13 +222,16 @@ func (d *dir) walk(rel string) (*os.Root, string, func(), error) {
 			closeAll()
 			return nil, "", nil, unsafeErr("a path component is not a directory")
 		}
-		next, err := cur.OpenRoot(name)
+		if d.beforeDirOpen != nil {
+			d.beforeDirOpen(strings.Join(parts[:i+1], "/"))
+		}
+		next, err := cur.openDirectory(name)
 		if err != nil {
 			closeAll()
 			return nil, "", nil, unsafeErr("a path component cannot be opened")
 		}
 		opened = append(opened, next)
-		if now, err := next.Stat("."); err != nil || !os.SameFile(info, now) {
+		if now, err := next.stat(); err != nil || !sameNativeFile(info, now) {
 			closeAll()
 			return nil, "", nil, unsafeErr("a path component changed while it was opened")
 		}
@@ -270,22 +280,20 @@ func (d *dir) readDir(rel string, limit int) ([]fs.DirEntry, *accessError) {
 	if !info.IsDir() {
 		return nil, unsafeErr("is %s, not a directory", kindName(info.Mode()))
 	}
-	sub, oerr := cur.OpenRoot(leaf)
+	if d.beforeDirOpen != nil {
+		d.beforeDirOpen(rel)
+	}
+	sub, oerr := cur.openDirectory(leaf)
 	if oerr != nil {
 		return nil, unsafeErr("cannot be opened")
 	}
 	defer sub.Close()
-	if now, serr := sub.Stat("."); serr != nil || !os.SameFile(info, now) {
+	if now, serr := sub.stat(); serr != nil || !sameNativeFile(info, now) {
 		return nil, unsafeErr("changed while it was opened")
 	}
-	f, oerr := sub.Open(".")
-	if oerr != nil {
-		return nil, unsafeErr("cannot be opened")
-	}
-	defer f.Close()
 	// At most limit+1 entries are read: the caller sees an overflow, a hostile
 	// directory is never read whole.
-	entries, rerr := f.ReadDir(limit + 1)
+	entries, rerr := sub.readEntries(limit + 1)
 	if rerr == io.EOF {
 		rerr = nil
 	}
@@ -343,8 +351,8 @@ func (d *dir) readFile(rel string, limit int64) ([]byte, *accessError) {
 		return nil, unsafeErr("cannot be opened")
 	}
 	defer f.Close()
-	fi, serr := f.Stat()
-	if serr != nil || !fi.Mode().IsRegular() || !os.SameFile(info, fi) {
+	fi, serr := statNativeFile(f)
+	if serr != nil || !fi.Mode().IsRegular() || !sameNativeFile(info, fi) {
 		return nil, unsafeErr("changed while it was opened")
 	}
 	data, rerr := io.ReadAll(io.LimitReader(f, limit+1))
