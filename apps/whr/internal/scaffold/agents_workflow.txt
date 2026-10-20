@@ -1,0 +1,34 @@
+## Agent workflow
+
+Agents may push their own topic branches and open pull requests for work within
+an owner's requested task. They may update those PRs and their descriptions.
+Draft PRs must name a blocker. Ready means the owner can merge: independent
+review must be CLEAR for the exact current head, required checks must be green,
+and no named blocker may remain.
+
+Agents may rewrite only their own PR commits. Run the affected checks and obtain
+independent review of the exact rewritten SHA before pushing. Use an explicit
+expected-head lease: --force-with-lease=<ref>:<observed-full-SHA>. Never force
+push without that lease. Stacked PRs target their parent branch, are linked as a
+stack, and are retargeted to main once the parent merges. Rebase dependent work
+with both the old and new parent SHAs recorded; preserve the review gate.
+
+The owner controls merges, tags, releases, artifact publication, repository and
+environment settings, and submodule gitlinks. Each approval covers one named
+operation; there is no standing approval for these operations. A source check,
+commit, merge or bot update does not authorize a standalone build or publication.
+Run source checks with umask 022; a sandbox's umask 0000 can cause misleading
+permission failures. Obtain explicit approval before standalone builds.
+
+Never set repository or worktree git identity. Use the owner's configured
+identity. Bot updater commit messages and PR titles name the changed versions.
+
+Use the strongest permitted model tier for independent executed reviews, a
+middle tier for authoring and simple rechecks, and the cheapest suitable tier
+for helpers. Honor host and user restrictions on models, delegation and tools.
+Each parallel agent works in its own git worktree. Keep author and reviewer
+independent, check the affected behavior, and report exact revisions and evidence.
+
+This block is authored configuration. It grants no runtime automation privilege,
+credential access or trust in repository hooks or other executable workflows.
+Follow the host's trust and approval requirements before executing them.
