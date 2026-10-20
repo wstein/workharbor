@@ -83,9 +83,13 @@ func renderAgentsBlock() []byte {
 // planAgentsBlock implements the single FR-064 precedence and edit predicate.
 // Filesystem kind, descriptor size and consent are handled by the caller.
 func planAgentsBlock(data []byte, edit bool) (agentsBlockPlan, error) {
+	return planAgentsBlockSized(data, int64(len(data)), edit)
+}
+
+func planAgentsBlockSized(data []byte, size int64, edit bool) (agentsBlockPlan, error) {
 	class := "missing"
 	var block agentsBlock
-	if len(data) > agentsBlockMaxBytes {
+	if size > agentsBlockMaxBytes || len(data) > agentsBlockMaxBytes {
 		class = "too_large"
 	} else {
 		var valid bool

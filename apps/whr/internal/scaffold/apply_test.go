@@ -66,8 +66,8 @@ func TestInitApplyCreatesAndValidates(t *testing.T) {
 			applied++
 		}
 	}
-	if applied != 3 {
-		t.Fatalf("applied actions=%d, want manifest, projects and placeholder", applied)
+	if applied != 4 {
+		t.Fatalf("applied actions=%d, want manifest, projects, placeholder and agent workflow", applied)
 	}
 }
 func TestInitFailureInjectionRollback(t *testing.T) {

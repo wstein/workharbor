@@ -436,6 +436,15 @@ func (t *transaction) validateDisk() (*workspacecfg.Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	if _, edited := t.expected["AGENTS.md"]; edited {
+		data, err := read("AGENTS.md")
+		if err != nil {
+			return nil, err
+		}
+		if err := validAgentsOutput(data); err != nil {
+			return nil, err
+		}
+	}
 	report := workspacecfg.ValidateMemory(t.directory, workspacecfg.MemoryInput{Manifest: raw, Devcontainer: dc, DevcontainerPresent: true, ProjectsPresent: true})
 	if !report.Valid {
 		return nil, exitcode.Errorf(exitcode.PathUnclassified, "written proposal failed Git-free validation")
@@ -455,6 +464,9 @@ func (p *Proposal) partialResult(remaining []string, message string) (Preview, e
 func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview, error) {
 	result := p.Preview()
 	if err := interruptedContext(ctx); err != nil {
+		return result, err
+	}
+	if err := p.validateAgentsOutput(); err != nil {
 		return result, err
 	}
 	// Apply requires real discovery identities, never an invented memory snapshot.
@@ -487,7 +499,7 @@ func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview,
 	}
 	changes := false
 	for _, a := range result.Actions {
-		changes = changes || a.Action == "create" || a.Action == "overwrite"
+		changes = changes || mutates(a.Action)
 	}
 	if !changes {
 		report, err := t.validateDisk()
@@ -545,13 +557,13 @@ func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview,
 			} else {
 				err = t.writeFile(a.Path, p.files[a.Path], false)
 			}
-		case "overwrite":
+		case "overwrite", "append_block", "replace_block":
 			err = t.writeFile(a.Path, p.files[a.Path], true)
 		}
 		if err != nil {
 			return fail(err)
 		}
-		if a.Action == "create" || a.Action == "overwrite" {
+		if mutates(a.Action) {
 			result.Actions[i].Applied = true
 			if _, err = fmt.Fprintln(journal, a.Path); err == nil {
 				err = journal.Sync()
@@ -583,4 +595,8 @@ func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview,
 		}
 	}
 	return result, nil
+}
+
+func mutates(action string) bool {
+	return action == "create" || action == "overwrite" || action == "append_block" || action == "replace_block"
 }

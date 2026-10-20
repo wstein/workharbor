@@ -16,7 +16,7 @@ func DiscoverWithOptions(ctx context.Context, directory string, options Options)
 	if err := options.validate(); err != nil {
 		return Snapshot{}, err
 	}
-	return discoverSelected(ctx, directory, nil, options.Devcontainer)
+	return discoverSelected(ctx, directory, nil, options.Devcontainer, options.NoAgentsBlock)
 }
 
 // SelectDevcontainer extends a wizard snapshot with one bounded, no-follow
