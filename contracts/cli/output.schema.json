@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://workharbor.invalid/contracts/cli/output.schema.json",
   "title": "whr --json envelope, schema_version 1 (first-increment subset)",
-  "description": "Planned by ADR 0010 and FR-015. This revision defines the envelope and the results of the first-increment commands (version, workspace.validate, workspace.init, host.doctor). Results of later commands and the typed event stream of shell, console and agent attach are added by their own work items and never change an existing definition without a new schema_version. The command field is always the canonical id from commands.json, whichever alias was typed.",
+  "description": "Planned by ADR 0010 and FR-015. This revision defines the envelope and the results of the first-increment commands (version, workspace.validate, workspace.init, host.doctor). Results of later commands and the typed event stream of shell, console and agent attach are added by their own work items through coherent reviewed current-contract/source/test changes. Before first usable release no historical result reader or new schema_version is required solely for compatibility; current schema_version validation remains. The command field is always the canonical id from commands.json, whichever alias was typed.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -1048,7 +1048,7 @@
               "shortcuts"
             ]
           },
-          "description": "Settings of a defaults-only run that could not be written because an existing version 1 manifest was preserved (explicit flags needing the edit exit 70 instead)."
+          "description": "Reserved optional field; it is not emitted by pre-ready init. Existing valid manifests use ordinary file proposal/preservation/overwrite consent with no automatic version bump or separate migration workflow (FR-057(g))."
         },
         "bundle_selection_unavailable": {
           "const": true,

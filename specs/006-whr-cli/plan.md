@@ -269,7 +269,9 @@ written with `O_EXCL|O_NOFOLLOW` relative to a no-follow-opened target; overwrit
 temporary file and rename, with the old bytes kept until the rename. Each created path is recorded with device and
 inode for reverse-order rollback, which restores overwritten files and removes a path only when the identity still
 matches; the preview carries a content hash per file, re-checked immediately before writing to detect change since
-preview. `init` runs no Git command and makes no network connection (FR-056); it validates with the Git-free profile of the `validate` code (manifest, devcontainer and projects checks, `git_checks: not_run`, FR-057), and an existing version 1 manifest is preserved only by a defaults-only run (exit 0, not-persisted warning), while explicit flags that need it edited exit 70 naming `--overwrite workharbor.json`; `--project-url` is written to the manifest
+preview. `init` runs no Git command and makes no network connection (FR-056); it validates with the Git-free profile of the `validate` code (manifest, devcontainer and projects checks, `git_checks: not_run`, FR-057), and valid existing v1/v2 manifests follow ordinary file preservation/proposal/consent rules:
+no edit means original bytes retained, and requested edits preview the current authoring format (v2)
+with explicit per-path overwrite consent; no automatic version bump or separate migration workflow; `--project-url` is written to the manifest
 only. The wizard (D2) uses a prompt port (stderr for prompts, terminal check on stdin and stderr, `--non-interactive`,
 `--json` and non-terminals suppress it) so unit tests drive it with scripted answers; a separate work item builds a PTY
 test harness for end-to-end terminal behavior (raw mode, line editing, cancel by interrupt), which D2 then uses for its
