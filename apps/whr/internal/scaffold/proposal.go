@@ -98,7 +98,7 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 		}
 	}
 	p := &Proposal{files: map[string][]byte{}, inputs: map[string]Fingerprint{}}
-	p.preview = Preview{Directory: s.Directory, DryRun: o.DryRun, Actions: []Action{}, RuntimeEnforcement: "not_in_this_release", GitChecks: "not_run", BundleSelectionUnavailable: true, Settings: map[string]Setting{}, NextSteps: []string{"Run git init -b main, pin declared projects as submodules, and commit configuration before requesting creation trust.", "Run whr validate after Git initialization; Git checks have not run."}}
+	p.preview = Preview{AgentsBlockWarnings: []AgentsBlockWarning{}, Directory: s.Directory, DryRun: o.DryRun, Actions: []Action{}, RuntimeEnforcement: "not_in_this_release", GitChecks: "not_run", BundleSelectionUnavailable: true, Settings: map[string]Setting{}, NextSteps: []string{"Run git init -b main, pin declared projects as submodules, and commit configuration before requesting creation trust.", "Run whr validate after Git initialization; Git checks have not run."}}
 	p.preview.NextSteps = append(p.preview.NextSteps, UnsupportedStarters())
 	p.inputs["."] = Fingerprint{Exists: true, Kind: "directory", Info: s.RootInfo}
 	if s.RootInfo != nil {
@@ -167,6 +167,12 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 		}
 		fileRoles[name] = true
 	}
+	if !o.NoAgentsBlock {
+		if fileRoles["AGENTS.md"] {
+			return nil, exitcode.Errorf(exitcode.PathConflict, "AGENTS.md has conflicting init roles")
+		}
+		fileRoles["AGENTS.md"] = true
+	}
 	for name := range fileRoles {
 		for dir := path.Dir(name); dir != "."; dir = path.Dir(dir) {
 			if fileRoles[dir] {
@@ -215,6 +221,11 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 	}
 	if err := p.file(s, o, doc.ProjectsPath+"/.gitkeep", []byte{}); err != nil {
 		return nil, err
+	}
+	if !o.NoAgentsBlock {
+		if err := p.agentsFile(s, o); err != nil {
+			return nil, err
+		}
 	}
 	p.preview.Validation = workspacecfg.ValidateMemory(s.Directory, workspacecfg.MemoryInput{Manifest: p.files["workharbor.json"], Devcontainer: p.files[doc.DevcontainerPath], DevcontainerPresent: true, ProjectsPresent: true})
 	if !p.preview.Validation.Valid {

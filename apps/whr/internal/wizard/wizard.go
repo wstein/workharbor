@@ -63,15 +63,30 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 	}
 	// Only the proposal model knows the paths it can modify. These are preview
 	// permissions, never write consent: every overwrite is confirmed below.
+	preconfirmedAgents := false
+	for _, name := range options.Overwrite {
+		if name == "AGENTS.md" {
+			preconfirmedAgents = true
+		}
+	}
+	agentsEdit := false
 	candidate := func() (*scaffold.Proposal, error) {
 		o := options
 		o.Overwrite = append([]string(nil), options.Overwrite...)
+		if agentsEdit {
+			o.Overwrite = append(o.Overwrite, "AGENTS.md")
+		}
 		for name, e := range snapshot.Entries {
 			if e.Kind == "file" && (name == "workharbor.json" || strings.HasSuffix(name, "/.gitkeep")) {
 				o.Overwrite = append(o.Overwrite, name)
 			}
 		}
 		return scaffold.Build(snapshot, o)
+	}
+	if preconfirmedAgents {
+		if _, err := candidate(); err != nil && exitcode.FromError(err) == exitcode.Conflict {
+			return nil, err
+		}
 	}
 	var shown []int
 	for i, st := range steps {
@@ -129,6 +144,9 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 				*st.value = &v
 			}
 			if _, err := candidate(); err != nil && !(st.name != "devcontainer" && options.Devcontainer == nil && exitcode.FromError(err) == exitcode.NeedsHuman) {
+				if preconfirmedAgents && exitcode.FromError(err) == exitcode.Conflict {
+					return nil, err
+				}
 				*st.value = old
 				snapshot = previous
 				if err := s.print(terminal.Escape(err.Error()) + "\n"); err != nil {
@@ -187,6 +205,31 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 					if !yes {
 						return nil, cancelled()
 					}
+				}
+			}
+			// Only safe AGENTS edits are offered. Declining this path preserves
+			// the original proposal; other paths retain cancellation semantics.
+			for _, warning := range proposal.Preview().AgentsBlockWarnings {
+				if warning.Code != "agents_block.missing" && warning.Code != "agents_block.older" && warning.Code != "agents_block.modified" {
+					continue
+				}
+				agentsEdit = true
+				edited, err := candidate()
+				agentsEdit = false
+				if err != nil {
+					return nil, err
+				}
+				if err := s.print(edited.HumanPreview()); err != nil {
+					return nil, err
+				}
+				yes, err := s.confirm("AGENTS.md")
+				if err != nil {
+					return nil, err
+				}
+				if yes {
+					proposal = edited
+				} else if err := s.print(proposal.HumanPreview()); err != nil {
+					return nil, err
 				}
 			}
 			return proposal, nil
