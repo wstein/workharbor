@@ -2,6 +2,8 @@
 package commands_test
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,11 +11,17 @@ import (
 )
 
 func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
+	body := "foreign workflow\n"
+	block := func(version int) string {
+		return fmt.Sprintf("<!-- whr:agents-block begin v=%d sha256=%x -->\n%s<!-- whr:agents-block end -->\n", version, sha256.Sum256([]byte(body)), body)
+	}
 	cases := []struct {
 		name, body, action, warning string
 		edit                        bool
 		code                        int
 	}{
+		{"same version foreign intact", block(1), "left_unchanged", "agents_block.different_template", false, 0},
+		{"higher intact replacement", block(2), "replace_block", "", true, 0},
 		{"missing", "owner\n", "left_unchanged", "agents_block.missing", false, 0},
 		{"append", "owner\r\n", "append_block", "", true, 0},
 		{"malformed", "<!-- whr:agents-block end -->\n", "left_unchanged", "agents_block.malformed", false, 0},
@@ -62,7 +70,7 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 					continue
 				}
 				found++
-				if a["action"] != tt.action || a["applied"] != (tt.action == "append_block") {
+				if a["action"] != tt.action || a["applied"] != (tt.action == "append_block" || tt.action == "replace_block") {
 					t.Fatalf("action %v", a)
 				}
 			}

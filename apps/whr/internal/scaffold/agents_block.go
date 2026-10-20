@@ -99,14 +99,12 @@ func planAgentsBlockSized(data []byte, size int64, edit bool) (agentsBlockPlan, 
 			class = "malformed"
 		case block.end == 0:
 			class = "missing"
-		case block.version > agentsBlockVersion:
-			class = "newer"
 		case digest(data[block.bodyStart:block.bodyEnd]) != block.hash:
 			class = "modified"
-		case block.version < agentsBlockVersion:
-			class = "older"
-		default:
+		case block.version == agentsBlockVersion && bytes.Equal(data[block.bodyStart:block.bodyEnd], []byte(agentsBlockBody)):
 			class = "current"
+		default:
+			class = "different_template"
 		}
 	}
 	if class == "current" {
@@ -114,7 +112,7 @@ func planAgentsBlockSized(data []byte, size int64, edit bool) (agentsBlockPlan, 
 	}
 	var result []byte
 	action := "replace_block"
-	if class == "modified" || class == "older" || class == "missing" {
+	if class == "modified" || class == "different_template" || class == "missing" {
 		if class == "missing" {
 			action = "append_block"
 			result = append(result, data...)
@@ -135,7 +133,7 @@ func planAgentsBlockSized(data []byte, size int64, edit bool) (agentsBlockPlan, 
 	if edit && (class == "too_large" || class == "malformed") {
 		return agentsBlockPlan{}, exitcode.Errorf(exitcode.PathConflict, "AGENTS.md agent workflow block is %s; no files were written", class)
 	}
-	if !edit || class == "newer" {
+	if !edit {
 		return agentsBlockPlan{action: "left_unchanged", warning: "agents_block." + class}, nil
 	}
 	return agentsBlockPlan{action: action, data: result}, nil

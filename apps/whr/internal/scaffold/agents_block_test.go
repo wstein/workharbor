@@ -12,7 +12,7 @@ func fixtureAgentsBlock(v int, body string) []byte {
 	return []byte(fmt.Sprintf("<!-- whr:agents-block begin v=%d sha256=%s -->\n%s<!-- whr:agents-block end -->\n", v, digest([]byte(body)), body))
 }
 func TestAgentsBlockClassificationAndActions(t *testing.T) {
-	current := fixtureAgentsBlock(agentsBlockVersion, "body\n")
+	current := renderAgentsBlock()
 	cases := []struct {
 		name          string
 		data          []byte
@@ -21,9 +21,9 @@ func TestAgentsBlockClassificationAndActions(t *testing.T) {
 	}{
 		{"missing", []byte("owner\n"), "missing", "append_block", false},
 		{"current", current, "current", "skip_existing", false},
-		{"older", fixtureAgentsBlock(agentsBlockVersion-1, "body\n"), "older", "replace_block", false},
-		{"modified", bytes.Replace(current, []byte("body\n"), []byte("edit\n"), 1), "modified", "replace_block", false},
-		{"newer", bytes.Replace(fixtureAgentsBlock(agentsBlockVersion+1, "body\n"), []byte("body\n"), []byte("edit\n"), 1), "newer", "left_unchanged", false},
+		{"different template", fixtureAgentsBlock(agentsBlockVersion-1, "body\n"), "different_template", "replace_block", false},
+		{"modified", bytes.Replace(current, []byte("## Agent workflow"), []byte("## Owner workflow"), 1), "modified", "replace_block", false},
+		{"higher modified", bytes.Replace(fixtureAgentsBlock(agentsBlockVersion+1, "body\n"), []byte("body\n"), []byte("edit\n"), 1), "modified", "replace_block", false},
 		{"malformed", []byte("<!-- whr:agents-block end -->\n"), "malformed", "", true},
 		{"size precedence", bytes.Repeat([]byte("<!-- whr:agents-block end -->\n"), 3000), "too_large", "", true},
 	}
@@ -45,7 +45,7 @@ func TestAgentsBlockClassificationAndActions(t *testing.T) {
 					action = tt.edited
 				}
 				warning := "agents_block." + tt.class
-				if tt.class == "current" || (edit && tt.class != "newer") {
+				if tt.class == "current" || edit {
 					warning = ""
 				}
 				if got.action != action || got.warning != warning {
@@ -120,18 +120,18 @@ func TestAgentsBlockBoundariesAndHashPrecedence(t *testing.T) {
 			}
 		})
 	}
-	// An older block with edited bytes is modified, ahead of the older class.
+	// Body modification takes precedence over intact template identity.
 	old := fixtureAgentsBlock(agentsBlockVersion-1, "body\n")
 	modified := bytes.Replace(old, []byte("body\n"), []byte("edited\n"), 1)
 	got, err := planAgentsBlock(modified, false)
 	if err != nil || got.warning != "agents_block.modified" {
 		t.Fatalf("modified precedence: %+v %v", got, err)
 	}
-	for _, class := range []string{"missing", "older", "modified"} {
+	for _, class := range []string{"missing", "different_template", "modified"} {
 		t.Run(class, func(t *testing.T) {
 			base := []byte{}
 			switch class {
-			case "older":
+			case "different_template":
 				base = old
 			case "modified":
 				base = modified
@@ -156,5 +156,41 @@ func TestAgentsBlockBoundariesAndHashPrecedence(t *testing.T) {
 				t.Fatalf("exceeded result bound: %+v %v", got, err)
 			}
 		})
+	}
+}
+
+func TestAgentsBlockCurrentTemplateIdentityR1(t *testing.T) {
+	cases := []struct {
+		name    string
+		data    []byte
+		warning string
+	}{
+		{"same version foreign intact", fixtureAgentsBlock(agentsBlockVersion, "foreign workflow\n"), "different_template"},
+		{"lower version intact", fixtureAgentsBlock(agentsBlockVersion-1, agentsBlockBody), "different_template"},
+		{"higher version intact", fixtureAgentsBlock(agentsBlockVersion+1, agentsBlockBody), "different_template"},
+		{"higher version modified", bytes.Replace(fixtureAgentsBlock(agentsBlockVersion+1, "foreign workflow\n"), []byte("foreign workflow\n"), []byte("modified workflow\n"), 1), "modified"},
+	}
+	for _, tt := range cases {
+		for _, edit := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/edit=%v", tt.name, edit), func(t *testing.T) {
+				prefix := []byte("\xef\xbb\xbfowner\r\n")
+				suffix := []byte("owner tail\r\n")
+				input := append(append(append([]byte{}, prefix...), tt.data...), suffix...)
+				got, err := planAgentsBlock(input, edit)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !edit {
+					if got.action != "left_unchanged" || got.warning != "agents_block."+tt.warning {
+						t.Fatalf("unrequested action=%s warning=%s", got.action, got.warning)
+					}
+					return
+				}
+				want := append(append(append([]byte{}, prefix...), renderAgentsBlock()...), suffix...)
+				if got.action != "replace_block" || got.warning != "" || !bytes.Equal(got.data, want) {
+					t.Fatalf("requested action=%s warning=%s replacement differs=%v", got.action, got.warning, !bytes.Equal(got.data, want))
+				}
+			})
+		}
 	}
 }

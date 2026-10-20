@@ -1072,9 +1072,8 @@
               "code": {
                 "enum": [
                   "agents_block.missing",
-                  "agents_block.older",
+                  "agents_block.different_template",
                   "agents_block.modified",
-                  "agents_block.newer",
                   "agents_block.too_large",
                   "agents_block.malformed"
                 ]
