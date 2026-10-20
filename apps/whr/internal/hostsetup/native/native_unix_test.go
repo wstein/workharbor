@@ -5,11 +5,13 @@ package native
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strconv"
 	"strings"
@@ -28,6 +30,8 @@ func TestNativeHelper(t *testing.T) {
 		return
 	}
 	switch os.Args[len(os.Args)-1] {
+	case "failure":
+		os.Exit(7)
 	case "version":
 		fmt.Print("probe 1.2.3")
 	case "environment":
@@ -214,7 +218,7 @@ func TestNativeDescendantPipeCleanup(t *testing.T) {
 		t.Fatalf("missing owned descendant identity: %+v %v", out, err)
 	}
 	defer syscall.Kill(pid, syscall.SIGKILL)
-	if err == nil || time.Since(start) > 2*time.Second {
+	if err != nil || out.Exit != 0 || time.Since(start) > 2*time.Second {
 		t.Fatalf("descendant cleanup not bounded: %+v %v", out, err)
 	}
 	// Reparented dead children can remain zombies in minimal Linux containers.
@@ -268,5 +272,97 @@ func TestNativeClosedAndSpecialFiles(t *testing.T) {
 	}
 	if _, err := h.Run(context.Background(), probe(path, "version")); err == nil {
 		t.Fatal("executed after close")
+	}
+}
+
+type fakeLease struct {
+	events       []string
+	released     bool
+	exited       bool
+	observeErr   error
+	waitErr      error
+	unsafeSignal bool
+}
+
+func (p *fakeLease) Exited() (bool, error) {
+	p.events = append(p.events, "observe")
+	return p.exited, p.observeErr
+}
+func (p *fakeLease) SignalGroup() error {
+	p.events = append(p.events, "signal")
+	if p.released {
+		p.unsafeSignal = true
+	}
+	return nil
+}
+func (p *fakeLease) Release() error {
+	p.events = append(p.events, "release")
+	p.released = true
+	return nil
+}
+func (p *fakeLease) Wait() error {
+	p.events = append(p.events, "wait")
+	p.released = true
+	return p.waitErr
+}
+func TestNativeNeverSignalsReleasedProcess(t *testing.T) {
+	for _, mode := range []string{"success", "nonzero", "cancel", "unsupported", "observer_failure", "ownership_lost"} {
+		t.Run(mode, func(t *testing.T) {
+			child := &fakeLease{exited: true}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			switch mode {
+			case "nonzero":
+				child.waitErr = errors.New("nonzero")
+			case "cancel":
+				cancel()
+			case "unsupported":
+				child.observeErr = syscall.ENOSYS
+			case "observer_failure":
+				child.observeErr = syscall.EIO
+			case "ownership_lost":
+				child.observeErr = errOwnershipLost
+			}
+			err := finishProbe(ctx, child)
+			if child.unsafeSignal {
+				t.Fatalf("signal after ownership release: %v", child.events)
+			}
+			if (mode == "success") != (err == nil) {
+				t.Fatalf("unexpected result: %v; events=%v", err, child.events)
+			}
+			if mode == "ownership_lost" {
+				if !reflect.DeepEqual(child.events, []string{"observe", "release", "wait"}) {
+					t.Fatalf("lost-ownership cleanup: %v", child.events)
+				}
+			} else {
+				signal, wait := -1, -1
+				for i, e := range child.events {
+					if e == "signal" {
+						signal = i
+					}
+					if e == "wait" {
+						wait = i
+					}
+				}
+				if signal < 0 || wait < 0 || signal >= wait {
+					t.Fatalf("not owned signal before sole Wait: %v", child.events)
+				}
+			}
+		})
+	}
+}
+
+func TestNativeFailedStartAndNonzeroExit(t *testing.T) {
+	host, root, path := fixture(t)
+	out, err := host.Run(context.Background(), probe(path, "failure"))
+	if err == nil || out.Exit != 7 {
+		t.Fatalf("nonzero exit accepted or lost: %+v %v", out, err)
+	}
+	bad := filepath.Join(root, "invalid-executable")
+	if err := os.WriteFile(bad, []byte("not an executable format"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.Run(context.Background(), probe("/invalid-executable", "version")); err == nil {
+		t.Fatal("failed process spawn accepted")
 	}
 }

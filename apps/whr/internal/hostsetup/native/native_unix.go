@@ -210,7 +210,7 @@ func (h *Host) Run(ctx context.Context, p detect.Probe) (detect.Output, error) {
 	}
 	// ExtraFiles[0] is descriptor3 on both supported Unix platforms. /dev/fd is
 	// supplied by the OS, not PATH; the opened file remains pinned through exec.
-	cmd := exec.CommandContext(ctx, "/dev/fd/"+strconv.Itoa(3), p.Args...)
+	cmd := exec.Command("/dev/fd/"+strconv.Itoa(3), p.Args...)
 	cmd.Args[0] = p.Executable
 	cmd.ExtraFiles = []*os.File{f}
 	cmd.Env = []string{"PATH=" + detect.FixedPATH, "LC_ALL=C"}
@@ -220,21 +220,13 @@ func (h *Host) Run(ctx context.Context, p detect.Probe) (detect.Output, error) {
 	output := &boundedOutput{cancel: cancel}
 	cmd.Stdout = output
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error {
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		}
-		return err
-	}
-	// Bound pipe cleanup too if a probe leaves descendants holding output open.
+	// Wait owns reaping and must run only after every group signal. There is no
+	// CommandContext watcher that could signal concurrently with/after Wait.
 	cmd.WaitDelay = 100 * time.Millisecond
-	err = cmd.Run()
-	// A leader may exit before descendants close their pipes. WaitDelay bounds
-	// the copy goroutines; finish the owned process group as well.
-	if cmd.Process != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	if err = cmd.Start(); err != nil {
+		return detect.Output{}, err
 	}
+	err = finishProbe(ctx, &commandLease{cmd: cmd})
 	stdout, overflow := output.result()
 	result := detect.Output{Stdout: stdout, Exit: -1}
 	if cmd.ProcessState != nil {
@@ -250,3 +242,69 @@ func (h *Host) Run(ctx context.Context, p detect.Probe) (detect.Output, error) {
 }
 func (h *Host) Now() time.Time            { return time.Now() }
 func (h *Host) Detector() detect.Detector { return detect.Detector{FS: h, Exec: h, Clock: h} }
+
+// processLease keeps the command's PID owned until the final group signal.
+type processLease interface {
+	Exited() (bool, error)
+	SignalGroup() error
+	Release() error
+	Wait() error
+}
+
+var errOwnershipLost = errors.New("version probe ownership lost")
+
+type commandLease struct{ cmd *exec.Cmd }
+
+func (c *commandLease) Exited() (bool, error) { return childExited(c.cmd.Process.Pid) }
+func (c *commandLease) SignalGroup() error {
+	err := syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
+	if errors.Is(err, syscall.ESRCH) {
+		return nil
+	}
+	return err
+}
+func (c *commandLease) Release() error { return c.cmd.Process.Release() }
+func (c *commandLease) Wait() error    { return c.cmd.Wait() }
+
+func finishProbe(ctx context.Context, child processLease) error {
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	var observationErr error
+	for {
+		if ctx.Err() != nil {
+			observationErr = ctx.Err()
+			break
+		}
+		exited, err := child.Exited()
+		if errors.Is(err, errOwnershipLost) {
+			// Never address a potentially reused PID/group. Release marks the os.Process
+			// handle unusable before Cmd.Wait closes its bounded copy pipes; it cannot
+			// issue a new OS wait for the no-longer-owned numeric PID.
+			_ = child.Release()
+			_ = child.Wait()
+			return err
+		}
+		if err != nil {
+			observationErr = err
+			break
+		}
+		if exited {
+			break
+		}
+		select {
+		case <-ctx.Done():
+		case <-ticker.C:
+		}
+	}
+	// No other goroutine can wait/release this private command. An exited but
+	// unreaped child still reserves its PID/group identity through this signal.
+	signalErr := child.SignalGroup()
+	waitErr := child.Wait()
+	if observationErr != nil {
+		return observationErr
+	}
+	if signalErr != nil {
+		return signalErr
+	}
+	return waitErr
+}
