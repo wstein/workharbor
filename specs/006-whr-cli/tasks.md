@@ -1,5 +1,10 @@
 # Feature 006 pilot work items
 
+Delivery priority follows the [owner roadmap](plan.md#owner-delivery-order-2026-10-20):
+validator/foundation → usable init → wizard/reuse/generic templates → existing 008
+integration. Local lifecycle/drift support integration. Existing task dependencies,
+scopes, current numeric schema validation and all approval gates remain unchanged.
+
 Amendment H77 (2026-10-16/17) adds the first-increment WIs T025–T037 below; they are proposed, not approved or started,
 and change no checkbox of T001–T024. The owner decided that the series runs on its own branches and pull requests; its
 edits to the descriptions and dependencies of T011, T015, T016 and T017 take effect only with the owner's approval of
