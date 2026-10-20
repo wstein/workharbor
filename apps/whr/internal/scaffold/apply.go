@@ -442,6 +442,16 @@ func (t *transaction) validateDisk() (*workspacecfg.Report, error) {
 	}
 	return report, nil
 }
+
+// partialResult keeps recovery paths outside the bounded human error message.
+func (p *Proposal) partialResult(remaining []string, message string) (Preview, error) {
+	result := p.Preview()
+	result.Remaining = append([]string(nil), remaining...)
+	result.NextSteps = append([]string{"Inspect and recover every remaining path before retrying init."}, result.NextSteps...)
+	err := exitcode.Errorf(exitcode.PathPartialFailure, "%s", message)
+	err.Result = result
+	return result, err
+}
 func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview, error) {
 	result := p.Preview()
 	if err := interruptedContext(ctx); err != nil {
@@ -494,7 +504,7 @@ func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview,
 	markerInfo, err := journal.Stat()
 	if err != nil {
 		journal.Close()
-		return result, exitcode.Errorf(exitcode.PathPartialFailure, "inspect %s and recover init manually", marker)
+		return p.partialResult([]string{marker}, fmt.Sprintf("inspect %s and recover init manually", marker))
 	}
 	fail := func(cause error) (Preview, error) {
 		journal.Close()
@@ -507,7 +517,7 @@ func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview,
 			remaining = append(remaining, marker)
 		}
 		if len(remaining) > 0 {
-			return p.Preview(), exitcode.Errorf(exitcode.PathPartialFailure, "init rollback incomplete; inspect and recover these paths before retrying: %s", strings.Join(remaining, ", "))
+			return p.partialResult(remaining, fmt.Sprintf("init rollback incomplete; inspect and recover these paths before retrying: %s", strings.Join(remaining, ", ")))
 		}
 		return p.Preview(), interrupted(cause)
 	}
@@ -566,6 +576,11 @@ func (p *Proposal) apply(ctx context.Context, step func(string) error) (Preview,
 	}
 	if err = removeOwned(root, marker, markerInfo); err != nil {
 		return fail(err)
+	}
+	for _, action := range result.Actions {
+		if action.Applied && action.Action == "create" {
+			result.Created = append(result.Created, action.Path)
+		}
 	}
 	return result, nil
 }
