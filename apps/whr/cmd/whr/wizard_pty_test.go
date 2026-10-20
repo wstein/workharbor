@@ -122,3 +122,49 @@ func TestWizardPTYDevcontainerSelection(t *testing.T) {
 		t.Fatal("wizard selection missing")
 	}
 }
+
+func TestWizardPTYAgentsConsentAndRefusal(t *testing.T) {
+	for _, kind := range []string{"decline", "refused", "flagged refusal"} {
+		t.Run(kind, func(t *testing.T) {
+			dir := wizardFixture(t)
+			original := []byte("owner\r\n")
+			if kind != "decline" {
+				original = []byte("<!-- whr:agents-block end -->\n")
+			}
+			target := filepath.Join(dir, "AGENTS.md")
+			if err := os.WriteFile(target, original, 0644); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"init", dir}
+			if kind == "flagged refusal" {
+				args = append(args, "--overwrite=AGENTS.md")
+			}
+			s := ptytest.StartFunc(t, "wizard", ptytest.Options{Args: args})
+			if kind == "flagged refusal" {
+				s.ExpectExit(68)
+			} else {
+				s.Expect("Workspace name (optional) [")
+				s.Send("review\n")
+				s.Expect("Review:")
+				s.Send("write\n")
+				if kind == "decline" {
+					s.Expect("Modify AGENTS.md? [y/N]: ")
+					s.Send("no\n")
+				}
+				s.ExpectExit(0)
+			}
+			raw, err := os.ReadFile(target)
+			if err != nil || string(raw) != string(original) {
+				t.Fatalf("declined/refused path changed: %v", err)
+			}
+			if kind != "decline" && strings.Contains(string(s.Transcript()), "Modify AGENTS.md?") {
+				t.Fatal("refused edit offered")
+			}
+			if kind == "flagged refusal" {
+				if _, err := os.Stat(filepath.Join(dir, "workharbor.json")); !os.IsNotExist(err) {
+					t.Fatal("refusal wrote manifest")
+				}
+			}
+		})
+	}
+}

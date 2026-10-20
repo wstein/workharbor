@@ -24,10 +24,10 @@ func discoveryConflict() error {
 }
 
 func discover(ctx context.Context, directory string, beforeOpen func(string)) (Snapshot, error) {
-	return discoverSelected(ctx, directory, beforeOpen, nil)
+	return discoverSelected(ctx, directory, beforeOpen, nil, false)
 }
 
-func discoverSelected(ctx context.Context, directory string, beforeOpen func(string), selected *string) (Snapshot, error) {
+func discoverSelected(ctx context.Context, directory string, beforeOpen func(string), selected *string, noAgents bool) (Snapshot, error) {
 	s := Snapshot{Directory: directory, Entries: map[string]Entry{}}
 	if err := ctx.Err(); err != nil {
 		return s, err
@@ -103,6 +103,11 @@ func discoverSelected(ctx context.Context, directory string, beforeOpen func(str
 		limit      int
 	}{{dc, "file", workspacecfg.MaxDevcontainerLen}, {projects, "directory", 0}, {projects + "/.gitkeep", "file", workspacecfg.MaxManifestBytes}} {
 		if err := observe(ctx, root, target.name, target.kind, target.limit, &s, beforeOpen); err != nil {
+			return s, err
+		}
+	}
+	if !noAgents {
+		if err := observeAgents(ctx, root, &s, beforeOpen); err != nil {
 			return s, err
 		}
 	}

@@ -795,7 +795,8 @@
         "validation",
         "runtime_enforcement",
         "git_checks",
-        "bundle_selection_unavailable"
+        "bundle_selection_unavailable",
+        "agents_block_warnings"
       ],
       "properties": {
         "directory": {
@@ -821,7 +822,10 @@
                   "create",
                   "overwrite",
                   "reuse",
-                  "skip_existing"
+                  "skip_existing",
+                  "append_block",
+                  "replace_block",
+                  "left_unchanged"
                 ]
               },
               "kind": {
@@ -1053,6 +1057,33 @@
         "bundle_selection_unavailable": {
           "const": true,
           "description": "FR-050: bundle selection is not offered; new manifests carry an empty list and existing declarations are left unchanged."
+        },
+        "agents_block_warnings": {
+          "type": "array",
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "path"
+            ],
+            "properties": {
+              "code": {
+                "enum": [
+                  "agents_block.missing",
+                  "agents_block.older",
+                  "agents_block.modified",
+                  "agents_block.newer",
+                  "agents_block.too_large",
+                  "agents_block.malformed"
+                ]
+              },
+              "path": {
+                "const": "AGENTS.md"
+              }
+            }
+          }
         }
       },
       "allOf": [

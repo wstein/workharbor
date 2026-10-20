@@ -105,6 +105,6 @@ func initFailure(ctx context.Context, directory string, dryRun bool, preview *sc
 	if readErr != nil {
 		report = workspacecfg.NewReport(directory, []workspacecfg.Finding{{Code: "manifest.unsafe_path", Severity: workspacecfg.SevError, Message: "configuration could not be safely inspected"}})
 	}
-	err.Result = scaffold.Preview{Directory: directory, DryRun: dryRun, Actions: []scaffold.Action{}, Validation: report, RuntimeEnforcement: "not_in_this_release", GitChecks: "not_run", BundleSelectionUnavailable: true, NextSteps: []string{"Resolve the reported init conflict before retrying; no proposal was written."}}
+	err.Result = scaffold.Preview{AgentsBlockWarnings: []scaffold.AgentsBlockWarning{}, Directory: directory, DryRun: dryRun, Actions: []scaffold.Action{}, Validation: report, RuntimeEnforcement: "not_in_this_release", GitChecks: "not_run", BundleSelectionUnavailable: true, NextSteps: []string{"Resolve the reported init conflict before retrying; no proposal was written."}}
 	return err
 }

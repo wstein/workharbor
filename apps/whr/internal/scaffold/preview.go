@@ -18,7 +18,12 @@ type Action struct {
 	Diff          string `json:"diff,omitempty"`
 	DiffTruncated bool   `json:"diff_truncated,omitempty"`
 }
+type AgentsBlockWarning struct {
+	Code string `json:"code"`
+	Path string `json:"path"`
+}
 type Preview struct {
+	AgentsBlockWarnings        []AgentsBlockWarning `json:"agents_block_warnings"`
 	Created                    []string             `json:"created,omitempty"`
 	Remaining                  []string             `json:"remaining,omitempty"`
 	Directory                  string               `json:"directory"`
@@ -51,6 +56,9 @@ func (p *Proposal) HumanPreview() string {
 		if a.DiffTruncated {
 			b.WriteString("[preview truncated; retained content is complete]\n")
 		}
+	}
+	for _, warning := range p.preview.AgentsBlockWarnings {
+		fmt.Fprintf(&b, "%s %s: left unchanged\n", warning.Code, warning.Path)
 	}
 	for _, step := range p.preview.NextSteps {
 		b.WriteString(terminal.Escape(step))
