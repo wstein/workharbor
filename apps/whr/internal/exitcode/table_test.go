@@ -8,6 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -38,7 +41,8 @@ type contractFile struct {
 		TransportLos int      `json:"transport_loss"`
 	} `json:"remote_status"`
 	Freeze struct {
-		TestIDs []string `json:"test_ids"`
+		TestFile string   `json:"test_file"`
+		TestIDs  []string `json:"test_ids"`
 	} `json:"freeze"`
 }
 
@@ -99,11 +103,10 @@ func TestExitTableCodesUniqueAndInRange(t *testing.T) {
 			t.Errorf("Name(%d) resolves a reserved code", r)
 		}
 	}
-	for _, id := range c.Freeze.TestIDs {
-		if id == "" {
-			t.Error("empty freeze id")
-		}
+	if c.Freeze.TestFile != "apps/whr/internal/exitcode/table_test.go" {
+		t.Errorf("contract names test file %q", c.Freeze.TestFile)
 	}
+	assertCurrentTestIDs(t, c.Freeze.TestIDs)
 }
 
 func TestEveryExitPathMapsToCode(t *testing.T) {
@@ -215,5 +218,47 @@ func TestCLIFailureAnnouncedOnStderrAndKindCLI(t *testing.T) {
 	remote, err := exitcode.Remote(64)
 	if err != nil || remote.Kind != exitcode.KindRemote || remote.Code != 64 {
 		t.Fatalf("Remote(64) = %+v, %v", remote, err)
+	}
+}
+
+// assertCurrentTestIDs checks names against the actual runnable declarations in
+// this contract's fixed test file, without keeping a second name registry.
+func assertCurrentTestIDs(t *testing.T, ids []string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), "table_test.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := map[string]bool{}
+	for _, node := range file.Decls {
+		fn, ok := node.(*ast.FuncDecl)
+		if !ok || fn.Recv != nil || fn.Type.Params.NumFields() != 1 || (fn.Type.Results != nil && fn.Type.Results.NumFields() != 0) || (fn.Type.TypeParams != nil && fn.Type.TypeParams.NumFields() != 0) {
+			continue
+		}
+		pointer, ok := fn.Type.Params.List[0].Type.(*ast.StarExpr)
+		if !ok {
+			continue
+		}
+		selector, ok := pointer.X.(*ast.SelectorExpr)
+		if !ok {
+			continue
+		}
+		pkg, ok := selector.X.(*ast.Ident)
+		if ok && pkg.Name == "testing" && selector.Sel.Name == "T" && strings.HasPrefix(fn.Name.Name, "Test") {
+			declared[fn.Name.Name] = true
+		}
+	}
+	if len(ids) == 0 {
+		t.Error("contract has no current test IDs")
+	}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if !declared[id] {
+			t.Errorf("contract test ID %q has no runnable declaration in table_test.go", id)
+		}
+		if seen[id] {
+			t.Errorf("duplicate contract test ID %q", id)
+		}
+		seen[id] = true
 	}
 }
