@@ -4,6 +4,8 @@ package wizard_test
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -84,5 +86,62 @@ func TestWizardAgentsFlaggedRefusalReturnsConflictDuringSettings(t *testing.T) {
 	_, err := wizard.Run(context.Background(), s, scaffold.Options{Overwrite: []string{"AGENTS.md"}}, strings.NewReader("demo\n"), &diag)
 	if exitcode.FromError(err) != exitcode.Conflict {
 		t.Fatalf("preconfirmed refused edit must be 68, got %v", err)
+	}
+}
+
+func TestWizardAgentsDifferentTemplateConsentR1(t *testing.T) {
+	expected, err := scaffold.Build(fixture(), scaffold.Options{DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipped := expected.Files()["AGENTS.md"]
+	for _, version := range []int{0, 1, 2} {
+		for _, consent := range []string{"yes", "no", "flag"} {
+			t.Run(fmt.Sprintf("version=%d/%s", version, consent), func(t *testing.T) {
+				body := "foreign workflow\n"
+				block := fmt.Sprintf("<!-- whr:agents-block begin v=%d sha256=%x -->\n%s<!-- whr:agents-block end -->\n", version, sha256.Sum256([]byte(body)), body)
+				original := []byte("owner\r\n" + block + "tail\r\n")
+				s := existing()
+				s.Entries["AGENTS.md"] = scaffold.Entry{Kind: "file", Data: original}
+				options := scaffold.Options{}
+				answers := "write\n" + consent + "\n"
+				if consent == "flag" {
+					options.Overwrite = []string{"AGENTS.md"}
+					answers = "write\n"
+				}
+				var diag bytes.Buffer
+				p, err := wizard.Run(context.Background(), s, options, strings.NewReader(answers), &diag)
+				if err != nil || p == nil {
+					t.Fatalf("consent failed: %v", err)
+				}
+				if strings.Contains(diag.String(), "Modify AGENTS.md?") != (consent != "flag") {
+					t.Fatal("wrong path-confirmation behavior")
+				}
+				wantAction := "replace_block"
+				wantData := append(append([]byte("owner\r\n"), shipped...), []byte("tail\r\n")...)
+				if consent == "no" {
+					wantAction = "left_unchanged"
+					wantData = original
+				}
+				found := 0
+				for _, a := range p.Preview().Actions {
+					if a.Path == "AGENTS.md" {
+						found++
+						if a.Action != wantAction {
+							t.Fatalf("action %+v", a)
+						}
+					}
+				}
+				if found != 1 || !bytes.Equal(p.Files()["AGENTS.md"], wantData) {
+					t.Fatal("accepted proposal differs from path consent")
+				}
+				if consent == "no" {
+					warnings := p.Preview().AgentsBlockWarnings
+					if len(warnings) != 1 || warnings[0].Code != "agents_block.different_template" {
+						t.Fatalf("declined warning %v", warnings)
+					}
+				}
+			})
+		}
 	}
 }
