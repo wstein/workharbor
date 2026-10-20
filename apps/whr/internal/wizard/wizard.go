@@ -39,7 +39,7 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 		{"name", "Workspace name (optional)", "", &options.Name, false},
 		{"project-url", "Project URL (optional)", "", &options.ProjectURL, false},
 		{"start-dir", "Starting directory", ".", &options.StartDir, false},
-		{"devcontainer", "Reuse existing devcontainer", ".devcontainer/devcontainer.json", nil, false},
+		{"devcontainer", "Reuse existing devcontainer", ".devcontainer/devcontainer.json", &options.Devcontainer, false},
 		{"human-shell", "Human shell (fish/bash/zsh/nu)", "fish", &options.HumanShell, false},
 		{"console-mode", "Console mode (herdr/plain)", "herdr", &options.ConsoleMode, false},
 		{"shortcuts", "Shared shortcuts (on/off)", "on", &options.Shortcuts, false},
@@ -110,28 +110,31 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 			if answer == "" {
 				answer = def
 			}
-			if st.value == nil {
-				if answer != def {
-					if err := s.print("Only the discovered existing devcontainer is available here; starters are unsupported.\n"); err != nil {
-						return nil, err
-					}
-					continue
-				}
-			} else {
-				old := *st.value
-				if answer == "" {
-					*st.value = nil
-				} else {
-					v := answer
-					*st.value = &v
-				}
-				if _, err := candidate(); err != nil {
-					*st.value = old
+			old := *st.value
+			previous := snapshot
+			if st.name == "devcontainer" {
+				selected, err := snapshot.SelectDevcontainer(ctx, answer)
+				if err != nil {
 					if err := s.print(terminal.Escape(err.Error()) + "\n"); err != nil {
 						return nil, err
 					}
 					continue
 				}
+				snapshot = selected
+			}
+			if answer == "" {
+				*st.value = nil
+			} else {
+				v := answer
+				*st.value = &v
+			}
+			if _, err := candidate(); err != nil && !(st.name != "devcontainer" && options.Devcontainer == nil && exitcode.FromError(err) == exitcode.NeedsHuman) {
+				*st.value = old
+				snapshot = previous
+				if err := s.print(terminal.Escape(err.Error()) + "\n"); err != nil {
+					return nil, err
+				}
+				continue
 			}
 			pos++
 			continue

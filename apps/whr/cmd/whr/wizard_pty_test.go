@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -79,5 +80,45 @@ func TestWizardPTYInterruptRollsBack(t *testing.T) {
 				t.Fatal("interrupted prompt changed files")
 			}
 		})
+	}
+}
+
+func TestWizardPTYDevcontainerSelection(t *testing.T) {
+	dir := t.TempDir()
+	raw := []byte("{ // custom\n \"image\":\"debian:bookworm\", }\n")
+	if err := os.WriteFile(filepath.Join(dir, "chosen.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s := ptytest.StartFunc(t, "wizard", ptytest.Options{Args: []string{"init", dir}})
+	s.Expect("Workspace name (optional) [")
+	s.Send("demo\n")
+	s.Expect("Project URL (optional) [")
+	s.Send("\n")
+	s.Expect("Starting directory [.")
+	s.Send("\n")
+	s.Expect("Reuse existing devcontainer [")
+	s.Send("../escape\n")
+	s.Expect("safe relative file path")
+	s.Send("chosen.json\n")
+	s.Expect("Human shell (fish/bash/zsh/nu) [fish")
+	s.Send("\n")
+	s.Expect("Console mode (herdr/plain) [herdr")
+	s.Send("\n")
+	s.Expect("Shared shortcuts (on/off) [on")
+	s.Send("\n")
+	s.Expect("reuse file chosen.json")
+	s.Expect("Review:")
+	s.Send("write\n")
+	s.ExpectExit(0)
+	got, err := os.ReadFile(filepath.Join(dir, "chosen.json"))
+	if err != nil || string(got) != string(raw) {
+		t.Fatal("selected devcontainer changed", err)
+	}
+	manifest, err := os.ReadFile(filepath.Join(dir, "workharbor.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(manifest), `"devcontainer_path": "chosen.json"`) {
+		t.Fatal("wizard selection missing")
 	}
 }
