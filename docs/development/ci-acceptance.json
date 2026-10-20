@@ -841,7 +841,9 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryCancelled",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRaceRefused",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoverySpecialFileRefused",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRootSuffixCannotHideSymlink"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRootSuffixCannotHideSymlink",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitProposalWizardFlagParity",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitModes"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
