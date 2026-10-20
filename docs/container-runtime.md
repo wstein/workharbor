@@ -1,8 +1,12 @@
 # Container runtime prerequisite
 
-WorkHarbor needs an existing Docker-compatible runtime on the host. `whr` never
-installs, configures or updates a container runtime; `whr doctor` only looks for a
-socket that is already there and links to this page when it finds none.
+WorkHarbor needs an existing Docker-compatible runtime on the host. On Linux `whr`
+never installs, configures or updates a container runtime. On macOS the host setup
+wizard (`whr setup`, [Feature 009](../specs/009-host-setup-wizard/spec.md)) and
+`whr doctor --fix` may install OrbStack through Homebrew when the owner selected it; `whr` never starts,
+configures or signs in to the runtime application and never changes its Linux VM.
+Plain `whr doctor` only looks for a socket that is already there and links to this page
+when it finds none.
 
 Status: guidance for the first `whr` increment ([Feature 006](../specs/006-whr-cli/spec.md),
 FR-060). Nothing here is a verified platform claim; the verified host and client
