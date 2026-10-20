@@ -120,6 +120,35 @@ func TestColorFlagsEndToEnd(t *testing.T) {
 	}
 }
 
+func TestHelpRejectsInvalidColor(t *testing.T) {
+	for _, help := range [][]string{{"--help"}, {"version", "--help"}, {"workspace", "--help"}, {"init", "--help"}, {"help"}} {
+		for _, jsonMode := range []bool{false, true} {
+			args := append([]string{"--color=bogus"}, help...)
+			if jsonMode {
+				args = append(args, "--json")
+			}
+			got := run(t, nil, args...)
+			if got.code != 64 || !strings.Contains(got.err, "color") {
+				t.Errorf("%v: want color usage error, got %+v", args, got)
+			}
+			if jsonMode {
+				env := decodeEnvelope(t, got.stdout)
+				if env["exit_code"] != float64(64) {
+					t.Errorf("%v: %#v", args, env)
+				}
+			} else if got.stdout != "" {
+				t.Errorf("%v: failure wrote help data: %q", args, got.stdout)
+			}
+		}
+	}
+	for _, mode := range []string{"auto", "always", "never"} {
+		got := run(t, nil, "--color="+mode, "--help")
+		if got.code != 0 || !strings.Contains(got.stdout, "Usage:") {
+			t.Errorf("valid color %s help: %+v", mode, got)
+		}
+	}
+}
+
 func TestHandlerPanicMapsToInternal(t *testing.T) {
 	for _, spelling := range [][]string{{"workspace", "validate"}, {"ws", "validate"}, {"validate"}} {
 		for _, jsonMode := range []bool{false, true} {
