@@ -9,6 +9,7 @@ import (
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/terminal"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/wizard"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg"
 )
 
@@ -17,6 +18,8 @@ type initInvocation struct {
 	options     scaffold.Options
 	err         error
 	diagnostics io.Writer
+	input       io.Reader
+	interactive bool
 }
 
 // initHandler consumes the same typed proposal used by the later wizard.
@@ -45,12 +48,19 @@ func initWithApply(ctx context.Context, call Call, apply func(context.Context, *
 	if err != nil {
 		return Result{}, initFailure(ctx, directory, invocation.options.DryRun, nil, err)
 	}
-	proposal, err := scaffold.Build(snapshot, invocation.options)
+	var proposal *scaffold.Proposal
+	if invocation.interactive {
+		proposal, err = wizard.Run(ctx, snapshot, invocation.options, invocation.input, invocation.diagnostics)
+	} else {
+		proposal, err = scaffold.Build(snapshot, invocation.options)
+	}
 	if err != nil {
 		return Result{}, initFailure(ctx, directory, invocation.options.DryRun, nil, err)
 	}
-	if _, err = io.WriteString(invocation.diagnostics, proposal.HumanPreview()); err != nil {
-		return Result{}, exitcode.Errorf(exitcode.PathUnclassified, "writing init preview failed: %v", err)
+	if !invocation.interactive {
+		if _, err = io.WriteString(invocation.diagnostics, proposal.HumanPreview()); err != nil {
+			return Result{}, exitcode.Errorf(exitcode.PathUnclassified, "writing init preview failed: %v", err)
+		}
 	}
 	result, err := apply(ctx, proposal)
 	if err != nil {

@@ -51,7 +51,7 @@ func TestInitModes(t *testing.T) {
 	for _, tc := range []struct {
 		flags []string
 		code  int
-	}{{nil, 64}, {[]string{"--json"}, 64}, {[]string{"--non-interactive"}, 70}, {[]string{"--non-interactive", "--yes"}, 0}, {[]string{"--dry-run"}, 0}} {
+	}{{nil, 0}, {[]string{"--json"}, 0}, {[]string{"--non-interactive"}, 70}, {[]string{"--non-interactive", "--yes"}, 0}, {[]string{"--dry-run"}, 0}} {
 		_, err := mappedInit(t, []string{"init"}, tc.flags)
 		if int(exitcode.FromError(err)) != tc.code {
 			t.Errorf("%v: %v, want code%d", tc.flags, err, tc.code)
