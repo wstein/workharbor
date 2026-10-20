@@ -119,3 +119,46 @@ func TestColorFlagsEndToEnd(t *testing.T) {
 		t.Errorf("JSON output is colored: %q", got.stdout)
 	}
 }
+
+func TestHandlerPanicMapsToInternal(t *testing.T) {
+	for _, spelling := range [][]string{{"workspace", "validate"}, {"ws", "validate"}, {"validate"}} {
+		for _, jsonMode := range []bool{false, true} {
+			args := append([]string{}, spelling...)
+			if jsonMode {
+				args = append(args, "--json")
+			}
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				defer func() {
+					if recover() != nil {
+						t.Fatal("handler panic escaped Execute")
+					}
+				}()
+				handlers := baseHandlers()
+				handlers["workspace.validate"] = func(context.Context, commands.Call) (commands.Result, error) { panic("panic-canary") }
+				got := run(t, handlers, args...)
+				if got.code != 74 || !strings.HasPrefix(got.err, "whr: ") {
+					t.Fatalf("panic result: %+v", got)
+				}
+				if strings.Contains(got.stdout+got.err, "panic-canary") {
+					t.Fatal("panic payload was disclosed")
+				}
+				if !jsonMode {
+					if got.stdout != "" {
+						t.Errorf("human failure stdout %q", got.stdout)
+					}
+					return
+				}
+				env := decodeEnvelope(t, got.stdout)
+				if env["command"] != "workspace.validate" || env["ok"] != false || env["exit_code"] != float64(74) {
+					t.Fatalf("panic envelope: %#v", env)
+				}
+				if e, ok := env["error"].(map[string]any); !ok || e["code"] != "internal" {
+					t.Fatalf("panic error: %#v", env["error"])
+				}
+				if strings.Count(got.stdout, "\n") != 1 {
+					t.Errorf("panic wrote more than one envelope: %q", got.stdout)
+				}
+			})
+		}
+	}
+}
