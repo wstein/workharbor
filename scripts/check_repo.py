@@ -101,7 +101,7 @@ class _Seen:
             self.duplicate = True
         # Inspect every pair, including values a duplicate key would drop.
         if not self.surrogate and _has_lone_surrogate([item for pair in pairs for item in pair
-                                                       if not isinstance(item, (dict, list))]):
+                                                       if not isinstance(item, dict)]):
             self.surrogate = True
         return dict(pairs)
 
@@ -301,7 +301,9 @@ def _project_findings(project, projects_path, project_schema, path_ok=True):
     last = '' if url.endswith('/') else url.rsplit('/', 1)[-1]
     name = last[:-4] if last.endswith('.git') else last
     # With an unusable projects_path (already reported) there is nothing to compare against.
-    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name) or (path_ok and path != f'{projects_path}/{name}'):
+    if (len(path) < project_schema['properties']['path'].get('minLength', 0)
+            or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._-]*', name)
+            or (path_ok and path != f'{projects_path}/{name}')):
         problems.append(('manifest.schema', 'project.path', ''))
     return problems
 
@@ -319,7 +321,7 @@ def vector_bytes(case):
     return template + b' ' * (spec['total'] - len(template))
 
 
-MIN_VECTOR_CASES = 137
+MIN_VECTOR_CASES = 142
 
 
 def vector_case_errors(cases):

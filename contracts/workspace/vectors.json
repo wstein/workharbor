@@ -1738,6 +1738,61 @@
     "manifest.path_invalid"
    ],
    "note": "U+FEFF is dropped before the comparison"
+  },
+  {
+   "id": "raw-list-surrogate-and-duplicate",
+   "raw_text": "{\"a\":[\"\\ud800\"],\"a\":1}",
+   "expect_codes": [
+    "manifest.encoding"
+   ]
+  },
+  {
+   "id": "raw-nested-list-surrogate-and-duplicate",
+   "raw_text": "{\"a\":[[\"\\ud800\"]],\"a\":1}",
+   "expect_codes": [
+    "manifest.encoding"
+   ]
+  },
+  {
+   "id": "raw-manifest-list-surrogate-and-duplicate",
+   "raw_text": "{\"schema_version\":1,\"devcontainer_path\":\".devcontainer/devcontainer.json\",\"projects_path\":\"projects\",\"bundles\":[\"\\ud800\"],\"bundles\":[]}",
+   "expect_codes": [
+    "manifest.encoding"
+   ]
+  },
+  {
+   "id": "v2-project-path-short-with-invalid-projects-path",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "../x",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a.git",
+     "path": "x"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema",
+    "manifest.path_invalid"
+   ]
+  },
+  {
+   "id": "v2-project-path-empty-with-invalid-projects-path",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "../x",
+    "bundles": [],
+    "project": {
+     "url": "https://f.example/o/a.git",
+     "path": ""
+    }
+   },
+   "expect_codes": [
+    "manifest.schema",
+    "manifest.path_invalid"
+   ]
   }
  ]
 }
