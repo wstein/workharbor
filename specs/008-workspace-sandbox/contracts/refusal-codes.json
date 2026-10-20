@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "contract": "whr-sandbox-refusals",
+  "feature": "008-workspace-sandbox",
+  "status": "proposed",
+  "exit_code": 68,
+  "exit_name": "conflict",
+  "rules": [
+    "A refusal happens before any provider side effect and creates nothing.",
+    "The stable code travels in a separate field (proposed: error.refusal); error.code stays the ADR 0013 name. Adding that field to contracts/cli/output.schema.json is an owner gate.",
+    "Codes are never reused or renamed; a new code is appended."
+  ],
+  "refusals": [
+    {"code": "refused.profile_unsupported", "when": "the provider does not support the requested trust profile"},
+    {"code": "refused.kernel_isolation_unavailable", "when": "a required kernel isolation (including microvm) is not enforced by the provider; no fallback"},
+    {"code": "refused.egress_enforcement_unavailable", "when": "a required egress policy is not enforced"},
+    {"code": "refused.credential_mediation_unavailable", "when": "credential mediation is required and not enforced"},
+    {"code": "refused.host_tools_unavailable", "when": "a host tool or gateway is required and not provided"},
+    {"code": "refused.git_config_profile_unavailable", "when": "the provider cannot deliver the git configuration profile of the requested profile"},
+    {"code": "refused.git_config_single_file_mount", "when": "a writable single-file git configuration mount is planned"},
+    {"code": "refused.host_git_config_for_agent", "when": "the host global git configuration would be planned for any profile other than developer, including the workspace container of ADR 0009"},
+    {"code": "refused.shared_git_metadata_untrusted", "when": "an untrusted_job would get a worktree, alternates or a shared object store"},
+    {"code": "refused.host_socket_mount", "when": "the host Docker socket or another host control socket would be mounted"},
+    {"code": "refused.tool_mount_writable", "when": "an /opt/bdock/<bundle> or bundledock-* volume would be writable"},
+    {"code": "refused.trust_acknowledgement_missing", "when": "a cooperative_job lacks the explicit shared-metadata acknowledgement"},
+    {"code": "refused.copy_policy_secret_path", "when": "a secret-pattern path is included without explicit naming and confirmation"},
+    {"code": "refused.copy_policy_dirty_submodule", "when": "a requested submodule has uncommitted changes"},
+    {"code": "refused.foreign_object", "when": "a target container, volume or directory lacks the ownership labels"},
+    {"code": "refused.primary_target", "when": "an operation targets the workspace's primary environment"},
+    {"code": "refused.unexported_results", "when": "discard would delete results not exported to an explicit destination"},
+    {"code": "refused.invalid_state", "when": "the operation is not allowed in the instance's current state"},
+    {"code": "refused.git_env_override", "when": "a developer sandbox request carries a GIT_CONFIG_* variable"},
+    {"code": "refused.cleanup_capability_insufficient", "when": "a job profile is requested from a provider whose cancellation_cleanup is below force_only"},
+    {"code": "refused.git_config_not_ready", "when": "git configuration preflight failed; the instance is not ready"}
+  ],
+  "freeze": {
+    "test_file": "apps/whr/internal/runtime/refusal_test.go",
+    "test_ids": ["TestRefusalCodesMatchContract", "TestRefusalCodesUniqueAndStable"],
+    "offline": true
+  }
+}
