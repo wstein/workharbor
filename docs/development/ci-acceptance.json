@@ -531,6 +531,12 @@
   "retained_assertion_failures": [],
   "application_tests": {
     "whr": [
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeDescriptorFS",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeProbeIsolationAndBounds",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeProbeRejectsAliasesAndUnsafeRequests",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeDetectorWiring",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeDescendantPipeCleanup",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeClosedAndSpecialFiles",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectAncestorDirectoriesResolvedBeforeProbe",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectTerminalBudgetAndCancellation",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectStates",
