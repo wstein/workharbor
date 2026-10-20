@@ -45,12 +45,7 @@ func (a *app) build() {
 	root.PersistentFlags().StringVar(&a.colorFlag, "color", string(output.ColorAuto), "color mode: auto, always or never")
 	root.PersistentFlags().BoolVar(&a.noColor, "no-color", false, "disable color (same as --color never)")
 	showVersion := root.Flags().Bool("version", false, "print the version (same as the version command)")
-	root.PersistentPreRunE = func(*cobra.Command, []string) error {
-		if _, err := output.ParseColorMode(a.colorFlag); err != nil {
-			return exitcode.Errorf(exitcode.PathBadArguments, "%v", err)
-		}
-		return nil
-	}
+	root.PersistentPreRunE = func(*cobra.Command, []string) error { return a.colorError() }
 	root.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		if name := c.Annotations[annotationID]; name != "" {
 			err = fmt.Errorf("%s: %w", name, err)
@@ -216,10 +211,22 @@ func (a *app) group(c *cobra.Command, path []string, args []string) error {
 	return nil
 }
 
+// colorError validates the color mode shared by commands and help.
+func (a *app) colorError() error {
+	if _, err := output.ParseColorMode(a.colorFlag); err != nil {
+		return exitcode.Errorf(exitcode.PathBadArguments, "%v", err)
+	}
+	return nil
+}
+
 // flagHelp prints the help of c to standard output (it is data), or refuses
 // --json with a structured usage error.
 func (a *app) flagHelp(c *cobra.Command) {
 	w := a.writer()
+	if err := a.colorError(); err != nil {
+		a.exit = w.Failure("help", asError(err))
+		return
+	}
 	if a.jsonMode() {
 		a.exit = w.Failure("help", exitcode.Errorf(exitcode.PathUnsupportedJSON, "help does not support --json"))
 		return
