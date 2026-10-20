@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "contract": "whr-host-setup-codes",
+  "feature": "009-host-setup-wizard",
+  "status": "proposed",
+  "rules": [
+    "The code travels in result.reason and per step in result.steps[].reason; error.code stays the ADR 0013 name.",
+    "exit_alone is the command exit status when this is the only outcome; when something was also applied the command exits 73.",
+    "Codes are stable and never reused; a new code is appended."
+  ],
+  "codes": [
+    {"code": "host_setup.platform_unsupported", "exit_alone": 68, "when": "platform is not darwin and not the Linux enrollment route, or doctor --fix off darwin"},
+    {"code": "host_setup.running_as_root", "exit_alone": 68, "when": "darwin: uid 0 or SUDO_USER set"},
+    {"code": "host_setup.run_locked", "exit_alone": 68, "when": "another real run holds the run lock"},
+    {"code": "host_setup.profile_absent", "exit_alone": 68, "when": "doctor --fix without a host profile"},
+    {"code": "host_setup.protocol_unwritable", "exit_alone": 68, "when": "the protocol cannot be created; no mutation happens"},
+    {"code": "host_setup.confirmation_missing", "exit_alone": 70, "when": "unattended run lacks --yes, --confirm <id> or input; names the flags"},
+    {"code": "host_setup.sudo_requires_terminal", "exit_alone": 70, "when": "privileged step without a terminal, with --json or --non-interactive, or unconfirmed; sudo not run"},
+    {"code": "host_setup.unknown_item", "exit_alone": 64, "when": "--only, --skip or --confirm names an id not in the catalogue"},
+    {"code": "host_setup.flag_not_valid_here", "exit_alone": 64, "when": "a flag of another platform or mode"},
+    {"code": "host_setup.catalogue_invalid", "exit_alone": 74, "when": "schema or loader rule violated"},
+    {"code": "host_setup.plan_changed", "exit_alone": 68, "when": "plan hash differs between confirmation and apply"},
+    {"code": "host_setup.package_manager_missing", "exit_alone": 68, "when": "brew not found at its canonical paths; step blocked, instructions printed"},
+    {"code": "host_setup.package_manager_failed", "exit_alone": 68, "when": "brew exited nonzero (offline, conflict); bounded tail kept"},
+    {"code": "host_setup.version_below_minimum", "exit_alone": 68, "when": "version after install or upgrade is below min_version"},
+    {"code": "host_setup.sudo_failed", "exit_alone": 68, "when": "sudo exited nonzero or the owner declined its prompt"},
+    {"code": "host_setup.step_timeout", "exit_alone": 71, "when": "the step deadline passed"},
+    {"code": "host_setup.dependency_failed", "exit_alone": 68, "when": "a required step failed or was declined; step blocked"},
+    {"code": "host_setup.target_unsafe", "exit_alone": 68, "when": "dotfile or git target is a symlink, special file or outside HOME"},
+    {"code": "host_setup.changed_since_preview", "exit_alone": 68, "when": "target bytes differ from the previewed state at write time"},
+    {"code": "host_setup.backup_failed", "exit_alone": 68, "when": "backup could not be created or verified; no write happened"},
+    {"code": "host_setup.git_move_refused", "exit_alone": 68, "when": "symlink, relative include, GIT_CONFIG_GLOBAL or foreign XDG_CONFIG_HOME, git lock file, or verification failed (restored); the reason detail names which"},
+    {"code": "host_setup.opted_out", "exit_alone": 0, "when": "item recorded as opted out; not changed"},
+    {"code": "host_setup.declined", "exit_alone": 0, "when": "the owner answered no to a step"}
+  ]
+}

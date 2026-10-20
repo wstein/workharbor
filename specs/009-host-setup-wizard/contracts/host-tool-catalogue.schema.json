@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://workharbor.invalid/specs/009-host-setup-wizard/contracts/host-tool-catalogue.schema.json",
+  "title": "Host tool catalogue, schema_version 1 (proposed)",
+  "description": "Host tool catalogue used by `whr setup` and `whr doctor --fix`: a small curated list owned by WorkHarbor, minimum versions only, not a mirror of the BundleDock toolbox (OD-2, confirmed 2026-10-20). whr embeds one snapshot per release and never fetches it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "catalogue_version",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "catalogue_version": {
+      "type": "string",
+      "pattern": "^[0-9]{4}\\.[0-9]{2}\\.[0-9]+$"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,31}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+(\\.[0-9]+){0,3}$"
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "platforms",
+        "selected_by_default",
+        "network"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "runtime",
+            "tool"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "platforms": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "darwin-arm64",
+              "darwin-amd64"
+            ]
+          }
+        },
+        "requires": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
+        "network": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hosts",
+            "purpose"
+          ],
+          "properties": {
+            "hosts": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9.-]{0,252}$"
+              }
+            },
+            "purpose": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "lookup_urls": {
+              "type": "array",
+              "maxItems": 8,
+              "items": {
+                "type": "string",
+                "pattern": "^https://[a-z0-9][a-z0-9.-]{0,252}/[A-Za-z0-9._~/%+-]{0,256}$"
+              }
+            }
+          }
+        },
+        "privileged": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "purpose",
+              "argv"
+            ],
+            "properties": {
+              "purpose": {
+                "type": "string",
+                "maxLength": 120
+              },
+              "argv": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 8,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._/=:+-]{1,128}$"
+                }
+              }
+            }
+          }
+        },
+        "tool": {
+          "$ref": "#/$defs/tool"
+        },
+        "selected_by_default": {
+          "type": "boolean",
+          "description": "Preselected in the wizard; every entry stays individually selectable."
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "marker",
+            "target",
+            "content_file",
+            "sha256",
+            "mode"
+          ],
+          "properties": {
+            "marker": {
+              "enum": [
+                "dotfile",
+                "shell_hook"
+              ],
+              "description": "The entry needs a dotfile change or a shell hook; the wizard shows the diff."
+            },
+            "target": {
+              "type": "string",
+              "pattern": "^\\.config/[A-Za-z0-9._/-]{1,120}$",
+              "description": "Home-relative; the loader also rejects `..` and `//` (FR-013)."
+            },
+            "content_file": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]{1,64}$"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "mode": {
+              "enum": [
+                "0644",
+                "0600"
+              ]
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "runtime",
+                  "tool"
+                ]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "tool"
+            ]
+          }
+        }
+      ]
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "version_args",
+        "version_regex",
+        "min_version",
+        "source"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._+-]{1,64}$"
+        },
+        "version_args": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._=-]{1,32}$"
+          }
+        },
+        "version_regex": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "min_version": {
+          "$ref": "#/$defs/version"
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "manager",
+            "type",
+            "name",
+            "tap",
+            "may_elevate"
+          ],
+          "properties": {
+            "manager": {
+              "const": "homebrew"
+            },
+            "type": {
+              "enum": [
+                "formula",
+                "cask"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9@._+-]{0,63}$"
+            },
+            "tap": {
+              "enum": [
+                "homebrew/core",
+                "homebrew/cask"
+              ]
+            },
+            "may_elevate": {
+              "type": "boolean",
+              "description": "The installer may raise its own operating-system prompt; shown in the plan."
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-loader-rules": [
+    "item ids unique; every requires id exists; no cycle; a `config` belongs to its own entry",
+    "tap matches type (formula: homebrew/core, cask: homebrew/cask);",
+    "config sha256 equals the sha256 of content_file in the snapshot; target has no `..` or `//`",
+    "network.lookup_urls hosts are in network.hosts",
+    "no item installs, configures or authenticates an AI agent tool (Feature 006 FR-030)",
+    "every privileged argv is reviewed with its catalogue entry (D-8); the initial catalogue has none",
+    "patterns are RE2-compatible (Go regexp)"
+  ],
+  "x-initial-items": [
+    "orbstack",
+    "git",
+    "gh",
+    "jq",
+    "fish",
+    "starship",
+    "ripgrep",
+    "fd",
+    "fzf",
+    "zoxide",
+    "bat",
+    "jj",
+    "herdr"
+  ],
+  "x-initial-defaults": {
+    "selected_by_default_true": [
+      "orbstack",
+      "git",
+      "gh",
+      "jq",
+      "fish",
+      "starship",
+      "ripgrep",
+      "fd",
+      "fzf",
+      "zoxide"
+    ],
+    "selected_by_default_false": [
+      "bat",
+      "jj",
+      "herdr"
+    ],
+    "config_marker_on": [
+      "starship",
+      "fzf",
+      "zoxide",
+      "fish"
+    ]
+  }
+}
