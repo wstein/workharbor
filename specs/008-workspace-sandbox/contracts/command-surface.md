@@ -48,6 +48,6 @@ cancellation; 73 incomplete cleanup (leftovers listed); 74 internal. Library map
 and exports results. An external runner or the operator installs, authenticates and launches an agent, supplies any provider
 credential by its own means and decides acceptance. `whr` has no `run --agent`, no agent-specific flag, no agent detection and
 no credential relay; credential mediation is a separate specification. A credential an external runner places inside an
-untrusted instance is exposed to that instance (residual risk). Whether generic `exec` is outside Feature 006 FR-030 is recorded as an
+untrusted instance is exposed to that instance. Whether generic `exec` is outside Feature 006 FR-030 is recorded as an
 owner decision OD-1, 2026-10-20: outside Feature 006 FR-030 ([plan.md](../plan.md#owner-decisions)). Which profile an agent uses is the operator's choice: `whr`
 does not detect agents and enforces only profile-based capabilities (FR-024); `developer` is for humans.

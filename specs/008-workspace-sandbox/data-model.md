@@ -7,7 +7,7 @@ Status: proposed; implements the entities of [spec.md](spec.md).
 | Workspace | id, repository path, `workharbor.json` reference, devcontainer reference; never modified by sandbox operations (FR-001). |
 | ExecutionInstance | `sandbox_id` (`sbx-` + 16 base32), optional name, workspace id, profile, provider id, state, retention, base commit, `shared_git_metadata`, git profile version and hash, created time, labels, handle (provider-native id). Immutable: id, workspace, profile, provider, base commit. |
 | TrustProfile | `developer`, `cooperative_job`, `untrusted_job`; table below. |
-| ProviderCapabilities | per profile: the eleven fields of [runtime-provider.md](contracts/runtime-provider.md), each `status`, `value`, `scope`, `residual`. |
+| ProviderCapabilities | per profile: the eleven fields of [runtime-provider.md](contracts/runtime-provider.md), each `status`, `value`, `scope`. |
 | SandboxRequest | workspace, profile, requirements (`field=value`), copy policy, acknowledgement flags, identity variable names (values are held by the caller, never logged), name. |
 | AdmissionDecision | `allowed` with `Plan`, or `refused` with an ordered list of refusal codes; no side effect. |
 | Plan | ordered mounts (source kind, target, mode), environment (names and sources, no secret values logged), labels, user, home kind. |

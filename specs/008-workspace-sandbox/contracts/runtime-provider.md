@@ -6,13 +6,13 @@ Status: proposed design baseline for Feature 008 (FR-012 to FR-018); not impleme
 ## Capability report
 
 Every provider returns one report per environment profile it supports. Each field has a value, a `scope` (what the claim
-covers) and a `residual` (what it does not). Status per field: `enforced`, `not_enforced`, `unknown`; `unknown` never
+covers). Status per field: `enforced`, `not_enforced`, `unknown`; `unknown` never
 satisfies a requirement (FR-015). Reports state only what the provider's tests prove (FR-018).
 
 | Field | Values | Request that must be refused when not `enforced` | Standard container provider (Stage 2) reports |
 | --- | --- | --- | --- |
-| `kernel_isolation` | `shared_kernel`, `microvm` | `microvm` -> `refused.kernel_isolation_unavailable`; never a fallback | `shared_kernel` (the container shares the Docker VM kernel with all other containers of that VM, which is itself separate from the macOS Mac host kernel); residual: kernel and runtime escapes |
-| `filesystem_access` | `private_copy`, `bind_rw`, `bind_ro`, `linked_worktree`, `mountless` | an unsupported mode -> `refused.profile_unsupported` | `private_copy`, `bind_rw`, `bind_ro`, `linked_worktree`; residual: a bind mount is a writable host resource |
+| `kernel_isolation` | `shared_kernel`, `microvm` | `microvm` -> `refused.kernel_isolation_unavailable`; never a fallback | `shared_kernel` (the container shares the Docker VM kernel with all other containers of that VM, which is itself separate from the macOS Mac host kernel) |
+| `filesystem_access` | `private_copy`, `bind_rw`, `bind_ro`, `linked_worktree`, `mountless` | an unsupported mode -> `refused.profile_unsupported` | `private_copy`, `bind_rw`, `bind_ro`, `linked_worktree` |
 | `git_access` | `private_clone`, `linked_worktree`, `primary_rw` | untrusted with worktree or alternates -> `refused.shared_git_metadata_untrusted` | private clone, linked worktree (cooperative only), primary rw (developer only) |
 | `git_config_profile` | `host_global_dir_rw` (developer), `agent_policy_ro` (jobs) | `refused.git_config_profile_unavailable`, `refused.host_git_config_for_agent`, `refused.git_env_override`, `refused.git_config_single_file_mount` | both; verified by preflight and canary tests only |
 | `home_state` | `persistent_volume`, `scratch`, `none` | `refused.profile_unsupported` | `persistent_volume` (developer), `scratch` (jobs) |
@@ -55,7 +55,7 @@ writable, primary home volume in a job, primary `.git` in an untrusted job. Secr
 One table-driven suite in `apps/whr/internal/runtime/conformance/`, run against every provider (FR-018, FR-034); a new provider
 adds a constructor, not a case:
 
-1. Capability report is complete (all eleven fields, scope and residual non-empty) and stable across calls.
+1. Capability report is complete (all eleven fields, scope non-empty) and stable across calls.
 2. A requirement above a declared capability is refused with the expected code, with zero side effects (provider call count).
 3. `unknown` never satisfies a requirement; `microvm` is satisfied only by a provider declaring it, never by substitution.
 4. `Create` applies the labels of the data model to every object; `List` returns only labelled objects; foreign objects are refused.
