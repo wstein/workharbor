@@ -353,16 +353,17 @@ func contains(list []string, s string) bool {
 }
 
 func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
-	called := 0
 	spy := baseHandlers()
-	for _, e := range commands.Table() {
-		if _, ok := spy[e.ID]; !ok {
-			continue
-		}
-	}
+	contract := loadContract(t)
 	for _, e := range commands.Table() {
 		if e.Increment != "later" {
 			continue
+		}
+		if strings.TrimSpace(contract.BlockedOnValues[e.BlockedOn]) == "" {
+			t.Errorf("%s: blocked_on %q has no contract description", e.ID, e.BlockedOn)
+		}
+		if strings.TrimSpace(commands.WaitsFor(e.ID)) == "" {
+			t.Errorf("%s: refusal has no explanation of its prerequisite", e.ID)
 		}
 		for _, sp := range spellings(e) {
 			for _, extra := range [][]string{nil, {"some-name"}, {"--cpus", "2", "--memory", "1GiB"}, {"--bogus"}} {
@@ -381,14 +382,14 @@ func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 			}
 		}
 	}
-	if called != 0 {
-		t.Fatalf("handlers ran for unavailable commands")
-	}
 	// The first-increment command without a handler yet (init) refuses the same way.
 	for _, id := range []string{"workspace.init"} {
 		for _, e := range commands.Table() {
 			if e.ID != id {
 				continue
+			}
+			if strings.TrimSpace(commands.WaitsFor(id)) == "" {
+				t.Errorf("%s: pending prerequisite explanation is empty", id)
 			}
 			got := run(t, nil, e.Path...)
 			if got.code != 64 || got.stdout != "" || !strings.Contains(got.err, id+" is not available") {
@@ -397,6 +398,7 @@ func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 		}
 	}
 	// Once a handler exists the command runs, and a handler is never invoked for a refused JSON mode.
+	called := 0
 	h := stubHandlers()
 	h["workspace.validate"] = func(context.Context, commands.Call) (commands.Result, error) {
 		called++

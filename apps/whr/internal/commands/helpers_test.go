@@ -29,9 +29,10 @@ type contractEntry struct {
 }
 
 type contract struct {
-	GroupAliases map[string][]string `json:"group_aliases"`
-	Commands     []contractEntry     `json:"commands"`
-	Freeze       struct {
+	BlockedOnValues map[string]string   `json:"blocked_on_values"`
+	GroupAliases    map[string][]string `json:"group_aliases"`
+	Commands        []contractEntry     `json:"commands"`
+	Freeze          struct {
 		TestFile string   `json:"test_file"`
 		TestIDs  []string `json:"test_ids"`
 	} `json:"freeze"`
