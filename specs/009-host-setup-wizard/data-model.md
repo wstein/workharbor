@@ -11,7 +11,7 @@ Status: proposed; implements the entities of [spec.md](spec.md). Catalogue: [hos
 | StepResult | `step_id`, `status` (`applied`, `unchanged`, `declined`, `opted_out`, `blocked`, `failed`, `skipped`, `rolled_back`), `reason`, `exit_status`, bounded output tail. |
 | HostProfile | `catalogue_version`, `updated`, `items`: id to `selected` or `opted_out`; includes the reserved id `git-config`. No paths or values. |
 | BackupRecord | `<state>/backups/<run-id>/` (0700) with `manifest.json` (0600): per file original path (`~`-relative), backup name, SHA-256, size, mode, reason, time. Byte copy verified by hash; never deleted by `whr`; restore is a manual copy. |
-| Protocol | `<state>/protocols/<run-id>.jsonl` and `.txt` per real run ([protocol.schema.json](contracts/protocol.schema.json)); `<state>/run.lock` for the run lock. `<state>` is `~/.local/state/whr` (DP-1). |
+| Protocol | `<state>/protocols/<run-id>.jsonl` and `.txt` per real run ([protocol.schema.json](contracts/protocol.schema.json)); `<state>/run.lock` for the run lock. `<state>` is `~/.local/state/whr` (DP-1, confirmed H38); the host profile is `~/.config/whr/host-profile.json`. |
 
 ## Item states
 
@@ -45,6 +45,6 @@ There is no kind for the Docker VM, the runtime application, a login shell or a 
 ## Run states
 
 `detected` -> `previewed` -> `confirmed` (plan hash rechecked; lock and protocol start) -> `applying` -> `done` | `partial` | `failed` | `interrupted`.
-`no` and cancel leave `previewed` with no write. A rerun starts at `detected`.
+`no` and cancel before confirmation leave `previewed` with no write. A rerun starts at `detected`. A confirmed no-op run still takes the lock and writes its protocol; installations, managed configuration/profile and backups remain unchanged (H38). Each protocol record kind has required payload and no unrelated-kind fields; sequence, redaction and filesystem durability remain behavioral acceptance.
 
 The closed `orbstack_app` probe means the application metadata key `CFBundleShortVersionString` in `/Applications/OrbStack.app/Contents/Info.plist`. The read-only owner measurement used `/usr/bin/plutil -extract CFBundleShortVersionString raw -o - /Applications/OrbStack.app/Contents/Info.plist`; this is evidence for the route, not a generic catalogue argv allowance. T002 owns detection and path/source checks. Compare the application version (observed `2.2.4`) against the approved minimum `2.2.3`; Homebrew registration `2.2.3,20963` describes package provenance separately and is never the application-version parser input. Catalogue loading executes no probe.

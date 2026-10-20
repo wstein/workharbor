@@ -2,7 +2,7 @@
 
 Branch: `docs/spec009-host-setup-wizard` (PR target `main`) | Date: 2026-10-20
 Spec: [spec.md](spec.md)
-Status: proposed for independent review and owner approval; no product code exists for this feature.
+Status: source work authorized by H37; DP-1 to DP-5 and no-op protocol bookkeeping confirmed by H38 (2026-10-20). The H35 loader/proposal slice has a separate scoped CLEAR. Full-feature acceptance, task completion, remaining AP application, production-catalogue integration and actual adapter/host acceptance remain separate. H40's selected minimum-version snapshot belongs to its catalogue increment; this canonical slice does not select floors or authorize standalone builds.
 
 ## Approach
 
@@ -10,7 +10,7 @@ Library-first and offline. Go packages under `apps/whr/internal/hostsetup/` (ADR
 `catalogue/`, `detect/` and `plan/` (detection, typed steps, hash, apply), `pkgmgr/` (port, Homebrew adapter, fakes for package manager, sudo and
 network), `dotfiles/`, `gitmove/`, `profile/` (host profile, protocol, run lock), `fix/` (`doctor --fix` on the same engine), `wizard/` (Stage 2).
 One engine serves `setup` and `doctor --fix`: detect, plan, apply; they differ only in how confirmations are obtained (prompt or flags). Real
-`git` runs only on fixtures in a temporary HOME. No real `brew`, `sudo`, network or Docker in any test (FR-023).
+`git` runs only on fixtures in a temporary HOME. Git move previews show structural keys/redacted paths and actions, never content/value diffs. No real `brew`, `sudo`, network or Docker in any test (FR-023).
 
 ## Dependencies on other features
 
@@ -54,26 +54,33 @@ Resolved 2026-10-20 (D-1 to D-8, [spec](spec.md#owner-decisions)). **OD-1 to OD-
 | --- | --- | --- |
 | OD-1 | Installation source: Homebrew only, plus the OrbStack cask. Every item listed up front (name, tap, minimum version), every item individually deselectable. Homebrew itself is a precondition, never installed by `whr`. | FR-009, FR-010; T003 |
 | OD-2 (amended) | The host catalogue is a small curated list owned by WorkHarbor (13 initial entries listed in spec FR-010; entries added deliberately), each with a minimum version only. It is not a mirror of the BundleDock toolbox: no host install of toolbox tools, no version equality, no toolbox sync. `whr` embeds a snapshot per release. | FR-010, FR-022; T001 |
-| OD-3 | Dotfiles (starship.toml, a fish drop-in, git configuration) are written only after diff preview and backup, never silently overwritten, `--dry-run` previews; no merging into a user's file. | FR-013, FR-014; T004, T005 |
+| OD-3 | Dotfiles (starship.toml, a fish drop-in) need diff preview and backup; the git configuration move needs structural key/path-only preview and backup, never a value/content diff (H38). Nothing is silently overwritten; `--dry-run` previews; no merging into a user's file. | FR-013, FR-014; T004, T005 |
 | OD-4 | On Linux `whr setup` keeps the Feature 006 enrollment: one name, platform-specific fixed step lists chosen by platform (AP-1 to AP-3). | FR-001; T008, T009, T011 |
 | OD-5 | R-40 is superseded: setup may install a container runtime when the user selects it. The archived requirement is not edited; `docs/container-runtime.md` and Feature 006 FR-060 wording change by AP-7 and AP-4. | FR-003; T012 |
 
-### Author design proposals (confirm with the review)
+### Confirmed design decisions (H38, 2026-10-20)
 
-| ID | Proposal | Reason |
+| ID | Confirmed existing default | Reason |
 | --- | --- | --- |
 | DP-1 | Host profile `~/.config/whr/host-profile.json`; state directory `~/.local/state/whr/` with `protocols/`, `backups/<run-id>/` and `run.lock` | `doctor --fix` must know opt-outs |
-| DP-2 | Step deadline 900 s, probe 5 s, output tail 64 KiB, SIGINT grace 30 s, warning at 500 protocols | testable bounds |
+| DP-2 | Step deadline 900 s, probe 5 s, output tail 64 KiB, SIGINT grace 30 s, warning above 500 protocols | testable bounds |
 | DP-3 | Flag names and closed answer sets of [wizard-flow.md](contracts/wizard-flow.md) (`--yes`, `--confirm <id>`, `--only`, `--skip`) | consistent with Feature 006 FR-045 |
-| DP-4 | Feature 008 OD-5 resolved here: wizard step plus doctor check `git.global_config`; no separate `host git-config move` command | follows D-4; needs a 008 amendment (AP-8) |
-| DP-5 | Follow-up to merged Feature 008 (not edited here): [plan.md](../008-workspace-sandbox/plan.md) "Open: OD-5" and dependency rows, [spec.md](../008-workspace-sandbox/spec.md) Terms, Owner decisions and FR-026, [tasks.md](../008-workspace-sandbox/tasks.md) T010, [analysis.md](../008-workspace-sandbox/analysis.md) A-3, [checklists/requirements.md](../008-workspace-sandbox/checklists/requirements.md) OD-5 item, the `legacy_home_file` remedy of [git-host-only-keys.json](../008-workspace-sandbox/contracts/git-host-only-keys.json) | applied by T014 (OG-8) |
+| DP-4 | Feature009 carrier confirmed: wizard step plus doctor check `git.global_config`; no separate `host git-config move` command | follows D-4; Feature008 AP-8 text applied in PR #164 |
+| DP-5 | Feature008 follow-up text applied in PR #164 (not edited here): [plan.md](../008-workspace-sandbox/plan.md) resolved OD-5 and dependency rows, [spec.md](../008-workspace-sandbox/spec.md) Terms, Owner decisions and FR-026, [tasks.md](../008-workspace-sandbox/tasks.md) T010, [analysis.md](../008-workspace-sandbox/analysis.md) A-3, [checklists/requirements.md](../008-workspace-sandbox/checklists/requirements.md) OD-5 item, the `legacy_home_file` remedy of [git-host-only-keys.json](../008-workspace-sandbox/contracts/git-host-only-keys.json) | text applied by PR #164; remaining T014 acceptance stays separate |
 
-### Amendment proposals (not applied by this feature)
+### Amendment application status (external changes, not edited here)
 
-T009 writes them as one docs-only text; each is an owner decision applied by T012 to T014, on which T011 depends, so Feature 006 never contradicts the
-shipped behavior.
+The table records the amendment scope and its external application. Feature006
+AP-1 to AP-5 and the FR-063 portion of AP-9 were applied in
+`1071dd6198854933f124fad4c5ec8d1a02c8fdf9`; AP-7 was applied in
+`7b146ef28ea038eb2ad1d58d67f013a7f75cccd5`. Feature008 AP-8/OD-5 text was
+applied by owner-approved PR #164 (`9d297da28887ceee35ed6e5669647f07ffb4f220`).
+These are text-application evidence, not completion of T012/T014 acceptance or
+command registration. AP-6 reason/result placement remains unselected; its CLI
+contracts and the T013 ADR application (including AP-9's ADR portion) remain
+separate gates. T011 retains its approved/merged prerequisites.
 
-| ID | Text affected | Proposed change |
+| ID | Text affected | Amendment scope |
 | --- | --- | --- |
 | AP-1 | Feature 006 FR-009 (and US3 `setup` stories) | Add: "On macOS `whr setup` is the host setup wizard of Feature 009: it consumes no enrollment code, installs no host agent service and has its own dry run. On Linux it is unchanged." |
 | AP-2 | FR-026 | macOS is a host platform for `setup` (wizard) and `doctor --fix`, unverified until owner-run evidence; `service` and `offboard` still refuse macOS. |
@@ -91,3 +98,32 @@ OG-1 any real run on the owner's Mac; OG-2 any host mutation outside a temporary
 and releases; OG-4 changes to `contracts/cli/*`, ADR 0013 or ADR 0014; OG-5 doctor catalogue, `setup` or `container-runtime.md` changes;
 OG-6 any change to Feature 006 text; OG-7 adding or changing a host catalogue entry; OG-8 any change to Feature 008 text; OG-9 the first real run that uses
 `sudo` or a privileged catalogue step. An approval covers the one operation named.
+
+
+## Source execution and decision bindings
+
+H37 (2026-10-20) authorizes manual source execution with a private per-work-item
+path/argv/evidence record, TDD and independent exact-head review. The strict
+single-task v1 parser still rejects this feature's cross-feature prerequisites
+and range; it is unchanged. Never fabricate a context/journal or drop external
+prerequisites to satisfy that parser. Source dependents may use exact locally
+available CLEAR prerequisite heads before owner merge under H37, recording their
+SHAs, content identities and relevant passing checks. This does not satisfy an
+open real-host acceptance criterion or authorize Feature008 implementation.
+
+| Decision | Status | Consumers / remaining application gates |
+| --- | --- | --- |
+| DP-1: profile/state paths | Confirmed H38 | T006 profile/protocol/lock; T007 profile-based repairs; no real HOME write authority |
+| DP-2: 900s step, 5s probe, 64KiB tail, 30s SIGINT grace, warning above500 protocols | Confirmed H38 | T002 probe budget; T003 process bounds; T006 protocol warning; fake clocks/process ports only |
+| DP-3: existing wizard-flow flags and answer sets | Confirmed H38 | T007, T008, T010, T011; current frozen CLI contracts change only through T011 |
+| DP-4: setup guided move plus doctor git check | Confirmed H38 | T005, T007, T010; registration T011 after approved/merged T014 |
+| DP-5: Feature008 carrier follow-up | Confirmed H38 | AP-8 text applied by PR #164; remaining T014 acceptance and T011 registration gates retained; no Feature008 source implementation here |
+| Confirmed no-op protocols | Confirmed H38 | T006/T015 compare only managed installations/config/profile/backups; protocol/lock bookkeeping still occurs |
+| AP-6 reason/result placement | UNSELECTED | Hold only affected T008 JSON failure/result schema, T011 registration/schema and related T013 text; independent exit/platform and other source work may proceed with scoped evidence |
+
+Protocol record-shape controls are test-only in
+`apps/whr/internal/hostsetup/profile/protocol_schema_test.go`, over the six positive
+and explicit negative records in `contracts/protocol.fixtures.json` (relative to
+this feature). This is not a protocol writer, sequence verifier, secret audit or
+T006 completion. Those remain engine acceptance. F7 exit tests must distinguish
+applied+opted_out/applied+declined success from applied+blocked-dependent failure.
