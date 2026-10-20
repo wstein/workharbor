@@ -7,8 +7,7 @@ import (
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
 )
 
-// initOptions is the typed handoff for the later init handler. It does not
-// register a handler, render success or apply any files.
+// initOptions captures typed flags for the shared proposal model without I/O.
 func initOptions(c *cobra.Command) (scaffold.Options, error) {
 	var o scaffold.Options
 	for _, setting := range []struct {
@@ -39,6 +38,15 @@ func initOptions(c *cobra.Command) (scaffold.Options, error) {
 		return o, exitcode.Errorf(exitcode.PathUnclassified, "init overwrite registration is incomplete")
 	}
 	o.Overwrite = overwrite
+	// Check flag values before mode/consent or filesystem failures. The pure
+	// model checks the current schema; an absent devcontainer is expected in
+	// this empty probe and is the only error deferred to actual discovery.
+	probe := o
+	probe.NonInteractive = false
+	probe.DryRun = true
+	if _, err := scaffold.Build(scaffold.Snapshot{}, probe); err != nil && exitcode.FromError(err) != exitcode.NeedsHuman {
+		return o, err
+	}
 	if !o.NonInteractive && !o.DryRun {
 		return o, exitcode.Errorf(exitcode.PathBadArguments, "interactive init is not in this release")
 	}

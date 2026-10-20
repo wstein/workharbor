@@ -867,7 +867,21 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPermissionFailureNamesTarget",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRollbackRefusesReplacedDirectory",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyHostileTargetsRefused",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPartialResultMatchesPublicSchema"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPartialResultMatchesPublicSchema",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicJSONWritesAndValidates",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicDryRunWritesNothing",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicModesNameRequiredFlags",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicInvalidFlagsBeforeFilesystemOrConsent",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicCreatedPathsAreTyped",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicCancelledPreviewWritesNothing",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicStalePreviewRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicPreviewFailureWritesNothing",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicRerunNoOpAndOverwriteConsent",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicAliasesAndConflictSchema",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicExitCodesAndClosedEnvelopes",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicEscapesUntrustedDirectory",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicRunsNoStartupCommandOrGit",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicPartialRecoverySurvivesMessageClip"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

@@ -87,7 +87,14 @@ func (a *app) build() {
 
 	for _, e := range entries {
 		e := e
-		runE := func(c *cobra.Command, args []string) error { return a.run(c.Context(), e, args) }
+		runE := func(c *cobra.Command, args []string) error {
+			ctx := c.Context()
+			if e.ID == "workspace.init" {
+				options, err := initOptions(c)
+				ctx = context.WithValue(ctx, initContextKey{}, initInvocation{options: options, err: err, diagnostics: a.env.Stderr})
+			}
+			return a.run(ctx, e, args)
+		}
 		leaf := func(use string) *cobra.Command {
 			c := &cobra.Command{Use: use, Args: cobra.ArbitraryArgs, RunE: runE, ValidArgsFunction: cobra.NoFileCompletions,
 				Annotations: map[string]string{annotationID: e.ID}}

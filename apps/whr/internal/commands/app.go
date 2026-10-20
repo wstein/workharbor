@@ -45,12 +45,13 @@ type Handler func(ctx context.Context, call Call) (Result, error)
 
 // DefaultHandlers returns the handlers of the commands implemented so far.
 // `help` and `completion` are built in. Later work items add their commands
-// here (init T030).
+// here.
 func DefaultHandlers() map[string]Handler {
 	return map[string]Handler{
 		"version":            versionHandler,
 		"host.doctor":        DoctorHandler(doctor.SystemPorts(nil)),
 		"workspace.validate": validateHandler,
+		"workspace.init":     initHandler,
 	}
 }
 
