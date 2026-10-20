@@ -322,7 +322,7 @@ func TestCompletionKnowsBothForms(t *testing.T) {
 	}
 	// Production handlers: unavailable commands are not offered.
 	prod := complete(nil, "")
-	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws"} {
+	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws", "init"} {
 		if !contains(prod, want) {
 			t.Errorf("production completion lacks %q: %v", want, prod)
 		}
@@ -386,19 +386,11 @@ func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 			}
 		}
 	}
-	// The first-increment command without a handler yet (init) refuses the same way.
-	for _, id := range []string{"workspace.init"} {
-		for _, e := range commands.Table() {
-			if e.ID != id {
-				continue
-			}
-			if strings.TrimSpace(commands.WaitsFor(id)) == "" {
-				t.Errorf("%s: pending prerequisite explanation is empty", id)
-			}
-			got := run(t, nil, e.Path...)
-			if got.code != 64 || got.stdout != "" || !strings.Contains(got.err, id+" is not available") {
-				t.Errorf("%s: exit %d stdout %q stderr %q", id, got.code, got.stdout, got.err)
-			}
+	// Init is now available, but unattended writes still require --yes.
+	for _, sp := range [][]string{{"workspace", "init"}, {"ws", "init"}, {"init"}} {
+		got := run(t, nil, append(append([]string{}, sp...), "--non-interactive")...)
+		if got.code != 70 || got.stdout != "" || !strings.Contains(got.err, "--yes") {
+			t.Errorf("available init %v must name missing consent: %+v", sp, got)
 		}
 	}
 	// Once a handler exists the command runs, and a handler is never invoked for a refused JSON mode.
@@ -430,21 +422,21 @@ func TestInitFlagsMatchContract(t *testing.T) {
 				t.Errorf("%v --help lacks %s:\n%s", sp, flag, help.stdout)
 			}
 		}
-		// Every contract flag parses; the command itself is unavailable until T030.
+		// Every contract flag parses; the stub avoids applying unrelated fixture inputs.
 		for _, flag := range init.Flags {
 			args := append(append([]string{}, sp...), flag)
 			if !isBoolFlag(flag) {
 				args = append(args, "value")
 			}
-			got := run(t, nil, args...)
-			if got.code != 64 || !strings.Contains(got.err, "workspace.init is not available") {
-				t.Errorf("%v: exit %d stderr %q, want the unavailable refusal, not a flag error", args, got.code, got.err)
+			got := run(t, stubHandlers(), args...)
+			if got.code != 0 {
+				t.Errorf("%v: exit %d stderr %q, want parsed flags delivered to the stub", args, got.code, got.err)
 			}
 		}
 		for _, flags := range [][]string{{"--overwrite=workharbor.json"}, {"--overwrite=workharbor.json", "--overwrite=AGENTS.md"}} {
-			got := run(t, nil, append(append([]string{}, sp...), flags...)...)
-			if got.code != 64 || !strings.Contains(got.err, "workspace.init is not available") {
-				t.Errorf("%v %v: want unavailable refusal, got %+v", sp, flags, got)
+			got := run(t, stubHandlers(), append(append([]string{}, sp...), flags...)...)
+			if got.code != 0 {
+				t.Errorf("%v %v: want parsed flags delivered to the stub, got %+v", sp, flags, got)
 			}
 		}
 		missing := run(t, nil, append(append([]string{}, sp...), "--overwrite")...)
