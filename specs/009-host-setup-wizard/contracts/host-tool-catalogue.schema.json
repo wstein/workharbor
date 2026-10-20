@@ -309,12 +309,12 @@
       "ripgrep",
       "fd",
       "fzf",
-      "zoxide"
-    ],
-    "selected_by_default_false": [
-      "bat",
+      "zoxide",
       "jj",
       "herdr"
+    ],
+    "selected_by_default_false": [
+      "bat"
     ],
     "config_marker_on": [
       "starship",
