@@ -6,7 +6,7 @@ Status: source work authorized by H37; DP-1 to DP-5 and no-op protocol bookkeepi
 
 ## Approach
 
-Library-first and offline. Go packages under `apps/whr/internal/hostsetup/` (ADR 0010; module `apps/whr`), standard library only:
+Library-first and offline. Go packages under `apps/whr/internal/hostsetup/` (ADR 0010; module `apps/whr`): catalogue, detection and plan logic use the standard library only. The native Unix boundary uses the module's existing `golang.org/x/sys/unix` dependency for descriptor-relative, nonfollowing filesystem operations (no added module dependency).
 `catalogue/`, `detect/` and `plan/` (detection, typed steps, hash, apply), `pkgmgr/` (port, Homebrew adapter, fakes for package manager, sudo and
 network), `dotfiles/`, `gitmove/`, `profile/` (host profile, protocol, run lock), `fix/` (`doctor --fix` on the same engine), `wizard/` (Stage 2).
 One engine serves `setup` and `doctor --fix`: detect, plan, apply; they differ only in how confirmations are obtained (prompt or flags). Real
@@ -127,3 +127,6 @@ and explicit negative records in `contracts/protocol.fixtures.json` (relative to
 this feature). This is not a protocol writer, sequence verifier, secret audit or
 T006 completion. Those remain engine acceptance. F7 exit tests must distinguish
 applied+opted_out/applied+declined success from applied+blocked-dependent failure.
+
+
+The T002 native boundary is explicit: opening a trusted root creates read-only FS/Exec/Clock ports and a detector; it does not register a command or run probes automatically. Each directory and executable is opened without following links, with descriptor execution pinning the resolved file across pathname replacement. Version children receive only the fixed PATH and `LC_ALL=C`, closed stdin, bounded stdout and discarded stderr. Cancellation and pipe cleanup terminate the owned process group. Curated version arguments remain a trusted catalogue boundary; these ports are not a sandbox proving arbitrary executables cannot access the network. Linux source tests use owned temporary files and copied test helpers only. Darwin test-compiler checks establish type compatibility; actual macOS descriptor execution and host measurements remain a separate owner-authorized acceptance step.
