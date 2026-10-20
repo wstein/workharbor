@@ -881,7 +881,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicExitCodesAndClosedEnvelopes",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicEscapesUntrustedDirectory",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicRunsNoStartupCommandOrGit",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicPartialRecoverySurvivesMessageClip"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicPartialRecoverySurvivesMessageClip",
+      "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestInitEntrypointSignalsCancelAndCleanUp"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
