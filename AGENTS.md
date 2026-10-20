@@ -20,15 +20,18 @@ never expose credentials, silently widen scope or bypass ownership/provider gate
 Resume existing work on retries; use a per-issue branch. Submit review evidence.
 After independent review, always create a PR; the owner authorizes PR publication
 by default. Target `main` explicitly and follow [linear history](WORKFLOW.md#pr-target);
-follow the [PR readiness gate](WORKFLOW.md#pr-readiness) before marking ready for review
-(Ready tells the owner the PR can be merged; it grants agents nothing).
+follow the [PR readiness gate](WORKFLOW.md#pr-readiness) before marking ready for review.
+Ready means the owner can merge it.
 Evaluate each PR's scope independently: unfinished follow-up work does not block
 readiness when the PR's own scope is accepted, independent review is CLEAR for its
 exact current head, and all required checks are green. Unmet acceptance criteria
 within that scope remain blockers. Task/feature completion, merge and live-operation
 gates remain separate.
-Agents push only their own topic branches and open pull requests for reviewed work
-within the requested task. They never push `main` or tags, never merge, and never
+Agents push only their own topic branches, rewrite their own branches with an
+explicit lease (a rewritten head of a branch that changes code, tests, scripts or generated
+files is independently reviewed at its exact new SHA before the lease push; a branch
+that changes only specs or documentation needs before it only checks and, for a pure
+rebase, `git range-diff` equality), and open pull requests for reviewed work within the requested task. They never push `main` or tags, never merge, and never
 rewrite commits they did not author. The owner merges. This complements
 "never rewrite accepted history" in [WORKFLOW.md](WORKFLOW.md#pr-target): accepted
 history and commits an agent did not author are both off limits. A containing workspace
