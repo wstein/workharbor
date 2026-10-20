@@ -162,13 +162,17 @@ the repository's ordinary `go build`/application checks; no archive, image, rele
 
 - [ ] T037 [US0] Claude Code settings default (FR-065, SC-023; wave 1b, after T030 and T036): the authored `.claude/settings.json` (`{"attribution": {"sessionUrl": false}}`, 2-space indent, trailing newline) in the `apps/whr/internal/scaffold/` proposal, an existing file left unchanged (`left_unchanged`, exit 0) unless `--overwrite .claude/settings.json` (also for non-regular targets and a non-directory `.claude`, with one `left_unchanged` row, a `next_steps` entry and an output line), the `.claude` create or reuse action, the exit codes of FR-063, no new flag and no schema change (it reuses the actions of T036), the table test of SC-023, and updates of the T030, T032 and T036 tests and vectors for the new default proposal and the no-op-rerun baseline. Needs the spec review first. Source and unit tests only: no container, network or Git command.
 
+- [ ] T038 [US1, US4] Local devcontainer and temporary container lifecycle with volume protection (FR-066, FR-067, FR-068, SC-024; #142) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, `contracts/cli/commands.json`, and `contracts/cli/output.schema.json`: `--local` and `--label` on `workspace.ls`; `--local`, `--label`, `--role`, `--volumes`, `--force`, `--dry-run`, and `--yes` on `workspace.rm`; bounded 5 s Docker socket inspection; pre-mutation ownership verification (exit 68 on foreign container); default preservation of home volume; deletion of home volume requiring both `--volumes` and `--force` (and `--yes` unattended, exit 70 without it); refusal of staging/temp cleanup resolving to primary home volume (exit 68); refusal of volume deletion if mounted by another container (exit 68); protection of `/opt/bdock/*` and `bundledock-*` tool volumes; side-by-side staging and promotion; `--dry-run` zero mutations; partial failure reporting (exit 73). Failing tests first: `TestLocalLsListsLabelledContainersAndVolumes`, `TestLocalLsLabelFilter`, `TestLocalLsEscapesHostileMetadata`, `TestLocalRmContainerOnlyPreservesHomeVolume`, `TestLocalRmWithVolumesAndForceRemovesHomeVolume`, `TestLocalRmVolumesWithoutForceRefused`, `TestLocalRmNeverRemovesBundleDockOrReadOnlyVolumes`, `TestLocalRmRefusesForeignUnlabelledContainer`, `TestLocalRmRefusesDeletingPrimaryHomeVolumeFromStagingOrTemp`, `TestLocalRmRefusesVolumeMountedByOtherContainer`, `TestLocalRmDryRunExecutesNoMutations`, `TestLocalRmNonInteractiveRequiresYes`, `TestLocalRmPartialVolumeFailureExits73`, `TestLocalCommandsJSONMatchesSchema`, `TestWorkspaceLsAndRmWithoutLocalStillRefuse`. Acceptance: all SC-024 cases pass offline with fake Docker fixtures; `python3 scripts/check_repo.py` and Go tests pass; independent exact-head review is CLEAR. Prerequisite: T025.
+
+- [ ] T039 [US1, US4] Bundle mount drift reporting (FR-069, SC-025; #143) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, and `contracts/cli/output.schema.json`: read-only comparison of pinned bundle references in `.devcontainer/bundle-pins.json` or devcontainer configuration against mounted image/volume references on running container; per-bundle reporting of pinned, mounted, and status (`in_sync`, `drift`, `cannot_determine`); exit code 0 when all in sync, distinct exit code when drift detected, and exit 68 when unreadable/undetermined; `--json` output conforming to `bundleDriftResult`; zero mutations verified. Failing tests first: `TestBundleDriftAllInSync`, `TestBundleDriftDetected`, `TestBundleDriftMissingMount`, `TestBundleDriftUnreadablePins`, `TestBundleDriftJSONMatchesSchema`, `TestBundleDriftZeroMutations`. Acceptance: all SC-025 cases pass offline with fake Docker fixtures; independent review is CLEAR. Prerequisites: T025, T038.
+
 ## Dependencies and execution
 
-The first-increment WIs T025 to T034, T036 and T037 follow the dependency graph above and depend only on T001–T004 (accepted) and on no
+The first-increment WIs T025 to T034, T036, T037, T038 and T039 follow the dependency graph above and depend only on T001–T004 (accepted) and on no
 control-plane WI; T035 additionally needs T009 and T028; T011 additionally depends on T025, T016 on T027 and T017 on T025. T005–T010 are unaffected. By owner decision
 (2026-10-16/17) they run on their own branches and pull requests outside the chain below. Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5); it is not approval of any head's text, and the edits take effect only with approval at one exact head with a tracker or PR link; until then the chain below is unchanged and authoritative.
 
-Machine-readable dependency table (the single-task guard requires exactly one, sorted, covering every task; T001 to T024 follow the chain below, T025 to T037 the graph above):
+Machine-readable dependency table (the single-task guard requires exactly one, sorted, covering every task; T001 to T024 follow the chain below, T025 to T039 the graph above):
 
 | Task | Prerequisites |
 | --- | --- |
@@ -209,6 +213,8 @@ Machine-readable dependency table (the single-task guard requires exactly one, s
 | T035 | T009, T028 |
 | T036 | T030, T032 |
 | T037 | T030, T036 |
+| T038 | T025 |
+| T039 | T025, T038 |
 
 
 (The dependency table above encodes the amended graph, including T011 <- T025, T016 <- T027 and T017 <- T025; those extra edges take effect only with the owner's approval of this file at one exact head with a tracker or PR link. The chain below is the unamended order.)

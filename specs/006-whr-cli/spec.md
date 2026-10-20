@@ -1000,10 +1000,13 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   FR-057 unless `--no-agents-block` is given; the block is on by default (owner decision of 2026-10-17). The
   agent workflow block comes from one template shipped with `whr`. It covers: pushes of topic branches and PRs by
   agents within the requested task; rewrites of agent-authored PR branches only after checks and an exact-SHA review
-  of the rewritten head, then only with an explicit expected-head lease; Ready meaning the owner can merge; Draft only
-  with a named blocker; owner-only merge, tag, release, publication and settings; an approval covering one named
-  operation with no standing approval; submodule gitlinks belonging to the owner; and delegation by model tier with
-  one worktree per parallel agent. It embeds no stack facts, names no Anchorage path, repository, remote,
+  of the rewritten head, then only with an explicit expected-head lease; Ready meaning the owner can merge and requiring
+  independent CLEAR review of the exact current head; Draft only with a named blocker; owner-only merge, tag, release,
+  publication and settings; an approval covering one named operation with no standing approval; submodule gitlinks
+  belonging to the owner; running source checks with `umask 022` (avoiding sandbox `umask 0000` permission breakages);
+  stacked PRs targeting their parent branch, linked as a stack, and retargeted to `main` once the parent merges; never
+  setting per-repo git identity; bot updater commits and PR titles naming the changed versions; and delegation by model
+  tier with one worktree per parallel agent. It embeds no stack facts, names no Anchorage path, repository, remote,
   gitlink, credential or vendor-specific model, and adds no automation mode (D57 unchanged). The Anchorage umbrella
   `AGENTS.md` (sections "Pull requests and history" and "Delegation") is the source text from which the template is
   derived, not its first instance: it has no versioned markers and holds Anchorage-specific text. The template is
@@ -1137,6 +1140,54 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   first and at most the proposal length plus one byte is read. A rerun after an upgrade creates these
   new files once. No flag, schema field or warning code is added; T037 uses the `left_unchanged` action of T036.
   Exit codes follow FR-063.
+- **FR-066**: `whr workspace ls --local` (short form `whr ls --local`) MUST inspect the local Docker daemon
+  (following the socket discovery rules of `whr doctor`, FR-060) within a 5-second total wall-clock budget and fixed argument
+  vectors, without evaluating shell commands or contacting any remote network endpoint (owner decision of 2026-10-19/20).
+  It discovers running and stopped containers bearing recognized workspace or devcontainer labels (`anchorage-staging`,
+  `anchorage-temp`, `devcontainer.local_folder`, `devcontainer.config_file`, or a WorkHarbor workspace label). Passing
+  `--role <primary|staging|temp>` or `--label <key[=value]>` filters discovery accordingly; foreign, unlabelled containers
+  are never returned. For each matched container, discovery reports: `id` (64-hex container ID; 12-char prefix in human
+  output), `name` (without leading slash), `role` (`primary`, `staging`, `temp`), `image` reference, `state` and `status`,
+  `workspace_folder` (from labels or bind mounts), `labels`, `home_volume` (named volume mounted at `/home/captain` or legacy
+  `/home/vscode`, or null), and `protected_volumes` (read-only volumes, mounts under `/opt/bdock/*` and `bundledock-*` tool
+  volumes). Terminal output is escaped per FR-022; `--json` emits a validated `localWorkspaceListResult`. Omitting `--local`
+  preserves the remote control-plane contract (exit 64).
+- **FR-067**: `whr workspace rm --local` (short form `whr rm --local`) MUST stop and remove local workspace containers subject to
+  hard home volume protection invariants (owner decision of 2026-10-19/20, #142):
+  (a) Target selection requires an explicit container `<id|name>`, `--role <staging|temp>`, or `--label <key[=value]>`;
+  omitting selectors or providing conflicting selectors is a usage error (64).
+  (b) Pre-mutation ownership check: before stopping or removing any container, `whr` verifies that the target carries a
+  recognized workspace/devcontainer label; foreign unlabelled containers are refused with exit 68 (`conflict`) with zero mutations.
+  (c) Hard volume invariant 1 (Default preservation): removing or recreating a container preserves its `/home/captain` (or
+  legacy `/home/vscode`) named home volume by default and states `preserve_home_volume: true` in the preview.
+  (d) Hard volume invariant 2 (Force requirement): deleting a home volume requires both an explicit volume flag (`--volumes`)
+  and an explicit force flag (`--force`), accompanied by confirmation (`--yes` in non-interactive/scripted mode); the preview
+  MUST explicitly name the target volume and all its mounts. Unattended or scripted deletion without both `--force` and `--yes`
+  is refused (70); in automated execution mode, force volume deletion is strictly prohibited without explicit human confirmation.
+  (e) Hard volume invariant 3 (Label scoping & primary volume protection): cleanup of temporary or staging containers (targeted by
+  `--role staging`, `--role temp`, or labels `anchorage-temp=1`, `anchorage-staging=1`) strictly refuses to resolve to, unlink, or
+  delete the primary workspace volume (`anchorage-home-*` or the volume mounted to the primary devcontainer), even if an argument,
+  flag, or environment variable targets it (refusal with exit 68 and zero mutations).
+  (f) Hard volume invariant 4 (Multi-container concurrency check): if a home volume selected for deletion is currently mounted by
+  any other running container, volume deletion is refused before any container is stopped or removed (exit 68).
+  (g) Hard volume invariant 5 (Tool volume protection): read-only volumes, mounts under `/opt/bdock/*`, and all `bundledock-*` tool
+  volumes are strictly protected and never removed under any flag combination.
+  (h) Execution order: `whr` stops and removes the verified container (`docker rm -f -- <id>`), then removes the selected home
+  volume (`docker volume rm -- <name>`). If volume deletion fails after container removal, `whr` exits 73 (`partial_failure`)
+  naming the residual volume and recovery instructions. `--dry-run` previews all container and volume actions with zero mutations
+  (`applied: false`). Omitting `--local` preserves the remote control-plane contract (exit 64).
+- **FR-068**: `whr workspace stage --local` and `whr workspace promote --local` implement side-by-side devcontainer verification
+  and promotion without disruption: `stage --local` builds and starts a candidate container (`whr-anchorage-staging`,
+  `anchorage-staging=1`, isolated staging home volume) alongside the running primary container, optionally running smoke checks
+  (`--smoke`); `promote --local` verifies the healthy candidate, recreates the primary container using the verified image while
+  preserving the primary home volume, and cleans up the staging container and its staging home volume per FR-067.
+- **FR-069**: `whr workspace drift --local` (or `whr workspace ls --local --drift`) MUST perform a read-only comparison between
+  the bundle references pinned in the workspace configuration (`.devcontainer/bundle-pins.json`, `devcontainer.json`, or bundle locks)
+  and the actual mounted image/volume references and version identities on the running container (#143). It lists, per bundle:
+  bundle name, pinned reference, mounted reference/identity, and status (`in_sync`, `drift`, or `cannot_determine`). Output is stable,
+  redacted (no credentials), and available as `--json` (`bundleDriftResult`). It NEVER pulls images, recreates containers, or mutates
+  any resource. Exit status is 0 when all bundles are in sync, a distinct exit code (exit 1 or 68) when drift is detected, and exit 68
+  when configuration or runtime mounts cannot be determined.
 - **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
   credential or provider account (FR-028). No secret is accepted, read, stored or printed by them: a
   `--project-url` with `https` userinfo or any password or token (`ssh://git@host/...` is admitted) and a `.gitmodules`
@@ -1144,14 +1195,14 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 - **FR-063**: The new failures map to the codes of ADR 0013 without changing that table: success, including warnings
   only, 0; unknown flag, invalid or missing flag value, mutually exclusive flags, a traversing or credential-bearing
   input, `--template` while starters are unsupported, `--devcontainer` or plain `init` (no `--non-interactive`, no `--dry-run`) in wave 1a, a `dir` that is a file, an unavailable command, `--json` where
-  unsupported, `--no-agents-block` together with `--overwrite AGENTS.md` 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
+  unsupported, `--no-agents-block` together with `--overwrite AGENTS.md`, missing or conflicting targets in local `rm` (FR-067) 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing version 1 manifest
-  edited, and a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0) 70, in unattended mode only (needs-human,
+  edited, a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0), and deleting a home volume without both `--force` and `--yes` (FR-067) 70, in unattended mode only (needs-human,
   with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72, except `AGENTS.md`, where a declined edit is not a cancellation (FR-064), and `.claude/settings.json`, which the wizard offers to replace only when `--overwrite .claude/settings.json` names it (FR-065));
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview (no such re-check applies to a path that is left unchanged and not written), pre-existing
-  content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a `doctor` run with a failed check, an unsupported platform for a mutating host
-  command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; SIGINT
-  or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback 73, which takes precedence over 72 and over
+  content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a foreign unlabelled container or attempt to delete a volume mounted by another container or resolving staging/temp cleanup to the primary volume (FR-067), unreadable bundle pins or mounts (FR-069), a `doctor` run with a failed check, an unsupported platform for a mutating host
+  command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; bundle drift detected (FR-069) 1 (or 68); SIGINT
+  or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback or volume removal failure after container deletion (FR-067) 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
   74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), a newer block and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
   increment. Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
@@ -1373,6 +1424,17 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `.claude`-is-a-file or symlinked `.claude` target (`left_unchanged`, exit 0, nothing opened, without the flag; 68 with
   it); and a file appearing after the preview (68 with or without the flag; for the no-flag case, absent at preview and created by another
   process before the exclusive create), with exactly one `left_unchanged` row and no `.claude` row for a non-directory `.claude`.
+- **SC-024**: Local container lifecycle and home volume protection (FR-066, FR-067, FR-068; #142) pass offline unit and fake-Docker
+  integration tests covering: (1) `whr ls --local` role and label filtering and FR-022 escaping; (2) container removal preserving the
+  home volume by default; (3) volume deletion requiring both `--volumes` and `--force`; (4) force deletion without `--yes` unattended
+  exiting 70; (5) staging/temp cleanup refusing to touch the primary home volume (68); (6) volume shared with another running container
+  refusing deletion (68); (7) read-only, `/opt/bdock/*`, and `bundledock-*` tool volumes never deleted; (8) foreign unlabelled containers
+  refused (68); (9) `--dry-run` parity with zero mutations; (10) partial failure exiting 73; and (11) invocation without `--local`
+  still refusing (64).
+- **SC-025**: Bundle mount drift reporting (FR-069; #143) passes offline unit and fake-Docker integration tests covering:
+  (1) all bundles in sync (exit 0); (2) one or more bundles drifted (exit 1 or 68, reporting pinned vs mounted identities); (3) missing mount
+  or unreadable pin file (status `cannot_determine`, exit 68); (4) stable, parseable `--json` output (`bundleDriftResult`) with no secrets;
+  and (5) verified zero mutations (no pull, rebuild, or restart).
 - **SC-011**: A lost-response test (drop the reply to a workspace lifecycle mutation) yields exactly one operation, retrievable
   with `whr op show --key`. A lost `agent send` response reports unknown delivery without an automatic resend.
 
