@@ -197,8 +197,11 @@ the created PR's `baseRefName` is `main`; an execution pin does not select the P
 target. If accepted prerequisites have not reached `main`, prepare their separate
 promotion for owner review and keep dependent work draft or blocked. Preserve
 historical task pins and evidence. Maintain linear history: the owner merges by
-rebase only; agents never merge, push `main`, or rewrite accepted history. Changed
-candidate SHAs require fresh check and independent review evidence.
+rebase only; agents never merge, push `main`, or rewrite accepted history, but may rewrite their own
+topic branches with an explicit lease. For code, changed
+candidate SHAs require fresh check and independent review evidence before the push;
+for a branch that changes only specs or documentation, a rewrite needs only checks and,
+for a pure rebase, `git range-diff` equality, and the independent review still precedes Ready.
 
 <a id="pr-readiness"></a>
 Mark an authorized PR ready for review only when independent review of its exact
