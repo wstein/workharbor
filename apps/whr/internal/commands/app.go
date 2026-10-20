@@ -159,7 +159,7 @@ func (a *app) run(ctx context.Context, e Entry, args []string) error {
 		a.exit = w.Failure(e.ID, exitcode.Errorf(exitcode.PathUnsupportedJSON, "%s does not support --json", e.ID))
 		return nil
 	}
-	res, err := h(ctx, Call{Entry: e, Args: args})
+	res, err := callHandler(ctx, h, Call{Entry: e, Args: args})
 	if err != nil {
 		// A handler may fail with data to show, such as a doctor report
 		// or a validate findings list.
@@ -176,6 +176,18 @@ func (a *app) run(ctx context.Context, e Entry, args []string) error {
 		a.exit = w.Failure(e.ID, exitcode.Errorf(exitcode.PathUnclassified, "writing the result failed: %v", err))
 	}
 	return nil
+}
+
+// callHandler contains unexpected handler panics before any result is written.
+// It does not recover output failures or change the handler's side effects.
+func callHandler(ctx context.Context, h Handler, call Call) (res Result, err error) {
+	defer func() {
+		if recover() != nil {
+			res = Result{}
+			err = exitcode.Errorf(exitcode.PathUnclassified, "command handler failed internally")
+		}
+	}()
+	return h(ctx, call)
 }
 
 func asError(err error) *exitcode.Error {
