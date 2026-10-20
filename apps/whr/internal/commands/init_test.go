@@ -80,7 +80,7 @@ func TestInitPublicModesNameRequiredFlags(t *testing.T) {
 		code    int
 		message string
 	}{
-		{nil, 64, "not in this release"}, {[]string{"--non-interactive"}, 70, "--yes"},
+		{nil, 70, "--yes"}, {[]string{"--non-interactive"}, 70, "--yes"},
 	} {
 		got := run(t, nil, append([]string{"init", dir}, tc.flags...)...)
 		if got.code != tc.code || !strings.Contains(got.err, tc.message) {

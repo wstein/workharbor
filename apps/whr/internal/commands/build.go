@@ -91,7 +91,11 @@ func (a *app) build() {
 			ctx := c.Context()
 			if e.ID == "workspace.init" {
 				options, err := initOptions(c)
-				ctx = context.WithValue(ctx, initContextKey{}, initInvocation{options: options, err: err, diagnostics: a.env.Stderr})
+				interactive := !options.NonInteractive && !options.DryRun && !a.jsonMode() && a.env.InputTerminal && a.env.IsTerminal(a.env.Stderr) && a.env.Stdin != nil
+				if err == nil && !interactive && !options.Yes && !options.DryRun {
+					err = exitcode.Errorf(exitcode.PathHumanDecisionMissing, "unattended init requires --yes (or --dry-run); provide missing settings with init flags")
+				}
+				ctx = context.WithValue(ctx, initContextKey{}, initInvocation{options: options, err: err, diagnostics: a.env.Stderr, input: a.env.Stdin, interactive: interactive})
 			}
 			return a.run(ctx, e, args)
 		}

@@ -47,9 +47,6 @@ func initOptions(c *cobra.Command) (scaffold.Options, error) {
 	if _, err := scaffold.Build(scaffold.Snapshot{}, probe); err != nil && exitcode.FromError(err) != exitcode.NeedsHuman {
 		return o, err
 	}
-	if !o.NonInteractive && !o.DryRun {
-		return o, exitcode.Errorf(exitcode.PathBadArguments, "interactive init is not in this release")
-	}
 	if o.NonInteractive && !o.Yes && !o.DryRun {
 		return o, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "--non-interactive requires --yes (or --dry-run)")
 	}

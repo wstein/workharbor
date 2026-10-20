@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/commands"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/wizard"
 )
 
 func main() {
@@ -22,7 +23,7 @@ func main() {
 // run is the thin entry point: all behavior lives in internal/commands.
 func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	return commands.Execute(ctx, args, commands.Env{
-		Stdout: out, Stderr: errOut, Getenv: os.Getenv, IsTerminal: isTerminal,
+		Stdout: out, Stderr: errOut, Stdin: wizard.Reader(ctx, os.Stdin), InputTerminal: wizard.IsTerminal(os.Stdin), Getenv: os.Getenv, IsTerminal: isTerminal,
 	}, commands.DefaultHandlers())
 }
 
@@ -32,10 +33,5 @@ func isTerminal(w io.Writer) bool {
 	if !ok {
 		return false
 	}
-	info, err := f.Stat()
-	if err != nil || info.Mode()&os.ModeCharDevice == 0 {
-		return false
-	}
-	null, err := os.Stat(os.DevNull)
-	return err != nil || !os.SameFile(info, null)
+	return wizard.IsTerminal(f)
 }
