@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "contract": "whr-git-host-only-keys",
+  "feature": "008-workspace-sandbox",
+  "status": "accepted by owner 2026-10-20 (OD-3), including the extension keys; first tests still verify behavior against real git",
+  "decision": "owner decision 2026-10-20; keys marked extension are added by this specification and need owner review",
+  "rules": [
+    "The check is read-only. It reports key, origin file (home shown as ~) and remedy; it never prints a value, because values can carry secrets.",
+    "A finding does not block readiness; a missing report is a defect.",
+    "Matching is case-insensitive on section and variable names, as git does."
+  ],
+  "remedies": {
+    "agent_forwarding": "forward an agent socket the operator authorizes; no key material enters the container",
+    "path_mapping": "map the host path to an existing in-container path, or set the key in an included file the container resolves",
+    "host_only_include": "move the key into an include file the container skips because its path is absent",
+    "install_in_container": "provide the helper or editor inside the container image",
+    "remove_or_replace": "remove the key or replace it with a container-valid value"
+  },
+  "keys": [
+    {"key": "credential.helper", "pattern": "credential.helper and credential.<url>.helper", "reason": "host helper such as the macOS keychain does not exist in the container", "remedy": "agent_forwarding", "source": "owner"},
+    {"key": "user.signingkey", "reason": "value is a host key path or agent reference", "remedy": "path_mapping", "source": "owner"},
+    {"key": "gpg.ssh.program", "reason": "host program path", "remedy": "path_mapping", "source": "owner"},
+    {"key": "core.editor", "reason": "host editor path or command", "remedy": "install_in_container", "source": "owner"},
+    {"key": "core.excludesFile", "reason": "host path", "remedy": "path_mapping", "source": "owner"},
+    {"key": "include.path", "reason": "host path; git ignores a missing include silently", "remedy": "host_only_include", "source": "owner"},
+    {"key": "includeIf.*.path", "pattern": "includeIf \"gitdir:\" and other conditions", "reason": "condition or target uses host paths; skipped silently when absent", "remedy": "host_only_include", "source": "owner"},
+    {"key": "gpg.program", "reason": "host program path", "remedy": "path_mapping", "source": "extension"},
+    {"key": "core.sshCommand", "reason": "host program or key path", "remedy": "path_mapping", "source": "extension"},
+    {"key": "core.hooksPath", "reason": "host path; hooks are code that would run in the container", "remedy": "remove_or_replace", "source": "extension"},
+    {"key": "commit.template", "reason": "host path", "remedy": "path_mapping", "source": "extension"},
+    {"key": "http.sslCAInfo", "reason": "host path", "remedy": "path_mapping", "source": "extension"}
+  ],
+  "location_findings": {
+    "xdg": "pass: ~/.config/git/config exists and no legacy file",
+    "legacy_home_file": "fail: only ~/.gitconfig exists; a single file cannot be mounted safely; remedy is the guided move on the Mac host (carrying command: OD-5, recommended `whr host git-config move`)",
+    "split": "fail: both exist; git reads both and writes --global to the legacy file; remedy is the guided move",
+    "absent": "fail: no host configuration; remedy is to create the XDG directory on the host; a sandbox never creates it",
+    "symlink": "unknown: the target is not resolved by the check; remedy is to use a real directory"
+  },
+  "freeze": {
+    "test_file": "apps/whr/internal/gitprofile/catalog_test.go",
+    "test_ids": ["TestHostOnlyKeysCatalogMatchesContract"],
+    "offline": true
+  }
+}

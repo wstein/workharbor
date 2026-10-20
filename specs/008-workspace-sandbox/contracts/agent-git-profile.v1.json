@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "contract": "whr-agent-git-profile",
+  "profile_version": 1,
+  "feature": "008-workspace-sandbox",
+  "status": "v1 accepted by owner 2026-10-20 (OD-3); first tests still verify behavior against real git",
+  "rules": [
+    "Declared by WorkHarbor policy; never derived from, merged with or read from the host.",
+    "Rendered deterministically (this order, git config syntax, trailing newline) and delivered read-only; GIT_CONFIG_GLOBAL points to it and GIT_CONFIG_NOSYSTEM=1.",
+    "No user.name or user.email: identity comes only from GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL supplied by the operator. user.useConfigOnly makes git fail instead of guessing.",
+    "A change of any key or value needs a new profile_version; the rendered hash is recorded in the instance labels and manifest."
+  ],
+  "entries": [
+    {
+      "key": "init.defaultBranch",
+      "value": "main",
+      "rationale": "deterministic branch name for new repositories"
+    },
+    {
+      "key": "user.useConfigOnly",
+      "value": "true",
+      "rationale": "git fails instead of guessing an identity; identity comes from the operator variables"
+    },
+    {
+      "key": "rebase.updateRefs",
+      "value": "false",
+      "rationale": "avoids rewriting extra refs unattended"
+    },
+    {
+      "key": "rerere.enabled",
+      "value": "false",
+      "rationale": "no recorded resolutions reused across jobs"
+    },
+    {
+      "key": "commit.gpgsign",
+      "value": "false",
+      "rationale": "no host signing key in a job"
+    },
+    {
+      "key": "tag.gpgsign",
+      "value": "false",
+      "rationale": "no host signing key in a job"
+    },
+    {
+      "key": "core.fsmonitor",
+      "value": "false",
+      "rationale": "no helper process started by git"
+    },
+    {
+      "key": "protocol.ext.allow",
+      "value": "never",
+      "rationale": "blocks the ext:: transport that runs commands"
+    },
+    {
+      "key": "credential.helper",
+      "value": "",
+      "rationale": "clears inherited global and system helpers (not repository-local ones)"
+    }
+  ],
+  "identity_variables": [
+    "GIT_AUTHOR_NAME",
+    "GIT_AUTHOR_EMAIL",
+    "GIT_COMMITTER_NAME",
+    "GIT_COMMITTER_EMAIL"
+  ],
+  "freeze": {
+    "test_file": "apps/whr/internal/gitprofile/agent_test.go",
+    "test_ids": [
+      "TestAgentProfileMatchesContract",
+      "TestAgentProfileRenderDeterministic"
+    ],
+    "offline": true
+  }
+}
