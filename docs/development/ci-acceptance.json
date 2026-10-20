@@ -833,7 +833,15 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPreviewTruncatesOnlyDisplay",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitJSONMatchesSchema",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRefusesFileRoleCollisions",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPreservesNearLimitManifestWithoutEdit"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitPreservesNearLimitManifestWithoutEdit",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitExistingDevcontainerPathPreserved",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDryRunWritesAndRunsNothing",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitExistingShellSettingsPreserved",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRefusesUnsafeTargets",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryCancelled",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRaceRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoverySpecialFileRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRootSuffixCannotHideSymlink"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
