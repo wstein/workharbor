@@ -210,7 +210,7 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 			// Only safe AGENTS edits are offered. Declining this path preserves
 			// the original proposal; other paths retain cancellation semantics.
 			for _, warning := range proposal.Preview().AgentsBlockWarnings {
-				if warning.Code != "agents_block.missing" && warning.Code != "agents_block.older" && warning.Code != "agents_block.modified" {
+				if warning.Code != "agents_block.missing" && warning.Code != "agents_block.different_template" && warning.Code != "agents_block.modified" {
 					continue
 				}
 				agentsEdit = true
