@@ -4,6 +4,10 @@ Date: 2026-10-16
 Status: Proposed (owner decision H77, 2026-10-16). It needs an independent review CLEAR for its exact head and
 then explicit owner approval of that head, evidenced by a tracker or PR link. Werner's chat direction and
 implementation go-ahead of 2026-10-16 are the decision recorded here, not approval of this text. Nothing is implemented.
+Amendment of 2026-10-20 (sections 3 and 4 and Consequences, for the macOS `setup` wizard and `doctor --fix` of
+[Feature 009](../../specs/009-host-setup-wizard/spec.md)): the owner approved the proposals AP-6 and AP-9 in chat on 2026-10-20 and
+PR #164 is merged; this amendment text also needs an independent review CLEAR for its exact head and explicit owner approval of that
+head, evidenced by a tracker or PR link.
 
 ## Context
 
@@ -74,6 +78,16 @@ API stays specified and is blocked on it (`auth` and `host show` on the typed TL
 with a one-line explanation. The runtime parts of the wizard's preferences (launching fish or herdr, console grants)
 are outside this ADR and the increment.
 
+Amendment (2026-10-20, [Feature 009](../../specs/009-host-setup-wizard/spec.md)): `host.setup` and `host.doctor` stay one command each. `whr setup`
+selects its fixed step list by the detected platform, not by flag: on Linux it is the Feature 006 enrollment (unchanged), on macOS it is
+the host setup wizard (no enrollment code, no host agent service, its own dry run), other platforms are refused before any change.
+`whr doctor` stays read-only for the host; `whr doctor --fix` is the mutating real run on macOS only, so `host.doctor` declares
+writes `none`, and `host` with `--fix`. The doctor catalogue gains the checks `host.profile`, `host.tool.<id>`, `host.dotfile.<id>`
+and `git.global_config`. The registration of this in `contracts/cli/commands.json` (a `host.setup` note and `blocked_on`),
+`doctor-checks.json` and `output.schema.json` (result definitions, and a place for the stable reason code of the wizard, either
+`result.reason` or Feature 008's `error.refusal`) is owner-gated work item T011 of Feature 009 and is not part of this amendment;
+no new exit code is introduced.
+
 ### 4. Exit codes of the new commands
 
 No new code: the [ADR 0013 table](0013-whr-exit-codes.md) is unchanged and
@@ -83,7 +97,11 @@ file, an unavailable command, `--devcontainer` or plain `init` in wave 1a 64; mi
 changed since preview, pre-existing content failing validation, failed doctor check, unsupported platform for a mutating
 host command 68; SIGINT, SIGTERM and wizard cancellation 72; an incomplete rollback 73, which takes precedence over 72 and
 the original code; in `init` a failed self-validation of generated files or another unclassified failure 74. The
-`--json` `error.code` is the exit-code table's name for the status. The ADR's note that 74 is "never used where a
+macOS `setup` wizard and `doctor --fix` ([Feature 009](../../specs/009-host-setup-wizard/spec.md) FR-020) use the same table: success or an answer `no` 0; usage 64; refusal
+(unsupported platform, root start, run lock, blocked or failed with nothing applied, failed doctor check) 68; needs-human (unattended
+without confirmation, privileged step without terminal) 70; deadline with nothing applied 71; interrupt or cancellation 72; partial
+failure (something applied, something not) 73, which takes precedence over 72, 71 and 68; internal, including an invalid catalogue, 74.
+The `--json` `error.code` is the exit-code table's name for the status. The ADR's note that 74 is "never used where a
 category applies" is respected; a remote-unreachable category does not exist, and a superseding ADR for it is required
 before owner-API client work (owner decision, 2026-10-17).
 
@@ -101,8 +119,12 @@ before owner-API client work (owner decision, 2026-10-17).
 
 - Spec 006 FR-001, FR-011 (`host offboard`), the stories and tasks use the new names; `ws`
   keeps working as the group alias, so existing `whr ws ...` text stays valid.
-- `whr doctor` on a development macOS machine runs read-only checks even though macOS is not
-  a verified host platform; mutating host commands still refuse unsupported platforms (FR-026).
+- Plain `whr doctor` on a development macOS machine runs read-only checks even though macOS is not
+  a verified host platform; mutating host commands still refuse unsupported platforms (FR-026, as amended by
+  Feature 009: macOS is a host platform for `setup` and `doctor --fix`, unverified until owner-run evidence; `service` and
+  `offboard` still refuse it). `doctor --fix` is the only mutating form of `doctor`.
+- The command table and `contracts/cli/` change only when Feature 009's T011 is approved and merged; until then they describe the Linux
+  `setup` and a read-only `doctor` only.
 - A `validate` result never claims the configuration is provisionable; admission remains the
   host agent's decision at trust time.
 - Cobra registers short forms as separate root commands generated from the table (Cobra aliases
