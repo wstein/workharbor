@@ -69,7 +69,7 @@ an independent publication clone. These focused measurements do not claim a raw
 full-suite pass. Qualified green never describes a raw red suite as green or grants
 task execution permission.
 
-Use ordinary PR synthetic-merge checkout into `main` or into the same-repository parent branch of a stacked PR (plain branch name, `base.sha` an ancestor of `head.sha`, no forks), read-only contents permission
+Use ordinary PR synthetic-merge checkout into `main` or into the same-repository parent branch of a stacked PR (plain branch name, `base.sha` an ancestor of `head.sha`, no forks; the merge parents are `[base, head]`, or for a native stack `[parent PR merge, head]` where that merge has exactly two parents and its second is `base.sha`), read-only contents permission
 and no persisted credentials. Keep focused Conventional Commits and exact-candidate
 independent review. No external policy-source variable, historical-tree equivalence
 framework or per-task hash refresh is needed. Existing unused repository settings
