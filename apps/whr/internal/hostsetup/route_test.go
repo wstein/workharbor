@@ -14,7 +14,7 @@ func TestLinuxSetupRoutesToEnrollment(t *testing.T) {
 		enroll         bool
 		want           string
 		code           exitcode.Code
-	}{{"linux", "setup", true, "enrollment", 0}, {"darwin", "setup", false, "wizard", 0}, {"windows", "setup", false, "", 68}, {"linux", "fix", false, "", 68}, {"windows", "fix", false, "", 68}, {"darwin", "fix", false, "fix", 0}, {"darwin", "setup", true, "", 64}} {
+	}{{"linux", "setup", true, "enrollment", 0}, {"darwin", "setup", false, "wizard", 0}, {"windows", "setup", false, "", 68}, {"linux", "fix", false, "", 68}, {"windows", "fix", false, "", 68}, {"darwin", "fix", false, "fix", 0}, {"darwin", "setup", true, "", 64}, {"darwin", "fix", true, "", 64}} {
 		t.Run(tc.platform+tc.mode+tc.want, func(t *testing.T) {
 			calls := []string{}
 			port := func(n string) RoutePort { return func(context.Context) error { calls = append(calls, n); return nil } }
