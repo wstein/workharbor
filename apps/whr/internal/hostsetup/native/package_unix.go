@@ -177,6 +177,8 @@ func (p *packageProcess) observe() {
 type nativePackageChild struct {
 	cmd    *exec.Cmd
 	exited bool
+	// probe reports whether the still-unreaped leader has exited; nil disables it.
+	probe func() (bool, error)
 }
 
 func newPackageChild(c pkgmgr.Command) (packageChild, error) {
@@ -197,7 +199,9 @@ func newPackageChild(c pkgmgr.Command) (packageChild, error) {
 	cmd.Stderr = io.Discard
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.WaitDelay = 100 * time.Millisecond
-	return &nativePackageChild{cmd: cmd}, nil
+	child := &nativePackageChild{cmd: cmd}
+	child.probe = func() (bool, error) { return childExited(child.cmd.Process.Pid) }
+	return child, nil
 }
 
 // Start has no detached startup goroutine. Go's synchronous Cmd.Start cannot
@@ -212,7 +216,7 @@ func (c *nativePackageChild) Start(ctx context.Context) error {
 	return c.cmd.Start()
 }
 func (c *nativePackageChild) Exited() (bool, error) {
-	exited, err := childExited(c.cmd.Process.Pid)
+	exited, err := c.probe()
 	if err == nil && exited {
 		c.exited = true
 	}
@@ -227,6 +231,11 @@ func (c *nativePackageChild) Signal(sig int) error {
 // exited, unreaped leader that refusal is not a failure. A live child still
 // surfaces every error. Signal runs under the process mutex, as does Exited.
 func (c *nativePackageChild) groupSignalResult(err error) error {
+	// A failed signal pauses the observer, so a child that exited since the last
+	// poll would stay marked live. The leader is still unreaped here, so re-probe.
+	if errors.Is(err, syscall.EPERM) && !c.exited && c.probe != nil {
+		_, _ = c.Exited()
+	}
 	if errors.Is(err, syscall.ESRCH) || signalOfExitedLeaderIgnored(err, c.exited, exitedLeaderSignalEPERM) {
 		return nil
 	}

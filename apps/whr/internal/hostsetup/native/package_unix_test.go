@@ -803,3 +803,31 @@ func TestNativePackageChildGroupSignalPolicy(t *testing.T) {
 		t.Fatalf("exited-leader EPERM must surface on this platform: %v", err)
 	}
 }
+
+// A failed signal pauses the observer, so nothing else refreshes the exit state.
+// An EPERM must therefore re-probe the still-unreaped leader before it is judged.
+func TestNativePackageChildSignalEPERMRefreshesExitedState(t *testing.T) {
+	probes := 0
+	child := &nativePackageChild{probe: func() (bool, error) { probes++; return true, nil }}
+	err := child.groupSignalResult(syscall.EPERM)
+	if probes != 1 || !child.exited {
+		t.Fatalf("EPERM did not refresh exit state: probes=%d exited=%v", probes, child.exited)
+	}
+	if exitedLeaderSignalEPERM && err != nil {
+		t.Fatalf("exited-leader EPERM must be tolerated on this platform: %v", err)
+	}
+	if !exitedLeaderSignalEPERM && !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("exited-leader EPERM must surface on this platform: %v", err)
+	}
+	live := &nativePackageChild{probe: func() (bool, error) { return false, nil }}
+	if err = live.groupSignalResult(syscall.EPERM); !errors.Is(err, syscall.EPERM) || live.exited {
+		t.Fatalf("live child EPERM hidden: %v", err)
+	}
+	broken := &nativePackageChild{probe: func() (bool, error) { return false, errOwnershipLost }}
+	if err = broken.groupSignalResult(syscall.EPERM); !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("probe failure must not hide EPERM: %v", err)
+	}
+	if err = child.groupSignalResult(syscall.EIO); !errors.Is(err, syscall.EIO) || probes != 1 {
+		t.Fatalf("only EPERM re-probes: err=%v probes=%d", err, probes)
+	}
+}
