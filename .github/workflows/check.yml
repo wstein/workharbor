@@ -38,3 +38,61 @@ jobs:
           sudo apt-get install --yes --no-install-recommends zsh fish
       - name: Validate explicit repository acceptance
         run: python3 -I -B scripts/check_ci.py
+  macos-pty:
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      # Bind native PTY evidence to the PR source head, not a synthetic merge.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact tested head
+        shell: bash
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_HEAD" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test -z "$(git status --porcelain)"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.27.2'
+          cache: false
+      - name: Verify native harness and wizard PTYs
+        shell: bash
+        working-directory: apps/whr
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          expected=(
+            TestPTYDrivesPromptAndCapturesTranscript
+            TestPTYKeysAndEnvironment
+            TestPTYInterruptDelivered
+            TestPTYBackAndCancelPrompt
+            TestPTYTimeoutFailsTest
+            TestPTYNoLeakedProcess
+            TestWizardPTYHappyPath
+            TestWizardPTYInterruptRollsBack
+          )
+          selection=$(printf '%s|' "${expected[@]}")
+          selection="^(${selection%|})$"
+          listed=$(go test -list "$selection" ./internal/ptytest ./cmd/whr)
+          printf '%s\n' "$listed"
+          for name in "${expected[@]}"; do
+            grep -Fx -- "$name" <<< "$listed"
+          done
+          if output=$(go test -v -count=1 -timeout=90s -run "$selection" ./internal/ptytest ./cmd/whr 2>&1); then
+            printf '%s\n' "$output"
+          else
+            printf '%s\n' "$output"
+            exit 1
+          fi
+          for name in "${expected[@]}"; do
+            grep -Eq -- "^--- PASS: ${name} \\(" <<< "$output"
+          done
+          if grep -q -- '^[[:space:]]*--- SKIP:' <<< "$output"; then
+            exit 1
+          fi
