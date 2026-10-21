@@ -1108,7 +1108,18 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeRollbackAndStageOwnership",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeKernelNoReplacePreservesOccupiedDestination",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeReadRefusesLeafLinkToSameInode",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeRenameAbsentRefusesLateOccupant"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeRenameAbsentRefusesLateOccupant",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicClaudeSettingsBaselineAndNoop",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicClaudeSettingsLeftUnchanged",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitClaudeSettingsCases",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitClaudeSettingsDryRunAndStale",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitClaudeSettingsExactDefault",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitClaudeSettingsLargeOverwriteAndRollback",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitClaudeSettingsSpecialTargets",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitClaudeSettingsTailChangeWithRestoredMtime",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestClaudeSettingsUnattendedOverwriteNeedsYes",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardClaudeSettingsFlaggedSpecialRefusedBeforePrompts",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardClaudeSettingsOnlyFlagPreconfirms"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
