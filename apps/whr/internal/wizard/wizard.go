@@ -63,10 +63,10 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 	}
 	// Only the proposal model knows the paths it can modify. These are preview
 	// permissions, never write consent: every overwrite is confirmed below.
-	preconfirmedAgents := false
+	preconfirmedGuardedPath := false
 	for _, name := range options.Overwrite {
-		if name == "AGENTS.md" {
-			preconfirmedAgents = true
+		if name == "AGENTS.md" || name == ".claude/settings.json" {
+			preconfirmedGuardedPath = true
 		}
 	}
 	agentsEdit := false
@@ -83,7 +83,7 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 		}
 		return scaffold.Build(snapshot, o)
 	}
-	if preconfirmedAgents {
+	if preconfirmedGuardedPath {
 		if _, err := candidate(); err != nil && exitcode.FromError(err) == exitcode.Conflict {
 			return nil, err
 		}
@@ -144,7 +144,7 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 				*st.value = &v
 			}
 			if _, err := candidate(); err != nil && !(st.name != "devcontainer" && options.Devcontainer == nil && exitcode.FromError(err) == exitcode.NeedsHuman) {
-				if preconfirmedAgents && exitcode.FromError(err) == exitcode.Conflict {
+				if preconfirmedGuardedPath && exitcode.FromError(err) == exitcode.Conflict {
 					return nil, err
 				}
 				*st.value = old
@@ -197,7 +197,7 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 			continue
 		case answer == "write":
 			for _, action := range proposal.Preview().Actions {
-				if action.Action == "overwrite" {
+				if action.Action == "overwrite" && action.Path != ".claude/settings.json" {
 					yes, err := s.confirm(action.Path)
 					if err != nil {
 						return nil, err

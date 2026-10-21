@@ -195,7 +195,13 @@ func (t *transaction) check(name string) error {
 		}
 		return nil
 	}
-	data, held, err := readBound(parent, path.Base(name), workspacecfg.MaxDevcontainerLen)
+	read := readBound
+	if name == claudeSettingsPath {
+		read = func(r *os.Root, leaf string, limit int) ([]byte, fs.FileInfo, error) {
+			return readClaudePrefix(r, leaf, expected.Info)
+		}
+	}
+	data, held, err := read(parent, path.Base(name), workspacecfg.MaxDevcontainerLen)
 	if err != nil || !os.SameFile(expected.Info, held) || digest(data) != expected.SHA256 {
 		return conflict()
 	}
@@ -261,7 +267,7 @@ func (t *transaction) temp(parent *os.Root, data []byte, mode fs.FileMode) (stri
 	return name, info, err
 }
 func verifyTemporary(parent *os.Root, name string, info fs.FileInfo, data []byte, mode fs.FileMode) error {
-	current, held, err := readBound(parent, name, workspacecfg.MaxDevcontainerLen)
+	current, held, err := readBound(parent, name, max(len(data), workspacecfg.MaxDevcontainerLen))
 	if err != nil || info == nil || !os.SameFile(info, held) || held.Mode() != mode || digest(current) != digest(data) {
 		return conflict()
 	}
@@ -285,6 +291,11 @@ func (t *transaction) writeFile(name string, data []byte, overwrite bool) error 
 	defer parent.Close()
 	leaf := path.Base(name)
 	if !overwrite {
+		if name == claudeSettingsPath {
+			if err := t.fault("create:" + name); err != nil {
+				return err
+			}
+		}
 		f, err := createExclusive(parent, leaf, 0644)
 		if err != nil {
 			return mutationError(name, err)
@@ -315,11 +326,20 @@ func (t *transaction) writeFile(name string, data []byte, overwrite bool) error 
 		t.remember(name, "file", info, data)
 		return nil
 	}
-	old, info, err := readBound(parent, leaf, workspacecfg.MaxDevcontainerLen)
+	var old []byte
+	var info fs.FileInfo
+	var observed []byte
+	if name == claudeSettingsPath {
+		old, info, err = readClaudeFull(parent, leaf, t.expected[name].Info)
+		observed = old[:min(len(old), claudeReadBound)]
+	} else {
+		old, info, err = readBound(parent, leaf, workspacecfg.MaxDevcontainerLen)
+		observed = old
+	}
 	if err != nil {
 		return err
 	}
-	if !os.SameFile(t.expected[name].Info, info) || digest(old) != t.expected[name].SHA256 || info.Mode() != t.expected[name].Mode {
+	if !os.SameFile(t.expected[name].Info, info) || digest(observed) != t.expected[name].SHA256 || info.Mode() != t.expected[name].Mode {
 		return conflict()
 	}
 	temp, created, err := t.temp(parent, data, info.Mode())
