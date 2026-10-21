@@ -131,6 +131,10 @@ func exclusive(parent int, name string) (*os.File, error) {
 	}
 	return f, nil
 }
+
+// appendSync makes each journal record durable before the caller acts on it.
+// The fsync cannot be observed from a Go test (a successful Sync leaves no
+// trace on a live file), so no test pins it; do not remove the Sync call.
 func appendSync(f *os.File, b []byte) error {
 	n, err := f.Write(b)
 	if err != nil || n != len(b) {
