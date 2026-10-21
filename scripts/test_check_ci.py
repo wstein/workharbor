@@ -612,6 +612,69 @@ class SourceTests(unittest.TestCase):
         with mock.patch.dict(os.environ, {'GITHUB_SHA': context.head}), self.assertRaises(ValueError):
             ci.source_context(self.root)
 
+    def native_stack(self, depth=1):
+        """GitHub native stack: each merge ref is head merged into the parent PR's merge commit."""
+        self.git('checkout', '--quiet', '--detach', self.base)
+        heads = [self.commit('stack-0.md')]
+        for level in range(1, depth + 1):
+            heads.append(self.commit('stack-%d.md' % level))
+        self.git('checkout', '--quiet', '--detach', self.base)
+        tip = self.commit('main-advance.md')
+        previous = self.merge(tip, heads[0]).checkout        # parent PR merge into main
+        for level in range(1, depth):
+            previous = self.merge(previous, heads[level]).checkout
+        return previous, heads[depth - 1], heads[depth]
+
+    def native_context(self, parent_merge, base, head, **changes):
+        wrong = self.merge(parent_merge, head, **changes)
+        return ci.SourceContext('pull_request', base, head, wrong.checkout)
+
+    def test_native_stack_merge_into_parent_pull_request_merge_is_accepted(self):
+        for depth in (1, 2, 3):
+            with self.subTest(depth=depth):
+                parent_merge, base, head = self.native_stack(depth)
+                context = self.native_context(parent_merge, base, head); self.stacked_event(context)
+                self.assertEqual(context, ci.source_context(self.root))
+                self.assertEqual(context, ci.source_context(self.root, *context))
+
+    def test_native_stack_refuses_wrong_parent_merge_shapes(self):
+        parent_merge, base, head = self.native_stack(2)
+        self.git('checkout', '--quiet', '--detach', self.base)
+        other = self.commit('other.md')
+        self.git('checkout', '--quiet', '--detach', self.base)
+        stale_main = self.commit('moved-main.md')
+        stale_merge = self.merge(stale_main, other).checkout   # second parent is not the base
+        tree = self.git('rev-parse', parent_merge + '^{tree}')
+        one_parent = self.git('commit-tree', tree, '-p', stale_main, text='single\n')
+        three = self.git('commit-tree', tree, '-p', stale_main, '-p', base, '-p', other, text='octopus\n')
+        swapped = self.git('commit-tree', tree, '-p', base, '-p', stale_main, text='swapped\n')
+        for name, bad in (('wrong second parent', stale_merge), ('one parent', one_parent),
+                          ('three parents', three), ('swapped parents', swapped), ('root commit', self.base)):
+            with self.subTest(name=name):
+                context = self.native_context(bad, base, head); self.stacked_event(context)
+                with self.assertRaises(ValueError): ci.source_context(self.root)
+
+    def test_native_stack_refuses_wrong_head_position_and_forged_tree(self):
+        parent_merge, base, head = self.native_stack(1)
+        self.git('checkout', '--quiet', '--detach', self.base)
+        other = self.commit('other-head.md')
+        for name, changes in (('head not second parent', {'parents': (parent_merge, other)}),
+                              ('head first', {'parents': (head, parent_merge)}),
+                              ('forged tree', {'tree': self.git('rev-parse', head + '^{tree}')})):
+            with self.subTest(name=name):
+                context = self.native_context(parent_merge, base, head, **changes); self.stacked_event(context)
+                with self.assertRaises(ValueError): ci.source_context(self.root)
+
+    def test_native_stack_shape_is_refused_for_main_and_after_parent_moved(self):
+        parent_merge, base, head = self.native_stack(1)
+        context = self.native_context(parent_merge, base, head)
+        self.stacked_event(context, ref='main')
+        with self.assertRaises(ValueError): ci.source_context(self.root)
+        # The parent PR head moved on: the event base no longer is the parent merge's second parent.
+        self.git('checkout', '--quiet', '--detach', head)
+        moved = self.native_context(parent_merge, self.commit('parent-moved.md'), head); self.stacked_event(moved)
+        with self.assertRaises(ValueError): ci.source_context(self.root)
+
     def test_stacked_pull_request_checks_the_exact_merge_of_head_into_parent_tip(self):
         # The checked tree is the merge of head into the parent tip, so an edit
         # of the checker by the head is judged as edited, never replaced or hidden.
