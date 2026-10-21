@@ -780,3 +780,26 @@ func TestPackageCommandAdapterEngineCleanupFailureRetainsOwnership(t *testing.T)
 		}
 	}
 }
+
+func TestNativePackageChildGroupSignalPolicy(t *testing.T) {
+	live := &nativePackageChild{}
+	if err := live.groupSignalResult(syscall.EPERM); !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("EPERM hidden for a live child: %v", err)
+	}
+	if err := live.groupSignalResult(syscall.ESRCH); err != nil {
+		t.Fatalf("missing group is not a failure: %v", err)
+	}
+	exited := &nativePackageChild{exited: true}
+	if err := exited.groupSignalResult(syscall.EIO); !errors.Is(err, syscall.EIO) {
+		t.Fatalf("non-EPERM error hidden for an exited leader: %v", err)
+	}
+	// Darwin refuses to signal the group of an exited, unreaped leader; that refusal
+	// is tolerated exactly where the native probe tolerates it, and nowhere else.
+	err := exited.groupSignalResult(syscall.EPERM)
+	if exitedLeaderSignalEPERM && err != nil {
+		t.Fatalf("exited-leader EPERM must be tolerated on this platform: %v", err)
+	}
+	if !exitedLeaderSignalEPERM && !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("exited-leader EPERM must surface on this platform: %v", err)
+	}
+}
