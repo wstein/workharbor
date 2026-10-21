@@ -142,6 +142,8 @@ jobs:
             TestNativeOrbStackMetadataFixedRoute
             TestNativeOrbStackMetadataRejectsAliasesAndBounds
             TestNativeOrbStackMetadataProcessControls
+            TestNativeExitedLeaderSignalPolicy
+            TestNativeVerifiedDiskPathRejectsReplacement
             TestDetectStates
             TestDetectIsReadOnlyAndNeverRunsBrew
             TestDetectCLTGitShimNotExecuted

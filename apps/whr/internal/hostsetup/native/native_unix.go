@@ -301,7 +301,7 @@ func (c *commandLease) Exited() (bool, error) {
 }
 func (c *commandLease) SignalGroup() error {
 	err := syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
-	if errors.Is(err, syscall.ESRCH) || signalOfExitedLeaderIgnored(err, c.exited) {
+	if errors.Is(err, syscall.ESRCH) || signalOfExitedLeaderIgnored(err, c.exited, exitedLeaderSignalEPERM) {
 		return nil
 	}
 	return err
@@ -309,9 +309,10 @@ func (c *commandLease) SignalGroup() error {
 
 // signalOfExitedLeaderIgnored: where the OS refuses to signal the group of an
 // exited, unreaped leader (EPERM), that refusal is not a failure; a live child
-// still surfaces every error.
-func signalOfExitedLeaderIgnored(err error, leaderExited bool) bool {
-	return exitedLeaderSignalEPERM && leaderExited && errors.Is(err, syscall.EPERM)
+// still surfaces every error. platformEPERM is the OS flag, a parameter so a
+// test covers both values on any host.
+func signalOfExitedLeaderIgnored(err error, leaderExited, platformEPERM bool) bool {
+	return platformEPERM && leaderExited && errors.Is(err, syscall.EPERM)
 }
 func (c *commandLease) Release() error { return c.cmd.Process.Release() }
 func (c *commandLease) Wait() error    { return c.cmd.Wait() }
