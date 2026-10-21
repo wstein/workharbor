@@ -174,7 +174,10 @@ func (p *packageProcess) observe() {
 	}
 }
 
-type nativePackageChild struct{ cmd *exec.Cmd }
+type nativePackageChild struct {
+	cmd    *exec.Cmd
+	exited bool
+}
 
 func newPackageChild(c pkgmgr.Command) (packageChild, error) {
 	cmd := exec.Command(c.Argv[0], c.Argv[1:]...)
@@ -208,10 +211,23 @@ func (c *nativePackageChild) Start(ctx context.Context) error {
 	}
 	return c.cmd.Start()
 }
-func (c *nativePackageChild) Exited() (bool, error) { return childExited(c.cmd.Process.Pid) }
+func (c *nativePackageChild) Exited() (bool, error) {
+	exited, err := childExited(c.cmd.Process.Pid)
+	if err == nil && exited {
+		c.exited = true
+	}
+	return exited, err
+}
 func (c *nativePackageChild) Signal(sig int) error {
-	err := syscall.Kill(-c.cmd.Process.Pid, syscall.Signal(sig))
-	if errors.Is(err, syscall.ESRCH) {
+	return c.groupSignalResult(syscall.Kill(-c.cmd.Process.Pid, syscall.Signal(sig)))
+}
+
+// groupSignalResult applies the native probe's group-signal policy: a missing
+// group is gone, and where the OS refuses (EPERM) to signal the group of an
+// exited, unreaped leader that refusal is not a failure. A live child still
+// surfaces every error. Signal runs under the process mutex, as does Exited.
+func (c *nativePackageChild) groupSignalResult(err error) error {
+	if errors.Is(err, syscall.ESRCH) || signalOfExitedLeaderIgnored(err, c.exited, exitedLeaderSignalEPERM) {
 		return nil
 	}
 	return err
