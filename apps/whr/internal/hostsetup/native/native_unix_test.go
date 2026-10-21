@@ -366,3 +366,159 @@ func TestNativeFailedStartAndNonzeroExit(t *testing.T) {
 		t.Fatal("failed process spawn accepted")
 	}
 }
+
+const metadataPlistFixture = `<?xml version="1.0"?><plist version="1.0"><dict><key>CFBundleShortVersionString</key><string>2.2.4</string></dict></plist>`
+
+// Intercept the exact fake plist-reader argv before testing parses its flags.
+// The helper is a copied test executable, never the real system plutil.
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "-extract" {
+		expected := []string{"-extract", "CFBundleShortVersionString", "raw", "-o", "-", "/dev/fd/4"}
+		if os.Args[0] != "/usr/bin/plutil" || !reflect.DeepEqual(os.Args[1:], expected) || len(os.Environ()) != 2 || os.Getenv("PATH") != detect.FixedPATH || os.Getenv("LC_ALL") != "C" {
+			os.Exit(20)
+		}
+		input, err := io.ReadAll(os.Stdin)
+		if err != nil || len(input) != 0 {
+			os.Exit(21)
+		}
+		metadata, err := os.ReadFile("/dev/fd/4")
+		if err != nil {
+			os.Exit(22)
+		}
+		switch string(metadata) {
+		case metadataPlistFixture:
+			fmt.Print("2.2.4\n")
+		case strings.Replace(metadataPlistFixture, "2.2.4", "fixture-flood", 1):
+			fmt.Print(strings.Repeat("x", outputLimit+1))
+		case strings.Replace(metadataPlistFixture, "2.2.4", "fixture-block", 1):
+			for {
+				time.Sleep(time.Second)
+			}
+		case strings.Replace(metadataPlistFixture, "2.2.4", "fixture-nonzero", 1):
+			os.Exit(7)
+		case strings.Replace(metadataPlistFixture, "2.2.4", "fixture-stderr", 1):
+			fmt.Fprint(os.Stderr, "private-do-not-return")
+			fmt.Print("2.2.4\n")
+		default:
+			os.Exit(22)
+		}
+		os.Exit(0)
+	}
+	os.Exit(m.Run())
+}
+func metadataFixture(t *testing.T) (*Host, string) {
+	t.Helper()
+	host, root, helper := fixture(t)
+	for _, dir := range []string{"/usr/bin", "/Applications/OrbStack.app/Contents", "/opt/homebrew/Caskroom/orbstack"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Link(filepath.Join(root, helper), filepath.Join(root, "usr/bin/plutil")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, detect.OrbStackInfoPlist), []byte(metadataPlistFixture), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return host, root
+}
+func TestNativeOrbStackMetadataFixedRoute(t *testing.T) {
+	host, _ := metadataFixture(t)
+	value, err := host.OrbStackAppVersion(context.Background(), 3*time.Second)
+	if err != nil || value != "2.2.4\n" {
+		t.Fatalf("fixed metadata route: %q %v", value, err)
+	}
+	initial, err := catalogue.LoadInitial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := host.Detector().Detect(context.Background(), initial.Items[0])
+	if result.State != "present_ok" || result.Version != "2.2.4" || !result.Managed {
+		t.Fatalf("production route not wired: %+v", result)
+	}
+	p := probe("/usr/bin/plutil", "version")
+	p.Args = []string{"-extract", "CFBundleShortVersionString", "raw", "-o", "-", "/dev/fd/4"}
+	if _, err := host.Run(context.Background(), p); !errors.Is(err, errUnsafe) {
+		t.Fatalf("generic four-argument limit widened: %v", err)
+	}
+}
+func TestNativeOrbStackMetadataRejectsAliasesAndBounds(t *testing.T) {
+	for _, kind := range []string{"plist", "parent", "helper", "helper_parent"} {
+		t.Run(kind, func(t *testing.T) {
+			host, root := metadataFixture(t)
+			path := filepath.Join(root, detect.OrbStackInfoPlist)
+			if kind == "parent" {
+				path = filepath.Dir(path)
+			}
+			if kind == "helper" {
+				path = filepath.Join(root, "usr/bin/plutil")
+			}
+			if kind == "helper_parent" {
+				path = filepath.Join(root, "usr/bin")
+			}
+			if err := os.Rename(path, path+"-saved"); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(path+"-saved", path); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := host.OrbStackAppVersion(context.Background(), time.Second); err == nil {
+				t.Fatal("followed metadata/helper alias")
+			}
+		})
+	}
+	host, _ := metadataFixture(t)
+	if _, err := host.OrbStackAppVersion(context.Background(), 6*time.Second); err == nil {
+		t.Fatal("accepted metadata budget above5s")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := host.OrbStackAppVersion(ctx, time.Second); err == nil {
+		t.Fatal("executed cancelled metadata observation")
+	}
+	host, root := metadataFixture(t)
+	if err := os.WriteFile(filepath.Join(root, detect.OrbStackInfoPlist), make([]byte, 1024*1024+1), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.OrbStackAppVersion(context.Background(), time.Second); !errors.Is(err, errUnsafe) {
+		t.Fatalf("accepted oversized metadata file: %v", err)
+	}
+
+}
+
+func TestNativeOrbStackMetadataProcessControls(t *testing.T) {
+	for _, mode := range []string{"flood", "block", "nonzero", "stderr"} {
+		t.Run(mode, func(t *testing.T) {
+			host, root := metadataFixture(t)
+			content := strings.Replace(metadataPlistFixture, "2.2.4", "fixture-"+mode, 1)
+			if err := os.WriteFile(filepath.Join(root, detect.OrbStackInfoPlist), []byte(content), 0600); err != nil {
+				t.Fatal(err)
+			}
+			start := time.Now()
+			budget := 3 * time.Second
+			if mode == "block" {
+				budget = 100 * time.Millisecond
+			}
+			value, err := host.OrbStackAppVersion(context.Background(), budget)
+			switch mode {
+			case "flood":
+				if !errors.Is(err, errOutputLimit) || value != "" {
+					t.Fatalf("metadata output cap lost: %q %v", value, err)
+				}
+			case "block":
+				if !errors.Is(err, context.DeadlineExceeded) || value != "" || time.Since(start) > time.Second {
+					t.Fatalf("metadata deadline lost: %q %v", value, err)
+				}
+			case "nonzero":
+				var exit *exec.ExitError
+				if !errors.As(err, &exit) || exit.ExitCode() != 7 || value != "" {
+					t.Fatalf("metadata failed probe accepted: %q %v", value, err)
+				}
+			case "stderr":
+				if err != nil || value != "2.2.4\n" {
+					t.Fatalf("metadata stderr leaked: %q %v", value, err)
+				}
+			}
+		})
+	}
+}

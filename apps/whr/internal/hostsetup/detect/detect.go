@@ -49,6 +49,14 @@ type Exec interface {
 }
 type Clock interface{ Now() time.Time }
 
+const OrbStackInfoPlist = "/Applications/OrbStack.app/Contents/Info.plist"
+
+// Metadata exposes only the approved fixed application-version observation.
+// Callers cannot select a file, key or command through this port.
+type Metadata interface {
+	OrbStackAppVersion(context.Context, time.Duration) (string, error)
+}
+
 // Result retains measured internal evidence; command-facing redaction is T008.
 type Result struct {
 	Item    string
@@ -59,14 +67,22 @@ type Result struct {
 	Reason  string
 }
 type Detector struct {
-	FS    FS
-	Exec  Exec
-	Clock Clock
+	Metadata Metadata
+	FS       FS
+	Exec     Exec
+	Clock    Clock
 }
 
 func (d Detector) Detect(ctx context.Context, item catalogue.Item) Result {
 	result := Result{Item: item.ID, State: "unknown"}
-	if d.FS == nil || d.Exec == nil || d.Clock == nil || ctx.Err() != nil {
+	if d.FS == nil || d.Clock == nil || ctx.Err() != nil {
+		result.Reason = "probe_unavailable"
+		return result
+	}
+	if item.Tool.VersionMetadata != "" {
+		return d.orbStackMetadata(ctx, item)
+	}
+	if d.Exec == nil {
 		result.Reason = "probe_unavailable"
 		return result
 	}
@@ -347,4 +363,109 @@ func compareVersions(a, b string) (int, bool) {
 		}
 	}
 	return 0, true
+}
+
+// fixedFile checks each component without resolving aliases. The closed metadata
+// route has no owner-selected file/key or executable-discovery fallback.
+func (d Detector) fixedFile(ctx context.Context, p, leafKind string, start time.Time) error {
+	current := "/"
+	parts := strings.Split(strings.TrimPrefix(p, "/"), "/")
+	for i, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := d.stat(ctx, current, start)
+		if err != nil {
+			return err
+		}
+		kind := "directory"
+		if i == len(parts)-1 {
+			kind = leafKind
+		}
+		if info.Kind != kind {
+			return fs.ErrInvalid
+		}
+	}
+	return nil
+}
+func (d Detector) orbStackMetadata(ctx context.Context, item catalogue.Item) Result {
+	result := Result{Item: item.ID, State: "unknown"}
+	tool := item.Tool
+	source := tool.Source
+	if item.ID != "orbstack" || item.Kind != "runtime" || tool.VersionMetadata != catalogue.OrbStackAppMetadata || tool.Command != "" || len(tool.VersionArgs) != 0 || source.Manager != "homebrew" || source.Type != "cask" || source.Name != "orbstack" || source.Tap != "homebrew/cask" {
+		result.Reason = "probe_forbidden"
+		return result
+	}
+	if d.Metadata == nil {
+		result.Reason = "probe_unavailable"
+		return result
+	}
+	start := d.Clock.Now()
+	if err := d.fixedFile(ctx, OrbStackInfoPlist, "regular", start); err != nil {
+		result.Reason = "path_unverifiable"
+		if errors.Is(err, fs.ErrNotExist) {
+			result.State = "absent"
+			result.Reason = "not_found"
+		}
+		return result
+	}
+	result.Path = OrbStackInfoPlist
+	result.State = "present_unverifiable"
+	remaining, err := d.remaining(ctx, start)
+	if err != nil {
+		result.Reason = "probe_budget_exhausted"
+		return result
+	}
+	readCtx, cancel := context.WithTimeout(ctx, remaining)
+	defer cancel()
+	value, err := d.Metadata.OrbStackAppVersion(readCtx, remaining)
+	_, boundErr := d.remaining(ctx, start)
+	if err != nil || boundErr != nil || readCtx.Err() != nil || len(value) > 64*1024 {
+		result.Reason = "probe_failed"
+		return result
+	}
+	pattern, err := regexp.Compile(tool.VersionRegex)
+	if err != nil {
+		result.Reason = "invalid_version_pattern"
+		return result
+	}
+	match := pattern.FindStringSubmatch(value)
+	if len(match) == 0 {
+		result.Reason = "version_unparsed"
+		return result
+	}
+	version := match[0]
+	if len(match) > 1 {
+		version = match[1]
+	}
+	compared, ok := compareVersions(version, tool.MinVersion)
+	if !ok {
+		result.Reason = "version_unparsed"
+		return result
+	}
+	result.Version = version
+	// Application support version and cask registration are distinct evidence.
+	// A newer app version never stands in for the separate source-layout guard.
+	for _, prefix := range []string{"/opt/homebrew", "/usr/local"} {
+		err := d.fixedFile(ctx, prefix+"/Caskroom/orbstack", "directory", start)
+		if err == nil {
+			result.Managed = true
+			break
+		}
+		if !errors.Is(err, fs.ErrNotExist) {
+			result.Reason = "source_unverifiable"
+			return result
+		}
+	}
+	if _, err := d.remaining(ctx, start); err != nil {
+		result.Reason = "probe_budget_exhausted"
+		return result
+	}
+	if !result.Managed {
+		result.State = "present_other_source"
+		return result
+	}
+	result.State = "present_ok"
+	if compared < 0 {
+		result.State = "present_outdated"
+	}
+	return result
 }

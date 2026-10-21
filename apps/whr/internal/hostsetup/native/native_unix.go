@@ -208,11 +208,17 @@ func (h *Host) Run(ctx context.Context, p detect.Probe) (detect.Output, error) {
 	if ctx.Err() != nil {
 		return detect.Output{}, ctx.Err()
 	}
-	// ExtraFiles[0] is descriptor3 on both supported Unix platforms. /dev/fd is
-	// supplied by the OS, not PATH; the opened file remains pinned through exec.
-	cmd := exec.Command("/dev/fd/"+strconv.Itoa(3), p.Args...)
+	return runVersion(ctx, p, "/dev/fd/"+strconv.Itoa(3), []*os.File{f}, cancel)
+}
+
+// runVersion shares bounds/ownership only; its two callers select distinct,
+// closed command grammars. Generic Run retains its four-argument validation.
+func runVersion(ctx context.Context, p detect.Probe, commandPath string, files []*os.File, cancel context.CancelFunc) (detect.Output, error) {
+	// ExtraFiles preserves pinned inputs. Each caller explicitly chooses either
+	// the existing descriptor executable route or the fixed absolute helper.
+	cmd := exec.Command(commandPath, p.Args...)
 	cmd.Args[0] = p.Executable
-	cmd.ExtraFiles = []*os.File{f}
+	cmd.ExtraFiles = files
 	cmd.Env = []string{"PATH=" + detect.FixedPATH, "LC_ALL=C"}
 	cmd.Dir = "/"
 	cmd.Stdin = nil
@@ -223,10 +229,10 @@ func (h *Host) Run(ctx context.Context, p detect.Probe) (detect.Output, error) {
 	// Wait owns reaping and must run only after every group signal. There is no
 	// CommandContext watcher that could signal concurrently with/after Wait.
 	cmd.WaitDelay = 100 * time.Millisecond
-	if err = cmd.Start(); err != nil {
+	if err := cmd.Start(); err != nil {
 		return detect.Output{}, err
 	}
-	err = finishProbe(ctx, &commandLease{cmd: cmd})
+	err := finishProbe(ctx, &commandLease{cmd: cmd})
 	stdout, overflow := output.result()
 	result := detect.Output{Stdout: stdout, Exit: -1}
 	if cmd.ProcessState != nil {
@@ -240,8 +246,10 @@ func (h *Host) Run(ctx context.Context, p detect.Probe) (detect.Output, error) {
 	}
 	return result, err
 }
-func (h *Host) Now() time.Time            { return time.Now() }
-func (h *Host) Detector() detect.Detector { return detect.Detector{FS: h, Exec: h, Clock: h} }
+func (h *Host) Now() time.Time { return time.Now() }
+func (h *Host) Detector() detect.Detector {
+	return detect.Detector{FS: h, Exec: h, Clock: h, Metadata: h}
+}
 
 // processLease keeps the command's PID owned until the final group signal.
 type processLease interface {
@@ -307,4 +315,68 @@ func finishProbe(ctx context.Context, child processLease) error {
 		return signalErr
 	}
 	return waitErr
+}
+
+// OrbStackAppVersion is the closed fixed application metadata observation.
+func (h *Host) OrbStackAppVersion(ctx context.Context, budget time.Duration) (string, error) {
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if budget <= 0 || budget > 5*time.Second {
+		return "", errUnsafe
+	}
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	parent, leaf, err := h.parent(detect.OrbStackInfoPlist)
+	if err != nil {
+		return "", err
+	}
+	fd, err := unix.Openat(parent, leaf, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
+	unix.Close(parent)
+	if err != nil {
+		return "", err
+	}
+	metadata := os.NewFile(uintptr(fd), detect.OrbStackInfoPlist)
+	defer metadata.Close()
+	info, err := metadata.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 1024*1024 {
+		return "", errUnsafe
+	}
+	helper, err := h.executable("/usr/bin/plutil")
+	if err != nil {
+		return "", err
+	}
+	defer helper.Close()
+	h.mu.Lock()
+	if h.root == nil {
+		h.mu.Unlock()
+		return "", os.ErrClosed
+	}
+	rootName := h.root.Name()
+	h.mu.Unlock()
+	commandPath := path.Join(rootName, "usr/bin/plutil")
+	helperInfo, err := helper.Stat()
+	if err != nil {
+		return "", err
+	}
+	diskInfo, err := os.Lstat(commandPath)
+	if err != nil || !diskInfo.Mode().IsRegular() || !os.SameFile(helperInfo, diskInfo) {
+		return "", errUnsafe
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	// Execute the fixed absolute system helper, not /dev/fd/3. Its immutable OS
+	// location is the trusted identity boundary on a real host; owned temp roots
+	// supply copied test helpers only. The plist read descriptor remains pinned.
+	// This does not claim an arbitrary-path race proof or a Darwin runtime test.
+	p := detect.Probe{Executable: "/usr/bin/plutil", Args: []string{"-extract", "CFBundleShortVersionString", "raw", "-o", "-", "/dev/fd/4"}, Timeout: budget}
+	result, err := runVersion(ctx, p, commandPath, []*os.File{helper, metadata}, cancel)
+	if err != nil {
+		return "", err
+	}
+	if result.Exit != 0 {
+		return "", errUnsafe
+	}
+	return result.Stdout, nil
 }
