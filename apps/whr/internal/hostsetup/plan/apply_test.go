@@ -392,3 +392,43 @@ func TestApplyCancelledRunnerBeforeChildIsSkipped(t *testing.T) {
 		t.Fatal(out, err)
 	}
 }
+func TestApplyValidAuditSanitizesPrivateRunnerMetadata(t *testing.T) {
+	for _, test := range []struct {
+		name, privateReason, privateError, wantReason, status string
+		wantExit                                              int
+	}{
+		{name: "private_reason", privateReason: "ENV-PRIVATE-REASON-CANARY", status: "applied", wantExit: 0},
+		{name: "private_error", privateError: "PASSWORD-PRIVATE-ERROR-CANARY", wantReason: "step_failed", status: "failed", wantExit: 73},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			e, r, runner, home := applyFixture(t)
+			argv := []string{"/opt/homebrew/bin/brew", "install", "jq"}
+			runner.callback = func(context.Context, Step, string, time.Duration) (StepOutcome, error) {
+				var privateErr error
+				if test.privateError != "" {
+					privateErr = errors.New(test.privateError)
+				}
+				return StepOutcome{Audit: profile.StepAudit{Result: test.status, Argv: argv}, Reason: test.privateReason}, privateErr
+			}
+			out, err := e.Apply(context.Background(), r)
+			if err != nil || out.ExitCode != test.wantExit || len(out.Steps) != 1 || len(runner.calls) != 1 {
+				t.Fatal("valid audit was rejected before sanitization", out, err)
+			}
+			got := out.Steps[0]
+			if got.Audit.Result != test.status || !reflect.DeepEqual(got.Audit.Argv, argv) || got.Reason != test.wantReason {
+				t.Fatal("valid audit metadata or private reason was not handled independently", got)
+			}
+			encoded, encodeErr := json.Marshal(out)
+			if encodeErr != nil {
+				t.Fatal(encodeErr)
+			}
+			journal := filepath.Join(home, ".local/state/whr/protocols/"+r.RunID)
+			all := string(encoded) + string(readApply(t, journal+".jsonl")) + string(readApply(t, journal+".txt"))
+			for _, canary := range []string{test.privateReason, test.privateError} {
+				if canary != "" && strings.Contains(all, canary) {
+					t.Fatal("valid-audit path leaked private runner metadata")
+				}
+			}
+		})
+	}
+}
