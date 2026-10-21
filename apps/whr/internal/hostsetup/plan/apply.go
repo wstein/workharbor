@@ -33,7 +33,7 @@ type StepOutcome struct {
 // T003/T004 adapters are intentionally separate from this orchestration core:
 // pkgmgr already imports plan, so importing it here would introduce a cycle.
 type StepRunner interface {
-	ApplyStep(context.Context, Step, string, time.Duration) (StepOutcome, error)
+	ApplyStep(context.Context, Step, string, time.Duration, StepGuard) (StepOutcome, error)
 }
 type ApplyRequest struct {
 	Input                             Input
@@ -229,7 +229,7 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 				stepCtx, cancel := context.WithTimeout(ctx, StepBudget)
 				dispatch := step
 				dispatch.DependsOn = append([]string(nil), step.DependsOn...)
-				got, actionErr := e.Runner.ApplyStep(stepCtx, dispatch, r.RunID, StepBudget)
+				got, actionErr := e.Runner.ApplyStep(stepCtx, dispatch, r.RunID, StepBudget, guardFor(run, step, completed))
 				stepErr := stepCtx.Err()
 				cancel()
 				result = got
@@ -246,32 +246,38 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 					out.ExitCode = interrupted(ctx)
 					if result.Audit.Result != "applied" && result.Audit.Result != "unchanged" {
 						result.Reason = "interrupted"
-						if len(result.Audit.Argv) == 0 && result.Audit.ExitStatus == nil {
+						if result.Audit.Result != "failed" && result.Audit.Result != "rolled_back" && len(result.Audit.Argv) == 0 && result.Audit.ExitStatus == nil {
 							result.Audit.Result = "skipped"
 						}
 					}
-				} else if errors.Is(stepErr, context.DeadlineExceeded) || e.Clock.Now().Sub(started) >= StepBudget {
+				} else if errors.Is(stepErr, context.DeadlineExceeded) || errors.Is(actionErr, context.DeadlineExceeded) || e.Clock.Now().Sub(started) >= StepBudget {
 					result.Reason = "step_timeout"
 					if result.Audit.Result == "applied" {
 						result.Changed = true
 					}
-					if len(result.Audit.Argv) == 0 && result.Audit.ExitStatus == nil {
-						result.Audit.Result = "skipped"
-					} else {
-						result.Audit.Result = "failed"
+					if result.Audit.Result != "failed" && result.Audit.Result != "rolled_back" {
+						if len(result.Audit.Argv) == 0 && result.Audit.ExitStatus == nil {
+							result.Audit.Result = "skipped"
+						} else {
+							result.Audit.Result = "failed"
+						}
 					}
 					if out.ExitCode < 71 {
 						out.ExitCode = 71
 					}
 				} else if actionErr != nil {
 					result.Reason = "step_failed"
-					if result.Audit.Result == "applied" {
-						result.Changed = true
-					}
-					if len(result.Audit.Argv) == 0 && result.Audit.ExitStatus == nil {
-						result.Audit.Result = "blocked"
-					} else {
-						result.Audit.Result = "failed"
+					// Keep the actual T004 failed/rolled_back result. An action
+					// error only invalidates a reported success, not recovery evidence.
+					if result.Audit.Result == "applied" || result.Audit.Result == "unchanged" {
+						if result.Audit.Result == "applied" {
+							result.Changed = true
+						}
+						if len(result.Audit.Argv) == 0 && result.Audit.ExitStatus == nil {
+							result.Audit.Result = "blocked"
+						} else {
+							result.Audit.Result = "failed"
+						}
 					}
 				}
 			}

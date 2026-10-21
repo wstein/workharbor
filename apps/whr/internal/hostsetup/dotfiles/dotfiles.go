@@ -92,6 +92,8 @@ type Result struct {
 	Status, Restore string
 	Backup          *BackupRecord
 	Restored        bool
+	// BackupCreated records an exclusive owned write, independently of verification.
+	BackupCreated bool
 }
 
 // Error deliberately excludes raw filesystem errors, paths and file contents.
@@ -388,12 +390,18 @@ func (e *Engine) Apply(p *Preview, o Options) (Result, error) {
 		return r, refusal("target_unsafe")
 	}
 	if p.state == Differs {
-		record, err := e.backup(p, o.RunID)
+		record, backupCreated, err := e.backup(p, o.RunID)
+		r.BackupCreated = backupCreated
+		if record.Path != "" {
+			r.Backup = &record
+			r.Restore = "Restore by manual copy from " + record.Path
+		}
 		if err != nil {
+			if r.BackupCreated {
+				r.Status = "failed"
+			}
 			return r, refusal("backup_failed")
 		}
-		r.Backup = &record
-		r.Restore = "Restore by manual copy from " + record.Path
 	}
 	parents, err := e.parents(p.config.Target, true)
 	if err != nil {
@@ -494,61 +502,62 @@ func (e *Engine) stage(p string, b []byte, mode fs.FileMode) (Info, error) {
 	}
 	return info, nil
 }
-func (e *Engine) backup(p *Preview, run string) (BackupRecord, error) {
+func (e *Engine) backup(p *Preview, run string) (BackupRecord, bool, error) {
 	dir := ".local/state/whr/backups/" + run
 	filename := digest([]byte(p.config.Target))[:32] + ".bak"
 	backup := dir + "/" + filename
 	if _, err := e.parents(backup, true); err != nil {
-		return BackupRecord{}, err
+		return BackupRecord{}, false, err
 	}
 	for _, private := range []string{".local/state/whr", ".local/state/whr/backups", dir} {
 		info, err := e.fs.Stat(private)
 		if err != nil || info.Mode.Perm() != 0700 {
-			return BackupRecord{}, refusal("backup_failed")
+			return BackupRecord{}, false, refusal("backup_failed")
 		}
 	}
 	if err := e.check(p, p.before.parents); err != nil {
-		return BackupRecord{}, err
+		return BackupRecord{}, false, err
 	}
 	created, err := e.fs.Create(backup, p.before.data, 0600)
 	if err != nil {
-		return BackupRecord{}, err
+		return BackupRecord{}, created.ID != "", err
 	}
 	info, b, err := e.read(backup, MaxContentBytes)
 	if err != nil || created.ID == "" || !same(created, info) || info.Mode.Perm() != 0600 || digest(b) != p.before.hash {
-		return BackupRecord{}, refusal("backup_failed")
+		return BackupRecord{}, created.ID != "", refusal("backup_failed")
 	}
 	record := BackupRecord{Path: "~/" + backup, Original: "~/" + p.config.Target, SHA256: p.before.hash, Size: int64(len(b)), Mode: p.before.info.Mode.Perm(), Reason: "dotfile_replace", Time: e.clock.Now().UTC().Format(time.RFC3339Nano)}
+	// The owned copy is verified and retained even if manifest persistence fails.
 	manifest := dir + "/manifest.json"
 	old, data, err := e.read(manifest, maxManifestBytes)
 	if err != nil {
-		return BackupRecord{}, err
+		return record, true, err
 	}
 	var records []BackupRecord
 	if old.ID != "" {
 		if old.Mode.Perm() != 0600 || json.Unmarshal(data, &records) != nil {
-			return BackupRecord{}, refusal("backup_failed")
+			return record, true, refusal("backup_failed")
 		}
 	}
 	records = append(records, record)
 	data, err = json.Marshal(records)
 	if err != nil || len(data) > maxManifestBytes {
-		return BackupRecord{}, refusal("backup_failed")
+		return record, true, refusal("backup_failed")
 	}
 	staged := manifest + ".whr-stage-" + run
 	si, err := e.stage(staged, data, 0600)
 	if err != nil {
-		return BackupRecord{}, err
+		return record, true, err
 	}
 	defer e.clean(staged, si.ID)
 	if err = e.fs.Rename(staged, manifest, si.ID, old.ID); err != nil {
-		return BackupRecord{}, err
+		return record, true, err
 	}
 	mi, actual, err := e.read(manifest, maxManifestBytes)
 	if err != nil || mi.ID != si.ID || mi.Mode.Perm() != 0600 || !bytes.Equal(actual, data) {
-		return BackupRecord{}, refusal("backup_failed")
+		return record, true, refusal("backup_failed")
 	}
-	return record, nil
+	return record, true, nil
 }
 func (e *Engine) restore(p *Preview, record *BackupRecord, targetID, staged string) error {
 	if record == nil {

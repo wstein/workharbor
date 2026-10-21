@@ -67,7 +67,7 @@ func checkBoundaryInterruption(t *testing.T, boundary string, cause error, chang
 		// The first clock call supplies Begin's timestamp, after initial ctx.Err.
 		clock.remaining = 1
 	} else {
-		runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+		runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 			// After this runner, the first Now measures elapsed time and the second
 			// timestamps journalOutcome, after the final runner cancellation check.
 			clock.remaining = 2

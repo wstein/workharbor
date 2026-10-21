@@ -25,13 +25,13 @@ func (c *applyClock) Now() time.Time { return c.now }
 
 type applyRunner struct {
 	calls    []Step
-	callback func(context.Context, Step, string, time.Duration) (StepOutcome, error)
+	callback func(context.Context, Step, string, time.Duration, StepGuard) (StepOutcome, error)
 }
 
-func (r *applyRunner) ApplyStep(ctx context.Context, s Step, runID string, budget time.Duration) (StepOutcome, error) {
+func (r *applyRunner) ApplyStep(ctx context.Context, s Step, runID string, budget time.Duration, guard StepGuard) (StepOutcome, error) {
 	r.calls = append(r.calls, s)
 	if r.callback != nil {
-		return r.callback(ctx, s, runID, budget)
+		return r.callback(ctx, s, runID, budget, guard)
 	}
 	return StepOutcome{Audit: profile.StepAudit{Result: "applied", Argv: []string{"/opt/homebrew/bin/brew", "install", s.Item}}, Changed: true}, nil
 }
@@ -117,7 +117,7 @@ func TestApplyRerunNoOpStillJournalsAndLocks(t *testing.T) {
 	r.RunID = "2123456789abcdef"
 	r.Input.Results[0].State = "absent"
 	resealApply(t, &r)
-	runner.callback = func(ctx context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+	runner.callback = func(ctx context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 		_, err := e.Store.Begin(profile.Start{RunID: "3123456789abcdef", Command: "setup", Platform: "darwin-arm64", CatalogueVersion: "2026.10.1", Answer: "yes"}, e.Clock.Now())
 		if !errors.Is(err, profile.ErrLocked) {
 			t.Fatal("apply runner did not hold exclusive lock", err)
@@ -140,7 +140,7 @@ func TestApplyFailureBlocksOnlyDependents(t *testing.T) {
 	r.Input.Catalogue.Items = append(r.Input.Catalogue.Items, catalogue.Item{ID: "fd", SelectedByDefault: true})
 	r.Input.Results = append(r.Input.Results, detect.Result{Item: "fd", State: "absent"})
 	resealApply(t, &r)
-	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 		status := "applied"
 		exit := 0
 		if s.Item == "bat" {
@@ -169,7 +169,7 @@ func TestApplyInterruptStopsBeforeNextStepAndProfile(t *testing.T) {
 	resealApply(t, &r)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 		cancel()
 		return StepOutcome{Audit: profile.StepAudit{Result: "applied", Argv: []string{"/opt/homebrew/bin/brew", "install", s.Item}}, Changed: true}, nil
 	}
@@ -239,7 +239,7 @@ func TestApplyPerStepDeadlineIsNotGlobalRunBudget(t *testing.T) {
 	addBat(&r)
 	resealApply(t, &r)
 	clock := e.Clock.(*applyClock)
-	runner.callback = func(ctx context.Context, s Step, runID string, budget time.Duration) (StepOutcome, error) {
+	runner.callback = func(ctx context.Context, s Step, runID string, budget time.Duration, guard StepGuard) (StepOutcome, error) {
 		if runID != r.RunID {
 			t.Fatal("runner backup namespace differs from durable run")
 		}
@@ -261,7 +261,7 @@ func TestApplyStepTimeoutAndParentDeadline(t *testing.T) {
 		addBat(&r)
 		resealApply(t, &r)
 		clock := e.Clock.(*applyClock)
-		runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+		runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 			if s.Item == "jq" {
 				clock.now = clock.now.Add(StepBudget)
 			}
@@ -287,7 +287,7 @@ func TestApplyRejectsSensitiveRunnerMetadataAndStops(t *testing.T) {
 	e, r, runner, home := applyFixture(t)
 	addBat(&r)
 	resealApply(t, &r)
-	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 		return StepOutcome{Audit: profile.StepAudit{Result: "failed", Argv: []string{"/opt/homebrew/bin/brew", "install", "TOKEN-CANARY"}}, Changed: true, Reason: "ENV-CANARY"}, errors.New("PASSWORD-CANARY")
 	}
 	out, err := e.Apply(context.Background(), r)
@@ -308,7 +308,7 @@ func TestApplyFreezesSelectionsAndModifyConfirmations(t *testing.T) {
 	r.Input.Results[1] = detect.Result{Item: "bat", State: "present_outdated", Managed: true}
 	r.ConfirmedItems = map[string]bool{"bat": false}
 	resealApply(t, &r)
-	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 		r.ConfirmedItems["bat"] = true
 		r.Input.Selected["bat"] = false
 		return StepOutcome{Audit: profile.StepAudit{Result: "applied", Argv: []string{"/opt/homebrew/bin/brew", "install", s.Item}}}, nil
@@ -328,7 +328,7 @@ func TestApplyDispatchesAllKindsAndIsolatesConfigFailure(t *testing.T) {
 	r.Input.Catalogue.Items[0].Config = &catalogue.Config{Target: ".config/jq/config"}
 	r.Input.Config["jq"] = ConfigObservation{State: "absent"}
 	resealApply(t, &r)
-	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration) (StepOutcome, error) {
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
 		if s.Kind == "dotfile_create" {
 			return StepOutcome{Audit: profile.StepAudit{Result: "failed"}, Backups: []BackupAudit{{Path: "~/.local/state/whr/backups/" + r.RunID + "/jq.bak", SHA256: strings.Repeat("a", 64)}}, Diff: &DiffAudit{Added: 2, Removed: 0}}, nil
 		}
@@ -383,7 +383,7 @@ func TestApplyCancelledRunnerBeforeChildIsSkipped(t *testing.T) {
 	e, r, runner, _ := applyFixture(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	runner.callback = func(context.Context, Step, string, time.Duration) (StepOutcome, error) {
+	runner.callback = func(context.Context, Step, string, time.Duration, StepGuard) (StepOutcome, error) {
 		cancel()
 		return StepOutcome{}, context.Canceled
 	}
@@ -392,6 +392,7 @@ func TestApplyCancelledRunnerBeforeChildIsSkipped(t *testing.T) {
 		t.Fatal(out, err)
 	}
 }
+
 func TestApplyValidAuditSanitizesPrivateRunnerMetadata(t *testing.T) {
 	for _, test := range []struct {
 		name, privateReason, privateError, wantReason, status string
@@ -403,7 +404,7 @@ func TestApplyValidAuditSanitizesPrivateRunnerMetadata(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			e, r, runner, home := applyFixture(t)
 			argv := []string{"/opt/homebrew/bin/brew", "install", "jq"}
-			runner.callback = func(context.Context, Step, string, time.Duration) (StepOutcome, error) {
+			runner.callback = func(context.Context, Step, string, time.Duration, StepGuard) (StepOutcome, error) {
 				var privateErr error
 				if test.privateError != "" {
 					privateErr = errors.New(test.privateError)
