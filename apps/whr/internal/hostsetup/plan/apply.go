@@ -323,6 +323,11 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 			for _, pending := range sealed.Steps[len(out.Steps):] {
 				out.Remaining = append(out.Remaining, pending.ID)
 			}
+			if stopped != nil {
+				// The retained child handle must stay reachable beside the refusal.
+				out.ExitCode = 68
+				return out, errors.Join(stopped, refusal("protocol_unwritable"))
+			}
 			return fail(68, "protocol_unwritable")
 		}
 		out.Steps = append(out.Steps, result)

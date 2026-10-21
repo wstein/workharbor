@@ -468,7 +468,60 @@ func TestApplyStopsAfterOwnedCleanupErrorAndReturnsItUnchanged(t *testing.T) {
 		t.Fatal("profile was persisted after an unreconciled cleanup failure")
 	}
 	data := readApply(t, filepath.Join(home, ".local/state/whr/protocols/"+r.RunID+".jsonl"))
-	if !strings.Contains(string(data), `"package_manager_failed"`) && !strings.Contains(string(data), `"failed"`) {
-		t.Fatal("failed step not journaled")
+	if !strings.Contains(string(data), `"step_id":"jq.brew_install"`) || !strings.Contains(string(data), `"result":"failed"`) || strings.Count(string(data), `"type":"step"`) != 1 || !strings.Contains(string(data), `"exit_code":68,"remaining":["jq.brew_install","bat.brew_install"]`) {
+		t.Fatal("exact failed step not journaled once", string(data))
+	}
+}
+
+func TestApplyKeepsRetainedHandleWhenJournalRejectsStoppedStep(t *testing.T) {
+	e, r, runner, _ := applyFixture(t)
+	addBat(&r)
+	resealApply(t, &r)
+	owned := &stopRunError{cause: errors.New("kill refused")}
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
+		return StepOutcome{Audit: profile.StepAudit{Result: "failed", Argv: []string{"PRIVATE-ARGV-CANARY"}}}, owned
+	}
+	out, err := e.Apply(context.Background(), r)
+	var stopper RunStopper
+	if err == nil || !errors.As(err, &stopper) || stopper != RunStopper(owned) || !errors.Is(err, owned.cause) || err.Error() == owned.Error() || !strings.Contains(err.Error(), "host_setup.protocol_unwritable") {
+		t.Fatal("retained handle or protocol refusal lost", err)
+	}
+	if len(runner.calls) != 1 || out.ExitCode != 68 || len(out.Remaining) != 2 {
+		t.Fatal(out, runner.calls)
+	}
+}
+
+// dropClock returns base time, except that the second call after arm() is an
+// hour ahead (the step journal), so the following run_end time moves backwards.
+type dropClock struct {
+	now time.Time
+	n   int
+}
+
+func (c *dropClock) arm() { c.n = 2 }
+func (c *dropClock) Now() time.Time {
+	if c.n > 0 {
+		c.n--
+		if c.n == 0 {
+			return c.now.Add(time.Hour)
+		}
+	}
+	return c.now
+}
+
+// The Now() after the step journal belongs to run_end; an earlier time makes
+// Finish fail, which must not replace the retained handle.
+func TestApplyKeepsRetainedHandleWhenFinishFails(t *testing.T) {
+	e, r, runner, _ := applyFixture(t)
+	clock := &dropClock{now: time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)}
+	e.Clock = clock
+	owned := &stopRunError{cause: errors.New("kill refused")}
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
+		clock.arm()
+		return StepOutcome{Audit: profile.StepAudit{Result: "failed", Argv: []string{"/opt/homebrew/bin/brew", "install", s.Item}}}, owned
+	}
+	_, err := e.Apply(context.Background(), r)
+	if err != error(owned) {
+		t.Fatal("Finish failure replaced the retained handle", err)
 	}
 }
