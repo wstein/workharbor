@@ -626,6 +626,7 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyRechecksHashAndConsent",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyRejectsSensitiveRunnerMetadataAndStops",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyRerunNoOpStillJournalsAndLocks",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyRunnerErrorWithEmptyAuditIsBlocked",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyStepTimeoutAndParentDeadline",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyValidAuditSanitizesPrivateRunnerMetadata",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile/TestAppendFailurePoisonsManagedMutation",
