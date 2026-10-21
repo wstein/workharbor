@@ -641,3 +641,59 @@ func TestNativeRenameAbsentRefusesLateOccupant(t *testing.T) {
 		t.Fatalf("late occupant overwritten: triggered=%v error=%v", triggered, err)
 	}
 }
+
+// A directory swapped for a link to the very same inode passes the walk's
+// identity check, so only O_NOFOLLOW on the directory open refuses it.
+func TestNativeWalkRefusesParentLinkToSameInode(t *testing.T) {
+	home, f, c, _ := nativeFixture(t, "original\n")
+	info, err := f.Stat(c.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	triggered := false
+	f.beforeParentOpen = func(p string) {
+		f.beforeParentOpen = nil
+		triggered = true
+		if err := os.Rename(filepath.Join(home, p), filepath.Join(home, "moved")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join(home, "moved"), filepath.Join(home, p)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The identity check alone would yield ErrPermission; the refusal must come
+	// from the kernel's no-follow open (ELOOP, or ENOTDIR on Linux).
+	_, err = f.Read(c.Target, info.ID, 1024)
+	if !triggered || err == nil || errors.Is(err, fs.ErrPermission) || !(errors.Is(err, unix.ELOOP) || errors.Is(err, unix.ENOTDIR)) {
+		t.Fatalf("parent link followed or refused late: triggered=%v error=%v", triggered, err)
+	}
+}
+
+// The new directory is swapped for a link to itself before the chmod, so only
+// AT_SYMLINK_NOFOLLOW keeps the chmod from following the link.
+func TestNativeMkdirChmodDoesNotFollowSwappedLink(t *testing.T) {
+	home, f, _, _ := nativeFixture(t, "")
+	triggered := false
+	f.beforeChmod = func(p string) {
+		f.beforeChmod = nil
+		triggered = true
+		moved := filepath.Join(home, "moved")
+		if err := os.Chmod(filepath.Join(home, p), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Rename(filepath.Join(home, p), moved); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(moved, filepath.Join(home, p)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err := f.Mkdir(".config/sub", 0755)
+	st, statErr := os.Lstat(filepath.Join(home, "moved"))
+	if statErr != nil {
+		t.Fatal(statErr)
+	}
+	if !triggered || err == nil || st.Mode().Perm() != 0700 {
+		t.Fatalf("chmod followed the swapped link: triggered=%v error=%v mode=%v", triggered, err, st.Mode().Perm())
+	}
+}
