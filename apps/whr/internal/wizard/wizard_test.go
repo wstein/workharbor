@@ -164,3 +164,17 @@ func TestWizardAnswerBound(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// After the devcontainer step, a bare Enter on the review prompt takes its documented default, cancel; a
+// later "write" in the input must never be reached.
+func TestWizardBareEnterOnReviewCancels(t *testing.T) {
+	o := scaffold.Options{Name: ptr("demo"), ProjectURL: ptr("https://example.com/app.git"), StartDir: ptr("projects/app"), HumanShell: ptr("nu"), ConsoleMode: ptr("plain"), Shortcuts: ptr("off")}
+	var diag bytes.Buffer
+	p, err := wizard.Run(context.Background(), fixture(), o, strings.NewReader("\n\nwrite\n"), &diag)
+	if p != nil || exitcode.FromError(err) != exitcode.Interrupted {
+		t.Fatalf("bare Enter must cancel: proposal=%v error=%v", p, err)
+	}
+	if !strings.Contains(diag.String(), "Review: write, back, edit <flag>, review or cancel [cancel]: ") {
+		t.Fatalf("review prompt was not reached: %q", diag.String())
+	}
+}
