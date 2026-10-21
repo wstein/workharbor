@@ -882,7 +882,17 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicEscapesUntrustedDirectory",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicRunsNoStartupCommandOrGit",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicPartialRecoverySurvivesMessageClip",
-      "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestInitEntrypointSignalsCancelAndCleanUp"
+      "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestInitEntrypointSignalsCancelAndCleanUp",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRollbackRestoresDistinctOverwriteMode",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyRechecksAllInputsBeforeEachAction",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyScansForTemporariesAtApplyTime",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitApplyNoOpValidatesDisk",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitCreateExclusiveRefusesExistingAndLinks",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitRollbackRefusesReplacedRootName",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitFingerprintRetainsObservedIdentity",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRecheckRefusesChangeAfterRead",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDiscoveryRefusesRootReplacedAfterReads",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitHumanPreviewEscapesPathAndDiff"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
