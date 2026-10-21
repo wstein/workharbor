@@ -29,6 +29,7 @@ type fakeFS struct {
 	beforeRead   func(string)
 	afterRename  bool
 	corrupt      string
+	corruptReads int
 	beforeRename func(string, string)
 }
 
@@ -80,8 +81,10 @@ func (f *fakeFS) Read(p, id string, limit int64) ([]byte, error) {
 		return nil, fs.ErrPermission
 	}
 	b := bytes.Clone(n.data)
-	if f.corrupt == p {
-		b = append(b, '!')
+	if f.corrupt == p && len(b) > 0 {
+		// Preserve length and metadata so only byte/hash integrity can refuse.
+		b[0] ^= 1
+		f.corruptReads++
 	}
 	return b, nil
 }
@@ -339,7 +342,10 @@ func TestChangedSincePreviewRefused(t *testing.T) {
 		switch change {
 		case "bytes":
 			n := f.nodes[c.Target]
-			n.data = []byte("changed\n")
+			n.data = []byte("modified\n")
+			if int64(len(n.data)) != n.info.Size {
+				t.Fatal("stale fixture changed size")
+			}
 			f.nodes[c.Target] = n
 		case "identity":
 			f.put(c.Target, []byte(old), 0644)
@@ -354,6 +360,7 @@ func TestChangedSincePreviewRefused(t *testing.T) {
 		if change == "appeared" {
 			d = Create
 		}
+		before := cloneTree(f)
 		r, err := e.Apply(p, Options{Decision: d, Target: p.Target(), RunID: "r"})
 		if change == "config" {
 			if err != nil || r.Status != "applied" || string(f.nodes[".config/starship.toml"].data) != "new = true\n" {
@@ -361,7 +368,7 @@ func TestChangedSincePreviewRefused(t *testing.T) {
 			}
 			continue
 		}
-		if err == nil || len(writes(f)) != 0 {
+		if err == nil || len(writes(f)) != 0 || !reflect.DeepEqual(before, cloneTree(f)) {
 			t.Fatal("stale accepted/written", change, err, writes(f))
 		}
 	}
@@ -442,6 +449,14 @@ func TestDotfileCorruptionAndRecoveryFailure(t *testing.T) {
 			f.corrupt = ".config/.whr-stage-" + digest([]byte(c.Target))[:16] + "-r"
 		}
 		r, err := e.Apply(p, Options{Decision: Replace, Target: c.Target, RunID: "r"})
+		if f.corruptReads == 0 {
+			t.Fatal("corruption fixture was not exercised", which)
+		}
+		for _, op := range writes(f) {
+			if op == "rename:"+c.Target {
+				t.Fatal("corruption reached target rename", which)
+			}
+		}
 		if err == nil || string(f.nodes[c.Target].data) != "original\n" || r.Restored {
 			t.Fatal("corruption accepted", which, r, err)
 		}
@@ -583,5 +598,16 @@ func TestRollbackReconcilesAmbiguousMutations(t *testing.T) {
 		} else if !ok || string(n.data) != old || n.info.Mode.Perm() != 0644 {
 			t.Fatal("wrong restored bytes/mode")
 		}
+	}
+}
+
+func TestPreviewRefusesAnotherEngineWithSameFS(t *testing.T) {
+	e, f, c, m := fixture(t, "original\n")
+	p := preview(t, e, c, m)
+	other := New(f, fixedClock{})
+	before := cloneTree(f)
+	_, err := other.Apply(p, Options{Decision: Replace, Target: c.Target, RunID: "r"})
+	if err == nil || len(writes(f)) != 0 || !reflect.DeepEqual(before, cloneTree(f)) {
+		t.Fatal("foreign-engine preview accepted or wrote", err, writes(f))
 	}
 }
