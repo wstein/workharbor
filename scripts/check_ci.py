@@ -84,14 +84,27 @@ def _source_context(root, event=None, base=None, head=None, checkout=None):
             raise ValueError('Missing exact commit object')
     if event == 'pull_request':
         parents = git(root, 'rev-list', '--parents', '-n', '1', checkout).decode().split()[1:]
-        if base == head or parents != [base, head]:
+        if base == head or len(parents) != 2 or parents[1] != head:
             raise ValueError('Unexpected synthetic merge parents')
+        # Into main GitHub merges head into the base tip. For a native stack it
+        # merges head into the parent PR's own merge commit, whose second
+        # parent is this PR's base (the parent PR head); any depth has that shape.
+        parent = parents[0]
+        if parent != base:
+            if not stacked:
+                raise ValueError('Unexpected synthetic merge parents')
+            if (not re.fullmatch('[0-9a-f]{40}', parent)
+                    or git(root, 'cat-file', '-t', parent) != b'commit\n'):
+                raise ValueError('Missing exact parent merge commit')
+            grandparents = git(root, 'rev-list', '--parents', '-n', '1', parent).decode().split()[1:]
+            if len(grandparents) != 2 or grandparents[1] != base:
+                raise ValueError('Unexpected parent PR merge')
         if stacked:
             try:
                 git(root, 'merge-base', '--is-ancestor', base, head)
             except subprocess.CalledProcessError as error:
                 raise ValueError('Stacked PR base is not an ancestor of head') from error
-        tree = git(root, 'merge-tree', '--write-tree', base, head).decode().strip()
+        tree = git(root, 'merge-tree', '--write-tree', parent, head).decode().strip()
         if tree != git(root, 'rev-parse', checkout + '^{tree}').decode().strip():
             raise ValueError('Synthetic checkout differs from actual merge')
     elif head != checkout:
