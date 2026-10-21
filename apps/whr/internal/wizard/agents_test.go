@@ -95,9 +95,17 @@ func TestWizardAgentsDifferentTemplateConsentR1(t *testing.T) {
 		t.Fatal(err)
 	}
 	shipped := expected.Files()["AGENTS.md"]
-	for _, version := range []int{0, 1, 2} {
+	var shippedVersion int
+	if _, err := fmt.Sscanf(string(shipped), "<!-- whr:agents-block begin v=%d", &shippedVersion); err != nil || shippedVersion < 1 {
+		t.Fatalf("invalid shipped marker: %v", err)
+	}
+	for _, relation := range []struct {
+		name  string
+		delta int
+	}{{"lower", -1}, {"same", 0}, {"higher", 1}} {
+		version := shippedVersion + relation.delta
 		for _, consent := range []string{"yes", "no", "flag"} {
-			t.Run(fmt.Sprintf("version=%d/%s", version, consent), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s/version=%d/%s", relation.name, version, consent), func(t *testing.T) {
 				body := "foreign workflow\n"
 				block := fmt.Sprintf("<!-- whr:agents-block begin v=%d sha256=%x -->\n%s<!-- whr:agents-block end -->\n", version, sha256.Sum256([]byte(body)), body)
 				original := []byte("owner\r\n" + block + "tail\r\n")

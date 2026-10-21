@@ -2,15 +2,31 @@
 package commands_test
 
 import (
+	"context"
 	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
 )
 
 func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
+	dir := initFixture(t)
+	snapshot, err := scaffold.Discover(context.Background(), dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shipped, err := scaffold.Build(snapshot, scaffold.Options{DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shippedVersion int
+	if _, err := fmt.Sscanf(string(shipped.Files()["AGENTS.md"]), "<!-- whr:agents-block begin v=%d", &shippedVersion); err != nil || shippedVersion < 1 {
+		t.Fatalf("invalid shipped marker: %v", err)
+	}
 	body := "foreign workflow\n"
 	block := func(version int) string {
 		return fmt.Sprintf("<!-- whr:agents-block begin v=%d sha256=%x -->\n%s<!-- whr:agents-block end -->\n", version, sha256.Sum256([]byte(body)), body)
@@ -20,8 +36,8 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 		edit                        bool
 		code                        int
 	}{
-		{"same version foreign intact", block(1), "left_unchanged", "agents_block.different_template", false, 0},
-		{"higher intact replacement", block(2), "replace_block", "", true, 0},
+		{"same version foreign intact", block(shippedVersion), "left_unchanged", "agents_block.different_template", false, 0},
+		{"higher intact replacement", block(shippedVersion + 1), "replace_block", "", true, 0},
 		{"missing", "owner\n", "left_unchanged", "agents_block.missing", false, 0},
 		{"append", "owner\r\n", "append_block", "", true, 0},
 		{"malformed", "<!-- whr:agents-block end -->\n", "left_unchanged", "agents_block.malformed", false, 0},
