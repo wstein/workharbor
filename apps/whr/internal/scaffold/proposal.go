@@ -297,13 +297,16 @@ func (p *Proposal) file(s Snapshot, o Options, name string, data []byte) error {
 	p.files[name] = copyBytes(data)
 	p.observe(s, name)
 	diff := string(data)
+	oldPrefix := false
 	if action == "overwrite" {
 		diff = wholeDiff(name, e.Data, data)
+		// Only a bounded prefix of a large old file is read for the preview.
+		oldPrefix = e.Info != nil && e.Info.Size() > int64(len(e.Data))
 	}
 	if action == "skip_existing" {
 		diff = ""
 	}
 	shown, truncated := boundedDiff(diff)
-	p.preview.Actions = append(p.preview.Actions, Action{Action: action, Kind: "file", Path: name, Diff: shown, DiffTruncated: truncated})
+	p.preview.Actions = append(p.preview.Actions, Action{Action: action, Kind: "file", Path: name, Diff: shown, DiffTruncated: truncated || oldPrefix})
 	return nil
 }

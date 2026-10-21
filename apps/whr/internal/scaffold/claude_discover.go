@@ -79,7 +79,6 @@ func observeClaude(ctx context.Context, root *os.Root, s *Snapshot, beforeOpen f
 	if err != nil || e1 != nil || e2 != nil || !os.SameFile(held, after) || !os.SameFile(held, latest) || held.Size() != after.Size() || held.Size() != latest.Size() || held.ModTime() != after.ModTime() || held.ModTime() != latest.ModTime() || held.Mode() != latest.Mode() {
 		return discoveryConflict()
 	}
-	retained := data[:min(len(data), len(claudeSettings)+1)]
-	s.Entries[claudeSettingsPath] = Entry{Kind: "file", Data: retained, Digest: digest(data), Mode: held.Mode(), Info: held}
+	s.Entries[claudeSettingsPath] = Entry{Kind: "file", Data: data, Digest: digest(data), Mode: held.Mode(), Info: held}
 	return nil
 }

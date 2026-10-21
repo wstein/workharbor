@@ -71,7 +71,7 @@ func TestInitClaudeSettingsCases(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := len(s.Entries[claudeSettingsPath].Data); got > len(claudeSettings)+1 {
+			if got := len(s.Entries[claudeSettingsPath].Data); got > claudeReadBound {
 				t.Fatalf("unbounded discovery: %d", got)
 			}
 			p, err := Build(s, o)
@@ -293,5 +293,46 @@ func TestInitClaudeSettingsTailChangeWithRestoredMtime(t *testing.T) {
 	_, err = p.Apply(context.Background())
 	if int(exitcode.FromError(err)) != 68 {
 		t.Fatalf("tail mutation accepted: %v", err)
+	}
+}
+
+func TestInitClaudeSettingsOverwritePreviewShowsOldContent(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		old       string
+		truncated bool
+	}{
+		{"small", "owner line one with some text\nowner line two with some text\nowner line three with some text\nowner line four with some text\n", false},
+		{"large", strings.Repeat("owner-settings\n", 5000), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := fixture(t)
+			if err := os.Mkdir(filepath.Join(dir, ".claude"), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, claudeSettingsPath), []byte(tc.old), 0644); err != nil {
+				t.Fatal(err)
+			}
+			o := Options{DryRun: true, Overwrite: []string{claudeSettingsPath}}
+			s, err := DiscoverWithOptions(context.Background(), dir, o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, err := Build(s, o)
+			if err != nil {
+				t.Fatal(err)
+			}
+			a := claudeAction(t, p)
+			if a.Action != "overwrite" || a.DiffTruncated != tc.truncated {
+				t.Fatalf("action=%q truncated=%v", a.Action, a.DiffTruncated)
+			}
+			if !tc.truncated {
+				for _, line := range strings.SplitAfter(tc.old, "\n")[:4] {
+					if !strings.Contains(a.Diff, "-"+line) {
+						t.Fatalf("diff lacks old line %q:\n%s", line, a.Diff)
+					}
+				}
+			}
+		})
 	}
 }
