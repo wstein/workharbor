@@ -619,3 +619,25 @@ func TestNativeReadRefusesLeafLinkToSameInode(t *testing.T) {
 		t.Fatalf("leaf link followed: triggered=%v bytes=%q error=%v", triggered, b, err)
 	}
 }
+
+// The destination is occupied after the caller-side identity checks, so only the
+// kernel no-replace flag stands between the foreign file and an overwrite.
+func TestNativeRenameAbsentRefusesLateOccupant(t *testing.T) {
+	home, f, _, _ := nativeFixture(t, "")
+	source, err := f.Create(".config/stage", []byte("staged"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	triggered := false
+	f.beforeKernelRename = func(_, to string) {
+		f.beforeKernelRename = nil
+		triggered = true
+		if err := os.WriteFile(filepath.Join(home, to), []byte("foreign"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = f.Rename(".config/stage", ".config/absent", source.ID, "")
+	if !triggered || !errors.Is(err, fs.ErrExist) || string(nativeRead(t, home, ".config/absent")) != "foreign" || string(nativeRead(t, home, ".config/stage")) != "staged" {
+		t.Fatalf("late occupant overwritten: triggered=%v error=%v", triggered, err)
+	}
+}
