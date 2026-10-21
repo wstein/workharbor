@@ -400,7 +400,7 @@ func (h *Host) OrbStackAppVersion(ctx context.Context, budget time.Duration) (st
 	// Execute the fixed absolute system helper, not /dev/fd/3. Its immutable OS
 	// location is the trusted identity boundary on a real host; owned temp roots
 	// supply copied test helpers only. The plist read descriptor remains pinned.
-	// This does not claim an arbitrary-path race proof or a Darwin runtime test.
+	// This does not claim an arbitrary-path race proof; the macOS CI job runs the owned-fixture tests.
 	p := detect.Probe{Executable: "/usr/bin/plutil", Args: []string{"-extract", "CFBundleShortVersionString", "raw", "-o", "-", "/dev/fd/4"}, Timeout: budget}
 	result, err := runVersion(ctx, p, commandPath, []*os.File{helper, metadata}, cancel)
 	if err != nil {
