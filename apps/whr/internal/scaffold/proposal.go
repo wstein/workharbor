@@ -161,7 +161,7 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 		p.preview.Settings["project"] = Setting{*doc.Project, "flag"}
 	}
 	fileRoles := map[string]bool{}
-	for _, name := range []string{"workharbor.json", doc.DevcontainerPath, doc.ProjectsPath + "/.gitkeep"} {
+	for _, name := range []string{"workharbor.json", doc.DevcontainerPath, doc.ProjectsPath + "/.gitkeep", claudeSettingsPath} {
 		if fileRoles[name] {
 			return nil, exitcode.Errorf(exitcode.PathConflict, "init configuration has conflicting file roles")
 		}
@@ -227,6 +227,9 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 			return nil, err
 		}
 	}
+	if err := p.claudeSettingsFile(s, o); err != nil {
+		return nil, err
+	}
 	p.preview.Validation = workspacecfg.ValidateMemory(s.Directory, workspacecfg.MemoryInput{Manifest: p.files["workharbor.json"], Devcontainer: p.files[doc.DevcontainerPath], DevcontainerPresent: true, ProjectsPresent: true})
 	if !p.preview.Validation.Valid {
 		return nil, exitcode.Errorf(exitcode.PathConflict, "preserved configuration fails Git-free validation")
@@ -241,7 +244,11 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 }
 func (p *Proposal) observe(s Snapshot, name string) {
 	e, ok := s.Entries[name]
-	p.inputs[name] = Fingerprint{Exists: ok, Kind: e.Kind, SHA256: digest(e.Data), Mode: e.Mode, Info: e.Info}
+	sum := e.Digest
+	if sum == "" {
+		sum = digest(e.Data)
+	}
+	p.inputs[name] = Fingerprint{Exists: ok, Kind: e.Kind, SHA256: sum, Mode: e.Mode, Info: e.Info}
 }
 func (p *Proposal) directories(s Snapshot, name string, requireExisting bool) error {
 	if name == "." {

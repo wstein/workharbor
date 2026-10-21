@@ -106,6 +106,9 @@ func discoverSelected(ctx context.Context, directory string, beforeOpen func(str
 			return s, err
 		}
 	}
+	if err := observeClaude(ctx, root, &s, beforeOpen); err != nil {
+		return s, err
+	}
 	if !noAgents {
 		if err := observeAgents(ctx, root, &s, beforeOpen); err != nil {
 			return s, err

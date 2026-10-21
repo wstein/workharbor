@@ -26,6 +26,9 @@ type Entry struct {
 	Data []byte
 	Mode fs.FileMode
 	Info fs.FileInfo
+	// Digest, when set, replaces the hash of Data as the stale-write fingerprint
+	// for entries whose retained Data is only a prefix of what was read.
+	Digest string
 }
 type Snapshot struct {
 	Directory string

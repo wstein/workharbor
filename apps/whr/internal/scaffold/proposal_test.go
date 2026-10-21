@@ -58,6 +58,8 @@ func TestInitTemplateRefused(t *testing.T) {
 func TestInitRefusesFileRoleCollisions(t *testing.T) {
 	for _, tc := range []struct{ dc, projects string }{
 		{"projects/.gitkeep", "projects"}, {"workharbor.json", "projects"},
+		{".claude/settings.json", "projects"}, {".claude", "projects"},
+		{".devcontainer/devcontainer.json", ".claude/settings.json"},
 		{"projects", "projects"}, {"custom", "custom/nested"},
 		{".devcontainer/devcontainer.json", "workharbor.json/projects"},
 	} {

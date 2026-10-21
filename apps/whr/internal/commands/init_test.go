@@ -111,7 +111,7 @@ func TestInitPublicCreatedPathsAreTyped(t *testing.T) {
 	}
 	result := decodeEnvelope(t, got.stdout)["result"].(map[string]any)
 	created, ok := result["created"].([]any)
-	if !ok || len(created) != 4 {
+	if !ok || len(created) != 6 {
 		t.Fatalf("missing typed created paths: %v", result["created"])
 	}
 	for _, v := range created {
