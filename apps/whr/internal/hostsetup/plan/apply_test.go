@@ -163,6 +163,35 @@ func TestApplyFailureBlocksOnlyDependents(t *testing.T) {
 		t.Fatal(out.Steps[1])
 	}
 }
+
+// A runner that fails without any audit must be classified from the error
+// alone: blocked/step_failed, with its dependents blocked and nothing applied.
+func TestApplyRunnerErrorWithEmptyAuditIsBlocked(t *testing.T) {
+	e, r, runner, _ := applyFixture(t)
+	addBat(&r)
+	r.Input.Catalogue.Items[0].Requires = []string{"bat"}
+	resealApply(t, &r)
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
+		return StepOutcome{}, errors.New("adapter failed")
+	}
+	out, err := e.Apply(context.Background(), r)
+	if err != nil || out.ExitCode == 0 {
+		t.Fatal(out, err)
+	}
+	if len(runner.calls) != 1 || runner.calls[0].Item != "bat" {
+		t.Fatal("error did not stop the dependent", runner.calls)
+	}
+	first := out.Steps[0]
+	if first.Audit.Result != "blocked" || first.Reason != "step_failed" || first.Changed {
+		t.Fatal(first)
+	}
+	if second := out.Steps[1]; second.Audit.Result != "blocked" || second.Reason != "dependency_failed" {
+		t.Fatal(second)
+	}
+	if !reflect.DeepEqual(out.Remaining, []string{"bat.brew_install", "jq.brew_install"}) {
+		t.Fatal(out.Remaining)
+	}
+}
 func TestApplyInterruptStopsBeforeNextStepAndProfile(t *testing.T) {
 	e, r, runner, home := applyFixture(t)
 	addBat(&r)
