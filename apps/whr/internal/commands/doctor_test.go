@@ -4,7 +4,14 @@ package commands_test
 
 import (
 	"context"
+	"crypto/sha256"
+	"errors"
+	"fmt"
 	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -167,5 +174,247 @@ func TestDoctorExitCodesOnCancelAndDeadline(t *testing.T) {
 			}
 			cancel()
 		}
+	}
+}
+
+// The command adapter must use the same checker as validate, including warnings
+// and errors beyond manifest syntax; doctor only publishes aggregate counts.
+func TestDoctorConfigValidEqualsValidate(t *testing.T) {
+	for _, tc := range []struct{ name, manifest, devcontainer string }{
+		{"valid", goodManifest, goodDevc},
+		{"warning", goodManifest, `{"image":"ubuntu:22.04"}`},
+		{"invalid manifest", `{"schema_version":1.0}`, goodDevc},
+		{"invalid devcontainer", goodManifest, `{`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := goodDir(t)
+			put(t, dir, "workharbor.json", tc.manifest)
+			put(t, dir, ".devcontainer/devcontainer.json", tc.devcontainer)
+			validate := run(t, nil, "validate", dir, "--json")
+			expected := decodeEnvelope(t, validate.stdout)["result"].(map[string]any)
+			counts := expected["counts"].(map[string]any)
+			p := doctorWorkspacePorts(dir)
+			got := run(t, withDoctor(p), "doctor", "--json")
+			check := doctorConfigCheck(t, got.stdout)
+			want := doctor.StatusPass
+			if expected["valid"] == false {
+				want = doctor.StatusFail
+			}
+			if check["status"] != want {
+				t.Fatalf("config.valid = %v, validate valid = %v; %s", check, expected["valid"], got.stdout)
+			}
+			evidence := check["evidence"].(map[string]any)
+			if evidence["error_findings"] != counts["error"] || evidence["warning_findings"] != counts["warning"] {
+				t.Fatalf("doctor evidence %v != validate counts %v", evidence, counts)
+			}
+			if got.code != validate.code {
+				t.Fatalf("doctor exit %d != validate exit %d", got.code, validate.code)
+			}
+		})
+	}
+}
+
+func doctorWorkspacePorts(dir string) doctor.Ports {
+	p := fakePorts()
+	p.Getwd = func() (string, error) { return dir, nil }
+	p.Lstat = os.Lstat
+	return p
+}
+
+func doctorConfigCheck(t *testing.T, output string) map[string]any {
+	t.Helper()
+	report := decodeEnvelope(t, output)["result"].(map[string]any)
+	for _, value := range report["checks"].([]any) {
+		check := value.(map[string]any)
+		if check["id"] == "config.valid" {
+			return check
+		}
+	}
+	t.Fatal("config.valid absent")
+	return nil
+}
+
+func TestDoctorValidatorBudgetAndOverride(t *testing.T) {
+	for _, elapsed := range []time.Duration{2 * time.Second, doctor.Budget} {
+		t.Run(elapsed.String(), func(t *testing.T) {
+			p := doctorWorkspacePorts(goodDir(t))
+			start := time.Now()
+			now := start
+			p.Now = func() time.Time { return now }
+			p.GitVersion = func(context.Context, string) (string, error) {
+				now = start.Add(elapsed)
+				return "git version 2.43.0", nil
+			}
+			calls := 0
+			p.Validator = func(ctx context.Context, dir string) (doctor.Outcome, error) {
+				calls++
+				deadline, ok := ctx.Deadline()
+				// Earlier measurements spent two seconds: a fresh 5 s context fails here.
+				remaining := time.Until(deadline)
+				if !ok || remaining > 3*time.Second || remaining < 2*time.Second {
+					t.Errorf("validator deadline remainder = %v, present %v", remaining, ok)
+				}
+				return doctor.Outcome{Errors: 2, Warnings: 3}, nil
+			}
+			got := run(t, withDoctor(p), "doctor", "--json")
+			check := doctorConfigCheck(t, got.stdout)
+			if elapsed == doctor.Budget {
+				if calls != 0 || check["status"] != doctor.StatusUnknown || got.code != 0 {
+					t.Fatalf("spent budget: calls %d, check %v, exit %d", calls, check, got.code)
+				}
+			} else if calls != 1 || check["status"] != doctor.StatusFail || got.code != 68 {
+				t.Fatalf("injected validator overridden: calls %d, check %v, exit %d", calls, check, got.code)
+			}
+		})
+	}
+}
+
+func TestDoctorRealValidatorContextEnd(t *testing.T) {
+	for _, want := range []error{context.Canceled, context.DeadlineExceeded} {
+		t.Run(want.Error(), func(t *testing.T) {
+			var ctx context.Context
+			var end context.CancelFunc
+			if want == context.Canceled {
+				ctx, end = context.WithCancel(context.Background())
+			} else {
+				ctx, end = context.WithDeadline(context.Background(), time.Now().Add(50*time.Millisecond))
+			}
+			defer end()
+			p := doctorWorkspacePorts(goodDir(t))
+			p.GitVersion = func(context.Context, string) (string, error) {
+				if want == context.Canceled {
+					end()
+				} else {
+					<-ctx.Done()
+				}
+				return "git version 2.43.0", nil
+			}
+			result, err := commands.DoctorHandler(p)(ctx, commands.Call{})
+			if !errors.Is(err, want) || result.Value != nil {
+				t.Fatalf("got result %+v, error %v; want %v", result, err, want)
+			}
+		})
+	}
+}
+
+func TestDoctorRealValidatorSkipsAbsentManifest(t *testing.T) {
+	parent := goodDir(t)
+	child := filepath.Join(parent, "child")
+	if err := os.Mkdir(child, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := run(t, withDoctor(doctorWorkspacePorts(child)), "doctor", "--json")
+	check := doctorConfigCheck(t, got.stdout)
+	if got.code != 0 || check["status"] != doctor.StatusSkipped || check["reason"] != "precondition_absent" {
+		t.Fatalf("%v, exit %d", check, got.code)
+	}
+}
+
+// A real Git repository exercises the production checker and hardened runner.
+// The wrapper denies every unguarded invocation and every network-capable verb;
+// marker and before/after snapshots detect hooks, fsmonitor and file mutations.
+func TestDoctorRealValidatorReadOnlyNoNetwork(t *testing.T) {
+	dir := goodDir(t)
+	gitPath, err := exec.LookPath("git")
+	if err != nil {
+		t.Fatal(err)
+	}
+	git := exec.Command(gitPath, "init", "-q", "-b", "main", "--template=", dir)
+	git.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null"}
+	if out, err := git.CombinedOutput(); err != nil {
+		t.Fatalf("init: %v %s", err, out)
+	}
+	marker := filepath.Join(dir, "UNEXPECTED_EXECUTION")
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+	put(t, dir, "probe.sh", "#!/bin/sh\ntouch "+quote(marker)+"\n")
+	if err := os.Chmod(filepath.Join(dir, "probe.sh"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	put(t, dir, ".git/config", "[core]\n repositoryformatversion = 0\n bare = false\n fsmonitor = "+filepath.Join(dir, "probe.sh")+"\n hooksPath = "+dir+"\n[remote \"origin\"]\n url = https://CANARY_CREDENTIAL@example.invalid/repo\n[protocol \"https\"]\n allow = always\n")
+	toolDir := t.TempDir()
+	log := filepath.Join(toolDir, "calls")
+	guard := "#!/bin/sh\n[ \"$GIT_ALLOW_PROTOCOL\" = workharbor-no-protocol ] || exit 91\nfor arg do\n case \"$arg\" in fetch|pull|push|clone|ls-remote|submodule) exit 92;; esac\ndone\nprintf '%s\\n' \"$*\" >> " + quote(log) + "\nexec " + quote(gitPath) + " \"$@\"\n"
+	put(t, toolDir, "git", guard)
+	if err := os.Chmod(filepath.Join(toolDir, "git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	before := doctorTreeSnapshot(t, dir)
+	p := doctorWorkspacePorts(dir)
+	p.DialUnix = func(_ context.Context, path string) error {
+		if path != "/var/run/docker.sock" {
+			t.Errorf("unexpected socket dial: %s", path)
+		}
+		return nil
+	}
+	got := run(t, withDoctor(p), "doctor", "--json")
+	check := doctorConfigCheck(t, got.stdout)
+	if got.code != 0 || check["status"] != doctor.StatusPass {
+		t.Fatalf("checker failed: %s %s", got.stdout, got.err)
+	}
+	if !reflect.DeepEqual(before, doctorTreeSnapshot(t, dir)) {
+		t.Fatal("doctor mutated workspace bytes, modes or timestamps")
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil || !strings.Contains(string(calls), "ls-files --stage -z") {
+		t.Fatalf("real checker Git stage not measured: %q, %v", calls, err)
+	}
+	if strings.Contains(got.stdout, "CANARY_CREDENTIAL") || strings.Contains(got.stdout, "example.invalid") {
+		t.Fatalf("configuration detail leaked: %s", got.stdout)
+	}
+}
+
+func doctorTreeSnapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	state := map[string]string{}
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		var content []byte
+		if info.Mode().IsRegular() {
+			content, err = os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+		}
+		state[path] = fmt.Sprintf("%v %v %d %x", info.Mode(), info.ModTime(), info.Size(), sha256.Sum256(content))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return state
+}
+
+// Let the real checker block in its Git subprocess after earlier measurements
+// consumed nearly all of doctor's budget. A new validator budget would hang.
+func TestDoctorRealValidatorUsesRemainingBudget(t *testing.T) {
+	dir := goodDir(t)
+	put(t, dir, ".git/HEAD", "ref: refs/heads/main\n")
+	put(t, dir, ".git/config", "")
+	toolDir := t.TempDir()
+	put(t, toolDir, "git", "#!/bin/sh\nexec /bin/sleep 30\n")
+	if err := os.Chmod(filepath.Join(toolDir, "git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", toolDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	p := doctorWorkspacePorts(dir)
+	start := time.Now()
+	now := start
+	p.Now = func() time.Time { return now }
+	p.GitVersion = func(context.Context, string) (string, error) {
+		now = start.Add(doctor.Budget - 100*time.Millisecond)
+		return "git version 2.43.0", nil
+	}
+	got := run(t, withDoctor(p), "doctor", "--json")
+	elapsed := time.Since(start)
+	check := doctorConfigCheck(t, got.stdout)
+	if elapsed > 2*time.Second || check["status"] != doctor.StatusUnknown || check["reason"] != "not_measurable" || got.code != 0 {
+		t.Fatalf("validator ignored remainder: elapsed %v, exit %d, check %v", elapsed, got.code, check)
 	}
 }
