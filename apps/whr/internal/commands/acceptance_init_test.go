@@ -94,9 +94,28 @@ func TestFirstIncrementInitOfflineSource(t *testing.T) {
 			t.Fatal("read-only/refused/no-op command changed workspace")
 		}
 	}
+	requireManifestAction := func(got result, want string, applied bool) {
+		t.Helper()
+		actions := decodeEnvelope(t, got.stdout)["result"].(map[string]any)["actions"].([]any)
+		found := 0
+		for _, value := range actions {
+			action := value.(map[string]any)
+			if action["path"] != "workharbor.json" {
+				continue
+			}
+			found++
+			if action["action"] != want || action["kind"] != "file" || action["applied"] != applied {
+				t.Fatalf("manifest action evidence wrong: %v, want %s/%v", action, want, applied)
+			}
+		}
+		if found != 1 {
+			t.Fatalf("manifest action evidence count = %d, want 1", found)
+		}
+	}
 	base := []string{"init", dir, "--non-interactive", "--yes", "--name=source-demo", "--json"}
 	before := doctorTreeSnapshot(t, dir)
 	preview := invoke(0, append(append([]string{}, base...), "--dry-run")...)
+	requireManifestAction(preview, "create", false)
 	p := decodeEnvelope(t, preview.stdout)["result"].(map[string]any)
 	if p["dry_run"] != true || p["git_checks"] != "not_run" || !strings.Contains(preview.err, "create file workharbor.json") || !strings.Contains(preview.err, "not creation-ready") || !strings.Contains(preview.stdout, "not creation-ready") {
 		t.Fatalf("missing truthful preview: %+v", preview)
@@ -108,6 +127,7 @@ func TestFirstIncrementInitOfflineSource(t *testing.T) {
 	}
 	unchanged(before)
 	written := invoke(0, base...)
+	requireManifestAction(written, "create", true)
 	if !strings.Contains(written.err, "not creation-ready") || !strings.Contains(written.stdout, "not creation-ready") {
 		t.Fatal("written v2 lacks warning")
 	}
@@ -123,6 +143,7 @@ func TestFirstIncrementInitOfflineSource(t *testing.T) {
 	}
 	unchanged(state)
 	noop := invoke(0, base...)
+	requireManifestAction(noop, "skip_existing", false)
 	for _, a := range decodeEnvelope(t, noop.stdout)["result"].(map[string]any)["actions"].([]any) {
 		if a.(map[string]any)["applied"] != false {
 			t.Fatal("no-op reported writes")
@@ -136,6 +157,7 @@ func TestFirstIncrementInitOfflineSource(t *testing.T) {
 	}
 	unchanged(state)
 	replacement := invoke(0, append(edit, "--overwrite=workharbor.json")...)
+	requireManifestAction(replacement, "overwrite", true)
 	if !strings.Contains(replacement.err, "not creation-ready") || !strings.Contains(replacement.stdout, "not creation-ready") {
 		t.Fatal("replacement v2 lacks preview/result warning")
 	}
