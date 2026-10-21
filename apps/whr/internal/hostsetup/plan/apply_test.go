@@ -433,3 +433,42 @@ func TestApplyValidAuditSanitizesPrivateRunnerMetadata(t *testing.T) {
 		})
 	}
 }
+
+type stopRunError struct{ cause error }
+
+func (e *stopRunError) Error() string { return "owned process cleanup failed" }
+func (e *stopRunError) Unwrap() error { return e.cause }
+func (*stopRunError) StopRun()        {}
+
+// An adapter error that retains child ownership must stop all further mutation
+// and reach the caller unchanged so it can reconcile the retained handle.
+func TestApplyStopsAfterOwnedCleanupErrorAndReturnsItUnchanged(t *testing.T) {
+	e, r, runner, home := applyFixture(t)
+	addBat(&r)
+	resealApply(t, &r)
+	cause := errors.New("kill refused")
+	owned := &stopRunError{cause: cause}
+	runner.callback = func(_ context.Context, s Step, _ string, _ time.Duration, _ StepGuard) (StepOutcome, error) {
+		return StepOutcome{Audit: profile.StepAudit{Result: "failed", Argv: []string{"/opt/homebrew/bin/brew", "install", s.Item}}}, owned
+	}
+	out, err := e.Apply(context.Background(), r)
+	if err != error(owned) || !errors.Is(err, cause) {
+		t.Fatal("owned cleanup error was not returned unchanged", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatal("independent step ran after an owned cleanup error", runner.calls)
+	}
+	if out.ExitCode != 68 || len(out.Steps) != 1 || out.Steps[0].Reason != "package_manager_failed" || out.Steps[0].Audit.Result != "failed" {
+		t.Fatal(out)
+	}
+	if len(out.Remaining) != 2 || len(out.Applied) != 0 {
+		t.Fatal("remaining work not reported", out)
+	}
+	if _, statErr := os.Stat(filepath.Join(home, ".config")); !os.IsNotExist(statErr) {
+		t.Fatal("profile was persisted after an unreconciled cleanup failure")
+	}
+	data := readApply(t, filepath.Join(home, ".local/state/whr/protocols/"+r.RunID+".jsonl"))
+	if !strings.Contains(string(data), `"package_manager_failed"`) && !strings.Contains(string(data), `"failed"`) {
+		t.Fatal("failed step not journaled")
+	}
+}
