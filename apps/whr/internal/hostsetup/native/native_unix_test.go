@@ -549,14 +549,20 @@ func TestNativeOrbStackMetadataProcessControls(t *testing.T) {
 }
 
 func TestNativeExitedLeaderSignalPolicy(t *testing.T) {
-	if signalOfExitedLeaderIgnored(syscall.EPERM, false) {
-		t.Fatal("EPERM ignored for a live child")
-	}
-	if signalOfExitedLeaderIgnored(syscall.EIO, true) {
-		t.Fatal("non-EPERM error ignored")
-	}
-	if got := signalOfExitedLeaderIgnored(syscall.EPERM, true); got != exitedLeaderSignalEPERM {
-		t.Fatalf("exited-leader EPERM policy = %v", got)
+	for _, tc := range []struct {
+		err                   error
+		exited, platform, ign bool
+	}{
+		{syscall.EPERM, true, true, true},
+		{syscall.EPERM, true, false, false},
+		{syscall.EPERM, false, true, false},
+		{syscall.EPERM, false, false, false},
+		{syscall.EIO, true, true, false},
+		{syscall.EIO, false, true, false},
+	} {
+		if got := signalOfExitedLeaderIgnored(tc.err, tc.exited, tc.platform); got != tc.ign {
+			t.Errorf("err=%v exited=%v platform=%v: ignored=%v, want %v", tc.err, tc.exited, tc.platform, got, tc.ign)
+		}
 	}
 }
 
