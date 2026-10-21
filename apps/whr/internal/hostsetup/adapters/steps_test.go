@@ -227,3 +227,65 @@ func TestConcreteBrewRefusesUnconfirmedOrStaleAuthority(t *testing.T) {
 		})
 	}
 }
+
+type stuckProcess struct {
+	fixtureProcess
+	killErr error
+}
+
+func (p *stuckProcess) Kill() error { p.kills++; return p.killErr }
+
+type stuckExec struct {
+	process  *stuckProcess
+	startErr func(*stuckProcess) error
+	onStart  func()
+}
+
+func (x *stuckExec) Start(_ context.Context, _ pkgmgr.Command) (pkgmgr.Process, error) {
+	if x.onStart != nil {
+		x.onStart()
+	}
+	p := x.process
+	p.done = make(chan pkgmgr.Completion, 1)
+	if x.startErr != nil {
+		return p, x.startErr(p)
+	}
+	return p, nil
+}
+
+// A cleanup failure keeps ownership of the started child. It must reach the
+// orchestration caller unchanged and win over the deadline/cancel mapping.
+func TestConcreteBrewCleanupErrorReachesCallerAndWinsOverTimeoutMapping(t *testing.T) {
+	cause := errors.New("kill refused")
+	for _, mode := range []string{"startup", "deadline", "cancel"} {
+		t.Run(mode, func(t *testing.T) {
+			brew, request, _, _ := brewFixture(t)
+			proc := &stuckProcess{killErr: cause}
+			exec := &stuckExec{process: proc}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			switch mode {
+			case "startup":
+				exec.startErr = func(p *stuckProcess) error { return pkgmgr.NewCleanupError(p, cause) }
+			case "deadline":
+				brew.Clock = &deadlineClock{}
+			case "cancel":
+				brew.Clock = &deadlineClock{}
+				exec.onStart = cancel
+			}
+			brew.Exec = exec
+			shown, err := plan.Build(request.Input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			out, err := (pkgmgr.StepAdapter{Engine: brew, Request: request}).ApplyStep(ctx, shown.Steps[0], "0123456789abcdef", plan.StepBudget, &fixtureGuard{})
+			var owned pkgmgr.CleanupError
+			if !errors.As(err, &owned) || owned.CleanupProcess() != pkgmgr.Process(proc) || !errors.Is(err, cause) {
+				t.Fatal("cleanup ownership was lost or replaced", out, err)
+			}
+			if errors.Is(err, context.DeadlineExceeded) || (mode == "cancel" && err == ctx.Err()) {
+				t.Fatal("timeout/cancel mapping replaced the cleanup error", err)
+			}
+		})
+	}
+}
