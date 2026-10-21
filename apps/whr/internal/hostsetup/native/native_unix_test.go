@@ -297,6 +297,7 @@ type fakeLease struct {
 	exited       bool
 	observeErr   error
 	waitErr      error
+	signalErr    error
 	unsafeSignal bool
 }
 
@@ -309,7 +310,7 @@ func (p *fakeLease) SignalGroup() error {
 	if p.released {
 		p.unsafeSignal = true
 	}
-	return nil
+	return p.signalErr
 }
 func (p *fakeLease) Release() error {
 	p.events = append(p.events, "release")
@@ -322,7 +323,7 @@ func (p *fakeLease) Wait() error {
 	return p.waitErr
 }
 func TestNativeNeverSignalsReleasedProcess(t *testing.T) {
-	for _, mode := range []string{"success", "nonzero", "cancel", "unsupported", "observer_failure", "ownership_lost"} {
+	for _, mode := range []string{"success", "nonzero", "cancel", "unsupported", "observer_failure", "signal_failure", "ownership_lost"} {
 		t.Run(mode, func(t *testing.T) {
 			child := &fakeLease{exited: true}
 			ctx, cancel := context.WithCancel(context.Background())
@@ -336,10 +337,18 @@ func TestNativeNeverSignalsReleasedProcess(t *testing.T) {
 				child.observeErr = syscall.ENOSYS
 			case "observer_failure":
 				child.observeErr = syscall.EIO
+			case "signal_failure":
+				child.signalErr = syscall.EPERM
 			case "ownership_lost":
 				child.observeErr = errOwnershipLost
 			}
 			err := finishProbe(ctx, child)
+			if mode == "observer_failure" && (!errors.Is(err, syscall.EIO) || !strings.Contains(err.Error(), "observe probe child exit")) {
+				t.Fatalf("observation stage/cause lost: %v", err)
+			}
+			if mode == "signal_failure" && (!errors.Is(err, syscall.EPERM) || !strings.Contains(err.Error(), "signal owned probe group")) {
+				t.Fatalf("group-signal stage/cause lost: %v", err)
+			}
 			if child.unsafeSignal {
 				t.Fatalf("signal after ownership release: %v", child.events)
 			}
