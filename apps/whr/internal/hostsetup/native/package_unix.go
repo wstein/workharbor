@@ -66,47 +66,87 @@ func (p PackageExec) Start(ctx context.Context, c pkgmgr.Command) (pkgmgr.Proces
 	if err = child.Start(ctx); err != nil {
 		return nil, err
 	}
-	process := &packageProcess{child: child, done: make(chan pkgmgr.Completion, 1), reaped: make(chan struct{})}
+	process := &packageProcess{child: child, done: make(chan pkgmgr.Completion, 1), reaped: make(chan struct{}), observerDone: make(chan struct{})}
 	go process.observe()
 	// A cooperative launcher can return success concurrently with cancellation.
 	// Retain ownership and complete cleanup before reporting startup cancellation.
 	if err = ctx.Err(); err != nil {
-		_ = process.Kill()
+		if cleanupErr := process.Kill(); cleanupErr != nil {
+			return process, errors.Join(err, cleanupErr)
+		}
 		return nil, err
 	}
 	return process, nil
 }
 
 type packageProcess struct {
-	mu       sync.Mutex
-	child    packageChild
-	done     chan pkgmgr.Completion
-	reaped   chan struct{}
-	finished bool
+	mu           sync.Mutex
+	operations   sync.Mutex
+	child        packageChild
+	done         chan pkgmgr.Completion
+	reaped       chan struct{}
+	finished     bool
+	paused       bool
+	observerDone chan struct{}
+	cleanupErr   error
 }
 
 func (p *packageProcess) Done() <-chan pkgmgr.Completion { return p.done }
 func (p *packageProcess) Interrupt() error               { return p.signal(int(syscall.SIGINT)) }
 func (p *packageProcess) Kill() error {
-	if err := p.signal(int(syscall.SIGKILL)); err != nil {
+	p.operations.Lock()
+	defer p.operations.Unlock()
+	if err := p.signalOwned(int(syscall.SIGKILL)); err != nil {
 		return err
 	}
 	<-p.reaped
-	return nil
-}
-func (p *packageProcess) signal(sig int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.cleanupErr
+}
+func (p *packageProcess) signal(sig int) error {
+	p.operations.Lock()
+	defer p.operations.Unlock()
+	return p.signalOwned(sig)
+}
+
+// operations serializes pause/join/resume while mu protects unreaped identity.
+// A failed signal leaves an owned handle, but no idle polling goroutine. A later
+// explicit retry can resume observation; a terminal error never signals again.
+func (p *packageProcess) signalOwned(sig int) error {
+	p.mu.Lock()
 	if p.finished {
-		return nil
+		err := p.cleanupErr
+		p.mu.Unlock()
+		return err
 	}
-	return p.child.Signal(sig)
+	err := p.child.Signal(sig)
+	if err != nil {
+		p.paused = true
+		done := p.observerDone
+		p.mu.Unlock()
+		<-done
+		return pkgmgr.NewCleanupError(p, err)
+	}
+	if p.paused {
+		p.paused = false
+		p.observerDone = make(chan struct{})
+		go p.observe()
+	}
+	p.mu.Unlock()
+	return nil
 }
 func (p *packageProcess) observe() {
+	done := p.observerDone
+	defer close(done)
 	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 	for {
 		p.mu.Lock()
+		if p.paused {
+			p.mu.Unlock()
+			return
+		}
 		exited, err := p.child.Exited()
 		if exited || err != nil {
 			// Keep PID ownership through the final group signal, then reap. Serializing
@@ -119,12 +159,11 @@ func (p *packageProcess) observe() {
 			}
 			completion := p.child.Wait()
 			p.finished = true
-			close(p.reaped)
-			if err != nil {
-				completion.Err = err
-			} else if signalErr != nil {
-				completion.Err = signalErr
+			if cleanupCause := errors.Join(err, signalErr); cleanupCause != nil {
+				p.cleanupErr = pkgmgr.NewCleanupError(p, cleanupCause)
+				completion.Err = errors.Join(completion.Err, p.cleanupErr)
 			}
+			close(p.reaped)
 			p.mu.Unlock()
 			p.done <- completion
 			close(p.done)
