@@ -479,3 +479,31 @@ func (e Engine) Lookup(ctx context.Context, item catalogue.Item, raw string) (bo
 	}
 	return verified, nil
 }
+
+// ValidateBrewCommand checks the complete fixed invocation at a native execution
+// boundary. Rebuilding with the same constructor keeps argv and environment
+// policy identical to the sealed package engine; it does not authorize a run.
+func ValidateBrewCommand(c Command) error {
+	if len(c.Argv) < 3 || len(c.Argv) > 4 {
+		return errors.New("invalid brew command")
+	}
+	source := catalogue.Source{Manager: "homebrew", Type: "formula", Tap: "homebrew/core", Name: c.Argv[len(c.Argv)-1]}
+	if len(c.Argv) == 4 {
+		if c.Argv[2] != "--cask" {
+			return errors.New("invalid brew command")
+		}
+		source.Type = "cask"
+		source.Tap = "homebrew/cask"
+	}
+	kind := "brew_install"
+	if c.Argv[1] == "upgrade" {
+		kind = "brew_upgrade"
+	} else if c.Argv[1] != "install" {
+		return errors.New("invalid brew command")
+	}
+	rebuilt, err := brewCommand(c.Argv[0], kind, source, c.Env)
+	if err != nil || !reflect.DeepEqual(rebuilt, c) {
+		return errors.New("invalid brew command")
+	}
+	return nil
+}
