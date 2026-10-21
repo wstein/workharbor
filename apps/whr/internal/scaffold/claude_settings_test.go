@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestInitClaudeSettingsExactDefault(t *testing.T) {
@@ -334,5 +335,74 @@ func TestInitClaudeSettingsOverwritePreviewShowsOldContent(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInitClaudeSettingsLargeTailChangeNewMtime(t *testing.T) {
+	dir := fixture(t)
+	target := filepath.Join(dir, claudeSettingsPath)
+	if err := os.Mkdir(filepath.Join(dir, ".claude"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	old := []byte(strings.Repeat("x", claudeReadBound+4096))
+	if err := os.WriteFile(target, old, 0644); err != nil {
+		t.Fatal(err)
+	}
+	o := Options{NonInteractive: true, Yes: true, Overwrite: []string{claudeSettingsPath}}
+	s, err := DiscoverWithOptions(context.Background(), dir, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Build(s, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Same size, same hashed prefix; only the size/mtime pin can notice.
+	old[len(old)-1] = 'y'
+	if err := os.WriteFile(target, old, 0644); err != nil {
+		t.Fatal(err)
+	}
+	later := s.Entries[claudeSettingsPath].Info.ModTime().Add(time.Hour)
+	if err := os.Chtimes(target, later, later); err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.Apply(context.Background())
+	if int(exitcode.FromError(err)) != 68 {
+		t.Fatalf("large tail change accepted: %v", err)
+	}
+	if got, _ := os.ReadFile(target); !bytes.Equal(got, old) {
+		t.Fatal("file modified")
+	}
+}
+
+func TestInitClaudeSettingsRefusesOverwriteBeyondRestoreBound(t *testing.T) {
+	dir := fixture(t)
+	target := filepath.Join(dir, claudeSettingsPath)
+	if err := os.Mkdir(filepath.Join(dir, ".claude"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := os.Create(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(maxClaudeRestore + 1); err != nil { // sparse
+		t.Fatal(err)
+	}
+	f.Close()
+	o := Options{NonInteractive: true, Yes: true, Overwrite: []string{claudeSettingsPath}}
+	s, err := DiscoverWithOptions(context.Background(), dir, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := Build(s, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.Apply(context.Background())
+	if int(exitcode.FromError(err)) != 68 {
+		t.Fatalf("unrestorable overwrite accepted: %v", err)
+	}
+	if info, err := os.Stat(target); err != nil || info.Size() != maxClaudeRestore+1 {
+		t.Fatalf("file changed: %v %v", info, err)
 	}
 }
