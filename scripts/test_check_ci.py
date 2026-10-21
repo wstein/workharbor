@@ -545,6 +545,86 @@ class SourceTests(unittest.TestCase):
             path.write_text(json.dumps(changed))
             with self.subTest(field=field), self.assertRaises(ValueError): ci.source_context(self.root, *context)
 
+    def stacked(self):
+        """Parent branch tip as PR base; the head descends from it."""
+        parent = self.commit('parent.md')
+        head = self.commit('child.md')
+        self.git('checkout', '--quiet', '--detach', parent)
+        return self.merge(parent, head)
+
+    def stacked_event(self, context, ref='codex/006-t030-cli-20261020', base_repo='wstein/workharbor', head_repo='wstein/workharbor'):
+        event = {'pull_request': {'base': {'sha': context.base, 'ref': ref, 'repo': {'full_name': base_repo}},
+                                  'head': {'sha': context.head, 'repo': {'full_name': head_repo}}}}
+        path = Path(self.temporary.name)/'event.json'; path.write_text(json.dumps(event))
+        os.environ.update(GITHUB_EVENT_NAME='pull_request', GITHUB_SHA=context.checkout, GITHUB_EVENT_PATH=str(path))
+        return event, path
+
+    def test_stacked_pull_request_on_same_repository_parent_branch_is_accepted(self):
+        context = self.stacked(); self.stacked_event(context)
+        self.assertEqual(context, ci.source_context(self.root))
+        self.assertEqual(context, ci.source_context(self.root, *context))
+        for ref in ('feat/x', 'a', 'release-1.2', 'codex/a.b_c/d-e'):
+            with self.subTest(ref=ref):
+                self.stacked_event(context, ref=ref)
+                self.assertEqual(context, ci.source_context(self.root))
+
+    def test_stacked_base_in_fork_or_with_fork_head_is_refused(self):
+        context = self.stacked()
+        for base_repo, head_repo in (('foreign/repository', 'foreign/repository'),
+                                     ('wstein/workharbor', 'foreign/repository'),
+                                     ('foreign/repository', 'wstein/workharbor'),
+                                     ('wstein/workharbor-old', 'wstein/workharbor-old')):
+            self.stacked_event(context, base_repo=base_repo, head_repo=head_repo)
+            with self.subTest(base=base_repo, head=head_repo), self.assertRaises(ValueError):
+                ci.source_context(self.root)
+        event, path = self.stacked_event(context)
+        del event['pull_request']['head']['repo']; path.write_text(json.dumps(event))
+        with self.assertRaises(ValueError): ci.source_context(self.root)
+
+    def test_stacked_base_that_is_not_an_ancestor_of_head_is_refused(self):
+        head = self.commit('child.md')
+        self.git('checkout', '--quiet', '--detach', self.base)
+        sibling = self.commit('sibling.md')
+        context = self.merge(sibling, head)
+        self.stacked_event(context)
+        with self.assertRaises(ValueError): ci.source_context(self.root)
+        # The same pair stays valid for main, where no ancestry is required.
+        self.stacked_event(context, ref='main')
+        self.assertEqual(context, ci.source_context(self.root))
+
+    def test_stacked_base_with_nonplain_ref_name_is_refused(self):
+        context = self.stacked()
+        for ref in ('', ' ', 'refs/heads/topic', 'refs/heads/main', 'heads/topic', '-topic', 'a/-b', 'a..b', 'a/../b', 'a.lock/b',
+                    'a b', '/a', 'a/', 'a//b', 'a\nb', 'a.lock', 'a/b.lock', '.a', 'a/.b', 'a.', 'a@{b}', 'a~b', 'a:b', None, 3):
+            self.stacked_event(context, ref=ref)
+            with self.subTest(ref=ref), self.assertRaises(ValueError): ci.source_context(self.root)
+
+    def test_stacked_base_still_requires_actual_synthetic_merge_and_pins(self):
+        context = self.stacked(); self.stacked_event(context)
+        for parents, tree in (((context.head, context.base), None), ((context.base, context.head, self.base), None),
+                              (None, self.git('rev-parse', context.base + '^{tree}'))):
+            wrong = self.merge(context.base, context.head, parents, tree)
+            self.stacked_event(wrong)
+            with self.subTest(parents=parents, tree=tree), self.assertRaises(ValueError): ci.source_context(self.root)
+        self.git('checkout', '--quiet', '--detach', context.checkout); self.stacked_event(context)
+        self.git('checkout', '--quiet', '--detach', context.checkout)
+        with self.assertRaises(ValueError): ci.source_context(self.root, 'pull_request', self.base, context.head, context.checkout)
+        with mock.patch.dict(os.environ, {'GITHUB_SHA': context.head}), self.assertRaises(ValueError):
+            ci.source_context(self.root)
+
+    def test_stacked_pull_request_checks_the_exact_merge_of_head_into_parent_tip(self):
+        # The checked tree is the merge of head into the parent tip, so an edit
+        # of the checker by the head is judged as edited, never replaced or hidden.
+        parent = self.commit('parent.md')
+        (self.root/'scripts/check_ci.py').write_text('raise SystemExit(0)\n')
+        self.git('add', '--', 'scripts/check_ci.py'); self.git('commit', '--quiet', '-m', 'test: weaken')
+        head = self.git('rev-parse', 'HEAD')
+        self.git('checkout', '--quiet', '--detach', parent)
+        context = self.merge(parent, head); self.stacked_event(context)
+        self.assertEqual(context, ci.source_context(self.root))
+        self.assertEqual(parent, context.base)
+        self.assertEqual(self.git('rev-parse', context.checkout + '^{tree}'), self.git('rev-parse', head + '^{tree}'))
+
     def test_current_repository_push_accepts_exact_head_and_refuses_foreign_or_stale(self):
         event = {'repository': {'full_name': 'wstein/workharbor'}, 'after': self.base}
         path = Path(self.temporary.name)/'event.json'

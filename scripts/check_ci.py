@@ -25,11 +25,19 @@ from pathlib import Path
 from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY = 'wstein/workharbor'
 MANIFEST = 'docs/development/ci-acceptance.json'
 # Native macOS observations: raw 490s, qualified 838s. Keep aggregate
 # headroom separate from the 300s utility-command and approved task deadlines.
 RAW_AGGREGATE_TIMEOUT_SECONDS = 600
 QUALIFIED_AGGREGATE_TIMEOUT_SECONDS = 1200
+
+
+def plain_branch(ref):
+    """Conservative branch name: slash-separated words, no refs/, '..', leading '-' or '.'."""
+    return (re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9._-]*(/[A-Za-z0-9_][A-Za-z0-9._-]*)*', ref) is not None
+            and '..' not in ref and not ref.endswith(('.', '.lock')) and '.lock/' not in ref
+            and not ref.startswith(('refs/', 'heads/')))
 
 
 def _source_context(root, event=None, base=None, head=None, checkout=None):
@@ -39,6 +47,7 @@ def _source_context(root, event=None, base=None, head=None, checkout=None):
         raise ValueError('Expected regular checkout root')
     actual = git(root, 'rev-parse', 'HEAD').decode().strip()
     provided = (event, base, head, checkout)
+    stacked = False
     if any(value is not None for value in provided) and not all(provided):
         raise ValueError('Source context requires all four pins')
     if 'GITHUB_EVENT_NAME' in os.environ:
@@ -48,8 +57,15 @@ def _source_context(root, event=None, base=None, head=None, checkout=None):
         payload = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
         if github_event == 'pull_request':
             pr = payload['pull_request']
-            if pr['base']['ref'] != 'main' or pr['base']['repo']['full_name'] != 'wstein/workharbor':
-                raise ValueError('PR must target repository main')
+            if pr['base']['repo']['full_name'] != REPOSITORY:
+                raise ValueError('PR must target repository main or a branch of ' + REPOSITORY)
+            if pr['base']['ref'] != 'main':
+                # Stacked PR: the parent branch of this same repository, never a
+                # fork, and already contained in the head (checked below).
+                if (pr['head']['repo']['full_name'] != REPOSITORY
+                        or not isinstance(pr['base']['ref'], str) or not plain_branch(pr['base']['ref'])):
+                    raise ValueError('Stacked PR base must be a plain branch of ' + REPOSITORY)
+                stacked = True
             observed = SourceContext(github_event, pr['base']['sha'], pr['head']['sha'], actual)
         else:
             if payload['repository']['full_name'] != 'wstein/workharbor' or payload['after'] != actual:
@@ -70,6 +86,11 @@ def _source_context(root, event=None, base=None, head=None, checkout=None):
         parents = git(root, 'rev-list', '--parents', '-n', '1', checkout).decode().split()[1:]
         if base == head or parents != [base, head]:
             raise ValueError('Unexpected synthetic merge parents')
+        if stacked:
+            try:
+                git(root, 'merge-base', '--is-ancestor', base, head)
+            except subprocess.CalledProcessError as error:
+                raise ValueError('Stacked PR base is not an ancestor of head') from error
         tree = git(root, 'merge-tree', '--write-tree', base, head).decode().strip()
         if tree != git(root, 'rev-parse', checkout + '^{tree}').decode().strip():
             raise ValueError('Synthetic checkout differs from actual merge')
