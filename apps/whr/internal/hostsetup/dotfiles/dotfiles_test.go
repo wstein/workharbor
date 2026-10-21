@@ -27,6 +27,7 @@ type fakeFS struct {
 	failAfter    int
 	afterRemove  bool
 	beforeRead   func(string)
+	afterCreate  string
 	afterRename  bool
 	corrupt      string
 	corruptReads int
@@ -106,6 +107,9 @@ func (f *fakeFS) Create(p string, b []byte, m fs.FileMode) (Info, error) {
 		return Info{}, fs.ErrExist
 	}
 	f.put(p, b, m)
+	if f.afterCreate == p {
+		return f.nodes[p].info, fs.ErrPermission
+	}
 	return f.nodes[p].info, nil
 }
 func (f *fakeFS) Rename(from, to, fromID, toID string) error {
@@ -609,5 +613,80 @@ func TestPreviewRefusesAnotherEngineWithSameFS(t *testing.T) {
 	_, err := other.Apply(p, Options{Decision: Replace, Target: c.Target, RunID: "r"})
 	if err == nil || len(writes(f)) != 0 || !reflect.DeepEqual(before, cloneTree(f)) {
 		t.Fatal("foreign-engine preview accepted or wrote", err, writes(f))
+	}
+}
+func TestVerifiedBackupReceiptSurvivesManifestFailure(t *testing.T) {
+	for _, fault := range []string{"read", "stage", "rename", "verify"} {
+		t.Run(fault, func(t *testing.T) {
+			e, f, c, m := fixture(t, "original\n")
+			p := preview(t, e, c, m)
+			manifest := ".local/state/whr/backups/r/manifest.json"
+			switch fault {
+			case "read":
+				f.put(manifest, []byte("[]"), 0600)
+				f.fail = "read:" + manifest
+			case "stage":
+				f.fail = "create:" + manifest + ".whr-stage-r"
+			case "rename":
+				f.fail = "rename:" + manifest
+			case "verify":
+				f.corrupt = manifest
+			}
+			r, err := e.Apply(p, Options{Decision: Replace, Target: c.Target, RunID: "r"})
+			backup := ".local/state/whr/backups/r/" + digest([]byte(c.Target))[:32] + ".bak"
+			n, exists := f.nodes[backup]
+			if !exists || string(n.data) != "original\n" || n.info.Mode.Perm() != 0600 {
+				t.Fatal("fixture did not retain an owned original-byte backup")
+			}
+			if err == nil || r.Status != "failed" || r.Backup == nil || r.Backup.Path != "~/"+backup || r.Backup.SHA256 != digest(n.data) {
+				t.Fatal("verified retained receipt lost after manifest failure", r, err)
+			}
+			if string(f.nodes[c.Target].data) != "original\n" || r.Restored {
+				t.Fatal("manifest failure changed target")
+			}
+			for _, call := range writes(f) {
+				if call == "rename:"+c.Target {
+					t.Fatal("manifest failure reached target rename")
+				}
+			}
+		})
+	}
+}
+func TestBackupReceiptRequiresOwnedVerifiedCopy(t *testing.T) {
+	for _, which := range []string{"foreign", "unverified", "read", "ambiguous_create"} {
+		t.Run(which, func(t *testing.T) {
+			e, f, c, m := fixture(t, "original\n")
+			p := preview(t, e, c, m)
+			backup := ".local/state/whr/backups/r/" + digest([]byte(c.Target))[:32] + ".bak"
+			if which == "foreign" {
+				for _, dir := range []string{".local", ".local/state", ".local/state/whr", ".local/state/whr/backups", ".local/state/whr/backups/r"} {
+					f.put(dir, nil, fs.ModeDir|0700)
+				}
+				f.put(backup, []byte("original\n"), 0600)
+			} else if which == "read" {
+				f.fail = "read:" + backup
+			} else if which == "ambiguous_create" {
+				f.afterCreate = backup
+			} else {
+				f.corrupt = backup
+			}
+			before := cloneTree(f)
+			r, err := e.Apply(p, Options{Decision: Replace, Target: c.Target, RunID: "r"})
+			if err == nil || r.Backup != nil || r.Restore != "" || string(f.nodes[c.Target].data) != "original\n" {
+				t.Fatal("foreign/unverified backup claimed", which, r, err)
+			}
+			if r.BackupCreated != (which != "foreign") {
+				t.Fatal("owned creation evidence incorrect", which, r)
+			}
+			if which != "foreign" && (r.Status != "failed" || string(f.nodes[backup].data) != "original\n") {
+				t.Fatal("owned failed backup write lost", which, r)
+			}
+			if which == "foreign" && !reflect.DeepEqual(before, cloneTree(f)) {
+				t.Fatal("foreign backup or namespace modified")
+			}
+			if which == "unverified" && f.corruptReads == 0 {
+				t.Fatal("unverified-copy fault was not reached")
+			}
+		})
 	}
 }
