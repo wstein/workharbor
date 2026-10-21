@@ -101,7 +101,10 @@ and `persist-credentials: false`. The runner checks exact source context and act
 ordered base/head merge parents/tree, physical tracked bytes/modes and pristine
 index/worktree, including ignored files. Checks run in a disposable checkout of that
 same revision, with isolated Python imports/cache; tracked mutations and source drift
-block. Executable Git configuration, replacement refs and grafts are refused or
+block. A pull request must target `main` or, as a stacked PR, another plain branch
+of `wstein/workharbor` (no forks, no `refs/` prefix, `..` or leading `-`) whose
+`base.sha` is an ancestor of `head.sha`; every other pin applies unchanged, so the
+checked code is the exact merge of the head into its parent tip. Executable Git configuration, replacement refs and grafts are refused or
 disabled before inspection. These checks establish source identity, not approval.
 
 No external `WORKHARBOR_CI_POLICY_SOURCE` setting is read or updated. Historical
