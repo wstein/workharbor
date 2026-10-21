@@ -172,3 +172,27 @@ func TestInitDiscoveryRootSuffixCannotHideSymlink(t *testing.T) {
 		t.Fatal("lexical dot-dot cleanup bypassed missing component")
 	}
 }
+
+func TestInitFingerprintRetainsObservedIdentity(t *testing.T) {
+	dir := fixture(t)
+	p := applyProposal(t, dir, Options{NonInteractive: true, Yes: true})
+	fp := p.Fingerprints()
+	for _, name := range []string{".", ".devcontainer", ".devcontainer/devcontainer.json"} {
+		got, ok := fp[name]
+		if !ok || !got.Exists || got.Info == nil {
+			t.Fatalf("%s: observed entry lacks retained identity: %+v", name, got)
+		}
+		disk, err := os.Lstat(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !os.SameFile(got.Info, disk) || got.Mode != disk.Mode() {
+			t.Fatalf("%s: retained identity does not name the observed object", name)
+		}
+	}
+	for _, name := range []string{"workharbor.json", "projects"} {
+		if got := fp[name]; got.Exists || got.Info != nil {
+			t.Fatalf("%s: absent target must carry no identity: %+v", name, got)
+		}
+	}
+}

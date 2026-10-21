@@ -129,3 +129,34 @@ func TestInitJSONMatchesSchema(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestInitHumanPreviewEscapesPathAndDiff(t *testing.T) {
+	const bidi = "‮"
+	s := snapshot()
+	dcPath := ".devcontainer/dev" + bidi + "container.json"
+	manifest := `{"schema_version":1,"devcontainer_path":"` + dcPath + `","projects_path":"projects","bundles":[]}`
+	s.Entries["workharbor.json"] = scaffold.Entry{Kind: "file", Data: []byte(manifest)}
+	s.Entries[dcPath] = scaffold.Entry{Kind: "file", Data: []byte("{}\n")}
+	dir := "evil" + bidi + "dir"
+	o := defaults()
+	o.StartDir = &dir
+	o.Overwrite = []string{"workharbor.json"}
+	p, err := scaffold.Build(s, o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	human := p.HumanPreview()
+	if strings.Contains(human, bidi) {
+		t.Fatalf("human preview emitted a raw bidi control: %q", human)
+	}
+	// The diff and the reuse path line must both survive in escaped form.
+	if strings.Count(human, "<U+202E>") < 2 {
+		t.Fatalf("path and diff must each show the escaped rune: %q", human)
+	}
+	if !strings.Contains(human, "reuse file .devcontainer/dev<U+202E>container.json\n") {
+		t.Fatalf("path not escaped: %q", human)
+	}
+	if !strings.Contains(human, "evil<U+202E>dir") {
+		t.Fatalf("diff not escaped: %q", human)
+	}
+}
