@@ -53,7 +53,7 @@ func TestNativeHelper(t *testing.T) {
 		if err != nil {
 			os.Exit(12)
 		}
-		child := exec.Command(exe, "-test.run=^TestNativeHelper$", "--", "block")
+		child := exec.Command(exe, "-test.run=^TestNativeHelper$", "--", "expire")
 		child.Env = os.Environ()
 		child.Stdout = os.Stdout
 		child.Stderr = os.Stderr
@@ -61,6 +61,9 @@ func TestNativeHelper(t *testing.T) {
 			os.Exit(13)
 		}
 		fmt.Print(child.Process.Pid)
+	case "expire":
+		// Inert orphan safety net: even a failed cleanup test cannot leave it running indefinitely.
+		time.Sleep(2 * time.Second)
 	case "block":
 		for {
 			time.Sleep(time.Second)
@@ -157,12 +160,17 @@ func TestNativeProbeIsolationAndBounds(t *testing.T) {
 			defer stop()
 			p := probe(path, "block")
 			p.Timeout = 100 * time.Millisecond
+			want := context.DeadlineExceeded
 			if cancel {
-				time.AfterFunc(30*time.Millisecond, stop)
+				// A detached parent cannot hide behind the short deadline control.
+				p.Timeout = 3 * time.Second
+				want = context.Canceled
+				timer := time.AfterFunc(30*time.Millisecond, stop)
+				defer timer.Stop()
 			}
 			start := time.Now()
 			_, err := h.Run(ctx, p)
-			if err == nil || time.Since(start) > 2*time.Second {
+			if !errors.Is(err, want) || time.Since(start) > 2*time.Second {
 				t.Fatalf("unbounded cancellation: %v %s", err, time.Since(start))
 			}
 		})
@@ -211,13 +219,21 @@ func TestNativeDetectorWiring(t *testing.T) {
 
 func TestNativeDescendantPipeCleanup(t *testing.T) {
 	h, _, path := fixture(t)
+	t.Run("inert helper self expires", func(t *testing.T) {
+		p := probe(path, "expire")
+		p.Timeout = 5 * time.Second
+		out, err := h.Run(context.Background(), p)
+		if err != nil || out.Exit != 0 {
+			t.Fatalf("inert safety-net helper did not self-terminate: %+v %v", out, err)
+		}
+	})
 	start := time.Now()
 	out, err := h.Run(context.Background(), probe(path, "descendant"))
 	pid, parseErr := strconv.Atoi(out.Stdout)
 	if parseErr != nil || pid <= 0 {
 		t.Fatalf("missing owned descendant identity: %+v %v", out, err)
 	}
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	// Never signal the reparented numeric PID; the inert helper self-expires if cleanup fails.
 	if err != nil || out.Exit != 0 || time.Since(start) > 2*time.Second {
 		t.Fatalf("descendant cleanup not bounded: %+v %v", out, err)
 	}
