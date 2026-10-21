@@ -37,6 +37,7 @@ type nativeFS struct {
 	// Test-only synchronization seams run before the corresponding final check.
 	// Production leaves them nil. They do not widen the public FS API.
 	beforeParentOpen, beforeLeafOpen func(string)
+	beforeKernelRename               func(string, string)
 	beforeRename                     func(string, string)
 }
 
@@ -359,6 +360,9 @@ func (f *nativeFS) Rename(from, to, fromID, toID string) error {
 		}
 	} else if targetErr != nil || !ti.Mode.IsRegular() || ti.ID != toID {
 		return fs.ErrPermission
+	}
+	if f.beforeKernelRename != nil {
+		f.beforeKernelRename(from, to)
 	}
 	if toID == "" {
 		err = renameAbsent(a, source, b, target)
