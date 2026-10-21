@@ -196,10 +196,12 @@ func TestPackageCommandAdapterEngineOwnsCancellation(t *testing.T) {
 
 type gatedReapChild struct {
 	fakePackageChild
-	waiting chan struct{}
-	release chan struct{}
+	waiting     chan struct{}
+	release     chan struct{}
+	releaseOnce sync.Once
 }
 
+func (c *gatedReapChild) releaseStart() { c.releaseOnce.Do(func() { close(c.release) }) }
 func (c *gatedReapChild) Wait() pkgmgr.Completion {
 	close(c.waiting)
 	<-c.release
@@ -217,7 +219,7 @@ func TestPackageCommandAdapterKillWaitsForReap(t *testing.T) {
 	select {
 	case <-child.waiting:
 	case <-time.After(time.Second):
-		close(child.release)
+		child.releaseStart()
 		t.Fatal("owned cleanup never reached Wait")
 	}
 	returnedEarly := false
@@ -226,7 +228,7 @@ func TestPackageCommandAdapterKillWaitsForReap(t *testing.T) {
 		returnedEarly = true
 	case <-time.After(30 * time.Millisecond):
 	}
-	close(child.release)
+	child.releaseStart()
 	if !returnedEarly {
 		select {
 		case err = <-killed:
@@ -237,7 +239,12 @@ func TestPackageCommandAdapterKillWaitsForReap(t *testing.T) {
 			t.Fatal("Kill failed to finish after reap")
 		}
 	}
-	completion := <-p.Done()
+	var completion pkgmgr.Completion
+	select {
+	case completion = <-p.Done():
+	case <-time.After(time.Second):
+		t.Fatal("completion not delivered after reap")
+	}
 	if returnedEarly {
 		t.Fatal("Kill returned before owned cleanup/reap")
 	}
@@ -277,7 +284,10 @@ type cooperativeStartChild struct {
 	entered     chan struct{}
 	release     chan struct{}
 	lateSuccess bool
+	releaseOnce sync.Once
 }
+
+func (c *cooperativeStartChild) releaseStart() { c.releaseOnce.Do(func() { close(c.release) }) }
 
 func (c *cooperativeStartChild) Start(ctx context.Context) error {
 	close(c.entered)
@@ -294,19 +304,36 @@ func (c *cooperativeStartChild) Start(ctx context.Context) error {
 		return nil
 	}
 }
+
+// This context advances a logical deadline only after the fake port enters;
+// no scheduler delay can expire a real timer before the entry observation.
+type controlledStartupContext struct {
+	context.Context
+	mu       sync.Mutex
+	done     chan struct{}
+	err      error
+	deadline bool
+}
+
+func (c *controlledStartupContext) Done() <-chan struct{}       { return c.done }
+func (c *controlledStartupContext) Err() error                  { c.mu.Lock(); defer c.mu.Unlock(); return c.err }
+func (c *controlledStartupContext) Deadline() (time.Time, bool) { return time.Unix(123, 0), c.deadline }
+func (c *controlledStartupContext) expire(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.err == nil {
+		c.err = err
+		close(c.done)
+	}
+}
 func TestPackageCommandAdapterCooperativeStartupCancellation(t *testing.T) {
 	for _, deadline := range []bool{false, true} {
 		t.Run(fmt.Sprintf("deadline=%t", deadline), func(t *testing.T) {
 			child := &cooperativeStartChild{entered: make(chan struct{}), release: make(chan struct{})}
 			adapter := PackageExec{launch: func(pkgmgr.Command) (packageChild, error) { return child, nil }}
-			ctx, cancel := context.WithCancel(context.Background())
-			var stop context.CancelFunc
-			if deadline {
-				ctx, stop = context.WithTimeout(ctx, 30*time.Millisecond)
-				defer stop()
-			}
-			defer cancel()
+			ctx := &controlledStartupContext{Context: context.Background(), done: make(chan struct{}), deadline: deadline}
 			result := make(chan error, 1)
+			joined := false
 			go func() {
 				p, err := adapter.Start(ctx, packageCommand())
 				if p != nil {
@@ -314,31 +341,37 @@ func TestPackageCommandAdapterCooperativeStartupCancellation(t *testing.T) {
 				}
 				result <- err
 			}()
-			<-child.entered
+			t.Cleanup(func() {
+				child.releaseStart()
+				if !joined {
+					select {
+					case <-result:
+					case <-time.After(time.Second):
+						t.Error("startup goroutine survived release")
+					}
+				}
+			})
+			select {
+			case <-child.entered:
+			case err := <-result:
+				joined = true
+				t.Fatalf("startup returned before controlled expiry: %v", err)
+			case <-time.After(time.Second):
+				t.Fatal("fake startup never entered")
+			}
 			want := context.Canceled
 			if deadline {
 				want = context.DeadlineExceeded
-			} else {
-				cancel()
 			}
-			var err error
-			timely := true
+			ctx.expire(want)
 			select {
-			case err = <-result:
-			case <-time.After(200 * time.Millisecond):
-				timely = false
-			}
-			close(child.release)
-			if !timely {
-				select {
-				case <-result:
-				case <-time.After(time.Second):
-					t.Fatal("startup goroutine survived release")
+			case err := <-result:
+				joined = true
+				if !errors.Is(err, want) || child.started {
+					t.Fatalf("startup outcome: %v started=%v", err, child.started)
 				}
+			case <-time.After(200 * time.Millisecond):
 				t.Fatal("cooperative startup ignored context")
-			}
-			if !errors.Is(err, want) || child.started {
-				t.Fatalf("startup outcome: err=%v started=%v", err, child.started)
 			}
 		})
 	}
@@ -356,9 +389,19 @@ func TestPackageCommandAdapterLateStartupSuccessIsReaped(t *testing.T) {
 		}
 		result <- err
 	}()
-	<-child.entered
+	select {
+	case <-child.entered:
+	case <-time.After(time.Second):
+		child.releaseStart()
+		select {
+		case <-result:
+		case <-time.After(time.Second):
+			t.Error("late startup goroutine survived release")
+		}
+		t.Fatal("late startup never entered")
+	}
 	cancel()
-	close(child.release)
+	child.releaseStart()
 	select {
 	case err := <-result:
 		if !errors.Is(err, context.Canceled) {
@@ -391,8 +434,13 @@ func TestPackageCommandAdapterCompletionFidelity(t *testing.T) {
 	if len(child.signals) != 1 || child.signals[0] != int(syscall.SIGKILL) {
 		t.Fatalf("wrong final signal: %v", child.signals)
 	}
-	if _, ok := <-p.Done(); ok {
-		t.Fatal("completion channel not closed")
+	select {
+	case _, ok := <-p.Done():
+		if ok {
+			t.Fatal("completion channel not closed")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("completion channel remained open")
 	}
 	if err = p.Interrupt(); err != nil {
 		t.Fatal(err)
@@ -431,11 +479,19 @@ func (d enginePackageDetector) Detect(_ context.Context, i catalogue.Item) detec
 	return detect.Result{Item: i.ID, State: state}
 }
 
-type enginePackageBook struct{ closed chan struct{} }
+type enginePackageBook struct {
+	closed              chan struct{}
+	closeErr, recordErr error
+}
 
 func (b enginePackageBook) Begin(context.Context, string) (pkgmgr.Journal, error) { return b, nil }
-func (b enginePackageBook) Record(context.Context, pkgmgr.Event) error            { return nil }
-func (b enginePackageBook) Close(context.Context) error                           { close(b.closed); return nil }
+func (b enginePackageBook) Record(_ context.Context, event pkgmgr.Event) error {
+	if event.Stage == "finished" {
+		return b.recordErr
+	}
+	return nil
+}
+func (b enginePackageBook) Close(context.Context) error { close(b.closed); return b.closeErr }
 func TestPackageCommandAdapterEngineCannotOutrunReap(t *testing.T) {
 	child := &gatedReapChild{waiting: make(chan struct{}), release: make(chan struct{})}
 	var launches atomic.Int32
@@ -464,7 +520,7 @@ func TestPackageCommandAdapterEngineCannotOutrunReap(t *testing.T) {
 	select {
 	case <-child.waiting:
 	case <-time.After(time.Second):
-		close(child.release)
+		child.releaseStart()
 		t.Fatal("engine never waited for child cleanup")
 	}
 	early := launches.Load() != 1
@@ -478,7 +534,7 @@ func TestPackageCommandAdapterEngineCannotOutrunReap(t *testing.T) {
 		early = true
 	default:
 	}
-	close(child.release)
+	child.releaseStart()
 	select {
 	case err := <-completed:
 		if err != nil {
@@ -497,5 +553,230 @@ func TestPackageCommandAdapterEngineCannotOutrunReap(t *testing.T) {
 	case <-book.closed:
 	default:
 		t.Fatal("bookkeeping not closed")
+	}
+}
+
+type signalFailureChild struct {
+	fakePackageChild
+	failAt   int
+	cancel   context.CancelFunc
+	waitDone chan struct{}
+	waitOnce sync.Once
+}
+
+func (c *signalFailureChild) Start(context.Context) error {
+	c.started = true
+	if c.cancel != nil {
+		c.cancel()
+	}
+	return nil
+}
+func (c *signalFailureChild) Wait() pkgmgr.Completion {
+	result := c.fakePackageChild.Wait()
+	if c.waitDone != nil {
+		c.waitOnce.Do(func() { close(c.waitDone) })
+	}
+	return result
+}
+func (c *signalFailureChild) Signal(sig int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.signals = append(c.signals, sig)
+	if len(c.signals) == c.failAt {
+		return syscall.EPERM
+	}
+	if sig == int(syscall.SIGKILL) {
+		c.exited = true
+	}
+	return nil
+}
+func TestPackageCommandAdapterKillPreservesCleanupFailure(t *testing.T) {
+	child := &signalFailureChild{failAt: 2}
+	adapter := PackageExec{launch: func(pkgmgr.Command) (packageChild, error) { return child, nil }}
+	p, err := adapter.Start(context.Background(), packageCommand())
+	if err != nil {
+		t.Fatal(err)
+	}
+	killErr := p.Kill()
+	var completion pkgmgr.Completion
+	select {
+	case completion = <-p.Done():
+	case <-time.After(time.Second):
+		t.Fatal("cleanup outcome unavailable")
+	}
+	var owned pkgmgr.CleanupError
+	if !errors.Is(killErr, syscall.EPERM) || !errors.As(killErr, &owned) || owned.CleanupProcess() != p || !errors.Is(completion.Err, syscall.EPERM) {
+		t.Fatalf("cleanup failure erased: Kill=%v Done=%v", killErr, completion.Err)
+	}
+	before := len(child.signals)
+	if err = p.Kill(); !errors.Is(err, syscall.EPERM) {
+		t.Fatalf("terminal error erased: %v", err)
+	}
+	if len(child.signals) != before {
+		t.Fatal("retry signalled after terminal Wait")
+	}
+}
+func TestPackageCommandAdapterLateStartupCleanupFailureKeepsOwnership(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	child := &signalFailureChild{failAt: 1, cancel: cancel, waitDone: make(chan struct{})}
+	adapter := PackageExec{launch: func(pkgmgr.Command) (packageChild, error) { return child, nil }}
+	type startOutcome struct {
+		process pkgmgr.Process
+		err     error
+	}
+	outcome := make(chan startOutcome, 1)
+	go func() { p, err := adapter.Start(ctx, packageCommand()); outcome <- startOutcome{p, err} }()
+	var got startOutcome
+	select {
+	case got = <-outcome:
+	case <-time.After(200 * time.Millisecond):
+		child.mu.Lock()
+		child.exited = true
+		child.mu.Unlock()
+		select {
+		case late := <-outcome:
+			if late.process != nil {
+				_ = late.process.Kill()
+			}
+		case <-time.After(time.Second):
+			t.Error("failed startup goroutine survived inert child exit")
+		}
+		t.Fatal("cleanup failure did not return owned startup outcome")
+	}
+	p, err := got.process, got.err
+
+	// Always complete the inert child, even when the ownership assertion fails.
+	if p == nil {
+		child.mu.Lock()
+		child.exited = true
+		child.mu.Unlock()
+		select {
+		case <-child.waitDone:
+		case <-time.After(time.Second):
+			t.Error("inert failure child did not finish cleanup")
+		}
+		t.Fatalf("late live child lost: %v", err)
+	}
+	defer func() {
+		if retry := p.Kill(); retry != nil {
+			t.Error(retry)
+		}
+	}()
+	var owned pkgmgr.CleanupError
+	if !errors.Is(err, context.Canceled) || !errors.Is(err, syscall.EPERM) || !errors.As(err, &owned) || owned.CleanupProcess() != p {
+		t.Fatalf("late cleanup evidence/ownership lost: %v", err)
+	}
+}
+
+func TestPackageCommandAdapterEngineCleanupFailureRetainsOwnership(t *testing.T) {
+	for _, late := range []bool{false, true} {
+		for _, journalFailure := range []string{"none", "record", "close"} {
+			t.Run(fmt.Sprintf("late=%t/journal=%s", late, journalFailure), func(t *testing.T) {
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				child := &signalFailureChild{failAt: 3, waitDone: make(chan struct{})}
+				if late {
+					child.failAt = 1
+					child.cancel = cancel
+				}
+				launches := 0
+				adapter := PackageExec{launch: func(pkgmgr.Command) (packageChild, error) {
+					launches++
+					if launches > 1 {
+						return &fakePackageChild{exited: true}, nil
+					}
+					return child, nil
+				}}
+				items := []catalogue.Item{}
+				for _, id := range []string{"jq", "fzf"} {
+					items = append(items, catalogue.Item{ID: id, SelectedByDefault: true, Tool: catalogue.Tool{Source: catalogue.Source{Manager: "homebrew", Type: "formula", Tap: "homebrew/core", Name: id}}})
+				}
+				input := plan.Input{Platform: "darwin-arm64", Catalogue: &catalogue.Catalogue{SchemaVersion: 1, Items: items}, Results: []detect.Result{{Item: "jq", State: "absent"}, {Item: "fzf", State: "absent"}}}
+				sealed, err := plan.Build(input)
+				if err != nil {
+					t.Fatal(err)
+				}
+				journalErr := errors.New("inert journal failure")
+				book := enginePackageBook{closed: make(chan struct{})}
+				if journalFailure == "record" {
+					book.recordErr = journalErr
+				}
+				if journalFailure == "close" {
+					book.closeErr = journalErr
+				}
+				engine := pkgmgr.Engine{Exec: adapter, FS: enginePackageFS{}, Clock: &enginePackageClock{}, Detector: enginePackageDetector{seen: map[string]int{}}, Bookkeeper: book}
+				type applyOutcome struct {
+					result pkgmgr.Result
+					err    error
+				}
+				outcomes := make(chan applyOutcome, 1)
+				go func() {
+					result, err := engine.Apply(ctx, pkgmgr.Request{Input: input, ExpectedHash: sealed.Hash, Policy: pkgmgr.Policy{Mode: "setup", Yes: true, UID: 501}, Environment: map[string]string{"HOME": "/tmp/home"}})
+					outcomes <- applyOutcome{result, err}
+				}()
+				var outcome applyOutcome
+				select {
+				case outcome = <-outcomes:
+				case <-time.After(200 * time.Millisecond):
+					child.mu.Lock()
+					child.exited = true
+					child.mu.Unlock()
+					select {
+					case late := <-outcomes:
+						var owned pkgmgr.CleanupError
+						if errors.As(late.err, &owned) {
+							_ = owned.CleanupProcess().Kill()
+						}
+					case <-time.After(time.Second):
+						t.Error("Apply goroutine survived inert child exit")
+					}
+					t.Fatal("cleanup failure did not return owned Apply outcome")
+				}
+				result, err := outcome.result, outcome.err
+				var owned pkgmgr.CleanupError
+				if !errors.As(err, &owned) {
+					child.mu.Lock()
+					child.exited = true
+					child.mu.Unlock()
+					select {
+					case <-child.waitDone:
+					case <-time.After(time.Second):
+					}
+					t.Fatalf("Apply lost owned cleanup failure: %v", err)
+				}
+				process := owned.CleanupProcess()
+				defer func() {
+					retryErr := process.Kill()
+					if late && retryErr != nil {
+						t.Error(retryErr)
+					}
+					select {
+					case <-process.Done():
+					case <-time.After(time.Second):
+						t.Error("owned child not joined")
+					}
+				}()
+				if !errors.Is(err, syscall.EPERM) || late && !errors.Is(err, context.Canceled) {
+					t.Fatalf("cleanup cause lost: %v", err)
+				}
+				if journalFailure != "none" && !strings.Contains(err.Error(), "host_setup.protocol_unwritable") {
+					t.Fatalf("journal failure lost cleanup cause: %v", err)
+				}
+				if len(result.Steps) != 1 || result.Steps[0].Status != "failed" || !result.Steps[0].MutationAttempted || result.Steps[0].Changed || launches != 1 {
+					t.Fatalf("uncertain mutation misreported or continuation occurred: %+v launches=%d", result, launches)
+				}
+				select {
+				case <-process.(*packageProcess).observerDone:
+				case <-time.After(time.Second):
+					t.Fatal("failed cleanup retained idle observer")
+				}
+				select {
+				case <-book.closed:
+				default:
+					t.Fatal("bookkeeping not closed")
+				}
+			})
+		}
 	}
 }
