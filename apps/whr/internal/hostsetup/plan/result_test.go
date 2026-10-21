@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -68,5 +69,90 @@ func TestResultRejectsInvalidEngineStatus(t *testing.T) {
 	_, err = ProjectResult(input(), p, ApplyResult{Steps: []StepOutcome{{Audit: profile.StepAudit{ID: p.Steps[0].ID, Result: "invalid-engine-state"}}}})
 	if err == nil {
 		t.Fatal("impossible engine status was silently remapped")
+	}
+}
+
+func TestResultRequiresSealedPlanAndMatchingInput(t *testing.T) {
+	// ProjectResult must bind both the displayed sealed steps and the original
+	// inputs; either rejection guard alone is insufficient.
+	for _, tc := range []string{"valid", "tampered_plan", "changed_input"} {
+		t.Run(tc, func(t *testing.T) {
+			in := input()
+			p, err := Build(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			switch tc {
+			case "tampered_plan":
+				p.Steps[0].Item = "forged-item"
+			case "changed_input":
+				in.Selected["bat"] = true
+			}
+			result, err := ProjectResult(in, p, ApplyResult{})
+			if tc == "valid" {
+				if err != nil || result.SchemaVersion != 1 || result.Steps == nil {
+					t.Fatalf("valid sealed projection rejected: %+v %v", result, err)
+				}
+			} else if err == nil {
+				t.Fatalf("%s projected without its original binding", tc)
+			}
+		})
+	}
+}
+
+func TestResultPreservesSafeEvidence(t *testing.T) {
+	in := input()
+	p, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := p.Steps[0]
+	for _, status := range []string{"applied", "unchanged", "blocked", "failed", "rolled_back", "skipped", "declined", "opted_out"} {
+		for _, reason := range []struct{ raw, want string }{
+			{"step_timeout", "host_setup.step_timeout"}, {"host_setup.dependency_failed", "host_setup.dependency_failed"},
+			{"interrupted", "interrupted"}, {"step_failed", "step_failed"}, {"confirmation_required", "confirmation_required"}, {"dependency_unavailable", "dependency_unavailable"},
+			{"private-unknown-reason", ""},
+		} {
+			t.Run(status+"/"+reason.raw, func(t *testing.T) {
+				// Receipt metadata is untrusted display input; only the sealed identity is
+				// safe. Recognized statuses/reasons still need exact positive assertions.
+				out, err := ProjectResult(in, p, ApplyResult{Steps: []StepOutcome{{Audit: profile.StepAudit{ID: s.ID, Item: "forged-item", Kind: "forged-kind", Result: status}, Reason: reason.raw}}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := []ResultStep{{ID: s.ID, Item: s.Item, Kind: s.Kind, Status: status, Reason: reason.want}}
+				if !reflect.DeepEqual(out.Steps, want) {
+					t.Fatalf("safe evidence lost or changed: got %+v want %+v", out.Steps, want)
+				}
+			})
+		}
+	}
+}
+
+func TestResultOmitsUnknownReceiptIdentity(t *testing.T) {
+	in := input()
+	p, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := p.Steps[0]
+	unknown := "/home/private-receipt-canary"
+	result, err := ProjectResult(in, p, ApplyResult{ExitCode: 68, Steps: []StepOutcome{
+		{Audit: profile.StepAudit{ID: unknown, Item: unknown, Kind: "brew_install", Result: "blocked"}, Reason: "dependency_failed"},
+		{Audit: profile.StepAudit{ID: s.ID, Item: s.Item, Kind: s.Kind, Result: "blocked"}, Reason: "dependency_failed"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []ResultStep{{ID: s.ID, Item: s.Item, Kind: s.Kind, Status: "blocked", Reason: "host_setup.dependency_failed"}}
+	if !reflect.DeepEqual(result.Steps, want) {
+		t.Fatalf("unknown receipt admitted or known receipt lost: %+v", result.Steps)
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), unknown) {
+		t.Fatal("unknown receipt identity leaked")
 	}
 }
