@@ -531,6 +531,10 @@
   "retained_assertion_failures": [],
   "application_tests": {
     "whr": [
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect/TestDetectOrbStackMetadataPresenceSourceAndBounds",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeOrbStackMetadataFixedRoute",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeOrbStackMetadataProcessControls",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeOrbStackMetadataRejectsAliasesAndBounds",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeFailedStartAndNonzeroExit",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeNeverSignalsReleasedProcess",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeDescriptorFS",

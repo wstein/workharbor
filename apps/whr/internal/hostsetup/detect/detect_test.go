@@ -358,3 +358,108 @@ func TestDetectTerminalBudgetAndCancellation(t *testing.T) {
 		}
 	})
 }
+
+type fakeMetadata struct {
+	value   string
+	err     error
+	calls   []time.Duration
+	clock   *fakeClock
+	elapsed time.Duration
+	cancel  context.CancelFunc
+}
+
+func (f *fakeMetadata) OrbStackAppVersion(ctx context.Context, budget time.Duration) (string, error) {
+	f.calls = append(f.calls, budget)
+	if f.clock != nil {
+		f.clock.now = f.clock.now.Add(f.elapsed)
+	}
+	if f.cancel != nil {
+		f.cancel()
+	}
+	return f.value, f.err
+}
+func TestDetectOrbStackMetadataPresenceSourceAndBounds(t *testing.T) {
+	initial, err := catalogue.LoadInitial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	approved := initial.Items[0]
+	if approved.ID != "orbstack" || approved.Tool.MinVersion != "2.2.3" || approved.Tool.VersionMetadata != catalogue.OrbStackAppMetadata {
+		t.Fatal("wrong approved production item")
+	}
+	cases := []struct {
+		name, want string
+		change     func(*fakeFS, *fakeMetadata, *catalogue.Item)
+		calls      int
+	}{
+		{"app_2_2_4_above_floor", "present_ok", func(*fakeFS, *fakeMetadata, *catalogue.Item) {}, 1},
+		{"below_app_floor", "present_outdated", func(_ *fakeFS, m *fakeMetadata, _ *catalogue.Item) { m.value = "2.2.2\n" }, 1},
+		{"metadata_without_presence", "absent", func(f *fakeFS, _ *fakeMetadata, _ *catalogue.Item) { f.files = map[string]File{} }, 0},
+		{"registration_without_app", "absent", func(f *fakeFS, _ *fakeMetadata, _ *catalogue.Item) { delete(f.files, OrbStackInfoPlist) }, 0},
+		{"no_registration", "present_other_source", func(f *fakeFS, _ *fakeMetadata, _ *catalogue.Item) {
+			delete(f.files, "/opt/homebrew/Caskroom/orbstack")
+		}, 1},
+		{"app_parent_alias", "unknown", func(f *fakeFS, _ *fakeMetadata, _ *catalogue.Item) {
+			f.files["/Applications/OrbStack.app"] = File{Kind: "symlink"}
+		}, 0},
+		{"plist_alias", "unknown", func(f *fakeFS, _ *fakeMetadata, _ *catalogue.Item) {
+			f.files[OrbStackInfoPlist] = File{Kind: "symlink"}
+		}, 0},
+		{"source_parent_alias", "present_unverifiable", func(f *fakeFS, _ *fakeMetadata, _ *catalogue.Item) {
+			f.files["/opt/homebrew/Caskroom"] = File{Kind: "symlink"}
+		}, 1},
+		{"unparseable", "present_unverifiable", func(_ *fakeFS, m *fakeMetadata, _ *catalogue.Item) { m.value = "private-value" }, 1},
+		{"output_cap", "present_unverifiable", func(_ *fakeFS, m *fakeMetadata, _ *catalogue.Item) { m.value = strings.Repeat("1", 65537) }, 1},
+		{"metadata_error", "present_unverifiable", func(_ *fakeFS, m *fakeMetadata, _ *catalogue.Item) { m.err = errors.New("private-value") }, 1},
+		{"late_metadata", "present_unverifiable", func(_ *fakeFS, m *fakeMetadata, _ *catalogue.Item) { m.elapsed = 5 * time.Second }, 1},
+		{"source_deadline", "present_unverifiable", func(f *fakeFS, m *fakeMetadata, _ *catalogue.Item) {
+			f.clock = m.clock
+			f.tickPath = "/opt/homebrew/Caskroom/orbstack"
+			f.tick = 5 * time.Second
+		}, 1},
+		{"cancelled_metadata", "present_unverifiable", func(*fakeFS, *fakeMetadata, *catalogue.Item) {}, 1},
+		{"already_cancelled", "unknown", func(*fakeFS, *fakeMetadata, *catalogue.Item) {}, 0},
+		{"unknown_route", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Tool.VersionMetadata = "arbitrary" }, 0},
+		{"conflicting_command", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Tool.Command = "orb" }, 0},
+		{"other_cask", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Tool.Source.Name = "other" }, 0},
+		{"other_item_id", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.ID = "jq" }, 0},
+		{"other_item_kind", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Kind = "tool" }, 0},
+		{"conflicting_version_args", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Tool.VersionArgs = []string{"version"} }, 0},
+		{"other_source_manager", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Tool.Source.Manager = "other" }, 0},
+		{"other_source_type", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Tool.Source.Type = "formula" }, 0},
+		{"other_source_tap", "unknown", func(_ *fakeFS, _ *fakeMetadata, i *catalogue.Item) { i.Tool.Source.Tap = "other/tap" }, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, f, exec, _ := fixture(t)
+			f.files = map[string]File{OrbStackInfoPlist: {Kind: "regular"}, "/opt/homebrew/Caskroom/orbstack": {Kind: "directory"}}
+			item := approved
+			metadata := &fakeMetadata{value: "2.2.4\n", clock: d.Clock.(*fakeClock)}
+			d.Metadata = metadata
+			tc.change(f, metadata, &item)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.name == "cancelled_metadata" {
+				metadata.cancel = cancel
+			}
+			if tc.name == "already_cancelled" {
+				cancel()
+			}
+			got := d.Detect(ctx, item)
+			if got.State != tc.want || len(metadata.calls) != tc.calls || len(exec.calls) != 0 {
+				t.Fatalf("metadata result=%+v calls=%v exec=%d want=%s/%d", got, metadata.calls, len(exec.calls), tc.want, tc.calls)
+			}
+			for _, budget := range metadata.calls {
+				if budget <= 0 || budget > 5*time.Second {
+					t.Fatalf("invalid budget: %v", budget)
+				}
+			}
+			if tc.want == "present_ok" && (!got.Managed || got.Version != "2.2.4" || got.Path != OrbStackInfoPlist) {
+				t.Fatalf("wrong application evidence: %+v", got)
+			}
+			if strings.Contains(got.Reason, "private-value") {
+				t.Fatal("raw metadata error leaked")
+			}
+		})
+	}
+}
