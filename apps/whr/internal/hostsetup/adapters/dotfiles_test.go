@@ -8,6 +8,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -437,6 +438,35 @@ func testConcreteBackupFailureInterruption(t *testing.T, verified bool) {
 			encoded, _ := json.Marshal(out)
 			if bytes.Contains(raw, []byte(`"type":"backup"`)) != verified || !bytes.Contains(raw, []byte(`"exit_code":73`)) || strings.Contains(string(raw)+string(encoded), "PRIVATE-VALUE-CANARY") {
 				t.Fatal("backup audit/partial exit missing or private bytes leaked")
+			}
+		})
+	}
+}
+
+func TestConcreteDotfileCheckpointFailurePreventsAllEffects(t *testing.T) {
+	for _, old := range [][]byte{nil, []byte("PRIVATE-VALUE-CANARY\n")} {
+		kind := "dotfile_replace"
+		if old == nil {
+			kind = "dotfile_create"
+		}
+		t.Run(kind, func(t *testing.T) {
+			engine, request, mem, exec, _, _, _ := concreteFilesFixture(t, old, true)
+			shown, err := plan.Build(request.Input)
+			if err != nil || len(shown.Steps) != 1 || shown.Steps[0].Kind != kind {
+				t.Fatal("fixture did not select the concrete dotfile step", shown, err)
+			}
+			before := make(map[string]memoryNode, len(mem.nodes))
+			for name, node := range mem.nodes {
+				node.data = bytes.Clone(node.data)
+				before[name] = node
+			}
+			guard := &fixtureGuard{err: errors.New("PRIVATE-GUARD-CANARY")}
+			out, err := engine.Runner.ApplyStep(context.Background(), shown.Steps[0], request.RunID, plan.StepBudget, guard)
+			if guard.calls != 1 || !errors.Is(err, guard.err) || out.Audit.Result != "blocked" {
+				t.Fatal("dotfile checkpoint error was bypassed", guard.calls, out, err)
+			}
+			if out.Changed || len(out.Backups) != 0 || out.Diff != nil || len(exec.calls) != 0 || !reflect.DeepEqual(before, mem.nodes) {
+				t.Fatal("failed checkpoint allowed a target/backup/filesystem or process effect", out, exec.calls)
 			}
 		})
 	}
