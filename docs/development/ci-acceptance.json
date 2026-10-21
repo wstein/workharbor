@@ -1110,6 +1110,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeKernelNoReplacePreservesOccupiedDestination",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeReadRefusesLeafLinkToSameInode",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeRenameAbsentRefusesLateOccupant",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeWalkRefusesParentLinkToSameInode",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeMkdirChmodDoesNotFollowSwappedLink",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicClaudeSettingsBaselineAndNoop",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitPublicClaudeSettingsLeftUnchanged",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitClaudeSettingsCases",

@@ -230,6 +230,8 @@ jobs:
             TestNativeKernelNoReplacePreservesOccupiedDestination
             TestNativeRenameAbsentRefusesLateOccupant
             TestNativeReadRefusesLeafLinkToSameInode
+            TestNativeWalkRefusesParentLinkToSameInode
+            TestNativeMkdirChmodDoesNotFollowSwappedLink
           )
           selection=$(printf '%s|' "${expected[@]}")
           selection="^(${selection%|})$"

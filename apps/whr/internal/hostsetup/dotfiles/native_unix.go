@@ -39,6 +39,7 @@ type nativeFS struct {
 	beforeParentOpen, beforeLeafOpen func(string)
 	beforeKernelRename               func(string, string)
 	beforeRename                     func(string, string)
+	beforeChmod                      func(string)
 }
 
 func openNative(home string) (*nativeFS, error) {
@@ -261,6 +262,9 @@ func (f *nativeFS) Mkdir(p string, mode fs.FileMode) error {
 	}
 	// No-follow chmod is required; unsupported kernels refuse instead of using a
 	// path-based chmod that could follow a swapped link. This also removes umask.
+	if f.beforeChmod != nil {
+		f.beforeChmod(p)
+	}
 	if err = unix.Fchmodat(parent, leaf, uint32(mode), unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		return err
 	}
