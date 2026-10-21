@@ -4,7 +4,7 @@ Status: proposed; implements the entities of [spec.md](spec.md). Catalogue: [hos
 
 | Entity | Fields |
 | --- | --- |
-| CatalogueItem | `id`, `kind` (`runtime`, `tool`), `title`, `platforms`, `selected_by_default`, `requires`, `network` (`hosts`, `purpose`, `lookup_urls`), optional `privileged` commands. Tools carry `tool` (`command`, `version_args`, `version_regex`, `min_version`, `source`: Homebrew type, name, tap, `may_elevate`); an entry that needs a dotfile change carries `config` (`marker`: `dotfile` or `shell_hook`, `target`, `content_file`, `sha256`, `mode`). |
+| CatalogueItem | `id`, `kind` (`runtime`, `tool`), `title`, `platforms`, `selected_by_default`, `requires`, `network` (`hosts`, `purpose`, `lookup_urls`), optional `privileged` commands. Tools carry `tool` (`command` and `version_args` (or exclusively `version_metadata: orbstack_app` for the OrbStack runtime cask), `version_regex`, `min_version`, `source`: Homebrew type, name, tap, `may_elevate`); an entry that needs a dotfile change carries `config` (`marker`: `dotfile` or `shell_hook`, `target`, `content_file`, `sha256`, `mode`). |
 | DetectionResult | `item`, `state` ([item states](#item-states)), found path (redacted) and version, bounded evidence. |
 | Plan | `plan_hash`, `platform`, `catalogue_version`, ordered `steps`, `mode` (`setup`, `fix`). |
 | Step | `step_id` (`<item>.<kind>`), `item`, `kind` ([step kinds](#step-kinds)), `class` (`create`, `modify`, `read_only`), `depends_on`, `preview`, rollback data. |
@@ -46,3 +46,5 @@ There is no kind for the Docker VM, the runtime application, a login shell or a 
 
 `detected` -> `previewed` -> `confirmed` (plan hash rechecked; lock and protocol start) -> `applying` -> `done` | `partial` | `failed` | `interrupted`.
 `no` and cancel leave `previewed` with no write. A rerun starts at `detected`.
+
+The closed `orbstack_app` probe means the application metadata key `CFBundleShortVersionString` in `/Applications/OrbStack.app/Contents/Info.plist`. The read-only owner measurement used `/usr/bin/plutil -extract CFBundleShortVersionString raw -o - /Applications/OrbStack.app/Contents/Info.plist`; this is evidence for the route, not a generic catalogue argv allowance. T002 owns detection and path/source checks. Compare the application version (observed `2.2.4`) against the approved minimum `2.2.3`; Homebrew registration `2.2.3,20963` describes package provenance separately and is never the application-version parser input. Catalogue loading executes no probe.
