@@ -17,7 +17,7 @@ import (
 )
 
 type packageChild interface {
-	Start() error
+	Start(context.Context) error
 	Exited() (bool, error)
 	Signal(int) error
 	Wait() pkgmgr.Completion
@@ -63,11 +63,17 @@ func (p PackageExec) Start(ctx context.Context, c pkgmgr.Command) (pkgmgr.Proces
 	if err = ctx.Err(); err != nil {
 		return nil, err
 	}
-	if err = child.Start(); err != nil {
+	if err = child.Start(ctx); err != nil {
 		return nil, err
 	}
-	process := &packageProcess{child: child, done: make(chan pkgmgr.Completion, 1)}
+	process := &packageProcess{child: child, done: make(chan pkgmgr.Completion, 1), reaped: make(chan struct{})}
 	go process.observe()
+	// A cooperative launcher can return success concurrently with cancellation.
+	// Retain ownership and complete cleanup before reporting startup cancellation.
+	if err = ctx.Err(); err != nil {
+		_ = process.Kill()
+		return nil, err
+	}
 	return process, nil
 }
 
@@ -75,12 +81,19 @@ type packageProcess struct {
 	mu       sync.Mutex
 	child    packageChild
 	done     chan pkgmgr.Completion
+	reaped   chan struct{}
 	finished bool
 }
 
 func (p *packageProcess) Done() <-chan pkgmgr.Completion { return p.done }
 func (p *packageProcess) Interrupt() error               { return p.signal(int(syscall.SIGINT)) }
-func (p *packageProcess) Kill() error                    { return p.signal(int(syscall.SIGKILL)) }
+func (p *packageProcess) Kill() error {
+	if err := p.signal(int(syscall.SIGKILL)); err != nil {
+		return err
+	}
+	<-p.reaped
+	return nil
+}
 func (p *packageProcess) signal(sig int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -106,6 +119,7 @@ func (p *packageProcess) observe() {
 			}
 			completion := p.child.Wait()
 			p.finished = true
+			close(p.reaped)
 			if err != nil {
 				completion.Err = err
 			} else if signalErr != nil {
@@ -143,7 +157,18 @@ func newPackageChild(c pkgmgr.Command) (packageChild, error) {
 	cmd.WaitDelay = 100 * time.Millisecond
 	return &nativePackageChild{cmd: cmd}, nil
 }
-func (c *nativePackageChild) Start() error          { return c.cmd.Start() }
+
+// Start has no detached startup goroutine. Go's synchronous Cmd.Start cannot
+// interrupt an in-flight kernel process-creation operation; context cancellation
+// is checked before it and the adapter cleans up success racing cancellation
+// before returning. Once successful startup is returned, only the engine owns
+// interrupt/grace/kill. This is not an arbitrary kernel-stall deadline guarantee.
+func (c *nativePackageChild) Start(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return c.cmd.Start()
+}
 func (c *nativePackageChild) Exited() (bool, error) { return childExited(c.cmd.Process.Pid) }
 func (c *nativePackageChild) Signal(sig int) error {
 	err := syscall.Kill(-c.cmd.Process.Pid, syscall.Signal(sig))
