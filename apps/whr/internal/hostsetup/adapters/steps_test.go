@@ -289,3 +289,39 @@ func TestConcreteBrewCleanupErrorReachesCallerAndWinsOverTimeoutMapping(t *testi
 		})
 	}
 }
+
+// Through the real orchestration path a retained child handle stops the run
+// before the next independent step and reaches the caller as the same error.
+func TestConcreteBrewCleanupErrorStopsRunAndKeepsHandle(t *testing.T) {
+	brew, request, _, home := brewFixture(t)
+	request.Input.Catalogue.Items = append(request.Input.Catalogue.Items, catalogue.Item{ID: "bat", Kind: "tool", SelectedByDefault: true, Tool: catalogue.Tool{Command: "bat", MinVersion: "1.0.0", Source: catalogue.Source{Manager: "homebrew", Type: "formula", Name: "bat", Tap: "homebrew/core"}}})
+	request.Input.Results = append(request.Input.Results, detect.Result{Item: "bat", State: "absent"})
+	sealed, err := plan.Build(request.Input)
+	if err != nil || len(sealed.Steps) != 2 {
+		t.Fatal(sealed, err)
+	}
+	request.ExpectedHash = sealed.Hash
+	cause := errors.New("kill refused")
+	proc := &stuckProcess{killErr: cause}
+	starts := 0
+	exec := &stuckExec{process: proc, onStart: func() { starts++ }}
+	exec.startErr = func(p *stuckProcess) error { return pkgmgr.NewCleanupError(p, cause) }
+	brew.Exec = exec
+	store, err := profile.Open(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	runner, err := New(brew, request, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := (plan.ApplyEngine{Store: store, Clock: fixtureClock{}, Runner: runner}).Apply(context.Background(), plan.ApplyRequest{Input: request.Input, ExpectedHash: request.ExpectedHash, RunID: "0123456789abcdef", Mode: "setup", Answer: "yes", Confirmed: true, UID: 501})
+	var owned pkgmgr.CleanupError
+	if !errors.As(err, &owned) || owned.CleanupProcess() != pkgmgr.Process(proc) || !errors.Is(err, cause) {
+		t.Fatal("retained handle did not reach the ApplyEngine caller", out, err)
+	}
+	if starts != 1 || len(out.Steps) != 1 || out.Steps[0].Reason != "package_manager_failed" || len(out.Remaining) != 2 || out.ProfileChanged {
+		t.Fatal("run continued after a retained child handle", starts, out)
+	}
+}

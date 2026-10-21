@@ -10,6 +10,9 @@ package pkgmgr
 type CleanupError interface {
 	error
 	CleanupProcess() Process
+	// StopRun marks the error for plan.RunStopper: orchestration runs no
+	// further step and returns the error to its caller unchanged.
+	StopRun()
 }
 type processCleanupError struct {
 	process Process
@@ -19,6 +22,7 @@ type processCleanupError struct {
 func (e *processCleanupError) Error() string           { return "package process cleanup failed" }
 func (e *processCleanupError) Unwrap() error           { return e.cause }
 func (e *processCleanupError) CleanupProcess() Process { return e.process }
+func (e *processCleanupError) StopRun()                {}
 
 // NewCleanupError binds a cleanup failure to its still-accounted process. It
 // retains the underlying cause for errors.Is without exposing command output.
