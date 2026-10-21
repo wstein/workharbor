@@ -1,7 +1,6 @@
 //go:build linux || darwin
 
 // SPDX-License-Identifier: EUPL-1.2
-//
 package profile_test
 
 import (
