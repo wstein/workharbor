@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -30,16 +31,18 @@ func TestFirstIncrementCommandProcess(t *testing.T) {
 func TestCompletionExecutesInShells(t *testing.T) {
 	drivers := map[string][]string{
 		// Supply editor state at bash-completion's initialization boundary.
-		"bash": {"--noprofile", "--norc", "-c", `source "$1"
+		"bash": {"--noprofile", "--norc", "-c", `source "$1" || exit
+# Model editor option handling outside an active completion session.
+compopt() { :; }
 _init_completion() { words=(whr completion ""); cur=""; prev=completion; cword=2; }
-__start_whr
+__start_whr || exit
 printf '%s\n' "${COMPREPLY[@]}"`, "completion-test"},
 		// Capture _describe's candidates without requiring a live ZLE editor.
 		"zsh": {"-f", "-c", `compdef() { :; }
 _describe() { print -rl -- "${completions[@]}"; }
-source "$1"
+source "$1" || exit
 words=(whr completion ""); CURRENT=3; PREFIX=""; _whr`, "completion-test"},
-		"fish": {"--no-config", "-c", `source $argv[1]; complete -C 'whr completion '`},
+		"fish": {"--no-config", "-c", `source $argv[1]; or exit $status; complete -C 'whr completion '`},
 	}
 	for shell, driver := range drivers {
 		t.Run(shell, func(t *testing.T) {
@@ -69,20 +72,19 @@ words=(whr completion ""); CURRENT=3; PREFIX=""; _whr`, "completion-test"},
 			cmd := exec.CommandContext(ctx, path, append(driver, script)...)
 			cmd.Env = []string{"PATH=" + dir + string(os.PathListSeparator) + os.Getenv("PATH"), "HOME=" + dir, "XDG_CONFIG_HOME=" + dir, "TERM=dumb", "WHR_ACCEPTANCE_PROCESS=1"}
 			cmd.Dir = dir
-			out, err := cmd.CombinedOutput()
+			var diagnostics strings.Builder
+			cmd.Stderr = &diagnostics
+			out, err := cmd.Output()
 			if err != nil {
-				t.Fatalf("%s execution: %v\n%s", shell, err, out)
+				t.Fatalf("%s execution: %v\nstdout: %s\nstderr: %s", shell, err, out, diagnostics.String())
 			}
-			for _, want := range []string{"bash", "zsh", "fish"} {
-				found := false
-				for _, candidate := range strings.Fields(string(out)) {
-					if strings.SplitN(candidate, ":", 2)[0] == want {
-						found = true
-					}
-				}
-				if !found {
-					t.Errorf("%s did not offer %s: %q", shell, want, out)
-				}
+			if diagnostics.Len() != 0 {
+				t.Fatalf("%s unexpected shell diagnostics: %s", shell, diagnostics.String())
+			}
+			candidates := strings.Fields(string(out))
+			sort.Strings(candidates)
+			if want := []string{"bash", "fish", "zsh"}; !reflect.DeepEqual(candidates, want) {
+				t.Errorf("%s completion candidates = %q, want exactly %q", shell, candidates, want)
 			}
 		})
 	}
