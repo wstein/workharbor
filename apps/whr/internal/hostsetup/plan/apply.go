@@ -32,6 +32,13 @@ type StepOutcome struct {
 // output bound), and return only audit metadata, never output/env contents.
 // T003/T004 adapters are intentionally separate from this orchestration core:
 // pkgmgr already imports plan, so importing it here would introduce a cycle.
+// RunStopper marks a runner error that retains ownership of a started child
+// (for example pkgmgr.CleanupError). ApplyEngine runs no further step after it
+// and returns the error unchanged so its caller can reconcile the retained handle.
+type RunStopper interface {
+	error
+	StopRun()
+}
 type StepRunner interface {
 	ApplyStep(context.Context, Step, string, time.Duration, StepGuard) (StepOutcome, error)
 }
@@ -167,6 +174,7 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 	}
 	out.ProtocolWarning = run.Warning
 	changed := false
+	var stopped error
 	// Cleanup does not inherit a cancelled step context. A durable journal failure
 	// stops all future actions; Close always releases this run's flock.
 	defer func() {
@@ -174,7 +182,9 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 			out.ExitCode = 73
 		}
 		if finishErr := run.Finish(out.ExitCode, out.Applied, out.Remaining, e.Clock.Now()); finishErr != nil {
-			err = refusal("protocol_unwritable")
+			if stopped == nil {
+				err = refusal("protocol_unwritable")
+			}
 			if changed {
 				out.ExitCode = 73
 			} else {
@@ -182,7 +192,9 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 			}
 		}
 		if closeErr := run.Close(); closeErr != nil {
-			err = refusal("protocol_unwritable")
+			if stopped == nil {
+				err = refusal("protocol_unwritable")
+			}
 			if changed {
 				out.ExitCode = 73
 			} else {
@@ -280,6 +292,23 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 						}
 					}
 				}
+				// Retained child ownership wins over timeout/cancel mapping: stop
+				// every further mutation and keep the error for the caller.
+				var owner RunStopper
+				if errors.As(actionErr, &owner) {
+					stopped = actionErr
+					result.Reason = "package_manager_failed"
+					if result.Audit.Result != "failed" && result.Audit.Result != "rolled_back" {
+						if len(result.Audit.Argv) == 0 && result.Audit.ExitStatus == nil {
+							result.Audit.Result = "blocked"
+						} else {
+							result.Audit.Result = "failed"
+						}
+					}
+					if out.ExitCode == 0 {
+						out.ExitCode = 68
+					}
+				}
 			}
 		}
 		if result.Audit.Result == "applied" {
@@ -307,6 +336,12 @@ func (e ApplyEngine) Apply(ctx context.Context, r ApplyRequest) (out ApplyResult
 			if out.ExitCode == 0 {
 				out.ExitCode = 68
 			}
+		}
+		if stopped != nil {
+			for _, pending := range sealed.Steps[len(out.Steps):] {
+				out.Remaining = append(out.Remaining, pending.ID)
+			}
+			return out, stopped
 		}
 	}
 	// An interruption stops before the next managed operation, including profile
