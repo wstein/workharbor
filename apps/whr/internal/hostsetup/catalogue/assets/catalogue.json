@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "catalogue_version": "2026.10.1",
+  "items": [
+    {
+      "id": "orbstack",
+      "kind": "runtime",
+      "title": "OrbStack",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew cask version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/cask/orbstack.json"
+        ]
+      },
+      "tool": {
+        "version_metadata": "orbstack_app",
+        "version_regex": "^([0-9]+\\.[0-9]+\\.[0-9]+)\\s*$",
+        "min_version": "2.2.3",
+        "source": {
+          "manager": "homebrew",
+          "type": "cask",
+          "name": "orbstack",
+          "tap": "homebrew/cask",
+          "may_elevate": true
+        }
+      }
+    },
+    {
+      "id": "git",
+      "kind": "tool",
+      "title": "git",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/git.json"
+        ]
+      },
+      "tool": {
+        "command": "git",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^git version ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "2.56.0",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "git",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    },
+    {
+      "id": "gh",
+      "kind": "tool",
+      "title": "GitHub CLI",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/gh.json"
+        ]
+      },
+      "tool": {
+        "command": "gh",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^gh version ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "2.102.1",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "gh",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    },
+    {
+      "id": "jq",
+      "kind": "tool",
+      "title": "jq",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/jq.json"
+        ]
+      },
+      "tool": {
+        "command": "jq",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^jq-([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "1.8.2",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "jq",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    },
+    {
+      "id": "fish",
+      "kind": "tool",
+      "title": "fish",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/fish.json"
+        ]
+      },
+      "tool": {
+        "command": "fish",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^fish, version ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "4.9.3",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "fish",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      },
+      "config": {
+        "marker": "shell_hook",
+        "target": ".config/fish/conf.d/whr-fish.fish",
+        "content_file": "fish.fish",
+        "sha256": "23518851361b060cd9f92cb5133a225f84bcc8b89c088e555b5b330db03ce17d",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "starship",
+      "kind": "tool",
+      "title": "starship",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/starship.json"
+        ]
+      },
+      "tool": {
+        "command": "starship",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^starship ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "1.27.0",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "starship",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      },
+      "config": {
+        "marker": "dotfile",
+        "target": ".config/starship.toml",
+        "content_file": "starship.toml",
+        "sha256": "14006a56e3f7334dfa1a8a6bc2e72e9dce2251150d76451eab9f20b0d6e2ad1c",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "ripgrep",
+      "kind": "tool",
+      "title": "ripgrep",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/ripgrep.json"
+        ]
+      },
+      "tool": {
+        "command": "rg",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^ripgrep ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "15.2.0",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "ripgrep",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    },
+    {
+      "id": "fd",
+      "kind": "tool",
+      "title": "fd",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/fd.json"
+        ]
+      },
+      "tool": {
+        "command": "fd",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^fd ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "10.5.0",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "fd",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    },
+    {
+      "id": "fzf",
+      "kind": "tool",
+      "title": "fzf",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/fzf.json"
+        ]
+      },
+      "tool": {
+        "command": "fzf",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "0.74.5",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "fzf",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      },
+      "config": {
+        "marker": "shell_hook",
+        "target": ".config/fish/conf.d/whr-fzf.fish",
+        "content_file": "fzf.fish",
+        "sha256": "f309e05470b8c9249cba1f2e48b7072d985906fd85f5dd24698bccaf78e8f4a9",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "zoxide",
+      "kind": "tool",
+      "title": "zoxide",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/zoxide.json"
+        ]
+      },
+      "tool": {
+        "command": "zoxide",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^zoxide ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "0.10.0",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "zoxide",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      },
+      "config": {
+        "marker": "shell_hook",
+        "target": ".config/fish/conf.d/whr-zoxide.fish",
+        "content_file": "zoxide.fish",
+        "sha256": "da446f7389a73123ef6bf29fda8c18c03d43a6694191afb40d1da947769b5ba0",
+        "mode": "0600"
+      }
+    },
+    {
+      "id": "bat",
+      "kind": "tool",
+      "title": "bat",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/bat.json"
+        ]
+      },
+      "tool": {
+        "command": "bat",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^bat ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "0.26.1",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "bat",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    },
+    {
+      "id": "jj",
+      "kind": "tool",
+      "title": "jj",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/jj.json"
+        ]
+      },
+      "tool": {
+        "command": "jj",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^jj ([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "0.46.0",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "jj",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    },
+    {
+      "id": "herdr",
+      "kind": "tool",
+      "title": "herdr",
+      "platforms": [
+        "darwin-arm64",
+        "darwin-amd64"
+      ],
+      "selected_by_default": true,
+      "network": {
+        "hosts": [
+          "formulae.brew.sh"
+        ],
+        "purpose": "Read-only Homebrew formula version lookup; installation uses Homebrew.",
+        "lookup_urls": [
+          "https://formulae.brew.sh/api/formula/herdr.json"
+        ]
+      },
+      "tool": {
+        "command": "herdr",
+        "version_args": [
+          "--version"
+        ],
+        "version_regex": "(?m)^herdr(?: version)? v?([0-9]+\\.[0-9]+(?:\\.[0-9]+){0,2})(?:\\s|$)",
+        "min_version": "0.9.5",
+        "source": {
+          "manager": "homebrew",
+          "type": "formula",
+          "name": "herdr",
+          "tap": "homebrew/core",
+          "may_elevate": false
+        }
+      }
+    }
+  ]
+}
