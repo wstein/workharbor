@@ -2,6 +2,7 @@
 package plan
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/catalogue"
@@ -60,9 +61,45 @@ func TestPlanDependenciesAndConfigClasses(t *testing.T) {
 	if len(p.Steps[1].DependsOn) != 1 || p.Steps[1].DependsOn[0] != "bat.brew_install" {
 		t.Fatal("dependency edge missing")
 	}
+	if !reflect.DeepEqual(p.Steps[2].DependsOn, []string{"bat.brew_install", "jq.brew_install"}) {
+		t.Fatalf("config must depend on prerequisite and its own installation: %v", p.Steps[2].DependsOn)
+	}
 }
 
 func TestPlanSealingRefusalsAndDynamicSelections(t *testing.T) {
+	t.Run("source fingerprint with identical steps", func(t *testing.T) {
+		in := input()
+		shown, err := Build(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in.Catalogue.Items[0].Tool.MinVersion = "2.0"
+		current, err := Build(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(shown.Steps, current.Steps) {
+			t.Fatal("source-only witness changed steps")
+		}
+		if shown.Hash == current.Hash || Recheck(current, shown.Hash) == nil {
+			t.Fatal("changed source inherited confirmation despite identical steps")
+		}
+	})
+	t.Run("explicit false deselects default", func(t *testing.T) {
+		in := input()
+		in.Selected["jq"] = false
+		p, err := Build(in)
+		if err != nil || len(p.Steps) != 0 {
+			t.Fatalf("explicitly deselected default planned: %+v %v", p.Steps, err)
+		}
+	})
+	t.Run("unmanaged outdated upgrade refused", func(t *testing.T) {
+		in := input()
+		in.Results[0] = detect.Result{Item: "jq", State: "present_outdated", Managed: false}
+		if p, err := Build(in); err == nil {
+			t.Fatalf("unmanaged upgrade authorized: %+v", p.Steps)
+		}
+	})
 	t.Run("sealed step tamper", func(t *testing.T) {
 		in := input()
 		p, err := Build(in)
