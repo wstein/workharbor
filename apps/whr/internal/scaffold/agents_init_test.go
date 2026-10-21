@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -368,5 +369,56 @@ func TestInitAgentsReadOnlyUnrequestedFilePreserved(t *testing.T) {
 	info, err := os.Stat(target)
 	if err != nil || info.Mode().Perm() != 0444 {
 		t.Fatalf("read-only mode changed: %v", err)
+	}
+}
+
+func TestInitAgentsRoleCollisionAndOptOut(t *testing.T) {
+	for _, tc := range []struct{ name, dc, projects string }{
+		{"direct devcontainer", "AGENTS.md", "projects"},
+		{"devcontainer ancestor", "AGENTS.md/dev.json", "projects"},
+		{"projects ancestor", ".devcontainer/devcontainer.json", "AGENTS.md"},
+	} {
+		for _, disabled := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/disabled=%v", tc.name, disabled), func(t *testing.T) {
+				raw, err := json.Marshal(map[string]any{"schema_version": 1, "devcontainer_path": tc.dc, "projects_path": tc.projects, "bundles": []string{}})
+				if err != nil {
+					t.Fatal(err)
+				}
+				s := Snapshot{Directory: "workspace", Entries: map[string]Entry{"workharbor.json": {Kind: "file", Data: raw}, tc.dc: {Kind: "file", Data: []byte(`{"image":"debian:bookworm"}`)}}}
+				if dir := path.Dir(tc.dc); dir != "." {
+					s.Entries[dir] = Entry{Kind: "directory"}
+				}
+				p, err := Build(s, Options{DryRun: true, NoAgentsBlock: disabled})
+				if !disabled {
+					if exitcode.FromError(err) != exitcode.Conflict {
+						t.Fatalf("AGENTS role collision accepted: %v", err)
+					}
+					return
+				}
+				if err != nil || p == nil {
+					t.Fatalf("opt-out must permit ordinary configuration roles: %v", err)
+				}
+				roles := 0
+				for _, a := range p.Preview().Actions {
+					if a.Path != "AGENTS.md" {
+						continue
+					}
+					roles++
+					if tc.dc == "AGENTS.md" {
+						if a.Kind != "file" || a.Action != "reuse" {
+							t.Fatalf("opt-out changed source role: %+v", a)
+						}
+					} else if a.Kind != "directory" {
+						t.Fatalf("opt-out proposed agent file: %+v", a)
+					}
+				}
+				if roles != 1 {
+					t.Fatalf("opt-out must retain exactly one ordinary role, got %d", roles)
+				}
+				if len(p.Preview().AgentsBlockWarnings) != 0 {
+					t.Fatal("opt-out produced agent warning")
+				}
+			})
+		}
 	}
 }
