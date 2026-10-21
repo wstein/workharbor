@@ -30,11 +30,19 @@ type Completion struct {
 	Exit int
 	Err  error
 }
+
+// Process retains child ownership through cleanup. Nil Kill error means final
+// group cleanup and reap completed. A cleanup failure must retain the process
+// through CleanupError; callers stop mutation and reconcile that handle.
 type Process interface {
 	Done() <-chan Completion
 	Interrupt() error
 	Kill() error
 }
+
+// Exec may return a nonnil process with an error when startup occurred but its
+// cleanup failed. That outcome is attempted mutation, never a failed-before-start
+// result. Ordinary canceled startup leaves no child and returns nil/error.
 type Exec interface {
 	Start(context.Context, Command) (Process, error)
 }
@@ -141,7 +149,7 @@ func (e Engine) Apply(ctx context.Context, r Request) (result Result, err error)
 		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
 		if closeErr := journal.Close(cleanup); closeErr != nil {
-			err = errors.New("host_setup.protocol_unwritable")
+			err = errors.Join(err, errors.New("host_setup.protocol_unwritable"))
 		}
 	}()
 	items := map[string]catalogue.Item{}
@@ -161,6 +169,7 @@ func (e Engine) Apply(ctx context.Context, r Request) (result Result, err error)
 		sr := StepResult{ID: step.ID, Status: "blocked"}
 		event := Event{Stage: "finished", StepID: step.ID, Item: step.Item, Kind: step.Kind, Class: step.Class}
 		var argv []string
+		var stepErr error
 		switch {
 		case stopped != "":
 			sr.Status = "skipped"
@@ -179,7 +188,7 @@ func (e Engine) Apply(ctx context.Context, r Request) (result Result, err error)
 		case item.Tool.Source.MayElevate:
 			sr.Reason = "privileged_step_unplanned"
 		default:
-			sr, argv = e.applyStep(ctx, step, item, r.Environment, journal)
+			sr, argv, stepErr = e.applyStep(ctx, step, item, r.Environment, journal)
 			if sr.Reason == "cancelled" {
 				stopped = sr.Reason
 			}
@@ -193,7 +202,10 @@ func (e Engine) Apply(ctx context.Context, r Request) (result Result, err error)
 		recordErr := journal.Record(cleanup, event)
 		cancel()
 		if recordErr != nil {
-			return result, errors.New("host_setup.protocol_unwritable")
+			return result, errors.Join(stepErr, errors.New("host_setup.protocol_unwritable"))
+		}
+		if stepErr != nil {
+			return result, stepErr
 		}
 		completed[step.ID] = sr.Status == "applied" || sr.Status == "unchanged"
 	}
@@ -217,25 +229,25 @@ func dependenciesReady(ctx context.Context, s plan.Step, item catalogue.Item, it
 	}
 	return true
 }
-func (e Engine) applyStep(ctx context.Context, s plan.Step, item catalogue.Item, environment map[string]string, j Journal) (StepResult, []string) {
+func (e Engine) applyStep(ctx context.Context, s plan.Step, item catalogue.Item, environment map[string]string, j Journal) (StepResult, []string, error) {
 	sr := StepResult{ID: s.ID, Status: "blocked"}
 	current := e.Detector.Detect(ctx, item)
 	if ctx.Err() != nil {
 		sr.Status = "skipped"
 		sr.Reason = "cancelled"
-		return sr, nil
+		return sr, nil, nil
 	}
 	if current.Item != item.ID {
 		sr.Reason = "state_changed"
-		return sr, nil
+		return sr, nil, nil
 	}
 	if current.State == "present_ok" {
 		sr.Status = "unchanged"
-		return sr, nil
+		return sr, nil, nil
 	}
 	if (s.Kind == "brew_install" && current.State != "absent") || (s.Kind == "brew_upgrade" && (current.State != "present_outdated" || !current.Managed)) {
 		sr.Reason = "state_changed"
-		return sr, nil
+		return sr, nil, nil
 	}
 	brew := ""
 	for _, p := range []string{"/opt/homebrew/bin/brew", "/usr/local/bin/brew"} {
@@ -243,11 +255,11 @@ func (e Engine) applyStep(ctx context.Context, s plan.Step, item catalogue.Item,
 		if ctx.Err() != nil {
 			sr.Status = "skipped"
 			sr.Reason = "cancelled"
-			return sr, nil
+			return sr, nil, nil
 		}
 		if err != nil {
 			sr.Reason = "package_manager_unverifiable"
-			return sr, nil
+			return sr, nil, nil
 		}
 		if present {
 			brew = p
@@ -256,19 +268,25 @@ func (e Engine) applyStep(ctx context.Context, s plan.Step, item catalogue.Item,
 	}
 	if brew == "" {
 		sr.Reason = "package_manager_missing"
-		return sr, nil
+		return sr, nil, nil
 	}
 	cmd, err := brewCommand(brew, s.Kind, item.Tool.Source, environment)
 	if err != nil {
 		sr.Reason = "invalid_package_source"
-		return sr, nil
+		return sr, nil, nil
 	}
 	if err = j.Record(ctx, Event{Stage: "starting", StepID: s.ID, Item: item.ID, Kind: s.Kind, Class: s.Class, Argv: append([]string(nil), cmd.Argv...)}); err != nil {
 		sr.Reason = "protocol_unwritable"
-		return sr, nil
+		return sr, nil, nil
 	}
 	completion, reason, started := e.run(ctx, cmd)
 	sr.MutationAttempted = started
+	var cleanup CleanupError
+	if errors.As(completion.Err, &cleanup) {
+		sr.Status = "failed"
+		sr.Reason = "package_manager_failed"
+		return sr, cmd.Argv, completion.Err
+	}
 	if completion.Exit >= 0 && completion.Exit <= 255 {
 		n := completion.Exit
 		sr.Exit = &n
@@ -276,19 +294,19 @@ func (e Engine) applyStep(ctx context.Context, s plan.Step, item catalogue.Item,
 	if reason != "" {
 		sr.Status = "failed"
 		sr.Reason = reason
-		return sr, cmd.Argv
+		return sr, cmd.Argv, nil
 	}
 	if completion.Err != nil || completion.Exit != 0 {
 		sr.Status = "failed"
 		sr.Reason = "package_manager_failed"
-		return sr, cmd.Argv
+		return sr, cmd.Argv, nil
 	}
 	sr.Changed = true
 	after := e.Detector.Detect(ctx, item)
 	if ctx.Err() != nil {
 		sr.Status = "failed"
 		sr.Reason = "cancelled"
-		return sr, cmd.Argv
+		return sr, cmd.Argv, nil
 	}
 	if after.Item != item.ID || after.State != "present_ok" {
 		sr.Status = "failed"
@@ -296,10 +314,10 @@ func (e Engine) applyStep(ctx context.Context, s plan.Step, item catalogue.Item,
 		if after.State == "present_outdated" {
 			sr.Reason = "version_below_minimum"
 		}
-		return sr, cmd.Argv
+		return sr, cmd.Argv, nil
 	}
 	sr.Status = "applied"
-	return sr, cmd.Argv
+	return sr, cmd.Argv, nil
 }
 
 // Exec must enforce OutputLimit while draining output, never returning raw tails
@@ -316,6 +334,15 @@ func (e Engine) run(ctx context.Context, cmd Command) (Completion, string, bool)
 	runCtx, cancel := context.WithTimeout(ctx, 900*time.Second)
 	defer cancel()
 	process, err := e.Exec.Start(runCtx, cmd)
+	// A nonnil process on failed startup means mutation may have started and
+	// cleanup ownership must reach Apply's caller. Never label it not-started.
+	if err != nil && process != nil {
+		return Completion{Exit: -1, Err: NewCleanupError(process, err)}, "package_manager_failed", true
+	}
+	var startupCleanup CleanupError
+	if errors.As(err, &startupCleanup) {
+		return Completion{Exit: -1, Err: err}, "package_manager_failed", true
+	}
 	if err != nil || process == nil {
 		if ctx.Err() != nil {
 			return unknown, "cancelled", false
@@ -358,7 +385,9 @@ func (e Engine) run(ctx context.Context, cmd Command) (Completion, string, bool)
 			return completion, reason, true
 		}
 	case <-grace:
-		_ = process.Kill()
+		if cleanupErr := process.Kill(); cleanupErr != nil {
+			return Completion{Exit: -1, Err: NewCleanupError(process, cleanupErr)}, "package_manager_failed", true
+		}
 	}
 	return unknown, reason, true
 }
