@@ -206,6 +206,8 @@ func TestNativeNoFollowAndSpecialRefusals(t *testing.T) {
 	}
 }
 func TestNativeDescriptorRaceRefusals(t *testing.T) {
+	t.Run("same-size stale content", checkNativeSameSizeEdit)
+	t.Run("regular parent directory replacement", checkNativeRegularParentSwap)
 	home, f, c, m := nativeFixture(t, "original\n")
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "starship.toml"), []byte("outside"), 0600); err != nil {
@@ -265,6 +267,8 @@ func TestNativeDescriptorRaceRefusals(t *testing.T) {
 
 }
 func TestNativeExclusiveIdentityAndAtomicity(t *testing.T) {
+	t.Run("rename source identity swap", checkNativeRenameSourceSwap)
+	t.Run("parent descriptor failure cleanup", checkNativeParentDescriptorCleanup)
 	home, f, c, _ := nativeFixture(t, "original\n")
 	old, err := f.Stat(c.Target)
 	if err != nil {
@@ -485,5 +489,109 @@ func TestNativeKernelNoReplacePreservesOccupiedDestination(t *testing.T) {
 	}
 	if string(nativeRead(t, home, "source")) != "staged contents" || string(nativeRead(t, home, "target")) != "foreign contents" {
 		t.Fatal("no-replace changed source or destination bytes")
+	}
+}
+
+// Opposing controls isolate content, identity and descriptor-lifetime guards.
+func checkNativeSameSizeEdit(t *testing.T) {
+	home, f, c, m := nativeFixture(t, "original\n")
+	e := New(f, fixedClock{})
+	p := preview(t, e, c, m)
+	beforeInfo, err := f.Stat(c.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(home, c.Target), []byte("modified\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	afterInfo, err := f.Stat(c.Target)
+	if err != nil || !same(beforeInfo, afterInfo) {
+		t.Fatal("witness changed metadata", beforeInfo, afterInfo, err)
+	}
+	before := nativeTree(t, home)
+	if _, err = e.Apply(p, Options{Decision: Replace, Target: c.Target, RunID: "same-size"}); err == nil || !reflect.DeepEqual(before, nativeTree(t, home)) {
+		t.Fatalf("same-size stale content accepted or caused writes: %v", err)
+	}
+}
+func checkNativeRegularParentSwap(t *testing.T) {
+	home, f, c, _ := nativeFixture(t, "original\n")
+	triggered := false
+	f.beforeParentOpen = func(p string) {
+		if p != ".config" {
+			return
+		}
+		f.beforeParentOpen = nil
+		triggered = true
+		if err := os.Rename(filepath.Join(home, ".config"), filepath.Join(home, "moved")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(filepath.Join(home, ".config"), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(home, c.Target), []byte("foreign\n"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := f.Stat(c.Target); err == nil || !triggered {
+		t.Fatalf("regular parent identity swap accepted: triggered=%v error=%v", triggered, err)
+	}
+	if string(nativeRead(t, home, "moved/starship.toml")) != "original\n" || string(nativeRead(t, home, c.Target)) != "foreign\n" {
+		t.Fatal("parent-swap refusal changed either file")
+	}
+}
+func checkNativeRenameSourceSwap(t *testing.T) {
+	home, f, c, _ := nativeFixture(t, "original\n")
+	target, err := f.Stat(c.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stage := ".config/stage"
+	made, err := f.Create(stage, []byte("staged\n"), 0600)
+	if err != nil {
+		t.Fatal(err)
+	}
+	triggered := false
+	f.beforeRename = func(from, to string) {
+		f.beforeRename = nil
+		triggered = true
+		if err := os.Rename(filepath.Join(home, from), filepath.Join(home, from+"-owned")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(home, from), []byte("foreign\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = f.Rename(stage, c.Target, made.ID, target.ID)
+	if err == nil || !triggered || string(nativeRead(t, home, c.Target)) != "original\n" || string(nativeRead(t, home, stage)) != "foreign\n" || string(nativeRead(t, home, stage+"-owned")) != "staged\n" {
+		t.Fatalf("foreign rename source accepted or lost: triggered=%v error=%v", triggered, err)
+	}
+}
+func checkNativeParentDescriptorCleanup(t *testing.T) {
+	_, f, c, _ := nativeFixture(t, "original\n")
+	if _, err := f.Stat(c.Target); err != nil {
+		t.Fatal(err)
+	}
+	count := func() int {
+		entries, err := os.ReadDir("/dev/fd")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(entries)
+	}
+	before := count()
+	for i := 0; i < 32; i++ {
+		if _, err := f.Stat(c.Target); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.Stat(".config/not-present"); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatal(err)
+		}
+		if _, err := f.Stat(".config/not-present/file"); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatal(err)
+		}
+	}
+	after := count()
+	if after != before {
+		t.Fatalf("native Stat parent descriptors leaked: before=%d after=%d", before, after)
 	}
 }
