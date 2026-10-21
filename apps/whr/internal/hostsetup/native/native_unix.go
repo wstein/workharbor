@@ -10,6 +10,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -293,7 +294,7 @@ func finishProbe(ctx context.Context, child processLease) error {
 			return err
 		}
 		if err != nil {
-			observationErr = err
+			observationErr = fmt.Errorf("observe probe child exit: %w", err)
 			break
 		}
 		if exited {
@@ -312,7 +313,7 @@ func finishProbe(ctx context.Context, child processLease) error {
 		return observationErr
 	}
 	if signalErr != nil {
-		return signalErr
+		return fmt.Errorf("signal owned probe group: %w", signalErr)
 	}
 	return waitErr
 }
