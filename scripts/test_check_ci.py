@@ -5,6 +5,7 @@ import io
 import json
 import os
 import py_compile
+import re
 import signal
 import shutil
 import subprocess
@@ -944,6 +945,25 @@ class SourceTests(unittest.TestCase):
         self.assertNotIn('WORKHARBOR_CI_POLICY_SOURCE', workflow)
         self.assertNotIn('continue-on-error', workflow)
         self.assertNotIn('pull_request_target', workflow)
+
+    def test_workflow_runs_push_only_for_main_and_pull_request_for_every_base(self):
+        # Push evidence is accepted on main; topic branches are covered by
+        # pull_request evidence, including stacked PRs whose base is a branch.
+        workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
+        self.assertIn('\non:\n  push:\n    branches: [main]\n  pull_request:\nconcurrency:', workflow)
+        self.assertNotIn('[push, pull_request]', workflow)
+
+    def test_workflow_cancels_superseded_runs_only_for_pull_requests(self):
+        workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
+        self.assertIn(
+            "\nconcurrency:\n"
+            "  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}\n"
+            "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", workflow)
+
+    def test_workflow_keeps_job_names_reported_for_pull_requests(self):
+        workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
+        self.assertEqual(['bootstrap', 'macos-pty', 'macos-hostsetup', 'macos-dotfiles'], re.findall(r'^  ([a-z-]+):$', workflow.split('\njobs:\n')[1], re.M))
+        self.assertNotRegex(workflow, r'(?m)^    if:')
 
 
 if __name__ == '__main__':
