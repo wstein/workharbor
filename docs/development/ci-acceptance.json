@@ -656,6 +656,7 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorPlatformUnknown",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/doctor/TestDoctorRemediationLinkResolves",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestDoctorExitCodes",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestDoctorConfigValidEqualsValidate",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestDoctorJSONMatchesSchema",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestMutatingHostCommandsRefuseUnsupportedPlatform",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestDoctorExitCodesOnCancelAndDeadline",
