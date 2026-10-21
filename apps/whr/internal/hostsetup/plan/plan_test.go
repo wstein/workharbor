@@ -114,6 +114,46 @@ func TestPlanSealingRefusalsAndDynamicSelections(t *testing.T) {
 			t.Fatal("tampered sealed step accepted")
 		}
 	})
+	t.Run("every sealed step field is hashed", func(t *testing.T) {
+		mutations := map[string]func(*Step){
+			"ID":           func(s *Step) { s.ID += "x" },
+			"Item":         func(s *Step) { s.Item += "x" },
+			"Kind":         func(s *Step) { s.Kind += "x" },
+			"Class":        func(s *Step) { s.Class += "x" },
+			"DependsOn":    func(s *Step) { s.DependsOn = append(append([]string(nil), s.DependsOn...), "x") },
+			"Target":       func(s *Step) { s.Target += "x" },
+			"BeforeSHA256": func(s *Step) { s.BeforeSHA256 += "x" },
+			"Blocked":      func(s *Step) { s.Blocked += "x" },
+		}
+		if got, want := len(mutations), reflect.TypeOf(Step{}).NumField(); got != want {
+			t.Fatalf("tamper table covers %d of %d Step fields", got, want)
+		}
+		for field, mutate := range mutations {
+			p, err := Build(input())
+			if err != nil {
+				t.Fatal(err)
+			}
+			mutate(&p.Steps[0])
+			if Recheck(p, p.Hash) == nil {
+				t.Errorf("tampered %s accepted", field)
+			}
+		}
+	})
+	t.Run("platform alone changes the sealed hash", func(t *testing.T) {
+		a, err := Build(input())
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := input()
+		in.Platform = "linux"
+		b, err := Build(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.Hash == b.Hash || Recheck(b, a.Hash) == nil {
+			t.Fatal("platform change kept the sealed hash")
+		}
+	})
 	t.Run("effective selection and observed order", func(t *testing.T) {
 		in := input()
 		a, err := Build(in)
