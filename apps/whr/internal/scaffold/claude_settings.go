@@ -45,8 +45,8 @@ const claudeReadBound = 64 << 10
 // file; larger owner files are refused (68) rather than replaced unrestorably.
 const maxClaudeRestore = 64 << 20
 
-// readClaudePrefix reads at most the authored length plus one byte, like the
-// discovery step, and requires the identity, size and mtime to match the preview.
+// readClaudePrefix reads at most claudeReadBound bytes, like the discovery
+// step, and requires the identity, size and mtime to match the preview.
 func readClaudePrefix(root *os.Root, leaf string, expected fs.FileInfo) ([]byte, fs.FileInfo, error) {
 	return readClaude(root, leaf, expected, claudeReadBound)
 }
