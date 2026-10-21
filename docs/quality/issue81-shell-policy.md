@@ -75,3 +75,34 @@ and `git diff --check`. These source checks do not establish full repository
 acceptance: `make check` was not run because its application/assets builds require
 explicit authorization. T001 remains unchecked, and runtime/adoption acceptance
 remains unverified.
+
+## Canonical CI evidence (2026-10-21)
+
+The earlier local-run statements remain historical observations. Subsequent
+[push CI run 39518598228](https://github.com/wstein/workharbor/actions/runs/39518598228)
+succeeded at exact head `1b263206c9e48062f42c89a474b3239735a21f46`. Its canonical
+step ran `python3 -I -B scripts/check_ci.py`, the same entry point as `make check`,
+and succeeded. The application checks enforce empty gofmt output, `go vet ./...`
+and `go test -json -count=1 ./...`; the captured policy-package events contain
+29 named test/subtest passes, one package pass and no failures or skips. This is
+hosted canonical-check evidence, not a newly executed local `make check`.
+
+Named policy coverage includes `TestDescriptionRefusals` (18 refusal subtests),
+`TestEnvironmentRefusals`, `TestPlanning` (six rows covering attachment defaults,
+priority/duplicates, absence/removal, share-only fallback, complete shortcuts
+opt-out and empty XDG defaults), `TestFragments` and `TestBashSnippetSurrogate`.
+Planning also checks inherited Starship denial, input immutability/nonaliasing
+and repeated-application idempotence. The policy source and tests are unchanged
+since `b2b725eedfad22bc50e2d69563b38694becc2e25`.
+
+An independent `gpt-6.1-sol` review bound the cached run/job logs and their hashes
+to that exact head, the required CI test IDs and the unchanged source, with no
+open findings in this evidence-binding scope. It did not reexecute the historical
+failure-first chronology or constitute a new full source audit. The historical
+TDD and local/surrogate evidence above retain their original provenance.
+
+This records canonical source-check success only. T001 remains unchecked and
+issue-81 integration is not declared complete. Native shell/vendor/image/system-rc
+behavior, real mount/digest trust, Docker and lifecycle/reconnect acceptance, and
+Feature 006 runtime adoption remain unverified; the existing resolver/attacher/
+new-session launcher responsibilities and trust limits still apply.
