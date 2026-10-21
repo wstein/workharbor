@@ -124,6 +124,8 @@ The owner has `~/.gitconfig`; the wizard reports host-only keys and offers the m
    the password; without a terminal, with `--json`, `--non-interactive` or without confirmation it is not run (exit 70).
 2. **Given** the package manager fails on step 3 of 5, **Then** independent steps still run, dependents are `blocked`, the exit status is 73 and
    completed and remaining steps are listed; a rerun re-detects and does only what remains.
+   Exception: if the failure retains a child process handle (cleanup failed), the run stops, lists the remaining steps, skips profile persistence
+   and returns the handle for reconciliation (`package_manager_failed`, exit 68, or 73 if something changed).
 3. **Given** no terminal or `--json`, **Then** no prompt is shown and missing confirmations yield exit 70 naming the flags.
 
 ### User Story 6 - Linux is unchanged (Priority: P2)
