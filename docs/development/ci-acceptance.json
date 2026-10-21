@@ -909,7 +909,20 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardPerPathSecondDeclineCancels",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardExplicitFlagsNotPrompted",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardAnswerBound",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardBareEnterOnReviewCancels"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardBareEnterOnReviewCancels",
+      "github.com/wstein/workharbor-nxt/apps/whr/cmd/whr/TestWizardPTYDevcontainerSelection",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitDevcontainerNeverModified",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitDevcontainerPathTraversalRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitDevcontainerSymlinkRefused",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestInitDevcontainerMissingAndInvalidJSONC",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDevcontainerSelectionRetainsOriginalAncestors",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDevcontainerSelectionStalePreview",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDevcontainerSelectionValidated",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDevcontainerSameSelectionPreservesManifest",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestInitDevcontainerSelectionNeedsManifestConsent",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestStartersMatchContract",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold/TestTemplateRefusedWhileUnsupported",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/wizard/TestWizardDevcontainerSelectionPerPathConsent"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
