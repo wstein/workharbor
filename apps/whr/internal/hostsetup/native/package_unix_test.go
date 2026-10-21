@@ -831,3 +831,41 @@ func TestNativePackageChildSignalEPERMRefreshesExitedState(t *testing.T) {
 		t.Fatalf("only EPERM re-probes: err=%v probes=%d", err, probes)
 	}
 }
+
+type ownershipLostChild struct {
+	fakePackageChild
+	released atomic.Bool
+}
+
+func (c *ownershipLostChild) Exited() (bool, error) { return false, errOwnershipLost }
+func (c *ownershipLostChild) Signal(s int) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.signals = append(c.signals, s)
+	return nil
+}
+func (c *ownershipLostChild) Release() error { c.released.Store(true); return nil }
+
+// Once the PID is no longer ours the observer must release it and never signal,
+// because the number may already belong to an unrelated process.
+func TestPackageCommandAdapterOwnershipLostReleasesWithoutSignal(t *testing.T) {
+	child := &ownershipLostChild{}
+	adapter := PackageExec{launch: func(pkgmgr.Command) (packageChild, error) { return child, nil }}
+	p, err := adapter.Start(context.Background(), packageCommand())
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case completion := <-p.Done():
+		if !errors.Is(completion.Err, errOwnershipLost) {
+			t.Fatalf("ownership loss not reported: %v", completion.Err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("observer never finished")
+	}
+	child.mu.Lock()
+	defer child.mu.Unlock()
+	if !child.released.Load() || len(child.signals) != 0 {
+		t.Fatalf("released=%v signals=%v", child.released.Load(), child.signals)
+	}
+}
