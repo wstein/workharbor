@@ -8,12 +8,22 @@ import (
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/doctor"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg"
 )
 
 // DoctorHandler runs the local checks of `whr doctor` (FR-060) on ports. It
-// is the only place that wires doctor's validator port: until T034 connects
-// the real checker, config.valid reports skipped with not_in_increment.
+// wires the same read-only checker used by validate unless a validator port
+// was supplied by the caller. Doctor supplies its remaining shared budget in ctx.
 func DoctorHandler(p doctor.Ports) Handler {
+	if p.Validator == nil {
+		p.Validator = func(ctx context.Context, dir string) (doctor.Outcome, error) {
+			report, err := workspacecfg.Validate(ctx, dir, workspacecfg.Options{})
+			if err != nil {
+				return doctor.Outcome{}, err
+			}
+			return doctor.Outcome{Errors: report.Counts.Error, Warnings: report.Counts.Warning}, nil
+		}
+	}
 	return func(ctx context.Context, call Call) (Result, error) {
 		if len(call.Args) > 0 {
 			return Result{}, exitcode.Errorf(exitcode.PathBadArguments, "doctor takes no arguments")
