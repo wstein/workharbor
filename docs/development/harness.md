@@ -104,7 +104,10 @@ same revision, with isolated Python imports/cache; tracked mutations and source 
 block. A pull request must target `main` or, as a stacked PR, another plain branch
 of `wstein/workharbor` (no forks, no `refs/` prefix, `..` or leading `-`) whose
 `base.sha` is an ancestor of `head.sha`; every other pin applies unchanged, so the
-checked code is the exact merge of the head into its parent tip. Executable Git configuration, replacement refs and grafts are refused or
+checked code is the exact merge of the head into its parent tip, or, for a native GitHub
+stack, into the parent PR's own merge commit (exactly two parents, the second equal to
+`base.sha`; any depth). Merge parents must be `[base, head]` for `main`, and `[base or
+parent PR merge, head]` for a stacked PR; a merge whose parent PR merge does not end in `base.sha` (a stale parent) is refused. Executable Git configuration, replacement refs and grafts are refused or
 disabled before inspection. These checks establish source identity, not approval.
 
 No external `WORKHARBOR_CI_POLICY_SOURCE` setting is read or updated. Historical
