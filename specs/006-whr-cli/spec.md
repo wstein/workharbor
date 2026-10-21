@@ -1152,7 +1152,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   object across settings scopes is unconfirmed, and its own scope precedence is unchanged. The file holds no credential,
   is read only when the owner uses Claude Code there, is harmless for workspaces that do not, and writing it installs,
   authenticates and launches nothing (scenario 6). `~/.claude/settings.json` is the owner's decision and is never read
-  or written. `.claude` is proposed as a directory (`create`, or `reuse` of a real directory).
+  or written. `.claude` is proposed as a directory (`create`, or `reuse` of a real directory). A symbolic-link `settings.json` under a real `.claude` directory still yields the `.claude` `reuse` row; only a `.claude` that is not a directory has no `.claude` row.
 
   *Outcomes, one action each.* An absent file is created (`create`); a regular file with equal bytes is `skip_existing`
   (a rerun is a no-op). Any other existing regular file is never merged or edited by default: it is `left_unchanged`,
@@ -1168,7 +1168,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (`overwrite`) under FR-046; then a symbolic link, special file or non-directory `.claude` is refused (68). With or
   without the flag, a file that appears or changes after the preview is 68 (FR-057(b)), except that no re-check applies
   to a path that is `left_unchanged`. A regular file is opened no-follow and non-blocking; its `fstat` size is compared
-  first and at most the proposal length plus one byte is read. A rerun after an upgrade creates these
+  first and at most 64 KiB (the bound of FR-064) is read; a larger file is additionally fingerprinted by size and
+  modification time, and equality is decided by size and bytes, which the content-hash re-check of FR-057(c) before
+  the rename uses. An overwrite of an existing file larger than 64 MiB is refused (68) because it could not be
+  restored. A rerun after an upgrade creates these
   new files once. No flag, schema field or warning code is added; T037 uses the `left_unchanged` action of T036.
   Exit codes follow FR-063.
 - **FR-066**: `whr workspace ls --local` (short form `whr ls --local`) MUST inspect the local Docker daemon
