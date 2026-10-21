@@ -581,6 +581,7 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/pkgmgr/TestStepCancellationAndStartDeadline",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/pkgmgr/TestRuntimeOnlyWhenSelectedNeverStarted",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/pkgmgr/TestNoLoginShellStartupFileTapOrTelemetry",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/pkgmgr/TestStartFailureWithProcessKeepsCleanupOwnership",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/pkgmgr/TestBrewRejectsForeignSourcesAndUnconfirmedUpgrade",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeDescriptorFS",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativeProbeIsolationAndBounds",

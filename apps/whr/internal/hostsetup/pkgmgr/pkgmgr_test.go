@@ -40,6 +40,9 @@ type fakeExec struct {
 	processes []*fakeProcess
 	exit      int
 	err       error
+	// errProcess is returned together with err, as a launcher that failed after
+	// mutation may have started.
+	errProcess *fakeProcess
 }
 
 func (f *fakeExec) Start(ctx context.Context, c Command) (Process, error) {
@@ -58,6 +61,9 @@ func (f *fakeExec) Start(ctx context.Context, c Command) (Process, error) {
 	}
 	f.calls = append(f.calls, c)
 	if f.err != nil {
+		if f.errProcess != nil {
+			return f.errProcess, f.err
+		}
 		return nil, f.err
 	}
 	p := &fakeProcess{done: make(chan Completion, 1)}
@@ -532,5 +538,22 @@ func TestStepDeadlineBlocksOnlyDependents(t *testing.T) {
 	}
 	if !reflect.DeepEqual(clock.durations, []time.Duration{900 * time.Second, 30 * time.Second, 900 * time.Second}) {
 		t.Fatalf("step bounds: %v", clock.durations)
+	}
+}
+
+// A nonnil process with a plain startup error means mutation may have started:
+// ownership must reach the caller as a CleanupError, never as "not started".
+func TestStartFailureWithProcessKeepsCleanupOwnership(t *testing.T) {
+	e, r, x, _, _, _, _ := fixture(t, item("jq"), item("other"))
+	p := &fakeProcess{done: make(chan Completion, 1)}
+	cause := errors.New("late startup failure")
+	x.err, x.errProcess = cause, p
+	got, err := e.Apply(context.Background(), r)
+	var owned CleanupError
+	if !errors.As(err, &owned) || owned.CleanupProcess() != p || !errors.Is(err, cause) {
+		t.Fatalf("process ownership lost: %v", err)
+	}
+	if s := got.Steps[0]; s.Status != "failed" || s.Reason != "package_manager_failed" || !s.MutationAttempted {
+		t.Fatalf("labelled as not started: %+v", s)
 	}
 }
