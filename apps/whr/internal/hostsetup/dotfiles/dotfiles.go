@@ -2,8 +2,8 @@
 
 // Package dotfiles implements the offline preview/backup/replace engine over a
 // rooted no-follow filesystem port. Open supplies an explicit-root Linux/Darwin
-// adapter; it never discovers HOME. Native runtime evidence covers Linux temporary
-// fixtures; Darwin runtime acceptance remains pending.
+// adapter; it never discovers HOME. Native runtime evidence covers owned temporary
+// fixtures on Linux and, in the macos-dotfiles CI job, on macOS.
 package dotfiles
 
 import (
