@@ -471,3 +471,38 @@ func TestConcreteDotfileCheckpointFailurePreventsAllEffects(t *testing.T) {
 		})
 	}
 }
+
+func TestConcreteDotfileModifyRequiresPerItemConfirmation(t *testing.T) {
+	old := []byte("PRIVATE-VALUE-CANARY\n")
+	engine, request, mem, exec, _, _, _ := concreteFilesFixture(t, old, true)
+	runner := engine.Runner.(*Runner)
+	runner.request.Policy.Confirmed["jq"] = false
+	shown, err := plan.Build(request.Input)
+	if err != nil || len(shown.Steps) != 1 || shown.Steps[0].Class != "modify" || shown.Steps[0].Kind != "dotfile_replace" {
+		t.Fatal("fixture did not select a modify dotfile step", shown, err)
+	}
+	before := make(map[string]memoryNode, len(mem.nodes))
+	for name, node := range mem.nodes {
+		node.data = bytes.Clone(node.data)
+		before[name] = node
+	}
+	guard := &fixtureGuard{}
+	out, err := runner.ApplyStep(context.Background(), shown.Steps[0], request.RunID, plan.StepBudget, guard)
+	if err != nil || out.Audit.Result != "declined" || guard.calls != 0 || out.Changed || len(out.Backups) != 0 || out.Diff != nil || len(exec.calls) != 0 || !reflect.DeepEqual(before, mem.nodes) {
+		t.Fatal("unconfirmed modify step was not declined without effects", out, err, guard.calls)
+	}
+}
+
+func TestConcreteDotfileEngineErrorIsPropagated(t *testing.T) {
+	engine, request, mem, _, _, _, _ := concreteFilesFixture(t, []byte("PRIVATE-VALUE-CANARY\n"), true)
+	mem.failDestination = ".config/jq/config"
+	mem.failBeforeRename = true
+	shown, err := plan.Build(request.Input)
+	if err != nil || len(shown.Steps) != 1 {
+		t.Fatal(shown, err)
+	}
+	out, err := engine.Runner.ApplyStep(context.Background(), shown.Steps[0], request.RunID, plan.StepBudget, &fixtureGuard{})
+	if err == nil || out.Audit.Result != "failed" {
+		t.Fatal("dotfile engine error was dropped", out, err)
+	}
+}
