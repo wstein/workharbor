@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 // Package catalogue validates host setup catalogue and template bytes. It performs
-// no filesystem, process, package-manager or network operations. The production
-// snapshot and measured minimum versions are deliberately not supplied here.
+// no filesystem, process, package-manager or network operations.
 package catalogue
 
 import (
@@ -42,13 +41,21 @@ type Item struct {
 	Config            *Config      `json:"config,omitempty"`
 }
 
-// Tool is fixed version-probe metadata and a package-manager source declaration.
+// OrbStackAppMetadata selects the fixed application metadata route: the
+// CFBundleShortVersionString key in /Applications/OrbStack.app/Contents/Info.plist.
+// This is the application version, not Homebrew's cask registration version.
+// Detection implements the read-only route; the catalogue never runs a probe.
+const OrbStackAppMetadata = "orbstack_app"
+
+// Tool declares either fixed command argv or the closed OrbStack metadata route,
+// a version parser and a package-manager source. The probe routes are exclusive.
 type Tool struct {
-	Command      string   `json:"command"`
-	VersionArgs  []string `json:"version_args"`
-	VersionRegex string   `json:"version_regex"`
-	MinVersion   string   `json:"min_version"`
-	Source       Source   `json:"source"`
+	Command         string   `json:"command,omitempty"`
+	VersionArgs     []string `json:"version_args,omitempty"`
+	VersionMetadata string   `json:"version_metadata,omitempty"`
+	VersionRegex    string   `json:"version_regex"`
+	MinVersion      string   `json:"min_version"`
+	Source          Source   `json:"source"`
 }
 
 // Source identifies a Homebrew formula or cask; it never causes installation.
@@ -344,6 +351,10 @@ func validItem(value any) bool {
 	if !validNetwork(item["network"]) || !validTool(item["tool"]) {
 		return false
 	}
+	probe := item["tool"].(map[string]any)
+	if _, metadata := probe["version_metadata"]; metadata && (!oneOf(item["id"], "orbstack") || !oneOf(item["kind"], "runtime")) {
+		return false
+	}
 	if v, exists := item["config"]; exists && !validConfig(v) {
 		return false
 	}
@@ -378,16 +389,27 @@ func validNetwork(value any) bool {
 	return true
 }
 func validTool(value any) bool {
-	tool, ok := object(value, "command version_args version_regex min_version source", "")
-	if !ok {
+	tool, ok := object(value, "version_regex min_version source", "command version_args version_metadata")
+	if !ok || !stringValue(tool["version_regex"], "", 128) || !stringValue(tool["min_version"], `^[0-9]+(\.[0-9]+){0,3}$`, 0) {
 		return false
 	}
-	if !stringValue(tool["command"], `^[A-Za-z0-9._+-]{1,64}$`, 0) || !stringValue(tool["version_regex"], "", 128) || !stringValue(tool["min_version"], `^[0-9]+(\.[0-9]+){0,3}$`, 0) || !stringsValue(tool["version_args"], 1, 4, false, func(v any) bool { return stringValue(v, `^[A-Za-z0-9._=-]{1,32}$`, 0) }) {
+	metadata, usesMetadata := tool["version_metadata"]
+	if usesMetadata {
+		_, hasCommand := tool["command"]
+		_, hasArgs := tool["version_args"]
+		if !oneOf(metadata, OrbStackAppMetadata) || hasCommand || hasArgs {
+			return false
+		}
+	} else if !stringValue(tool["command"], `^[A-Za-z0-9._+-]{1,64}$`, 0) || !stringsValue(tool["version_args"], 1, 4, false, func(v any) bool { return stringValue(v, `^[A-Za-z0-9._=-]{1,32}$`, 0) }) {
 		return false
 	}
 	source, ok := object(tool["source"], "manager type name tap may_elevate", "")
-	return ok && oneOf(source["manager"], "homebrew") && oneOf(source["type"], "formula", "cask") && stringValue(source["name"], `^[a-z0-9][a-z0-9@._+-]{0,63}$`, 0) && oneOf(source["tap"], "homebrew/core", "homebrew/cask") && boolean(source["may_elevate"])
+	if !ok || !oneOf(source["manager"], "homebrew") || !oneOf(source["type"], "formula", "cask") || !stringValue(source["name"], `^[a-z0-9][a-z0-9@._+-]{0,63}$`, 0) || !oneOf(source["tap"], "homebrew/core", "homebrew/cask") || !boolean(source["may_elevate"]) {
+		return false
+	}
+	return !usesMetadata || (oneOf(source["type"], "cask") && oneOf(source["name"], "orbstack"))
 }
+
 func validConfig(value any) bool {
 	config, ok := object(value, "marker target content_file sha256 mode", "")
 	return ok && oneOf(config["marker"], "dotfile", "shell_hook") && stringValue(config["target"], `^\.config/[A-Za-z0-9._/-]{1,120}$`, 0) && stringValue(config["content_file"], `^[A-Za-z0-9._-]{1,64}$`, 0) && stringValue(config["sha256"], `^[0-9a-f]{64}$`, 0) && oneOf(config["mode"], "0644", "0600")

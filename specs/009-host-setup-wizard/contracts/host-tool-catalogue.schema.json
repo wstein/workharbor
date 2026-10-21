@@ -201,6 +201,44 @@
               "tool"
             ]
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "tool": {
+                "required": [
+                  "version_metadata"
+                ]
+              }
+            },
+            "required": [
+              "tool"
+            ]
+          },
+          "then": {
+            "properties": {
+              "id": {
+                "const": "orbstack"
+              },
+              "kind": {
+                "const": "runtime"
+              },
+              "tool": {
+                "properties": {
+                  "source": {
+                    "properties": {
+                      "type": {
+                        "const": "cask"
+                      },
+                      "name": {
+                        "const": "orbstack"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       ]
     },
@@ -208,8 +246,6 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "command",
-        "version_args",
         "version_regex",
         "min_version",
         "source"
@@ -270,8 +306,44 @@
               "description": "The installer may raise its own operating-system prompt; shown in the plan."
             }
           }
+        },
+        "version_metadata": {
+          "const": "orbstack_app",
+          "description": "Fixed read-only application metadata route: CFBundleShortVersionString in /Applications/OrbStack.app/Contents/Info.plist; not the Homebrew cask registration. Mutually exclusive with command/version_args."
         }
-      }
+      },
+      "oneOf": [
+        {
+          "required": [
+            "command",
+            "version_args"
+          ],
+          "not": {
+            "required": [
+              "version_metadata"
+            ]
+          }
+        },
+        {
+          "required": [
+            "version_metadata"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "command"
+                ]
+              },
+              {
+                "required": [
+                  "version_args"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     }
   },
   "x-loader-rules": [
