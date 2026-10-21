@@ -569,6 +569,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/adapters/TestConcreteDotfileModifyRequiresPerItemConfirmation",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/adapters/TestConcreteDotfileEngineErrorIsPropagated",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyStopsAfterOwnedCleanupErrorAndReturnsItUnchanged",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyKeepsRetainedHandleWhenJournalRejectsStoppedStep",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/plan/TestApplyKeepsRetainedHandleWhenFinishFails",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/adapters/TestConcreteDotfileFailureRetainsActualEngineOutcome",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/adapters/TestConcreteDotfileReplaceCountsFullTruncatedDiff",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/adapters/TestConcreteInterleavesConfigBeforeDependentBrew",
