@@ -4,12 +4,16 @@
 package plan
 
 import (
+	"context"
 	"encoding/json"
-	"github.com/santhosh-tekuri/jsonschema/v6"
-	"github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/catalogue"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/detect"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/profile"
 )
 
 func TestResultRedaction(t *testing.T) {
@@ -33,27 +37,7 @@ func TestResultRedaction(t *testing.T) {
 			t.Fatal("leaked canary")
 		}
 	}
-	var value any
-	if e = json.Unmarshal(b, &value); e != nil {
-		t.Fatal(e)
-	}
-	// Draft internal shape only; no command envelope or AP-6 failure placement.
-	var draft any
-	e = json.Unmarshal([]byte(`{"type":"object","additionalProperties":false,"required":["schema_version","ExitCode","Steps","Applied","Remaining"],"properties":{"schema_version":{"const":1},"ExitCode":{"enum":[0,64,68,70,71,72,73,74]},"Steps":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["ID","Item","Kind","Status","Reason"],"properties":{"ID":{"type":"string"},"Item":{"type":"string"},"Kind":{"type":"string"},"Status":{"enum":["applied","unchanged","blocked","failed","rolled_back","skipped","declined","opted_out"]},"Reason":{"type":"string"}}}},"Applied":{"type":"array","items":{"type":"string"}},"Remaining":{"type":"array","items":{"type":"string"}}}}`), &draft)
-	if e != nil {
-		t.Fatal(e)
-	}
-	c := jsonschema.NewCompiler()
-	if e = c.AddResource("draft.json", draft); e != nil {
-		t.Fatal(e)
-	}
-	schema, e := c.Compile("draft.json")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e = schema.Validate(value); e != nil {
-		t.Fatal(e)
-	}
+	assertInternalResultDraft(t, b)
 	if result.Steps[0].Reason != "" {
 		t.Fatal("raw reason retained")
 	}
@@ -155,4 +139,96 @@ func TestResultOmitsUnknownReceiptIdentity(t *testing.T) {
 	if strings.Contains(string(data), unknown) {
 		t.Fatal("unknown receipt identity leaked")
 	}
+}
+
+// assertInternalResultDraft checks only the existing internal draft; it does not
+// register a public envelope or resolve AP-6.
+func assertInternalResultDraft(t *testing.T, b []byte) {
+	t.Helper()
+	var e error
+	var value any
+	if e = json.Unmarshal(b, &value); e != nil {
+		t.Fatal(e)
+	}
+	// Draft internal shape only; no command envelope or AP-6 failure placement.
+	var draft any
+	e = json.Unmarshal([]byte(`{"type":"object","additionalProperties":false,"required":["schema_version","ExitCode","Steps","Applied","Remaining"],"properties":{"schema_version":{"const":1},"ExitCode":{"enum":[0,64,68,70,71,72,73,74]},"Steps":{"type":"array","items":{"type":"object","additionalProperties":false,"required":["ID","Item","Kind","Status","Reason"],"properties":{"ID":{"type":"string"},"Item":{"type":"string"},"Kind":{"type":"string"},"Status":{"enum":["applied","unchanged","blocked","failed","rolled_back","skipped","declined","opted_out"]},"Reason":{"type":"string"}}}},"Applied":{"type":"array","items":{"type":"string"}},"Remaining":{"type":"array","items":{"type":"string"}}}}`), &draft)
+	if e != nil {
+		t.Fatal(e)
+	}
+	c := jsonschema.NewCompiler()
+	if e = c.AddResource("draft.json", draft); e != nil {
+		t.Fatal(e)
+	}
+	schema, e := c.Compile("draft.json")
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = schema.Validate(value); e != nil {
+		t.Fatal(e)
+	}
+}
+
+func TestResultCurrentProductionCatalogueContext(t *testing.T) {
+	// Bind the current production loader and concrete parent's ApplyResult API to
+	// the reviewed internal projection. Only injected actions run in a temp HOME;
+	// selection here is test input, not a change to production default choices.
+	current, err := catalogue.LoadInitial()
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := Input{Platform: "darwin-arm64", Catalogue: current, Config: map[string]ConfigObservation{}, Selected: map[string]bool{}, OptedOut: map[string]bool{}}
+	for _, item := range current.Items {
+		in.Selected[item.ID] = item.ID == "jq"
+		state := "present_ok"
+		if item.ID == "jq" {
+			state = "absent"
+		}
+		in.Results = append(in.Results, detect.Result{Item: item.ID, State: state})
+		if item.Config != nil {
+			in.Config[item.ID] = ConfigObservation{State: "identical"}
+		}
+	}
+	sealed, err := Build(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sealed.Steps) != 1 || sealed.Steps[0].ID != "jq.brew_install" {
+		t.Fatalf("unexpected current catalogue plan: %+v", sealed.Steps)
+	}
+	engine, request, runner, _ := applyFixture(t)
+	request.Input = in
+	request.ExpectedHash = sealed.Hash
+	applied, err := engine.Apply(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applied.ExitCode != 0 || !applied.ProfileChanged || len(runner.calls) != 1 {
+		t.Fatalf("current concrete result mismatch: %+v calls=%+v", applied, runner.calls)
+	}
+	view, err := ProjectResult(in, sealed, applied)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.ExitCode != applied.ExitCode || !reflect.DeepEqual(view.Applied, applied.Applied) || !reflect.DeepEqual(view.Remaining, applied.Remaining) {
+		t.Fatalf("current result evidence changed: %+v versus %+v", view, applied)
+	}
+	want := []ResultStep{{ID: "jq.brew_install", Item: "jq", Kind: "brew_install", Status: "applied"}}
+	if !reflect.DeepEqual(view.Steps, want) {
+		t.Fatalf("current receipt identity lost: %+v", view.Steps)
+	}
+	profileIDs := 0
+	for _, id := range view.Applied {
+		if strings.HasSuffix(id, ".profile_write") {
+			profileIDs++
+		}
+	}
+	if profileIDs != len(current.Items) {
+		t.Fatalf("profile receipts=%d catalogue items=%d", profileIDs, len(current.Items))
+	}
+	encoded, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertInternalResultDraft(t, encoded)
 }
