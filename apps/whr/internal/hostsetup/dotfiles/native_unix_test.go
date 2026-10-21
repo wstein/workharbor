@@ -595,3 +595,27 @@ func checkNativeParentDescriptorCleanup(t *testing.T) {
 		t.Fatalf("native Stat parent descriptors leaked: before=%d after=%d", before, after)
 	}
 }
+
+// A leaf swapped for a link to the very same inode passes the identity checks, so
+// only O_NOFOLLOW on the leaf open refuses it.
+func TestNativeReadRefusesLeafLinkToSameInode(t *testing.T) {
+	home, f, c, _ := nativeFixture(t, "original\n")
+	info, err := f.Stat(c.Target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	triggered := false
+	f.beforeLeafOpen = func(p string) {
+		f.beforeLeafOpen = nil
+		triggered = true
+		if err := os.Rename(filepath.Join(home, p), filepath.Join(home, "moved")); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(filepath.Join(home, "moved"), filepath.Join(home, p)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b, err := f.Read(c.Target, info.ID, 1024); err == nil || !triggered {
+		t.Fatalf("leaf link followed: triggered=%v bytes=%q error=%v", triggered, b, err)
+	}
+}

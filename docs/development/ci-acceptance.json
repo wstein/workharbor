@@ -1106,7 +1106,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeExclusiveIdentityAndAtomicity",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeNoFollowAndSpecialRefusals",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeRollbackAndStageOwnership",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeKernelNoReplacePreservesOccupiedDestination"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeKernelNoReplacePreservesOccupiedDestination",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/dotfiles/TestNativeReadRefusesLeafLinkToSameInode"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
