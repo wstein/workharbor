@@ -547,3 +547,45 @@ func TestNativeOrbStackMetadataProcessControls(t *testing.T) {
 		})
 	}
 }
+
+func TestNativeExitedLeaderSignalPolicy(t *testing.T) {
+	if signalOfExitedLeaderIgnored(syscall.EPERM, false) {
+		t.Fatal("EPERM ignored for a live child")
+	}
+	if signalOfExitedLeaderIgnored(syscall.EIO, true) {
+		t.Fatal("non-EPERM error ignored")
+	}
+	if got := signalOfExitedLeaderIgnored(syscall.EPERM, true); got != exitedLeaderSignalEPERM {
+		t.Fatalf("exited-leader EPERM policy = %v", got)
+	}
+}
+
+func TestNativeVerifiedDiskPathRejectsReplacement(t *testing.T) {
+	root := t.TempDir()
+	h, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Close()
+	target := filepath.Join(root, "tool")
+	if err := os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f, err := h.executable("/tool")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if got, err := h.verifiedDiskPath(f, "/tool"); err != nil || got != target {
+		t.Fatalf("verified path = %q, %v", got, err)
+	}
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.verifiedDiskPath(f, "/tool"); !errors.Is(err, errUnsafe) {
+		t.Fatalf("replaced file accepted: %v", err)
+	}
+}

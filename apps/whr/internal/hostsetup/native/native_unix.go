@@ -15,7 +15,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -209,7 +208,33 @@ func (h *Host) Run(ctx context.Context, p detect.Probe) (detect.Output, error) {
 	if ctx.Err() != nil {
 		return detect.Output{}, ctx.Err()
 	}
-	return runVersion(ctx, p, "/dev/fd/"+strconv.Itoa(3), []*os.File{f}, cancel)
+	commandPath, err := h.executeRoute(f, p.Executable)
+	if err != nil {
+		return detect.Output{}, err
+	}
+	return runVersion(ctx, p, commandPath, []*os.File{f}, cancel)
+}
+
+// verifiedDiskPath returns the on-disk path of the virtual path p under the
+// trusted root, provided it is still the regular file behind the opened f.
+func (h *Host) verifiedDiskPath(f *os.File, p string) (string, error) {
+	h.mu.Lock()
+	if h.root == nil {
+		h.mu.Unlock()
+		return "", os.ErrClosed
+	}
+	rootName := h.root.Name()
+	h.mu.Unlock()
+	diskPath := path.Join(rootName, p)
+	opened, err := f.Stat()
+	if err != nil {
+		return "", err
+	}
+	disk, err := os.Lstat(diskPath)
+	if err != nil || !disk.Mode().IsRegular() || !os.SameFile(opened, disk) {
+		return "", errUnsafe
+	}
+	return diskPath, nil
 }
 
 // runVersion shares bounds/ownership only; its two callers select distinct,
@@ -262,15 +287,31 @@ type processLease interface {
 
 var errOwnershipLost = errors.New("version probe ownership lost")
 
-type commandLease struct{ cmd *exec.Cmd }
+type commandLease struct {
+	cmd    *exec.Cmd
+	exited bool
+}
 
-func (c *commandLease) Exited() (bool, error) { return childExited(c.cmd.Process.Pid) }
+func (c *commandLease) Exited() (bool, error) {
+	exited, err := childExited(c.cmd.Process.Pid)
+	if err == nil && exited {
+		c.exited = true
+	}
+	return exited, err
+}
 func (c *commandLease) SignalGroup() error {
 	err := syscall.Kill(-c.cmd.Process.Pid, syscall.SIGKILL)
-	if errors.Is(err, syscall.ESRCH) {
+	if errors.Is(err, syscall.ESRCH) || signalOfExitedLeaderIgnored(err, c.exited) {
 		return nil
 	}
 	return err
+}
+
+// signalOfExitedLeaderIgnored: where the OS refuses to signal the group of an
+// exited, unreaped leader (EPERM), that refusal is not a failure; a live child
+// still surfaces every error.
+func signalOfExitedLeaderIgnored(err error, leaderExited bool) bool {
+	return exitedLeaderSignalEPERM && leaderExited && errors.Is(err, syscall.EPERM)
 }
 func (c *commandLease) Release() error { return c.cmd.Process.Release() }
 func (c *commandLease) Wait() error    { return c.cmd.Wait() }
@@ -348,21 +389,9 @@ func (h *Host) OrbStackAppVersion(ctx context.Context, budget time.Duration) (st
 		return "", err
 	}
 	defer helper.Close()
-	h.mu.Lock()
-	if h.root == nil {
-		h.mu.Unlock()
-		return "", os.ErrClosed
-	}
-	rootName := h.root.Name()
-	h.mu.Unlock()
-	commandPath := path.Join(rootName, "usr/bin/plutil")
-	helperInfo, err := helper.Stat()
+	commandPath, err := h.verifiedDiskPath(helper, "/usr/bin/plutil")
 	if err != nil {
 		return "", err
-	}
-	diskInfo, err := os.Lstat(commandPath)
-	if err != nil || !diskInfo.Mode().IsRegular() || !os.SameFile(helperInfo, diskInfo) {
-		return "", errUnsafe
 	}
 	if ctx.Err() != nil {
 		return "", ctx.Err()
