@@ -551,6 +551,7 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestPackageCommandAdapterClosedGrammar",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestPackageCommandAdapterReapsBeforeDone",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativePackageChildGroupSignalPolicy",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativePackageChildSignalEPERMRefreshesExitedState",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestPackageCommandAdapterRejectsEnvironmentAndTerminal",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestNativePackageCommandDoesNotStartOrInherit",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/hostsetup/native/TestPackageCommandAdapterEngineOwnsCancellation",
