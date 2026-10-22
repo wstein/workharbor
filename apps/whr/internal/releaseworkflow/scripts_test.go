@@ -792,3 +792,16 @@ func TestCIGreenMutantsAreCaught(t *testing.T) {
 		}
 	}
 }
+
+func TestNotesBaselineIsTheFinalReleaseAboveItsPreReleases(t *testing.T) {
+	dir := newRepo(t, "feat: a")
+	git(t, dir, "tag", "-a", "-m", "r", "v1.0.0-rc.1")
+	commitFile(t, dir, "b", "fix: b")
+	git(t, dir, "tag", "-a", "-m", "r", "v1.0.0")
+	commitFile(t, dir, "c", "feat: c")
+	git(t, dir, "tag", "-a", "-m", "r", "v1.0.1")
+	r := sh(t, dir, nil, "release-notes.sh", "v1.0.1", git(t, dir, "rev-parse", "HEAD"), "1.27.2")
+	if r.code != 0 || !strings.Contains(r.stdout, "Changes since v1.0.0\n") || strings.Contains(r.stdout, "since v1.0.0-rc.1") {
+		t.Errorf("baseline must be v1.0.0: %+v", r)
+	}
+}
