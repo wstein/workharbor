@@ -1,0 +1,316 @@
+# SPDX-License-Identifier: EUPL-1.2
+# Release of whr (docs/releasing.md): an owner-pushed annotated tag vMAJOR.MINOR.PATCH or
+# vMAJOR.MINOR.PATCH-(alpha|beta|rc).N on a commit of main is the publication approval for that
+# tag's release (a pre-release tag publishes a GitHub pre-release); a manual run is a dry run that
+# never publishes. Modelled on the SourceSteward release workflow. Nothing is signed with a
+# certificate or notarized; the publish job attests build provenance.
+name: release
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+', 'v[0-9]+.[0-9]+.[0-9]+-*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Dry-run version label (a dispatch never publishes)
+        required: false
+        default: v0.0.0-dryrun
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      dry_run: ${{ steps.resolve.outputs.dry_run }}
+      commit: ${{ steps.resolve.outputs.commit }}
+      prerelease: ${{ steps.resolve.outputs.prerelease }}
+      go_version: ${{ steps.go.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/whr/go.mod
+          check-latest: false
+      - name: Record the Go version of the toolchain
+        id: go
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "version=$(go env GOVERSION | sed 's/^go//')" >> "$GITHUB_OUTPUT"
+      - name: Resolve the version and the run kind
+        id: resolve
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = push ] && [ "$REF_TYPE" = tag ]; then
+            sh .github/scripts/release-verify.sh version "$REF_NAME"
+            version=$REF_NAME
+            prerelease=$(sh .github/scripts/release-verify.sh prerelease "$version")
+            dry_run=false
+          else
+            version=${INPUT_VERSION:-v0.0.0-dryrun}
+            sh .github/scripts/release-verify.sh dryversion "$version"
+            prerelease=true
+            dry_run=true
+          fi
+          {
+            echo "version=$version"
+            echo "dry_run=$dry_run"
+            echo "prerelease=$prerelease"
+            echo "commit=$GITHUB_SHA"
+          } >> "$GITHUB_OUTPUT"
+      - name: Require the repository owner to have started the run
+        shell: bash
+        env:
+          ACTOR: ${{ github.triggering_actor }}
+          PUSHER: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          test "$ACTOR" = "$OWNER" || { echo "run started by $ACTOR, not by the repository owner $OWNER" >&2; exit 1; }
+          test "$PUSHER" = "$OWNER" || { echo "run originally started by $PUSHER, not by the repository owner $OWNER" >&2; exit 1; }
+      - name: Require an annotated tag on a commit of main
+        if: steps.resolve.outputs.dry_run == 'false'
+        shell: bash
+        env:
+          TAG: ${{ steps.resolve.outputs.version }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # Fetch the tag object itself so a lightweight tag is not mistaken for an annotated one.
+          git fetch --force --no-tags "https://github.com/$REPO" "+refs/tags/$TAG:refs/tags/$TAG"
+          git fetch --force --no-tags "https://github.com/$REPO" '+refs/heads/main:refs/remotes/origin/main'
+          commit=$(sh .github/scripts/release-verify.sh tag "$TAG" refs/remotes/origin/main)
+          test "$commit" = "$GITHUB_SHA" || { echo "tag $TAG names $commit but the run is for $GITHUB_SHA" >&2; exit 1; }
+      - name: Require a green check run for the tagged commit
+        if: steps.resolve.outputs.dry_run == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          # check.yml on a push to main runs the repository checks and the macOS PTY lane; its
+          # conclusion is success only when all of them passed. Re-run it for the commit if absent.
+          # The script retries the head_sha query, then filters the push runs by head_sha client side.
+          sh .github/scripts/release-verify.sh ci-green "$GITHUB_SHA"
+      - name: Require that no release exists for the tag
+        if: steps.resolve.outputs.dry_run == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          if out=$(gh api "repos/$REPO/releases/tags/$TAG" 2>&1); then
+            echo "a release for $TAG already exists" >&2
+            exit 1
+          fi
+          case "$out" in
+            *"HTTP 404"*) echo "no release for $TAG yet" ;;
+            *) echo "cannot tell whether a release exists: $out" >&2; exit 1 ;;
+          esac
+      - run: go mod verify
+        working-directory: apps/whr
+      - run: go vet ./...
+        working-directory: apps/whr
+      - run: python3 -I -B scripts/check_repo.py
+      - run: go test -count=1 ./internal/releaseworkflow
+        working-directory: apps/whr
+
+  build:
+    name: build (${{ matrix.target }})
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            target: linux_amd64
+          - os: linux
+            arch: arm64
+            target: linux_arm64
+          - os: darwin
+            arch: arm64
+            target: darwin_arm64
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/whr/go.mod
+          check-latest: false
+          cache: false
+      - name: Build whr twice and compare
+        shell: bash
+        working-directory: apps/whr
+        env:
+          CGO_ENABLED: '0'
+          GOTOOLCHAIN: local
+          GOFLAGS: -mod=readonly
+          GOWORK: 'off'
+          GOOS: ${{ matrix.os }}
+          GOARCH: ${{ matrix.arch }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          COMMIT: ${{ needs.verify.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$COMMIT" || { echo "checkout is not the verified commit $COMMIT" >&2; exit 1; }
+          mkdir -p "$RUNNER_TEMP/bin"
+          pkg=github.com/wstein/workharbor-nxt/apps/whr/internal/version
+          built=$(date -u -d "@$(git log -1 --format=%ct)" +%Y-%m-%dT%H:%M:%SZ)
+          ldflags="-X $pkg.Version=${VERSION#v} -X $pkg.Revision=$COMMIT -X $pkg.BuildDate=$built"
+          # Two builds with separate, empty build caches must give the same bytes.
+          GOCACHE="$RUNNER_TEMP/gocache-first" go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$RUNNER_TEMP/bin/whr" ./cmd/whr
+          GOCACHE="$RUNNER_TEMP/gocache-second" go build -trimpath -buildvcs=false -ldflags "$ldflags" -o "$RUNNER_TEMP/bin/second-whr" ./cmd/whr
+          cmp "$RUNNER_TEMP/bin/whr" "$RUNNER_TEMP/bin/second-whr"
+          rm "$RUNNER_TEMP/bin/second-whr"
+      - name: Package the archive
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) sh .github/scripts/release-package.sh "$VERSION" "$TARGET" "$RUNNER_TEMP/bin/whr" "$RUNNER_TEMP/dist"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-${{ matrix.target }}
+          path: ${{ runner.temp }}/dist/*
+          retention-days: 1
+          if-no-files-found: error
+
+  smoke:
+    name: smoke (${{ matrix.target }})
+    needs: [verify, build]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux_amd64
+            runner: ubuntu-24.04
+          - target: linux_arm64
+            runner: ubuntu-24.04-arm
+          - target: darwin_arm64
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-${{ matrix.target }}
+          path: ${{ runner.temp }}/dist
+      - name: Smoke-test the shipped archive
+        shell: bash
+        env:
+          VERSION: ${{ needs.verify.outputs.version }}
+          TARGET: ${{ matrix.target }}
+          COMMIT: ${{ needs.verify.outputs.commit }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$COMMIT" || { echo "checkout is not the verified commit $COMMIT" >&2; exit 1; }
+          plain=${VERSION#v}
+          dist=$(cd "$RUNNER_TEMP" && pwd)/dist
+          sh .github/scripts/release-smoke.sh "$VERSION" "$dist/whr_${plain}_${TARGET}.tar.gz" "$COMMIT"
+
+  publish:
+    name: publish
+    needs: [verify, build, smoke]
+    if: needs.verify.outputs.dry_run == 'false' && github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      attestations: write
+      id-token: write
+    environment: release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/dist
+      - name: Recheck the approval and write SHA256SUMS
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.verify.outputs.version }}
+          COMMIT: ${{ needs.verify.outputs.commit }}
+          ACTOR: ${{ github.triggering_actor }}
+          PUSHER: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          # A re-run by someone else must not publish on the owner's earlier approval.
+          test "$ACTOR" = "$OWNER" || { echo "run triggered by $ACTOR, not by the repository owner $OWNER" >&2; exit 1; }
+          test "$PUSHER" = "$OWNER" || { echo "run originally started by $PUSHER, not by the repository owner $OWNER" >&2; exit 1; }
+          # Drafts are invisible to the verify job's read token; refuse any release, draft or not, for the tag.
+          existing=$(gh api "repos/$REPO/releases" --paginate --jq ".[] | select(.tag_name == \"$TAG\") | .id")
+          test -z "$existing" || { echo "a release (possibly a draft) for $TAG already exists: $existing" >&2; exit 1; }
+          # The tag must still name the verified commit; the owner may have moved it during the run.
+          remote=$(git ls-remote "https://github.com/$REPO" "refs/tags/$TAG^{}" | cut -f1)
+          test "$remote" = "$COMMIT" || { echo "tag $TAG now names '$remote', not the verified $COMMIT" >&2; exit 1; }
+          test "$(git rev-parse HEAD)" = "$COMMIT"
+          cd "$RUNNER_TEMP/dist"
+          n=3
+          test "$(ls -1 -- *.tar.gz | wc -l)" -eq "$n"
+          cat -- *.sha256 | LC_ALL=C sort -k2 > SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq "$n"
+          sha256sum --check SHA256SUMS
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ${{ runner.temp }}/dist/whr_*.tar.gz
+            ${{ runner.temp }}/dist/SHA256SUMS
+      - name: Create the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ needs.verify.outputs.version }}
+          COMMIT: ${{ needs.verify.outputs.commit }}
+          DRAFT: ${{ vars.WHR_RELEASE_DRAFT }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+          GO_VERSION: ${{ needs.verify.outputs.go_version }}
+        run: |
+          set -euo pipefail
+          sh .github/scripts/release-notes.sh "$TAG" "$COMMIT" "$GO_VERSION" > "$RUNNER_TEMP/notes.md"
+          flags=()
+          if [ "$DRAFT" = true ]; then flags+=(--draft); fi
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          gh release create "$TAG" --repo "$REPO" --verify-tag --title "WorkHarbor $TAG" --notes-file "$RUNNER_TEMP/notes.md" ${flags[@]+"${flags[@]}"} \
+            "$RUNNER_TEMP"/dist/whr_*.tar.gz "$RUNNER_TEMP/dist/SHA256SUMS"
