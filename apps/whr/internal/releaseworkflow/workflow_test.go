@@ -347,7 +347,7 @@ func TestNotesAndGuideNameEveryPlatform(t *testing.T) {
 			t.Errorf("guide and notes must say that %s is not shipped", system)
 		}
 	}
-	for _, want := range []string{"gh attestation verify", "SHA256SUMS", "WHR_RELEASE_DRAFT", "v0.1.0-alpha.", "dry run", "--verify-tag", "ci-green", "release-verify.sh"} {
+	for _, want := range []string{"gh attestation verify", "SHA256SUMS", "WHR_RELEASE_DRAFT", "alpha.N", "dry run", "--verify-tag", "ci-green", "release-verify.sh"} {
 		if !strings.Contains(guide, want) {
 			t.Errorf("the releasing guide lacks %q", want)
 		}
@@ -657,6 +657,52 @@ func TestEveryLinkedModuleHasAShippedThirdPartyNotice(t *testing.T) {
 			if !strings.Contains(pkg, "third_party/"+dir) || !strings.Contains(smk, "third_party/"+dir+"/LICENSE") {
 				t.Errorf("the package or smoke script does not ship third_party/%s", dir)
 			}
+		}
+	}
+}
+
+// publishRuleViolations checks the exact lines that decide what is published and how. A rule is a
+// full line of the workflow, so a weakened condition cannot hide behind a substring that remains.
+func publishRuleViolations(raw string) []string {
+	var out []string
+	for _, r := range []struct{ name, line string }{
+		{"draft only when WHR_RELEASE_DRAFT is true", `          if [ "$DRAFT" = true ]; then flags+=(--draft); fi` + "\n"},
+		{"pre-release flag only for a pre-release version", `          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi` + "\n"},
+		{"tag moved during the run", `          test "$remote" = "$COMMIT" || { echo "tag $TAG now names '$remote', not the verified $COMMIT" >&2; exit 1; }` + "\n"},
+		{"remote tag is read", `          remote=$(git ls-remote "https://github.com/$REPO" "refs/tags/$TAG^{}" | cut -f1)` + "\n"},
+		{"existing release (draft or not)", `          existing=$(gh api "repos/$REPO/releases" --paginate --jq ".[] | select(.tag_name == \"$TAG\") | .id")` + "\n"},
+		{"existing release refused", `          test -z "$existing" || { echo "a release (possibly a draft) for $TAG already exists: $existing" >&2; exit 1; }` + "\n"},
+		{"SHA256SUMS is an attestation subject", "            ${{ runner.temp }}/dist/whr_*.tar.gz\n            ${{ runner.temp }}/dist/SHA256SUMS\n"},
+		{"dry run never a release", "            prerelease=true\n            dry_run=true\n"},
+		{"tag run is not a dry run", "            dry_run=false\n"},
+	} {
+		if strings.Count(raw, r.line) != 1 {
+			out = append(out, r.name+": line missing or duplicated")
+		}
+	}
+	return out
+}
+
+func TestPublishRulesAreExactAndMutantsAreCaught(t *testing.T) {
+	raw := readRepo(t, ".github/workflows/release.yml")
+	if v := publishRuleViolations(raw); len(v) != 0 {
+		t.Fatalf("violations: %v", v)
+	}
+	for _, c := range []struct{ name, from, to string }{
+		{"always-prerelease", `if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi`, `flags+=(--prerelease)`},
+		{"drop-prerelease", `if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi`, `true`},
+		{"always-draft", `if [ "$DRAFT" = true ]; then flags+=(--draft); fi`, `flags+=(--draft)`},
+		{"drop-draft", `if [ "$DRAFT" = true ]; then flags+=(--draft); fi`, `true`},
+		{"drop-tag-moved", `test "$remote" = "$COMMIT" ||`, `test -n "$remote" ||`},
+		{"drop-existing-check", `test -z "$existing" ||`, `test -n "$COMMIT" ||`},
+		{"attest-no-sums", "\n            ${{ runner.temp }}/dist/SHA256SUMS\n", "\n"},
+		{"dispatch-dryrun-false", "            prerelease=true\n            dry_run=true\n", "            prerelease=true\n            dry_run=false\n"},
+	} {
+		if !strings.Contains(raw, c.from) {
+			t.Fatalf("%s: mutation target missing", c.name)
+		}
+		if v := publishRuleViolations(strings.Replace(raw, c.from, c.to, 1)); len(v) == 0 {
+			t.Errorf("%s: not caught", c.name)
 		}
 	}
 }
