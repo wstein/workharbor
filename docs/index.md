@@ -8,6 +8,7 @@
 ## Development
 
 - [Harness](development/harness.md), [Symphony](development/symphony.md)
+- [Releasing whr](releasing.md)
 
 ## Planning and evidence
 
