@@ -7,9 +7,9 @@
 # Usage: sh release-notes.sh TAG COMMIT GO_VERSION
 #
 # Run in a repository with full history and tags. The change list is the non-merge commit
-# subjects between the nearest earlier release tag (by version order, pre-releases included
-# because every whr tag so far is a pre-release) and COMMIT, grouped by Conventional Commit type,
-# or just "First release." when there is no earlier tag.
+# subjects between the nearest earlier release tag (by version order; a final release sorts above
+# its own pre-releases) and COMMIT, grouped by Conventional Commit type, or just "First release."
+# when no earlier release tag exists (the first release is v0.1.0).
 
 set -eu
 
@@ -24,7 +24,7 @@ plain=${tag#v}
 
 prev=
 if git rev-parse -q --verify "$commit^" >/dev/null; then
-	prev=$(git tag --merged "$commit^" --list 'v*' --sort=-version:refname |
+	prev=$(git -c versionsort.suffix=- tag --merged "$commit^" --list 'v*' --sort=-version:refname |
 		grep -E '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-(alpha|beta|rc)\.(0|[1-9][0-9]*))?$' | grep -vx "$tag" | head -n 1 || true)
 fi
 
