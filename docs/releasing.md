@@ -9,13 +9,13 @@ provenance and writes `SHA256SUMS`.
 ## Versions
 
 - A release is `vMAJOR.MINOR.PATCH`, for example `v0.1.0`.
-- A pre-release is `vMAJOR.MINOR.PATCH-alpha.N`, `-beta.N` or `-rc.N` with no leading zero in `N`,
-  for example `v0.1.0-alpha.6` (the existing tags are `v0.1.0-alpha.1` to `-alpha.5`). A pre-release
-  tag publishes a GitHub pre-release; a release tag publishes a normal release. No other suffix and
-  no build metadata is accepted.
-- A manual (dry) run takes a label `vMAJOR.MINOR.PATCH-dryrun` or `-dryrun.X`. The label can never
-  be a release version and a release version can never be a label.
-- The binary is stamped without the leading `v` (`whr version` prints `whr 0.1.0-alpha.6`), its
+- The first release is `v0.1.0`; its notes read "First release." because no earlier release tag
+  exists on the remote.
+- Pre-releases are supported for later use: `vMAJOR.MINOR.PATCH-alpha.N`, `-beta.N` or `-rc.N` with
+  no leading zero in `N`, for example `v0.2.0-rc.1`. A pre-release tag publishes a GitHub
+  pre-release; a release tag publishes a normal release. No other suffix and no build metadata is
+  accepted. A final release is the notes baseline above its own pre-releases.
+- The binary is stamped without the leading `v` (`whr version` prints `whr 0.1.0`), its
   revision is the tagged commit and its build date is the commit time. The archive is
   `whr_<version without v>_<os>_<arch>.tar.gz`.
 - Never move or re-create a tag. A wrong tag is abandoned and the next version used.
@@ -24,8 +24,8 @@ provenance and writes `SHA256SUMS`.
 
 linux/amd64, linux/arm64 and darwin/arm64, each built with CGO disabled and run natively on a
 runner of its own platform (`ubuntu-24.04`, `ubuntu-24.04-arm`, `macos-15`) before publication.
-Windows and darwin/amd64 are not shipped: whr uses Unix file-system and terminal primitives, and the
-repository evidence is Linux and Apple-silicon macOS. Open question for the owner: add darwin/amd64
+Windows and darwin/amd64 are explicitly not shipped: whr uses Unix file-system and terminal primitives, and the
+repository evidence is Linux and Apple-silicon macOS. Add darwin/amd64
 (a `macos-15-intel` runner) if Intel Macs matter.
 
 ## Stages
@@ -56,11 +56,12 @@ build, so it needs the owner's approval like any other.
 
 ## Owner steps for a release
 
-1. Check that `check.yml` is green on the `main` commit to release and that the `release`
-   environment exists.
+1. Check that `check.yml` is green on the `main` commit to release. Before the first tag, create
+   the environment `release` (Settings, Environments) with a required reviewer or a tag
+   restriction; the publish job refers to it and GitHub would otherwise create it unprotected.
 2. Optionally run the dry run above.
 3. Push the annotated tag on that commit, for example
-   `git tag -a v0.1.0-alpha.6 -m "WorkHarbor v0.1.0-alpha.6" <commit> && git push origin v0.1.0-alpha.6`.
+   `git tag -a v0.1.0 -m "WorkHarbor v0.1.0" <commit> && git push origin v0.1.0`.
 4. Wait for the run. If it fails before publish, fix the cause and use the next version.
 
 ## Verifying a download
