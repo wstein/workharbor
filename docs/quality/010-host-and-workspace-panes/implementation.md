@@ -58,3 +58,21 @@ its own owner merge; actual host execution/acceptance T018 remains owner-operate
 P2 implementation evidence: [local shell](p2.md). The prepared
 [SC-009 base runbook/result template](sc009-base.md) is UNVERIFIED.
 No real Docker, herdr or SSH operation has been performed by this agent.
+
+## P3 approval and prerequisite binding
+
+Owner `wstein` merged [P2 PR #221](https://github.com/wstein/workharbor/pull/221)
+at `7d3449b4913566e30be2711c60f56957f484c24b`; its accepted head was
+`48422b095da4cb370dc6ce2f66b427863133112c`, with exact-head code/QA CLEAR and
+[green CI](https://github.com/wstein/workharbor/actions/runs/40035395836).
+This closes T017. The owner's subsequent instruction identifies P3 and P4 as
+remaining work and authorizes their existing package scope. The authoritative
+spec, plan, contract, model and research are byte-identical to the approved docs
+head `056f09e2ca2f7124235686e73d3271901e8b27cb`; task/evidence updates leave
+requirements and ordering intact.
+
+P3 starts from the exact merge tip in the stw-created workspace for task
+`whr010-p3-plain-20261023`, owner `codex`, plan `fa952bfa95b67c11d24470c9127c18f6`.
+It covers T019–T022 only. [P3 evidence](p3.md) distinguishes configuration
+acceptance from the absent remote session-creation consumer. P4 starts after P3's
+owner merge; SC-009 T018/T030 stays UNVERIFIED and owner-operated.

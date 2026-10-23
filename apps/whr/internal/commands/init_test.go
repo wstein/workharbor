@@ -437,3 +437,59 @@ func TestInitPublicRunsNoStartupCommandOrGit(t *testing.T) {
 		t.Fatal("startup command bytes changed")
 	}
 }
+
+// FR-020/SC-007: the public result agrees with the reconciled schema default.
+func TestInitResultConsoleDefaultPlainMatchesSchema(t *testing.T) {
+	raw, err := os.ReadFile(repoFile("output.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	defs := schema["$defs"].(map[string]any)
+	properties := defs["initResult"].(map[string]any)["properties"].(map[string]any)
+	settings := properties["settings"].(map[string]any)["properties"].(map[string]any)
+	value := settings["console_mode"].(map[string]any)["properties"].(map[string]any)["value"].(map[string]any)
+	if value["default"] != "plain" {
+		t.Fatalf("schema default %v, want plain", value["default"])
+	}
+	for _, mode := range []string{"", "plain", "herdr"} {
+		dir := initFixture(t)
+		args := []string{"init", dir, "--non-interactive", "--yes", "--json"}
+		want, origin := mode, "flag"
+		if mode == "" {
+			want, origin = "plain", "default"
+		} else {
+			args = append(args, "--console-mode="+mode)
+		}
+		got := run(t, nil, args...)
+		if got.code != 0 {
+			t.Fatalf("%q: %+v", mode, got)
+		}
+		doc, err := jsonUnmarshal(got.stdout)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := compileSchema(t).Validate(doc); err != nil {
+			t.Fatal(err)
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, "workharbor.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var manifest map[string]any
+		if err := json.Unmarshal(raw, &manifest); err != nil {
+			t.Fatal(err)
+		}
+		if manifest["console_mode"] != want {
+			t.Fatalf("%q: stored mode %v, want %s", mode, manifest["console_mode"], want)
+		}
+		result := decodeEnvelope(t, got.stdout)["result"].(map[string]any)
+		setting := result["settings"].(map[string]any)["console_mode"].(map[string]any)
+		if setting["value"] != want || setting["origin"] != origin {
+			t.Fatalf("%q: %+v", mode, setting)
+		}
+	}
+}

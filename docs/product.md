@@ -68,3 +68,10 @@ External workflows retain human review, merge and release gates.
 Product implementation requires separate explicit owner scope and constitutional
 approval, followed by an approved feature spec and plan. Saving this proposal
 does not provide that authorization.
+
+## Console configuration
+
+The console mode defaults to `plain` for new sessions when an old or new manifest
+omits `console_mode`; explicit `herdr` remains supported and optional. Existing
+consoles retain their backend and state. Configuration generation and validation
+implement this default; remote console session creation remains pending.
