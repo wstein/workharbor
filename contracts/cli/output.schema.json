@@ -991,6 +991,8 @@
               ],
               "properties": {
                 "value": {
+                  "default": "plain",
+                  "description": "Omitted console_mode resolves to plain for old and new manifests; explicit herdr remains supported. Existing consoles retain their state.",
                   "enum": [
                     "herdr",
                     "plain"

@@ -87,3 +87,12 @@ proof of instanceable names, configuration and compatible dependencies.
 Neither topology is implemented or approved for product work. The
 [concept paper](papers/optional-ai-execution.md) records identity, intervention and
 credential questions for a separately approved design.
+
+## Console preference boundary
+
+Manifest validation retains whether `console_mode` was supplied. Configuration
+consumers resolve an omitted preference to `plain`; explicit `herdr` stays
+optional. A future session-creation consumer must apply this default once at
+creation, preserving the backend, shell and environment of existing consoles
+(Feature 010 OQ-7 and ADR 0012). The owner API and that runtime integration remain
+pending. Local shells are independent of the remote console and multiplexer.
