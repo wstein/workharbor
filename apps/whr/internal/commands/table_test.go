@@ -322,12 +322,12 @@ func TestCompletionKnowsBothForms(t *testing.T) {
 	}
 	// Production handlers: unavailable commands are not offered.
 	prod := complete(nil, "")
-	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws", "init"} {
+	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws", "init", "ls"} {
 		if !contains(prod, want) {
 			t.Errorf("production completion lacks %q: %v", want, prod)
 		}
 	}
-	for _, none := range []string{"ls", "setup", "service"} {
+	for _, none := range []string{"setup", "service"} {
 		if contains(prod, none) {
 			t.Errorf("production completion offers unavailable %q: %v", none, prod)
 		}
@@ -370,7 +370,13 @@ func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 			t.Errorf("%s: refusal has no explanation of its prerequisite", e.ID)
 		}
 		for _, sp := range spellings(e) {
-			for _, extra := range [][]string{nil, {"some-name"}, {"--cpus", "2", "--memory", "1GiB"}, {"--bogus"}} {
+			extras := [][]string{nil, {"some-name"}, {"--cpus", "2", "--memory", "1GiB"}, {"--bogus"}}
+			// FR-066 parses its own local flags now. Unknown flags retain exit
+			// 64 via Cobra; known flags without --local retain owner_api refusal.
+			if e.ID == "workspace.ls" {
+				extras = [][]string{nil, {"some-name"}, {"--role", "primary"}}
+			}
+			for _, extra := range extras {
 				args := append(append([]string{}, sp...), extra...)
 				got := run(t, spy, args...)
 				if got.code != 64 || got.stdout != "" {
@@ -773,4 +779,24 @@ func assertCurrentTestIDs(t *testing.T, ids []string) {
 		}
 		seen[id] = true
 	}
+}
+
+// FR-066 is a local-only amendment: remote metadata and every other deferred
+// command remain blocked. Source and contract must change together.
+func TestLocalLsContractAmendment(t *testing.T) {
+	for _, e := range commands.Table() {
+		if e.ID == "workspace.ls" {
+			if strings.Join(e.Flags, ",") != "--local,--role,--label,--json" || e.BlockedOn != "owner_api" || e.Needs != "control_plane" || e.Writes != "none" {
+				t.Fatalf("unexpected local/remote amendment: %+v", e)
+			}
+			got := run(t, nil, "ls", "--help")
+			for _, flag := range []string{"--local", "--role", "--label", "owner_api", "5 s"} {
+				if !strings.Contains(got.stdout, flag) {
+					t.Errorf("help lacks %s", flag)
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("workspace.ls missing")
 }

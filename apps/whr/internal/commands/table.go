@@ -82,7 +82,7 @@ func WaitsFor(id string) string {
 }
 
 var descriptions = map[string]string{
-	"workspace.ls":           "List workspaces",
+	"workspace.ls":           "List local workspaces with --local (remote listing waits for owner_api)",
 	"workspace.show":         "Show one workspace",
 	"workspace.create":       "Create a workspace",
 	"workspace.start":        "Start a workspace",

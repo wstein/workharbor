@@ -113,3 +113,34 @@ func TestLocalLsRejectsMalformedDockerRecords(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalLsBindAndLegacyVolumeMetadata(t *testing.T) {
+	raw := fmt.Sprintf(`{"Id":%q,"Name":"/legacy","State":"exited","Labels":{"devcontainer.config_file":"/host/project/.devcontainer/devcontainer.json"},"Mounts":[{"Type":"bind","Source":"/host/project","Destination":"/workspace","RW":true},{"Type":"bind","Source":"/toolbox","Destination":"/opt/bdock/go","RW":false},{"Type":"volume","Name":"legacy-home","Destination":"/home/vscode","RW":true}]}`, strings.Repeat("a", 64))
+	got, err := fixtureDocker(t, raw).Discover(context.Background(), socketPorts())
+	if err != nil || len(got) != 1 || got[0].WorkspaceFolder != "/host/project" || got[0].HomeVolume == nil || *got[0].HomeVolume != "legacy-home" {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+func TestLocalLsEmptyDaemonAvoidsInspect(t *testing.T) {
+	client := Client{Executable: fakeDocker(t, `test "$2 $3" = 'container ls' || exit 99`)}
+	got, err := client.Discover(context.Background(), socketPorts())
+	if err != nil || got == nil || len(got) != 0 {
+		t.Fatalf("%+v %v", got, err)
+	}
+}
+func TestLocalDiscoveryOwnBudgetStopsDocker(t *testing.T) {
+	client := Client{Executable: fakeDocker(t, `/bin/sleep 60 & wait`)}
+	start := time.Now()
+	_, err := client.Discover(context.Background(), socketPorts())
+	if err == nil || time.Since(start) > 5*time.Second+200*time.Millisecond {
+		t.Fatalf("discovery exceeded total budget: %v (%v)", err, time.Since(start))
+	}
+}
+func TestLocalDockerRefusesMutationArgv(t *testing.T) {
+	client := Client{Executable: fakeDocker(t, `echo should-not-run`)}
+	for _, args := range [][]string{{"container", "rm", "--force", strings.Repeat("a", 64)}, {"volume", "ls"}, {"container", "inspect", "--format", inspectFormat, ";touch bad"}} {
+		if raw, err := client.read(context.Background(), "unix:///test/socket", args...); err == nil || len(raw) != 0 {
+			t.Fatalf("non-discovery vector ran: %v", args)
+		}
+	}
+}

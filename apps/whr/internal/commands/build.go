@@ -89,6 +89,9 @@ func (a *app) build() {
 		e := e
 		runE := func(c *cobra.Command, args []string) error {
 			ctx := c.Context()
+			if e.ID == "workspace.ls" {
+				ctx = context.WithValue(ctx, localLsKey{}, localLsOptions(c))
+			}
 			if e.ID == "workspace.init" {
 				options, err := initOptions(c)
 				interactive := !options.NonInteractive && !options.DryRun && !a.jsonMode() && a.env.InputTerminal && a.env.IsTerminal(a.env.Stderr) && a.env.Stdin != nil
@@ -116,6 +119,10 @@ func (a *app) build() {
 			}
 			if e.ID == "workspace.init" {
 				addInitFlags(c, e)
+			} else if e.ID == "workspace.ls" {
+				c.Flags().Bool("local", false, "discover local workspace containers; no control plane")
+				c.Flags().String("role", "", "local role: primary, staging or temp")
+				c.Flags().String("label", "", "local label selector: key or key=value")
 			} else if !a.available(e.ID) {
 				// Unavailable commands accept and ignore any flags so that they refuse
 				// with their one-line explanation instead of a flag error.
