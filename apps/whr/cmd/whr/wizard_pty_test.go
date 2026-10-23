@@ -16,7 +16,10 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	ptytest.Main(m, map[string]func([]string) int{"wizard": func(args []string) int {
+	if os.Getenv("WHR_TEST_DOCKER") == "1" {
+		os.Exit(localShellFakeDocker(os.Args[1:]))
+	}
+	ptytest.Main(m, map[string]func([]string) int{"local-shell": localShellPTYEntry, "local-shell-nonterminal": localShellPTYNonterminal, "local-shell-redirect": localShellPTYRedirect, "wizard": func(args []string) int {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
 		return run(ctx, args, os.Stdout, os.Stderr)
