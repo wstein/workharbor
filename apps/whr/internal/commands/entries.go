@@ -6,7 +6,7 @@ package commands
 // the same change in the contract, its freeze test and an owner-reviewed
 // amendment (ADR 0014, FR-052).
 var entries = []Entry{
-	{ID: "workspace.ls", Path: []string{"workspace", "ls"}, Short: []string{"ls"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "envelope", BlockedOn: "owner_api"},
+	{ID: "workspace.ls", Path: []string{"workspace", "ls"}, Short: []string{"ls"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "envelope", BlockedOn: "owner_api", Flags: []string{"--local", "--role", "--label", "--json"}},
 	{ID: "workspace.show", Path: []string{"workspace", "show"}, Short: []string{"show"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "envelope", BlockedOn: "owner_api"},
 	{ID: "workspace.create", Path: []string{"workspace", "create"}, Short: []string{"create"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api", Flags: []string{"--cpus", "--memory"}},
 	{ID: "workspace.start", Path: []string{"workspace", "start"}, Short: []string{"start"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api"},

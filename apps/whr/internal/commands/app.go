@@ -10,6 +10,7 @@ import (
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/doctor"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/output"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/version"
 )
@@ -53,7 +54,10 @@ func DefaultHandlers() map[string]Handler {
 		"version":            versionHandler,
 		"host.doctor":        DoctorHandler(doctor.SystemPorts(nil)),
 		"workspace.validate": validateHandler,
-		"workspace.init":     initHandler,
+		"workspace.ls": LocalLsHandler(func(ctx context.Context) ([]localdocker.Workspace, error) {
+			return (localdocker.Client{}).Discover(ctx, doctor.SystemPorts(nil))
+		}),
+		"workspace.init": initHandler,
 	}
 }
 

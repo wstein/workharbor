@@ -50,10 +50,13 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 	if !a.available(e.ID) {
 		fmt.Fprintf(b, "Status: not available yet; it waits for %s and exits 64\n", WaitsFor(e.ID))
 	}
+	if e.ID == "workspace.ls" {
+		b.WriteString("Local: --local lists running and stopped labelled containers (5 s total); no runtime is started.\nWithout --local: waits for owner_api and exits 64.\n")
+	}
 	if e.JSON == "rejected" {
 		b.WriteString("JSON: not supported (--json is a usage error)\n")
 	}
-	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && e.ID == "workspace.init" {
+	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.init" || e.ID == "workspace.ls") {
 		fmt.Fprintf(b, "\nFlags:\n%s", usages)
 	}
 	b.WriteString("\n" + globalFlagsHelp)
