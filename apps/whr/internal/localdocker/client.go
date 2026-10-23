@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -21,47 +19,69 @@ const maxOutput = 4 << 20
 // credential helpers, contexts or CLI plugin settings. It is removed on return.
 type Client struct{ Executable string }
 
+type readResult struct {
+	stdout, stderr []byte
+	status         int
+}
+
 func (c Client) read(ctx context.Context, endpoint string, args ...string) ([]byte, error) {
-	if !strings.HasPrefix(endpoint, "unix://") || !filepath.IsAbs(strings.TrimPrefix(endpoint, "unix://")) {
-		return nil, errors.New("local Unix endpoint required")
+	result, err := c.runRead(ctx, endpoint, args...)
+	if err != nil {
+		return nil, err
 	}
-	if !discoveryArgs(args) {
-		return nil, errors.New("unsupported discovery operation")
+	if result.status != 0 {
+		return nil, errors.New("Docker discovery command failed")
+	}
+	return result.stdout, nil
+}
+
+func (c Client) runRead(ctx context.Context, endpoint string, args ...string) (readResult, error) {
+	if !strings.HasPrefix(endpoint, "unix://") || !filepath.IsAbs(strings.TrimPrefix(endpoint, "unix://")) {
+		return readResult{}, errors.New("local Unix endpoint required")
+	}
+	shellInspect := len(args) == 5 && args[0] == "container" && args[1] == "inspect" && args[2] == "--format" && (args[3] == "{{json .}}" || args[3] == "{{.State.Running}}") && fullID(args[4])
+	if !discoveryArgs(args) && !shellInspect {
+		return readResult{}, errors.New("unsupported discovery operation")
 	}
 	exe := c.Executable
 	if exe == "" {
 		var err error
 		exe, err = exec.LookPath("docker")
 		if err != nil {
-			return nil, errors.New("Docker CLI unavailable")
+			return readResult{}, errors.New("Docker CLI unavailable")
 		}
 	}
-	config, err := os.MkdirTemp("", "whr-docker-config-")
+	env, cleanEnv, err := ClientEnvironment()
 	if err != nil {
-		return nil, errors.New("cannot isolate Docker configuration")
+		return readResult{}, err
 	}
-	defer os.RemoveAll(config)
+	defer cleanEnv()
 	childctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	cmd := exec.CommandContext(childctx, exe, append([]string{"--host=" + endpoint}, args...)...)
-	cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "LC_ALL=C", "DOCKER_CONFIG=" + config}
+	cmd.Env = env
 	cmd.WaitDelay = 200 * time.Millisecond
 	cleanup := isolate(cmd)
 	defer cleanup()
-	out := &boundedOutput{cancel: cancel}
+	out, diagnostic := &boundedOutput{cancel: cancel}, &boundedOutput{cancel: cancel}
 	cmd.Stdout = out
-	cmd.Stderr = io.Discard
+	cmd.Stderr = diagnostic
 	err = cmd.Run()
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return readResult{}, ctx.Err()
 	}
-	if out.exceeded {
-		return nil, errors.New("Docker response exceeds discovery limit")
+	if out.exceeded || diagnostic.exceeded {
+		return readResult{}, errors.New("Docker response exceeds discovery limit")
 	}
+	status := 0
 	if err != nil {
-		return nil, errors.New("Docker discovery command failed")
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) {
+			return readResult{}, errors.New("Docker discovery command failed")
+		}
+		status = exit.ExitCode()
 	}
-	return out.buf.Bytes(), nil
+	return readResult{stdout: out.buf.Bytes(), stderr: diagnostic.buf.Bytes(), status: status}, nil
 }
 
 // Admit only fixed vectors, with validated full container IDs as inspect data.
