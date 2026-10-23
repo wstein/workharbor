@@ -15,6 +15,15 @@ This amendment changes requirements for pending init/template work; it claims no
 init implementation, prior review CLEAR, or approval of the full feature.
 
 
+## Amendment (2026-10-23): host session and local shell
+
+Owner request: work from one persistent herdr session on the host with host panes and workspace panes
+([Feature 010](../010-host-and-workspace-panes/spec.md), [ADR 0015](../../docs/adr/0015-host-session-and-local-shell.md)).
+This amendment adds `shell --local`, makes `plain` the default console mode (FR-048) and states what does not apply to a local
+pty. It is proposed text: it needs an independent review CLEAR for its exact head and explicit owner approval of that head, evidenced
+by a tracker or PR link. The manifest schema, vectors, command contract and code still say `herdr` until their separate work
+items land (Feature 010 FR-020).
+
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
@@ -175,7 +184,7 @@ of the documentation reconciliation issues (#66, #68, #75); the workpad of the f
 
 `ws init` gains the local wizard specified in US0 and FR-043–FR-050. The owner
 requested separate human/agent shells, file preview, existing devcontainer reuse,
-unattended equivalents, fish and herdr defaults, workspace/project/directory
+unattended equivalents, a fish default and a console mode choice (herdr or plain; the default is plain since 2026-10-23), workspace/project/directory
 inputs, starter templates, shared shortcuts and later optional bundle selection.
 This revision specifies those outcomes; it does not implement them. It requires
 human spec review and reconciliation/review of affected plans, task scope,
@@ -220,7 +229,7 @@ then validate shell/session preferences without provisioning a workspace.
 1. **Given** a terminal and no existing configuration, **When** `whr ws init` runs,
    **Then** it asks for workspace name, optional project repository, starting
    directory, existing devcontainer or starter, human shell, terminal mode and
-   shortcuts; it offers fish, herdr and enabled shortcuts as defaults for missing
+   shortcuts; it offers fish, plain and enabled shortcuts as defaults for missing
    settings, and shows bash as the fixed WorkHarbor agent-command shell policy.
 2. **Given** an existing `.devcontainer` and WorkHarbor settings, **When** init runs,
    **Then** it retains existing explicit values, asks only for missing settings,
@@ -242,7 +251,7 @@ then validate shell/session preferences without provisioning a workspace.
    agent commands use bash and existing script interpreters remain unchanged.
    No agent-native tool is installed, authenticated or launched, and none is configured except by the authored,
    credential-free `.claude/settings.json` (FR-065, owner decision of 2026-10-17) and `AGENTS.md` (FR-064).
-7. **Given** herdr console mode, **When** its owner disconnects and reattaches,
+7. **Given** a persistent console (plain by default, or herdr when selected), **When** its owner disconnects and reattaches,
    **Then** the same console survives with the same shell/environment and a fresh
    grant; stop/rebuild/runtime removal/explicit close terminate it. A fresh `shell`
    still ends on disconnect. Missing selected capabilities refuse explicitly.
@@ -693,8 +702,11 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   rebuilding at the previously trusted revision.
 - **FR-006**: `shell`, `console`, `ssh` and `agent attach` MUST use single-use, expiring, workspace- and
   owner-bound grants and the attachment limits of Feature 001; they MUST NOT provide raw host shell, Docker socket
-  or host-secret access.
+  or host-secret access. The one exception is `shell --local` of Feature 010 (FR-013 there): run on the Docker host with `--local`,
+  it needs no grant because its caller already uses the host's Docker socket; it is never an automatic fallback.
 - **FR-007**: `whr shell <ws>` MUST start a fresh login shell inside the workspace that ends with its attachment.
+  With `--local` on the Docker host, `whr shell --local <ws>` starts a fresh login shell through the local Docker daemon and the FR-066 discovery,
+  without control plane or grant; its lifetime is governed by Feature 010 FR-007, not by this sentence.
 - **FR-007a**: `whr console <ws>` MUST attach to the workspace's single persistent console session, creating it if
   absent and saying so. The console session's lifetime MUST be independent of its attachments:
   - client disconnect, grant expiry, idle timeout and the maximum attachment duration end only the attachment;
@@ -703,6 +715,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   - host disconnect ends the attachment and leaves console state unknown until reconciliation;
   - reattachment always requires a new grant and shows a bounded retained output tail, noting any dropped output;
   - `whr console <ws> --status` reports whether a session exists, its start time and current attachments.
+  - The console has no local mode: `whr console <ws> --local` exits 64 (Feature 010 FR-011).
 - **FR-008**: `whr ssh` MUST pin the workspace server key from the authenticated control plane, use short-lived
   client credentials refreshed before each connection, and ignore the user's personal SSH configuration and agent.
 - **FR-008a**: `whr ssh <ws> --print-config` MUST generate a client configuration for external SSH clients and IDEs
@@ -842,14 +855,17 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   shell/environment until explicit close/new session. Validate executable availability
   at trusted creation/session launch; missing/unknown support MUST refuse with
   remediation, never silently substitute or install a shell.
-- **FR-048**: Default missing console mode to herdr, with explicit plain mode.
+- **FR-048**: Default missing console mode to plain, with explicit herdr as an optional alternative (amended 2026-10-23: the
+  owner's herdr session runs on the host, [ADR 0015](../../docs/adr/0015-host-session-and-local-shell.md)).
   Either mode MUST preserve FR-007a's one owner-scoped persistent console, bounded
-  output tail, grant/attachment limits and end events. herdr is an in-container
-  human-console backend, not an agent launcher or an assumed agent-session protocol.
-  Backend availability/version compatibility MUST be established before launch;
+  output tail, grant/attachment limits and end events. herdr in the container is an optional
+  human-console backend, never required by any `whr` command, not an agent launcher or an assumed agent-session protocol, and `whr`
+  gives no nesting guidance and does not detect or avoid a multiplexer on the host.
+  When herdr is selected, backend availability/version compatibility MUST be established before launch;
   otherwise refuse with remediation to supply it through a separately approved
   environment or explicitly select plain. `whr shell` remains a fresh shell ending
-  with its attachment. No backend may expose host sessions/sockets or widen access.
+  with its attachment, and `shell --local` never starts a console or a multiplexer. No backend may expose host sessions/sockets or
+  widen access.
 - **FR-049**: Reuse existing devcontainer contents by default. Starters MUST use
   only admitted capabilities and immutable image inputs, preserve language-image
   choice, and expose their supported/unsupported status. Init MUST NOT execute a
@@ -1082,7 +1098,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `schema_version` 1 (exactly four fields, unchanged) and the proposed `schema_version` 2: the same four fields plus
   optional `name` (lowercase letters, digits and hyphens, 1-64 characters, no leading or trailing hyphen), `start_dir`, `human_shell` (`fish`, `bash`, `zsh`, `nu`), `console_mode` (`herdr`, `plain`), `shortcuts`
   (`on`, `off`) and `project` (`url`, `path`), with the defaults of FR-047 to FR-049 when a field is absent (`start_dir`
-  `.`, fish, herdr, on); the agent-command shell is fixed to bash by policy and is not a field. Version 2 is
+  `.`, fish, plain, on; amended 2026-10-23, the schema and vectors follow in a separate work item); the agent-command shell is fixed to bash by policy and is not a field. Version 2 is
   fail-closed: the host-agent resolver rejects any manifest whose field set is not exactly version 1's until a separate,
   reviewed resolver change (work item T035, after T009) accepts version 2, so an init-authored manifest is not
   creation-ready on its own. The manifest vectors ([`vectors.json`](../../contracts/workspace/vectors.json)) are shared by
@@ -1185,7 +1201,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `workspace_folder` (from labels or bind mounts), `labels`, `home_volume` (named volume mounted at `/home/captain` or legacy
   `/home/vscode`, or null), and `protected_volumes` (read-only volumes, mounts under `/opt/bdock/*` and `bundledock-*` tool
   volumes). Terminal output is escaped per FR-022; `--json` emits a validated `localWorkspaceListResult`. Omitting `--local`
-  preserves the remote control-plane contract (exit 64).
+  preserves the remote control-plane contract (exit 64). `shell --local` (Feature 010) reuses this discovery, label rules and socket
+  rules; it does not copy them.
 - **FR-067**: `whr workspace rm --local` (short form `whr rm --local`) MUST stop and remove local workspace containers subject to
   hard home volume protection invariants (owner decision of 2026-10-19/20, #142):
   (a) Target selection requires an explicit container `<id|name>`, `--role <staging|temp>`, or `--label <key[=value]>`;
@@ -1286,7 +1303,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   exit-code ADR (H15:b, issue #70). The legacy `whr` table (0 OK, 1 error, 2 usage, 3 not found,
   4 auth, 5 conflict, 6 needs-human, 7 timeout, 8 quit, 9 interrupted, 10 task failed) and the development-script
   tables of Features 003/004 are reference material only.
-- **FR-019**: `shell`, `console`, `ssh` and `agent attach` MUST exit with the remote status 0–255 when the remote
+- **FR-019**: `shell` (including `shell --local`), `console`, `ssh` and `agent attach` MUST exit with the remote status 0–255 when the remote
   side exits, and with the interrupted code when the transport is lost. Because remote statuses can overlap CLI codes,
   CLI failures MUST also be announced on standard error with the `whr:` prefix, and the JSON exit event MUST
   distinguish a remote status from a CLI failure.
@@ -1309,7 +1326,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `whr ssh` relays itself) MUST filter OSC, DCS, APC, PM and SOS sequences by default, including sequences split
   across frames or left unterminated. Unfiltered output MUST require an explicit per-session raw opt-in that is
   shown when the session starts and never persisted (owner decision on wstein/workharbor#223, closed).
-  Connections made by external clients with FR-008a configuration are out of this requirement's reach.
+  Connections made by external clients with FR-008a configuration are out of this requirement's reach, and so is `shell --local`:
+  `whr` does not relay that stream, the child owns the terminal directly (Feature 010 FR-014); FR-022 still applies to `whr`'s own lines.
 
 **Release, packaging and platforms**
 
@@ -1361,7 +1379,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 - **Validation result**: valid flag, counts, bounded findings (code, severity, subject, message, remediation) and
   `provider_admission: not_evaluated` for one configuration directory.
 - **Manifest settings**: the version 2 fields of `workharbor.json` (FR-058) authored by `init`; read by no runtime
-  component in the first increment.
+  component in the first increment, except `human_shell`, which `shell --local` reads (Feature 010 FR-005) once that command exists.
 - **Client profile**: endpoint, verified server identity, owner identity, credential scope, expiry and local
   credential location for one owner.
 - **Operation reference**: durable operation identifier, idempotency key (caller- or CLI-generated) and status.
@@ -1505,7 +1523,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   activation; T030/T033's existing reuse acceptance stays in force.
 - **SC-015**: On supported real environments, every offered human shell works for
   new sessions while noninteractive agent commands retain their declared interpreter;
-  unsupported environments refuse. Both console modes pass FR-007a reconnect/end
+  unsupported environments refuse. Both console modes (plain by default) pass FR-007a reconnect/end
   cases without duplicate consoles, and changed preferences never alter a live console.
   Unmanaged native-agent execution is explicitly identified, not claimed verified.
 
@@ -1522,8 +1540,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 - Legacy `whr` behavior is reference only; no legacy code or binary is a dependency.
 - Development scripts of Features 003–005 keep their own exit codes and are not the product CLI.
 - The agent session interface assumes no herdr protocol or dependency; its wire
-  format belongs to the contract of issue #71. FR-048 separately proposes herdr as
-  the default human-console backend, subject to reviewed integration and availability.
+  format belongs to the contract of issue #71. FR-048 makes plain the default human-console backend and herdr an optional one,
+  subject to reviewed integration and availability (amended 2026-10-23).
 - The first increment (FR-061) runs entirely on the user's machine. `validate` and `doctor` read local files and
   discover a local socket; plain `doctor` reads the machine's state read-only (`doctor --fix` is [Feature 009](../009-host-setup-wizard/spec.md)) and its thresholds are not host policy; `init` writes a local directory and runs no Git command. Thresholds of `doctor` and the
   limits of FR-055 are owner-confirmed values (H77 (6), 2026-10-17).

@@ -97,3 +97,10 @@ unchanged. This revision is ready for human spec review, not implementation.
 - Requirements-quality notes: the thresholds and limits are owner-confirmed values (quote in H77 (6), chat 2026-10-17); the findings catalogue is proposed; the
   starters are listed as unsupported; `setup --dry-run` is excluded with a stated reason (FR-061); owner-API commands are
   specified and blocked, not removed; FR-051–FR-063 continue the numbering after the 2026-10-16 revisions.
+
+## Amendment 2026-10-23 (host session and local shell)
+
+- [x] FR-006, FR-007, FR-007a, FR-019, FR-022a, FR-048, FR-058, FR-066, US0 scenarios 1 and 7, SC-015 and the assumptions are worded for
+  `shell --local`, the plain console default and the console without a local mode (Feature 010, ADR 0015).
+- [ ] Independent review CLEAR and explicit owner approval for the exact head. The schema, vectors, command contract and code
+  still say `herdr` until their separate work items land (Feature 010 FR-020).
