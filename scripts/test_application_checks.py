@@ -86,7 +86,7 @@ class ApplicationChecksTests(unittest.TestCase):
                 path.write_bytes(content)
                 with self.subTest(content=content), self.assertRaises(ValueError): self.apps.read_events(path)
 
-    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None, python=(3, 14, 8), tailwind_metadata=None):
+    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None, python=(3, 14, 8), tailwind_metadata=None, tailwind_warning=False, metadata_query_fails=False):
         # The default python is an opaque fixture interpreter version, not a pin.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)/'source'; root.mkdir()
@@ -108,7 +108,9 @@ class ApplicationChecksTests(unittest.TestCase):
                     records = (tailwind_metadata(root) if callable(tailwind_metadata) else tailwind_metadata) if tailwind_metadata is not None else [{
                         'path': str(root/'apps/control_plane/_build/tailwind-fixture'),
                         'url': 'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64'}]
-                    data = json.dumps(records).encode()
+                    metadata = Path(env['WORKHARBOR_TAILWIND_METADATA'])
+                    metadata.write_text(json.dumps(records))
+                    data = b'warning: fixture Mix warning\n' if tailwind_warning else b''
                 elif name == 'curl':
                     Path(argv[argv.index('--output') + 1]).write_bytes(b'fixture binary')
                 elif command[1:] == ('-l', '.') and formatted: data = b'cmd/main.go\n'
@@ -120,7 +122,7 @@ class ApplicationChecksTests(unittest.TestCase):
                 elif command[1:2] == ('test',):
                     Path(env['WORKHARBOR_EXUNIT_EVENTS']).write_text(''.join(json.dumps(e) + '\n' for e in self.exunit_events()))
                 Path(output_path).write_bytes(data)
-                return 0
+                return 1 if metadata_query_fails and name == 'mix' and command[1:2] == ('run',) else 0
             def which(name): return None if name == missing else '/fixture/bin/' + name
             with mock.patch.object(self.apps.shutil, 'which', side_effect=which), \
                     mock.patch.object(self.apps.sys, 'version_info', python):
@@ -299,6 +301,7 @@ class ApplicationChecksTests(unittest.TestCase):
                       lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': 'http://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64'}],
                       lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': 'https://example.com/tool'}],
                       lambda root: [{'path': str(root/'apps/control_plane/_build/../escaped-tool'), 'url': official}],
+                      lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': official, 'extra': 'x'}],
                       symlink_escape):
             observed = []
             with self.subTest(value=value):
@@ -313,3 +316,26 @@ class ApplicationChecksTests(unittest.TestCase):
             self.exercise(fail=lambda argv: Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1],
                           observe=lambda argv, env: observed.append(argv))
         self.assertFalse(any(Path(argv[0]).name == 'mix' and argv[1:2] in (['assets.setup'], ['assets.build'], ['test']) for argv in observed))
+
+    def test_tailwind_metadata_file_ignores_mix_warnings(self):
+        observed = []
+        def observe(argv, env):
+            if argv[1:2] == ['run']:
+                path = Path(env['WORKHARBOR_TAILWIND_METADATA'])
+                self.assertEqual(Path(env['HOME']).parent, path.parent)
+                self.assertFalse(path.exists())
+                observed.append(path)
+        self.exercise(tailwind_warning=True, observe=observe)
+        self.assertEqual(1, len(observed))
+        self.assertIn('File.write!', self.apps.TAILWIND_METADATA)
+        self.assertIn('System.fetch_env!("WORKHARBOR_TAILWIND_METADATA")', self.apps.TAILWIND_METADATA)
+        self.assertIn(':exclusive', self.apps.TAILWIND_METADATA)
+
+    def test_tailwind_query_failure_blocks_even_with_valid_metadata(self):
+        observed = []
+        with self.assertRaisesRegex(ValueError, 'Application command failed'):
+            self.exercise(metadata_query_fails=True, observe=lambda argv, env: observed.append(argv))
+        self.assertEqual(1, sum(argv[1:2] == ['run'] for argv in observed))
+        self.assertFalse(any(Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1] for argv in observed))
+        self.assertFalse(any(argv[1:2] in (['assets.setup'], ['assets.build'], ['test']) and Path(argv[0]).name == 'mix' for argv in observed))
+

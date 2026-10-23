@@ -24,7 +24,7 @@ TAILWIND_METADATA = '''Tailwind.profiles()
 end)
 |> Enum.uniq()
 |> Jason.encode!()
-|> IO.puts()'''
+|> then(&File.write!(System.fetch_env!("WORKHARBOR_TAILWIND_METADATA"), &1, [:exclusive]))'''
 
 
 
@@ -236,9 +236,14 @@ def check_applications(root, inventory, run):
         # Query the locked package instead of duplicating its platform/version
         # selection. Preinstall the same binaries in the fresh build directory;
         # assets.setup still runs and verifies them through --if-missing.
-        result = execute([tools['mix'], 'run', '--no-start', '--no-compile', '-e', TAILWIND_METADATA], cwd)
+        metadata = cache/'tailwind-metadata.json'
+        env['WORKHARBOR_TAILWIND_METADATA'] = str(metadata)
         try:
-            assets = json.loads(result.read_text(), object_pairs_hook=unique_object)
+            execute([tools['mix'], 'run', '--no-start', '--no-compile', '-e', TAILWIND_METADATA], cwd)
+        finally:
+            env.pop('WORKHARBOR_TAILWIND_METADATA', None)
+        try:
+            assets = json.loads(metadata.read_text(), object_pairs_hook=unique_object)
         except (OSError, UnicodeError, ValueError) as error:
             raise ValueError('Invalid Tailwind installation metadata') from error
         if not isinstance(assets, list) or not assets:
