@@ -33,6 +33,16 @@ type Manifest struct {
 	Project          *Project
 }
 
+// EffectiveConsoleMode resolves an omitted field for a new session. ConsoleMode
+// retains the raw preference so editors can distinguish absence from a choice.
+// Callers must first reject manifest validation findings.
+func (m Manifest) EffectiveConsoleMode() string {
+	if m.ConsoleMode == "" {
+		return "plain"
+	}
+	return m.ConsoleMode
+}
+
 // ManifestResult is the outcome of CheckManifest. Manifest is nil when the
 // content could not be read as a manifest object at all.
 type ManifestResult struct {

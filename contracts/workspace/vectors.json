@@ -13,7 +13,8 @@
     "projects_path": "projects",
     "bundles": []
    },
-   "expect_codes": []
+   "expect_codes": [],
+   "expect_console_mode": "plain"
   },
   {
    "id": "v2-minimal",
@@ -23,7 +24,8 @@
     "projects_path": "projects",
     "bundles": []
    },
-   "expect_codes": []
+   "expect_codes": [],
+   "expect_console_mode": "plain"
   },
   {
    "id": "v2-full",
@@ -41,7 +43,8 @@
      "path": "projects/app"
     }
    },
-   "expect_codes": []
+   "expect_codes": [],
+   "expect_console_mode": "herdr"
   },
   {
    "id": "v2-start-dir-root",
