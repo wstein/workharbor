@@ -33,3 +33,7 @@ binds this package, while stale reviewer-owned markers remain intact.
 P1 covers discovery only; 006/T038 lifecycle work stays open. One PR per package,
 P1 → P2 → P3 → P4, each stopping for owner merge. SC-009 checkpoints A/B remain
 owner-operated real-host gates; fake Docker and PTY tests cannot close them.
+
+P1 red/green implementation and verification evidence: [local discovery](p1.md).
+T002–T006 are implemented; T007 remains open through publication/review/CI and
+the owner merge boundary. No later package or owner-host task is completed.
