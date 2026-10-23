@@ -60,3 +60,10 @@ integrate anything; WorkHarbor decisions stay in its own specifications.
   — the stated isolation boundary: a box must not reach host files, credentials or other boxes.
 - [Provider plugins](https://github.com/madarco/agentbox/blob/605ee75d63319003c188bc532d4e5b2ba36a51d6/docs/provider-plugins.md)
   — a provider contract (`CloudBackend`) behind a versioned SDK.
+
+Different problem: AgentBox runs disposable boxes for coding agents and orchestrates
+them (queue, wait, send). WorkHarbor prepares the person's persistent, `.devcontainer`
+native workspace and keeps runs human-initiated, with no agent queue or scheduler in the
+runtime (decision D57 in the archived
+[requirements](archive/workharbor-old/docs/content/docs/requirements.md)).
+The overlap is isolated, reproducible environments on the owner's own hardware.
