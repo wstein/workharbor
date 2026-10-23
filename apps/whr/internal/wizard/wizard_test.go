@@ -4,6 +4,7 @@ package wizard_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/wizard"
@@ -176,5 +177,57 @@ func TestWizardBareEnterOnReviewCancels(t *testing.T) {
 	}
 	if !strings.Contains(diag.String(), "Review: write, back, edit <flag>, review or cancel [cancel]: ") {
 		t.Fatalf("review prompt was not reached: %q", diag.String())
+	}
+}
+
+func TestWizardDefaultsPlainAndRetainsExplicitHerdr(t *testing.T) {
+	for _, source := range []string{"default", "answer", "flag", "existing", "existing-missing"} {
+		s := fixture()
+		o := scaffold.Options{}
+		answers := "\n\n\n\n\n\n\nwrite\n"
+		want := "plain"
+		switch source {
+		case "answer":
+			answers = "\n\n\n\n\nherdr\n\nwrite\n"
+			want = "herdr"
+		case "flag":
+			o.ConsoleMode = ptr("herdr")
+			answers = "\n\n\n\n\n\nwrite\n"
+			want = "herdr"
+		case "existing-missing":
+			s = existing()
+			e := s.Entries["workharbor.json"]
+			e.Data = bytes.ReplaceAll(e.Data, []byte(`"console_mode":"plain",`), nil)
+			s.Entries["workharbor.json"] = e
+			answers = "review\nwrite\n"
+		case "existing":
+			s = existing()
+			e := s.Entries["workharbor.json"]
+			e.Data = bytes.ReplaceAll(e.Data, []byte(`"console_mode":"plain"`), []byte(`"console_mode":"herdr"`))
+			s.Entries["workharbor.json"] = e
+			answers = "write\n"
+			want = "herdr"
+		}
+		var diag bytes.Buffer
+		p, err := wizard.Run(context.Background(), s, o, strings.NewReader(answers), &diag)
+		if err != nil {
+			t.Fatalf("%s: %v (%s)", source, err, diag.String())
+		}
+		if got := p.Preview().Settings["console_mode"].Value; got != want {
+			t.Fatalf("%s: %v, want %s", source, got, want)
+		}
+		var manifest map[string]any
+		if err := json.Unmarshal(p.Files()["workharbor.json"], &manifest); err != nil {
+			t.Fatal(err)
+		}
+		if source != "existing-missing" && manifest["console_mode"] != want {
+			t.Fatalf("%s: stored mode %v, want %s", source, manifest["console_mode"], want)
+		}
+		if source == "default" && !strings.Contains(diag.String(), "Console mode (herdr/plain) [plain]:") {
+			t.Fatal("prompt default differs")
+		}
+		if (source == "existing" || source == "existing-missing") && !bytes.Equal(p.Files()["workharbor.json"], s.Entries["workharbor.json"].Data) {
+			t.Fatal("existing manifest rewritten")
+		}
 	}
 }

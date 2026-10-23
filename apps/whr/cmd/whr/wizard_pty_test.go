@@ -49,7 +49,7 @@ func TestWizardPTYHappyPath(t *testing.T) {
 	s.Send("\n")
 	s.Expect("Human shell (fish/bash/zsh/nu) [fish")
 	s.Send("\n")
-	s.Expect("Console mode (herdr/plain) [herdr")
+	s.Expect("Console mode (herdr/plain) [plain")
 	s.Send("\n")
 	s.Expect("Shared shortcuts (on/off) [on")
 	s.Send("\n")
@@ -60,8 +60,12 @@ func TestWizardPTYHappyPath(t *testing.T) {
 	}
 	s.Send("write\n")
 	s.ExpectExit(0)
-	if _, err := os.Stat(filepath.Join(dir, "workharbor.json")); err != nil {
+	raw, err := os.ReadFile(filepath.Join(dir, "workharbor.json"))
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"console_mode": "plain"`) {
+		t.Fatal("PTY default did not produce plain console")
 	}
 }
 func TestWizardPTYInterruptRollsBack(t *testing.T) {
@@ -105,7 +109,7 @@ func TestWizardPTYDevcontainerSelection(t *testing.T) {
 	s.Send("chosen.json\n")
 	s.Expect("Human shell (fish/bash/zsh/nu) [fish")
 	s.Send("\n")
-	s.Expect("Console mode (herdr/plain) [herdr")
+	s.Expect("Console mode (herdr/plain) [plain")
 	s.Send("\n")
 	s.Expect("Shared shortcuts (on/off) [on")
 	s.Send("\n")

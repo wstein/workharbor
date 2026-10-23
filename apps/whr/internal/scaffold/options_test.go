@@ -25,8 +25,8 @@ func TestInitPreservesExistingSettings(t *testing.T) {
 		if !bytes.Equal(p.Files()["workharbor.json"], old) {
 			t.Fatal("a permission alone must not rewrite existing bytes")
 		}
-		if len(p.Preview().Settings) != 0 {
-			t.Fatalf("missing settings must not be presented as persisted: %#v", p.Preview().Settings)
+		if len(p.Preview().Settings) != 1 || p.Preview().Settings["console_mode"].Value != "plain" || p.Preview().Settings["console_mode"].Origin != "default" {
+			t.Fatalf("only the effective console default may appear; it must not be presented as persisted: %#v", p.Preview().Settings)
 		}
 	}
 	o := scaffold.Options{DryRun: true, HumanShell: str("fish")}
