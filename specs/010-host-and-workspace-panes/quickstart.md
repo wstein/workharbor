@@ -27,7 +27,7 @@ Standalone builds and real-host operation require their own owner authorization;
 | Package | Essential expected outcomes |
 | --- | --- |
 | P1 | Labelled running/stopped fixtures listed; role/label filter correct; foreign excluded; full required metadata; schema-valid JSON; fixed Unix endpoint; total timeout ≤5 s; zero mutation. |
-| P2 | Exact argv; missing mount uses validated configured directory with an escaped pre-handover warning under the approved FR-005/FR-010 reconciliation; redirected stderr/no-fallback/invalid-fallback cases; invalid usage before Docker; no match 65, ambiguity 64, non-running 68; no token canaries in child env/argv/output; raw child bytes unchanged; statuses 0/1/7/126/127/137/255 pass with reachable daemon; lost daemon/deadline 72; no duplicate exec. |
+| P2 | Exact argv; missing mount uses validated configured directory with an escaped pre-handover warning under merged FR-010/OQ-11 and SC-011; redirected stderr/no-fallback/invalid-fallback cases; invalid usage before Docker; no match 65, ambiguity 64, non-running 68; no token canaries in child env/argv/output; raw child bytes unchanged; statuses 0/1/7/126/127/137/255 pass with reachable daemon; lost daemon/deadline 72; no duplicate exec. |
 | P3 | Omitted field on old/new manifest defaults plain; explicit herdr retained; wizard/scaffold/schema vectors agree; live console untouched; no local console enabled. |
 | P4 | Separate fake-whr/herdr script tests; invalid names/cancel open nothing; deterministic marker/title/tab label; background-off zero OSC 11 and enabled exactly one before exec; SC-010 numeric constraints verified. |
 

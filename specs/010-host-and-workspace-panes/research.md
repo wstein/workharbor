@@ -2,7 +2,7 @@
 
 Date: 2026-10-23. Repository baseline: `e4caa8465e7abd183fcd87e8e8a9ffcd53ddbcaf`.
 This is design research by source inspection, not Docker/herdr execution or acceptance evidence.
-The seven answers in [spec Decisions](spec.md#decisions) are settled; research does not reopen them.
+The eight owner answers in [spec Decisions](spec.md#decisions) are settled; research does not reopen them.
 
 ## Discovery before shell
 
@@ -70,9 +70,18 @@ clear/title persistence, notebook font/emoji width, detach behavior and SSH reco
 **Contract prerequisite:** P1 lists all container states and exposes no running-state filter flag. US3's running-only picker and
 FR-018's name-only read rule need reconciliation in the separately approved P4 scope. The concrete proposal is to permit reading the
 existing public `state` field solely for eligibility, alongside `name`; no new flag or independent discovery. Implementation of that
-picker stays gated until the amendment is accepted; P1–P3 and the seven settled decisions are unaffected.
+picker stays gated until the amendment is accepted; P1–P3 and the eight settled decisions are unaffected.
 **Alternatives considered:** Product-level herdr integration, mandatory prompt configuration, a new palette or background-only identity.
 These reopen settled decisions. A failing SC-010 palette measurement is the specified reason to revisit palette values.
+
+## Merged fallback-warning amendment
+
+**Decision:** Implement OQ-11 and SC-011 exactly as merged in [PR #216](https://github.com/wstein/workharbor/pull/216),
+commit `29ce650184b4015ff02759c0b07835c914ba4db1`; the prior proposed FR-005/FR-010 reconciliation is resolved.
+**Rationale:** The owner chose configured-working-directory fallback with an exact escaped warning after the TTY-only notice and
+before child start, including redirected stderr. Invalid directory refuses 68 without exec/warning; matching mount produces no warning.
+**Alternatives considered:** Silent fallback, a new approval gate, or invalid-directory fallback instead of refusal would contradict
+settled OQ-11. P2 must test the exact text and output order under SC-011.
 
 ## Research result
 

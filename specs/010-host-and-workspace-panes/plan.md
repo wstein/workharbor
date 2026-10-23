@@ -1,10 +1,10 @@
 # Implementation Plan: Host and workspace panes
 
-**Branch**: `docs/010-implementation-plan-20261023` | **Date**: 2026-10-23 | **Spec**: [spec.md](spec.md)
-**Baseline**: `e4caa8465e7abd183fcd87e8e8a9ffcd53ddbcaf` (`main`).
+**Branch**: `docs/010-oq11-tasks-20261023` | **Date**: 2026-10-23 | **Spec**: [spec.md](spec.md)
+**Baseline**: `29ce650184b4015ff02759c0b07835c914ba4db1` (`main`, including merged OQ-11).
 **Status**: Proposed implementation plan; no product implementation or real-host verification.
 The owner requested this plan. [PR #212](https://github.com/wstein/workharbor/pull/212) merged the specification and
-[PR #214](https://github.com/wstein/workharbor/pull/214) records the seven owner decisions. The spec still labels its overall status
+[PR #214](https://github.com/wstein/workharbor/pull/214) records seven owner decisions; [PR #216](https://github.com/wstein/workharbor/pull/216) adds the eighth, OQ-11, and SC-011. The spec still labels its overall status
 Draft; this plan does not invent revision-bound spec/plan approval, task approval, build authority or runtime activation.
 Before implementation, bind the reviewed spec/plan/tasks revisions and owner approval links under [WORKFLOW](../../WORKFLOW.md).
 
@@ -44,7 +44,7 @@ Pre-research and post-design checks give the same result; no new constitutional 
 | III: reproducible inputs | Read existing manifest without following links, bounded at 64 KiB; no configuration rewrite or provisioning. |
 | IV: host boundaries | ADR 0015's explicit local capability relaxation only; no sudo, socket exposure, grant bypass for remote commands or host-shell command. Labels are a usability guard. |
 | V: durable operations | No container/storage lifecycle operation is introduced. Fresh exec lifetime, detached/orphan process limits are explicit; no fake cleanup guarantee. |
-| VI: authority | Seven decisions below are fixed inputs. Frozen contract edits are separate reviewed P1–P3 amendments, not changes made by this plan. |
+| VI: authority | Eight decisions below are fixed inputs. Frozen contract edits are separate reviewed P1–P3 amendments, not changes made by this plan. |
 | VII: executable evidence | Failing behavior tests first; fake-host checks cannot satisfy SC-009. Missing native/host evidence stays unverified. |
 | VIII: human control | Per-package exact-head review and PR; owner merge, artifact approval, standalone builds and real-host operation remain separate gates. |
 
@@ -53,7 +53,7 @@ satisfy that gate. Unknown runtime behavior is covered by SC-009, not an unresol
 
 ## Fixed owner decisions — do not reopen
 
-Source: [spec Decisions](spec.md#decisions), recorded 2026-10-23 and merged by [PR #214](https://github.com/wstein/workharbor/pull/214).
+Source: [spec Decisions](spec.md#decisions), recorded 2026-10-23 and merged by [PR #214](https://github.com/wstein/workharbor/pull/214) and [PR #216](https://github.com/wstein/workharbor/pull/216).
 Retain these IDs in implementation tasks and review evidence. Changes require an explicit new owner decision and authoritative spec/ADR
 amendment; an implementation difficulty does not silently turn a settled question into a new default.
 
@@ -66,6 +66,7 @@ amendment; an implementation difficulty does not silently turn a settled questio
 | OQ-8 | No local `agent attach`. | Refuse `--local` there; session-contract/grant requirements remain unchanged. |
 | OQ-9 | Persistent pane title and tab label with emoji identify pane kind. | Plugin sets both; owner sets them manually without it. Prompt markers remain BundleDock shell policy. |
 | OQ-10 | Accept FR-021 glyphs and FR-021a palette, including measured limits. | Marker is default; background is optional priority-P3 functionality in delivery package P4. Change palette only if SC-010 verifier fails. |
+| OQ-11 | Use the configured working directory with the exact fallback warning when no workspace-folder mount is determinable. | Preserve the byte-exact TTY-only notice; emit the escaped warning after the notice and before handover, also on redirected stderr. Invalid fallback exits 68 with no exec and no warning. |
 
 Also preserve foreman choices OQ-1 (Docker CLI, not Engine API client) and OQ-4 (`WHR_LOCAL_WORKSPACE`, `WHR_LOCAL_MODE`);
 OQ-3 was withdrawn. They are not additional undecided owner questions.
@@ -80,7 +81,7 @@ specs/010-host-and-workspace-panes/
 ├── data-model.md            # ephemeral discovery, exec and identity values
 ├── contracts/local-cli.md   # design boundary; not the frozen command table
 ├── quickstart.md            # offline validation and SC-009 owner runbook
-└── tasks.md                # later speckit-tasks output; not created by planning
+└── tasks.md                # dependency-ordered implementation units and owner gates
 
 apps/whr/internal/
 ├── doctor/                 # existing socket rules; share rather than copy
@@ -112,7 +113,7 @@ Commits and focused PRs. Do not mark the broader 006/T038 complete after extract
 | Package | Dependencies | Scope and concrete acceptance | Boundary of completion |
 | --- | --- | --- | --- |
 | P1: local discovery | 006/T025 command/exit foundation and 006/T027 doctor socket rules | Implement only the read-only `ls --local` slice of 006/T038: recognized labels, running AND stopped containers, roles/label filters, mounts/home/protected-volume metadata, escaped human output and schema-validated `localWorkspaceListResult`. Reuse/extract doctor's socket resolver; pin explicit Unix endpoint; share a 5 s deadline. Tests prove no remote endpoint, context command or lifecycle mutation. Review command/result amendments under 006 FR-051/052. | Discovery library and CLI are accepted independently; `rm`, `stage`, `promote`, `drift` and remaining 006/T038 acceptance stay pending. Shell work starts against this accepted public/library boundary. |
-| P2: local shell | P1; 006/T031 PTY harness; approved FR-005/FR-010 fallback-warning reconciliation before command publication | Add `localshell` and explicit local command routing; select across all states then reject stopped/paused/restarting. Build FR-004 inspect/exec vectors from validated metadata, pass full ID and fixed detach keys, reuse `workspacecfg` for the no-follow 64-KiB manifest read and allowed `human_shell` validation; validate user/path/TERM. Preserve the configured-working-directory fallback and its warning; include `TestLocalShellWorkingDirFallbackWarnsBeforeHandover` and its no-fallback, redirected-stderr and invalid-directory cases. Preserve remote refusal; refuse `console --local` with guidance and local flags for ssh/agent attach. Tests cover terminal gating, no credentials, one exec, stream byte preservation, statuses and bounded liveness classification. | `shell --local` works without control plane/herdr. Missing-shell 126/127 remains delegated. Record no guarantee of cleanup after pane closure; no runtime/host activation follows. Run SC-009 base checkpoint only with owner authorization. |
+| P2: local shell | P1; 006/T031 PTY harness; merged FR-010/OQ-11 applied under SC-011 | Add `localshell` and explicit local command routing; select across all states then reject stopped/paused/restarting. Build FR-004 inspect/exec vectors from validated metadata, pass full ID and fixed detach keys, reuse `workspacecfg` for the no-follow 64-KiB manifest read and allowed `human_shell` validation; validate user/path/TERM. Preserve the configured-working-directory fallback and its warning; include `TestLocalShellWorkingDirFallbackWarnsBeforeHandover` and its no-fallback, redirected-stderr and invalid-directory cases. Preserve remote refusal; refuse `console --local` with guidance and local flags for ssh/agent attach. Tests cover terminal gating, no credentials, one exec, stream byte preservation, statuses and bounded liveness classification. | `shell --local` works without control plane/herdr. Missing-shell 126/127 remains delegated. Record no guarantee of cleanup after pane closure; no runtime/host activation follows. Run SC-009 base checkpoint only with owner authorization. |
 | P3: default `plain` | P2 accepted; existing scaffold/wizard/schema support | Reconcile FR-020 files: manifest schema/default vectors, scaffold, wizard prompts, output-schema default text, relevant product/architecture text. Tests cover omitted field on new AND existing manifests, explicit `herdr`, explicit `plain`, retention of explicit values and unchanged live console state. Follow frozen-contract amendment gates. | Configuration defaults reconcile; do not implement the absent owner API or claim remote console persistence verified. Runtime session-creation integration remains a prerequisite for claiming that part of SC-007. |
 | P4: optional herdr integration | P1–P3 accepted; owner approves separate plugin scope and FR-018/US3 running-list reconciliation | In `integrations/herdr/`, implement overlay picker and tab/split launch from public `whr` commands, name validation, fixed argv/env, persistent glyph title AND tab label, optional per-pane OSC 11 tint. Add independent fake-whr/herdr script checks and SC-010 verifier; no product dependencies, installation or make-check requirement. | Optional plugin may be reviewed separately; full SC-009 plugin checkpoint must be owner-accepted before claiming verified end-to-end pane behavior. Never use plugin absence to block accepted P1–P3 scope. |
 
@@ -123,25 +124,26 @@ removing an `owner_api` blocker globally is not sufficient.
 P4 has one explicit specification-reconciliation prerequisite: US3 calls for a running-only picker, but FR-018 permits reading only
 `name`, and P1 has no running-state filter flag. Propose a separately reviewed/owner-approved P4 amendment allowing the picker to read
 the existing public `state` field only for eligibility alongside `name`; do not implement it under an implicit exception. P2 still
-refuses stale/non-running selections. This requirement changes none of the seven settled answers, adds no CLI filter and blocks only
+refuses stale/non-running selections. This requirement changes none of the eight settled answers, adds no CLI filter and blocks only
 P4 picker implementation until the amendment is accepted.
 
-### P2 working-directory fallback and warning prerequisite
+### P2 working-directory fallback and warning (OQ-11, SC-011)
 
-FR-005 requires the container's configured working directory when no workspace-folder mount destination can be determined, plus a
-warning naming that fallback. FR-010 simultaneously fixes exactly one pre-handover stderr notice line. Before publishing the P2
-command, reconcile FR-005/FR-010 through a separately reviewed, owner-approved specification amendment; this plan does not waive the
-warning or silently change the notice contract. The concrete proposal is to retain the exact FR-010 notice (TTY stderr only) and
-permit one additional pre-handover stderr warning when a validated configured-working-directory fallback is used, including when
-stderr is redirected. It names the escaped fallback directory and reason. No fallback warning is written after handover.
-Until that amendment is accepted, this part of P2 command publication is blocked, just as the FR-018 amendment gates P4's picker.
-The seven settled owner decisions remain unchanged.
+The FR-005/FR-010 amendment is merged and owner-approved in [PR #216](https://github.com/wstein/workharbor/pull/216),
+recorded at baseline `29ce650184b4015ff02759c0b07835c914ba4db1`. No fallback-warning amendment gate remains.
+When no matching workspace-folder mount destination can be determined, validate the container's configured working directory and use
+it as `<dir>`. After the byte-exact notice (only on terminal stderr) and before the child starts, write exactly this warning line,
+with `<name>` and `<dir>` escaped per Feature 006 FR-022:
 
-P2's red-first `TestLocalShellWorkingDirFallbackWarnsBeforeHandover` must verify: with no matching workspace-folder mount, the exec
-uses the configured directory and an escaped warning names it before the child starts; the normal TTY notice remains byte-exact;
-redirected stderr still receives the warning but no TTY-only notice; a matched workspace mount emits no fallback warning; invalid
-configured directory exits 68 without exec. Exercise hostile control/bidirectional characters in the warning and ensure the raw child
-stream remains untouched. Generate this test and the amendment dependency explicitly in the later `tasks.md`.
+```text
+whr: warning: no workspace folder mount in <name>; starting in <dir>
+```
+
+P2's red-first `TestLocalShellWorkingDirFallbackWarnsBeforeHandover` asserts the exact warning bytes and notice → warning → child-start
+ordering, the fallback exec `--workdir`, redirected stderr (warning present, notice absent), matching mount (no warning), and invalid
+fallback (exit 68, escaped refusal, no exec and no warning). Validate an absolute directory of at most 4096 bytes without NUL/newline;
+cover boundary/hostile controls and bidirectional characters. Assert no fallback/notice output after handover and an unchanged raw
+child stream. Carry this test through [tasks.md](tasks.md); it implements settled OQ-11 rather than requesting another decision.
 
 ### Process, environment and error handling
 
@@ -162,6 +164,7 @@ This plan does not promise removal of credentials already configured in the owne
 | --- | --- | --- |
 | 006 FR-060/066; 010 FR-002/003 | P1, P2 | Socket-order regression, fake daemon discovery/filter/state/deadline tests; local result schema vectors; zero lifecycle/remote calls. |
 | FR-001, FR-004–010, FR-013–017; SC-001–006 | P2 | Exact argv, hostile metadata/property tests, manifest no-follow bounds, `TestLocalShellWorkingDirFallbackWarnsBeforeHandover` (warning timing/escaping, redirected stderr, no-fallback and invalid-directory cases), PTY input/output gating, env canaries, status 0/1/7/126/127/137/255 and transport/deadline tests. |
+| FR-005/010; OQ-11; SC-011 | P2 | `TestLocalShellWorkingDirFallbackWarnsBeforeHandover`: exact escaped warning, notice/warning/child ordering, redirected stderr, matching-mount silence, invalid fallback 68 with no exec/no warning. |
 | FR-011/012/020; SC-007 | P2 refusal, P3 defaults | Command freeze tests, schema/shared vectors, scaffold/wizard tests; live-console criterion remains pending until runtime consumer exists. |
 | FR-018/019/021/021a; SC-008/010 | P4 | Standalone fake-whr/herdr tests, picker cancellation and invalid names, fixed-name hash table, palette verifier, one OSC 11 only when enabled. |
 | SC-009 | Owner, after P2 and after P4 | Versioned real-host record: terminal keys, detach, exit, SSH reconnect/state, titles/tab labels, narrow emoji labels and pane-only tint. |
@@ -189,8 +192,7 @@ of this plan. Associated PR CI may run the full accepted check set under workspa
 
 For future product packages: red-first affected Go/schema/PTY checks, formatting, build/test evidence under applicable authorization,
 required CI and independent review of exact head. Run the plugin verifier separately from repository-required checks.
-SC-009, whole-feature completion, artifact approval, PR readiness, merge and deployment are distinct gates. Generate dependency-ordered
-`tasks.md` next, preserving the four package IDs and seven decision IDs; this plan creates no implementation task completion claims.
+SC-009, whole-feature completion, artifact approval, PR readiness, merge and deployment are distinct gates. Execute [tasks.md](tasks.md) only after its artifact/merge gates, preserving the four package IDs and eight decision IDs; this plan creates no implementation task completion claims.
 
 ## Complexity Tracking
 

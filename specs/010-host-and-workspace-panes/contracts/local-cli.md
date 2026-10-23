@@ -58,12 +58,19 @@ Working directory: choose the workspace-folder mount destination matching the ho
 configured working directory and retain a fallback reason for its required FR-005 warning. Validate the chosen directory before exec;
 an invalid fallback is a 68 refusal, not a successful fallback. Escape the fallback path/reason in every diagnostic under FR-022.
 
-**P2 publication prerequisite:** reconcile FR-005's required warning with FR-010's exactly-one-line notice by a separately reviewed,
-owner-approved spec amendment. Proposed output: keep the exact TTY-only start notice, then emit one additional pre-handover stderr
-warning naming the validated fallback directory/reason, even when stderr is redirected; a matched mount emits no warning. This is a
-proposal, not an implicit FR-010 exception, and no fallback warning is deferred into the shell stream after handover.
-P2 must add `TestLocalShellWorkingDirFallbackWarnsBeforeHandover`, including matched-mount/no-warning, redirected-stderr,
-invalid-fallback/no-exec, timing, escaping and unchanged child-stream cases. The later tasks must carry this prerequisite and test.
+**Merged requirement (OQ-11, SC-011):** [PR #216](https://github.com/wstein/workharbor/pull/216) has reconciled FR-005/FR-010.
+Keep the byte-exact TTY-only notice. Only on a valid configured-working-directory fallback, write one additional stderr line after
+the notice and before the child starts, even when stderr is redirected:
+
+```text
+whr: warning: no workspace folder mount in <name>; starting in <dir>
+```
+
+Escape the substituted name/directory per FR-022. A matched mount produces no warning. An invalid fallback (non-absolute, over 4096
+bytes, NUL or newline) exits 68 naming the escaped value, starts no exec and emits no warning. No notice/fallback warning is deferred
+into the shell stream after handover. No new warning amendment is needed.
+P2's `TestLocalShellWorkingDirFallbackWarnsBeforeHandover` asserts exact text, notice → warning → child ordering, configured workdir,
+redirected-stderr warning without notice, matched-mount silence, invalid-fallback/no-exec/no-warning, escaping and unchanged child bytes.
 
 ## P3: default preference
 
