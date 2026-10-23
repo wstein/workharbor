@@ -5,6 +5,7 @@ Only prose that no check reads or pins counts as docs. Anything else, and every
 case that is unclear or errors, is not docs-only and runs the full checks.
 """
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -64,8 +65,39 @@ def classify(root, event, base, head, env=None):
         return False
 
 
+DOCS_JOBS = ('docs',)
+FULL_JOBS = ('bootstrap', 'macos-pty', 'macos-hostsetup', 'macos-dotfiles')
+
+
+def gate(needs):
+    """True iff the jobs this run needed succeeded and all the others were legitimately skipped.
+
+    needs is the workflow's toJSON(needs). Failed detection leaves docs_only unset, so
+    the full jobs are required; a skipped or cancelled required job never passes.
+    """
+    try:
+        if needs['changes']['result'] != 'success':
+            return False
+        docs_only = needs['changes']['outputs']['docs_only']
+        if docs_only not in ('true', 'false'):
+            return False
+        required, excluded = (DOCS_JOBS, FULL_JOBS) if docs_only == 'true' else (FULL_JOBS, DOCS_JOBS)
+        return (all(needs[name]['result'] == 'success' for name in required)
+                and all(needs[name]['result'] == 'skipped' for name in excluded))
+    except (KeyError, TypeError):
+        return False
+
+
 def main(argv=None, env=None):
     env = os.environ if env is None else env
+    argv = sys.argv[1:] if argv is None else list(argv)
+    if argv == ['--gate']:
+        try:
+            ok = gate(json.loads(env['NEEDS']))
+        except (KeyError, ValueError):
+            ok = False
+        print('Gate: ' + ('all required checks passed' if ok else 'a required check failed, was cancelled or was skipped'))
+        return 0 if ok else 1
     try:
         parser = argparse.ArgumentParser(description=__doc__)
         parser.add_argument('--root', type=Path, default=Path.cwd())
