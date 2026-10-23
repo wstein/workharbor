@@ -57,6 +57,10 @@ None is requested; the first two conflict with OQ-7 and accepted console lifetim
 verifier. Keep the exact FR-021/021a glyph/hash/palette constants; record real terminal capability under SC-009.
 **Rationale:** OQ-5/9/10 settle location and identity policy. Owner-verified tab labels and pane background are recorded in the spec;
 clear/title persistence, notebook font/emoji width, detach behavior and SSH reconnect are not established by repository source checks.
+**Contract prerequisite:** P1 lists all container states and exposes no running-state filter flag. US3's running-only picker and
+FR-018's name-only read rule need reconciliation in the separately approved P4 scope. The concrete proposal is to permit reading the
+existing public `state` field solely for eligibility, alongside `name`; no new flag or independent discovery. Implementation of that
+picker stays gated until the amendment is accepted; P1–P3 and the seven settled decisions are unaffected.
 **Alternatives considered:** Product-level herdr integration, mandatory prompt configuration, a new palette or background-only identity.
 These reopen settled decisions. A failing SC-010 palette measurement is the specified reason to revisit palette values.
 

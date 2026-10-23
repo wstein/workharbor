@@ -58,10 +58,16 @@ No additional CLI flag, local console or nested-multiplexer detection is added.
 ## P4: plugin boundary
 
 The optional `integrations/herdr/` manifest provides an overlay picker and tab/split workspace pane entrypoint. It reads
-`whr ls --local --json`, offers only running candidates whose name validates against 006 FR-058, and passes the selected name as
+`whr ls --local --json`, validates candidate names against 006 FR-058, and passes the selected name as
 validated data through `WHR_PANE_WORKSPACE`/fixed argv, never a shell-evaluated command string. It reads no credentials or manifest
-aliases. Cancellation opens no pane; stale selection is safely refused by P2. Establish the running-only list view from P1's public
-state/filter interface; the plugin reads no labels or provider metadata and implements no independent Docker discovery.
+aliases. Cancellation opens no pane; stale or non-running selection is safely refused by P2.
+
+P1 returns all states and has no running-state filter flag. Before implementing the running-only picker, P4 must include a separately
+owner-approved specification reconciliation: US3 requires running workspaces, while FR-018 currently permits reading only `name`.
+The proposed amendment permits reading the existing public `state` field solely for running eligibility alongside `name`, without
+adding a CLI flag, reading labels/provider metadata or implementing independent Docker discovery. Until that amendment is accepted,
+the running-only picker implementation is blocked; this plan does not silently waive FR-018 or substitute an all-state picker.
+This is a P4 contract prerequisite, not a reopening of any settled OQ answer.
 
 The workspace entrypoint ultimately replaces itself with `whr shell --local <name>`, allowing the parent `whr` process to supervise
 its own Docker child. Fixed FNV-1a identity sets both pane title and tab label. Host configuration/action sets `🟥 HOST`; `whr` never
