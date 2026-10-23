@@ -50,6 +50,14 @@ class ClassifyTests(unittest.TestCase):
             with self.subTest(path=path):
                 self.assertFalse(changes.docs_only([entry(path)]))
 
+    def test_prose_directory_entries_end_at_the_trailing_slash(self):
+        # 'specs/006-whr-cli/' is a directory prefix: siblings sharing its name and the bare name are not prose.
+        for path in ('specs/006-whr-cli-extra/x.md', 'specs/006-whr-cli', 'specs/006-whr-cli.md',
+                     'specs/006-whr-clix/spec.md', 'specs/006-whr-cl/spec.md', 'specs/006-whr-cli/x.md.txt'):
+            with self.subTest(path=path):
+                self.assertFalse(changes.docs_only([entry(path)]))
+        self.assertTrue(changes.docs_only([entry('specs/006-whr-cli/sub/x.md')]))
+
     def test_one_unknown_path_makes_the_whole_change_full(self):
         self.assertFalse(changes.docs_only([entry('docs/adr/a.md'), entry('scripts/x.py')]))
 
@@ -207,6 +215,25 @@ class GitTests(unittest.TestCase):
             with redirect_stderr(io.StringIO()):
                 self.assertEqual(0, changes.main(['--bogus'], env=env))
         self.assertEqual('docs_only=true\ndocs_only=false\ndocs_only=false\n', output.read_text())
+
+    def test_main_unexpected_error_fails_closed_with_a_diagnostic(self):
+        output = self.root.parent/(self.root.name + '.out')
+        self.addCleanup(lambda: output.exists() and output.unlink())
+        env = dict(self.env, GITHUB_OUTPUT=str(output))
+        args = ['--root', str(self.root), '--event', 'pull_request', '--base', self.base, '--head', self.base]
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError('boom')
+
+        original = changes.classify
+        changes.classify = boom
+        self.addCleanup(setattr, changes, 'classify', original)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            self.assertEqual(0, changes.main(args, env=env))
+        self.assertEqual('docs_only=false\n', stdout.getvalue())
+        self.assertEqual('Change detection failed: boom\n', stderr.getvalue())
+        self.assertEqual('docs_only=false\n', output.read_text())
 
 
 if __name__ == '__main__':
