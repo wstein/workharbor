@@ -67,3 +67,20 @@ native workspace and keeps runs human-initiated, with no agent queue or schedule
 runtime (decision D57 in the archived
 [requirements](archive/workharbor-old/docs/content/docs/requirements.md)).
 The overlap is isolated, reproducible environments on the owner's own hardware.
+
+Ideas worth weighing in feature work, each needing its own specification and measurement:
+
+- **Credentials stay on the host.** Git credentials never enter the box; a push goes
+  through a host relay with a per-box token, ordinary pushes are only audited, destructive
+  ones (delete, force to a non-scratch branch, mirror, tag overwrite) need approval, and
+  the in-box `git` shim allows only a flag allowlist. Compare with the trust model of Feature 001.
+- **Pause instead of stop.** Idle boxes are frozen with `docker pause` (0 CPU, no cache
+  rehydration). Compare with stop/restart and recovery in Feature 001.
+- **Checkpoints.** A committed image layer restores a warm workspace; chains are
+  flattened after a depth limit. Compare with recovery and the BundleDock tool layer.
+- **Provider seam.** A small backend interface plus a plugin SDK with an API version
+  gate. Compare with the provider-neutral runtime boundary (Docker first, then Podman,
+  Apple container, Kubernetes).
+
+Not adopted: agent queues and idle-triggered starts (they contradict D57), a VNC desktop
+per box, and cloud providers as a first tier.
