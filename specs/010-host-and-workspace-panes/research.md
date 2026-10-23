@@ -41,6 +41,16 @@ exec. They contradict the direct-stream/liveness design, exceed scope or reopen 
 login shell has only three variables, nor claim to scrub credentials already configured in that container.
 **Alternatives considered:** Inherit all host variables and test only argv; that would not meet the fake-child canary requirement.
 
+## Existing manifest reader and shell validation
+
+**Decision:** Reuse `internal/workspacecfg` rather than adding a local-shell manifest parser.
+**Rationale:** `manifest.go` exports `MaxManifestBytes` (64 KiB), `CheckManifest` and `Manifest.HumanShell`; allowed shell values are
+fish/bash/zsh/nu. `safefs.go` supplies private bounded reads with no-follow directory/leaf handling in `safefs_*_unix.go`.
+P2 should expose a narrow manifest-only reader or extract the existing shared helper while retaining regression coverage; it must not
+invoke full workspace/Git validation merely to load a shell preference.
+**Alternatives considered:** A second JSON parser, another safe-filesystem implementation, or the full `Validate` flow. Those duplicate
+existing policy or add unrelated startup work. Symlink, size-limit and invalid-shell tests remain part of P2 acceptance.
+
 ## Plain default migration
 
 **Decision:** P3 changes omitted-field default application and existing schema/vectors/scaffold/wizard text together, while preserving

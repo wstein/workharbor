@@ -30,6 +30,11 @@ state. Preflight returns 65 for no labelled match, 64 for ambiguity, 68 for non-
 unusable socket/scheme, failed validation or inspect; interrupt before handover returns 72; unclassified failure 74.
 Names and values in diagnostics use the existing FR-022 escaping; never print endpoint credentials or environment values.
 
+Manifest resolution reuses `apps/whr/internal/workspacecfg`: its no-follow reader, `MaxManifestBytes`, `CheckManifest` and validated
+`Manifest.HumanShell` cover the existing size/JSON/shell rules. Since the file-reading helper is private, P2 must expose a narrow
+manifest-only API or extract the shared helper, retaining its safety tests; do not write another parser or run full directory/Git
+validation on shell startup. Missing `human_shell` retains the fish default; a rejected value is not silently defaulted.
+
 FR-004 fixed vectors (each displayed token is one argv element except the annotated format expression):
 
 ```text
