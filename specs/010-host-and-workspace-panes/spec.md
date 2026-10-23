@@ -197,9 +197,12 @@ by this specification.
 **Acceptance Scenarios**:
 
 1. **Given** the plugin is installed and workspaces are running, **When** the owner invokes its picker action, **Then** an overlay pane
-   lists the names from `whr ls --local --json` and nothing else.
+   lists the names of the workspaces whose `state` is `running` in `whr ls --local --json`, and nothing else (FR-018, OQ-12).
 2. **Given** a choice, **When** the owner confirms, **Then** the plugin opens one pane (`herdr plugin pane open ... --env
    WHR_PANE_WORKSPACE=<name>`) whose process is `whr shell --local <name>` and sets the title `ws:<name>`.
+2a. **Given** a result whose `state` is not `running` (stopped, paused, exited or any other value), **When** the picker builds its
+   list, **Then** that workspace is not offered; the picker reads no field other than `name` and `state` and shows the name only
+   (OQ-12).
 3. **Given** a name that does not match the workspace name rule of Feature 006 FR-058 (`^[a-z0-9]$|^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`, lowercase only), **When** it appears in the list, **Then** the plugin does not
    offer it.
 4. **Given** the plugin is absent, disabled or herdr is not installed, **When** the owner uses `whr shell --local`, **Then** nothing
@@ -375,7 +378,9 @@ multiplexer nested in their host pane.
 
 - **FR-018**: An optional herdr plugin MAY be provided later through a separate reviewed change; it is not part of the product
   dependencies, must not be required by any check of this repository and must not modify `whr`. Its contract: a pane entry for the
-  picker (placement `overlay`) that runs `whr ls --local --json` and reads only the `name` of each result; an entry that opens a
+  picker (placement `overlay`) that runs `whr ls --local --json` and reads only the `name` and `state` of each result (`state` solely to
+  decide eligibility: only a record whose `state` is exactly `running` is offered; the picker shows the name only, adds no CLI filter and
+  `whr shell --local` still refuses a stale or non-running selection (OQ-12)); an entry that opens a
   `tab` or `split` pane running exactly `whr shell --local <name>`; the name reaches the process only through `--env` or the pane
   command argv and is validated before use against the workspace name rule of Feature 006 FR-058 (`^[a-z0-9]$|^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`); uppercase names and others are intentionally not offered; the pane title and tab label are set per FR-021;
   it launches no agent tool and holds no credential.
@@ -482,7 +487,7 @@ This feature amends Feature 006 as follows. The same sentences are applied to
 
 ## Decisions
 
-Owner decisions of 2026-10-23 on the former open questions, ids kept; no rule changes except OQ-11. OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn.
+Owner decisions of 2026-10-23 on the former open questions, ids kept; no rule changes except OQ-11 and OQ-12. OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn.
 
 - **OQ-1** (foreman decision): the `docker` command line client with the fixed argument vectors of FR-004; no Engine API client.
 - **OQ-2** (owner-decided 2026-10-23: no): `<ws>` matches only the container name or ID, not the workspace name from `workharbor.json` or the devcontainer name, until the final WorkHarbor workspace label exists; the spike did not verify it.
@@ -502,3 +507,8 @@ Owner decisions of 2026-10-23 on the former open questions, ids kept; no rule ch
   configured working directory and `whr` writes one warning line naming the fallback (FR-005, FR-010), instead of a silent fallback or exit 68. This amends
   the earlier "exactly one line" rule of FR-010: the notice stays one byte-exact, terminal-only line, and the warning is written also when standard error is
   redirected, before the hand-over only.
+- **OQ-12** (owner-decided 2026-10-23: option A): the picker of US3 reads `name` and the existing public `state` of `whr ls --local --json`,
+  `state` solely for eligibility, and offers only workspaces whose `state` is `running`. This widens FR-018's "only `name`" by one field and
+  adds no CLI filter; `shell --local` still refuses a stale or non-running selection (exit 68). Considered and not chosen: (B) a
+  `--state running` flag on `ls --local` (changes the FR-066 interface and reopens P1); (C) list all and let `shell --local` refuse
+  (offers stopped workspaces, opens a failing pane).
