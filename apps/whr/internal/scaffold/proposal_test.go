@@ -25,7 +25,7 @@ func TestInitCreatesExpectedManifest(t *testing.T) {
 	if err := json.Unmarshal(p.Files()["workharbor.json"], &manifest); err != nil {
 		t.Fatalf("expected proposed manifest, got %v", err)
 	}
-	for key, want := range map[string]any{"schema_version": float64(2), "name": "demo", "start_dir": ".", "human_shell": "fish", "console_mode": "herdr", "shortcuts": "on"} {
+	for key, want := range map[string]any{"schema_version": float64(2), "name": "demo", "start_dir": ".", "human_shell": "fish", "console_mode": "plain", "shortcuts": "on"} {
 		if manifest[key] != want {
 			t.Errorf("%s=%v, want %v", key, manifest[key], want)
 		}
@@ -93,5 +93,59 @@ func TestInitPreservesNearLimitManifestWithoutEdit(t *testing.T) {
 	}
 	if !p.Preview().Validation.Valid {
 		t.Fatal("retained bytes must validate")
+	}
+}
+
+// FR-012/020, SC-007: absent defaults apply without rewriting existing files.
+func TestScaffoldMissingConsoleModeDefaultsPlain(t *testing.T) {
+	for _, version := range []int{0, 1, 2} {
+		s := snapshot()
+		if version != 0 {
+			raw, _ := json.Marshal(map[string]any{"schema_version": version, "devcontainer_path": ".devcontainer/devcontainer.json", "projects_path": "projects", "bundles": []string{}})
+			s.Entries["workharbor.json"] = scaffold.Entry{Kind: "file", Data: raw}
+		}
+		p, err := scaffold.Build(s, scaffold.Options{DryRun: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		setting := p.Preview().Settings["console_mode"]
+		if setting.Value != "plain" || setting.Origin != "default" {
+			t.Errorf("version %d: setting %+v", version, setting)
+		}
+		if version != 0 && !bytes.Equal(p.Files()["workharbor.json"], s.Entries["workharbor.json"].Data) {
+			t.Fatal("default rewrote existing manifest")
+		}
+	}
+}
+
+func TestScaffoldExplicitConsoleModePreserved(t *testing.T) {
+	for _, mode := range []string{"herdr", "plain"} {
+		for _, source := range []string{"flag", "existing"} {
+			s := snapshot()
+			opts := scaffold.Options{DryRun: true}
+			if source == "flag" {
+				opts.ConsoleMode = str(mode)
+			} else {
+				raw, _ := json.Marshal(map[string]any{"schema_version": 2, "devcontainer_path": ".devcontainer/devcontainer.json", "projects_path": "projects", "bundles": []string{}, "console_mode": mode})
+				s.Entries["workharbor.json"] = scaffold.Entry{Kind: "file", Data: raw}
+			}
+			p, err := scaffold.Build(s, opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := p.Preview().Settings["console_mode"]; got.Value != mode || got.Origin != source {
+				t.Fatalf("%s %s lost: %+v", source, mode, got)
+			}
+			var manifest map[string]any
+			if err := json.Unmarshal(p.Files()["workharbor.json"], &manifest); err != nil {
+				t.Fatal(err)
+			}
+			if manifest["console_mode"] != mode {
+				t.Fatalf("%s: stored mode %v, want %s", source, manifest["console_mode"], mode)
+			}
+			if source == "existing" && !bytes.Equal(p.Files()["workharbor.json"], s.Entries["workharbor.json"].Data) {
+				t.Fatal("explicit preference rewritten")
+			}
+		}
 	}
 }
