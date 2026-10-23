@@ -31,6 +31,7 @@
 - [Persistent workspace console](adr/0012-persistent-workspace-console.md)
 - [Fresh whr exit-code table](adr/0013-whr-exit-codes.md)
 - [whr command structure, aliases and first increment (proposed)](adr/0014-whr-command-structure.md)
+- [Host multiplexer session and host-local workspace shells (proposed)](adr/0015-host-session-and-local-shell.md)
 
 ## Background and references
 
