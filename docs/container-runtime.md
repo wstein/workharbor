@@ -23,3 +23,37 @@ matrices are published per release (FR-026).
 After installing, run `whr doctor`. A passing `container.socket` check means a socket
 accepted a connection; it does not mean the runtime version, storage or Dev Container
 features are admitted by the WorkHarbor provider.
+
+## Local workspace discovery
+
+`whr ls --local` (also `whr workspace ls --local` or `whr ws ls --local`)
+uses the same Unix socket selection as doctor: an explicit `DOCKER_HOST` wins;
+otherwise the documented doctor candidates are tried in order. Non-Unix endpoints
+are refused with exit 68; Docker contexts are not consulted. Socket selection and
+Docker reads share one five-second budget (deadline exit 71, interruption 72).
+Nothing is installed, started, stopped or removed.
+
+The list includes running and stopped containers bearing `anchorage-staging`,
+`anchorage-temp`, `devcontainer.local_folder`, `devcontainer.config_file` or the
+existing provider label `workharbor.workspace`. Labels are a usability guard, not
+a security boundary. Staging takes precedence over temp when both labels exist;
+the remaining recognized containers have role primary.
+
+Use `--role primary|staging|temp` and/or `--label key[=value]` to narrow the list.
+A label without `=` tests presence; `key=` tests an empty value. Filtering never
+admits foreign containers. There is no running-state filter.
+
+`--json` returns `result.workspaces` under the canonical command `workspace.ls`;
+the [output schema](../contracts/cli/output.schema.json) defines every field.
+JSON preserves full container IDs; human output shows 12 characters and escapes
+terminal control/bidirectional characters. Home and protected volumes are metadata
+only. The host workspace folder comes from `devcontainer.local_folder`, otherwise
+a unique bind source at `/workspace`, `/workspaces` or `/workspaces/...`; it is
+empty when no unambiguous folder is identified. Docker child processes receive a
+minimal environment and a fresh empty temporary config directory, preventing
+host credentials, contexts and credential helpers from being loaded. Responses
+larger than 4 MiB are refused rather than truncated.
+
+Without `--local`, listing still refuses with exit 64 because the remote owner API
+is pending. Local shell entry is the next Feature 010 package; this discovery
+slice does not implement removal, volume cleanup or the owner-host pane gates.

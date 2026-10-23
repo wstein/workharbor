@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/doctor"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 )
 
 func fixtureDocker(t *testing.T, records string) Client {
@@ -132,7 +133,7 @@ func TestLocalDiscoveryOwnBudgetStopsDocker(t *testing.T) {
 	client := Client{Executable: fakeDocker(t, `/bin/sleep 60 & wait`)}
 	start := time.Now()
 	_, err := client.Discover(context.Background(), socketPorts())
-	if err == nil || time.Since(start) > 5*time.Second+200*time.Millisecond {
+	if exitcode.FromError(err) != exitcode.Timeout || time.Since(start) > 5*time.Second+200*time.Millisecond {
 		t.Fatalf("discovery exceeded total budget: %v (%v)", err, time.Since(start))
 	}
 }
