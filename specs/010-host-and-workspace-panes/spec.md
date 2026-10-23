@@ -5,7 +5,7 @@
 **Created**: 2026-10-23
 **Status**: Draft specification for independent review and owner decision. Not approved, not planned, not implemented. It needs an
 independent review CLEAR for its exact head and then explicit owner approval of that head, evidenced by a tracker or PR link
-(WORKFLOW.md). The recommended defaults of the open questions are proposals, not owner decisions.
+(WORKFLOW.md). The owner decided the open questions on 2026-10-23 (see Decisions).
 **Related**: [Feature 006](../006-whr-cli/spec.md) (FR-006, FR-007, FR-007a, FR-019, FR-022, FR-022a, FR-029, FR-030, FR-047, FR-048,
 FR-052, FR-058, FR-066, FR-067, FR-063), [ADR 0012](../../docs/adr/0012-persistent-workspace-console.md),
 [ADR 0013](../../docs/adr/0013-whr-exit-codes.md), [ADR 0014](../../docs/adr/0014-whr-command-structure.md),
@@ -469,22 +469,21 @@ This feature amends Feature 006 as follows. The same sentences are applied to
 - Herdr runs on the host with its own server socket under the owner's account; `whr` never touches it.
 - The control plane and owner API may or may not exist; local mode is independent of both.
 
-## Open questions (each with the recommended default)
+## Decisions
+
+Owner decisions of 2026-10-23 on the former open questions, ids kept; no rule changes. OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn.
 
 - **OQ-1** (foreman decision): the `docker` command line client with the fixed argument vectors of FR-004; no Engine API client.
-- **OQ-2**: Should `<ws>` also match the workspace name from `workharbor.json` or the devcontainer name, not only the container
-  name or ID? Recommended default: no, until the final WorkHarbor workspace label exists; the spike did not verify it.
+- **OQ-2** (owner-decided 2026-10-23: no): `<ws>` matches only the container name or ID, not the workspace name from `workharbor.json` or the devcontainer name, until the final WorkHarbor workspace label exists; the spike did not verify it.
 - **OQ-4** (foreman decision): keep `WHR_LOCAL_WORKSPACE` and `WHR_LOCAL_MODE` in the container environment; they are the only variables `whr` adds.
-- **OQ-5**: Where does the optional plugin live (a subdirectory of this repository, installable as `owner/repo/subdir`, or another
-  repository)? Recommended default: `integrations/herdr/` in this repository, separate spec task, never part of `make check`.
-- **OQ-6**: Accept that a missing shell executable shows as Docker's own error (126 or 127) instead of a `whr` refusal with remediation? This relaxes Feature 006 FR-047 ("refuse with remediation"; never substitute, which still holds). Recommended default: yes, because the only pre-launch check would be a second `docker exec`, which FR-004 forbids.
-- **OQ-7**: Is the manifest default `plain` also applied to existing manifests that omit the field? Recommended default: yes, because
+- **OQ-5** (owner-decided 2026-10-23: `integrations/herdr/`): the optional plugin lives in `integrations/herdr/` in this repository, as a separate spec task, never part of `make check`.
+- **OQ-6** (owner-decided 2026-10-23: yes): a missing shell executable shows as Docker's own error (126 or 127) instead of a `whr` refusal with remediation. This relaxes Feature 006 FR-047 ("refuse with remediation"; never substitute a shell, which still holds), because the only pre-launch check would be a second `docker exec`, which FR-004 forbids.
+- **OQ-7** (owner-decided 2026-10-23: yes): the manifest default `plain` also applies to existing manifests that omit the field, because
   the field's default is read at session creation; existing consoles keep their old state (FR-047, FR-007a).
-- **OQ-8**: Should the same local mode later cover `agent attach`? Recommended default: no; FR-029 requires the session contract and
+- **OQ-8** (owner-decided 2026-10-23: no): the same local mode does not cover `agent attach`; FR-029 requires the session contract and
   grants.
-- **OQ-9**: Is the persistent pane title plus tab label, each with the emoji marker of FR-021, the indicator of the pane kind, with prompt markers
-  left to the BundleDock shell policy? Recommended default: yes; the plugin sets title and label with the marker, the owner sets them by hand
+- **OQ-9** (owner-decided 2026-10-23: yes): the persistent pane title plus tab label, each with the emoji marker of FR-021, is the indicator of the pane kind, with prompt markers
+  left to the BundleDock shell policy. The plugin sets title and label with the marker, the owner sets them by hand
   without the plugin, and `WHR_LOCAL_WORKSPACE` stays available to a prompt.
-- **OQ-10**: Accept the proposed glyph set of FR-021 and the tint palette of FR-021a with its measured limits (lowest pairwise CIEDE2000 10.5 normal, 8.2
-  protanopia, 7.3 deuteranopia, 7.0 tritanopia; five tints; owner decision of 2026-10-23: marker default, background optional P3)? Recommended
-  default: yes; the palette is adjusted only if the SC-010 script fails.
+- **OQ-10** (owner-decided 2026-10-23: yes): the glyph set of FR-021 and the tint palette of FR-021a are accepted with their measured limits (lowest pairwise CIEDE2000 10.5 normal, 8.2
+  protanopia, 7.3 deuteranopia, 7.0 tritanopia; five tints; marker default, background optional P3). The palette is changed only if the SC-010 script fails.
