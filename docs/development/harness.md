@@ -102,7 +102,12 @@ The query writes JSON exclusively to a new private cache file; stdout/stderr
 warnings remain in the normal command log and do not corrupt that metadata.
 Additional JSON keys are refused.
 The same isolated HTTPS-only curl transfer preinstalls those binaries inside the
-fresh disposable `_build` directory, matching the package's executable mode.
+fresh disposable `_build` directory, matching the package's executable mode. Tailwind 4.3.3 SHA-256 pins cover every
+published native artifact, taken from the official
+[sha256sums.txt](https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/sha256sums.txt)
+and checked against release asset metadata. Each download is streamed through
+SHA-256 verification before chmod or any version/build invocation. Missing pins
+or mismatches stop acceptance; changing versions requires a reviewed pin update.
 Unrecognized URLs, destinations outside that directory and failed transfers
 stop acceptance. `assets.setup` still verifies installed Tailwind versions through
 its existing `--if-missing` tasks, installs esbuild normally, and `assets.build`

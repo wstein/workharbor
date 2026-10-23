@@ -1,5 +1,6 @@
 """Application acceptance negatives use recorded events, never installed host tools."""
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -86,7 +87,7 @@ class ApplicationChecksTests(unittest.TestCase):
                 path.write_bytes(content)
                 with self.subTest(content=content), self.assertRaises(ValueError): self.apps.read_events(path)
 
-    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None, python=(3, 14, 8), tailwind_metadata=None, tailwind_warning=False, metadata_query_fails=False):
+    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None, python=(3, 14, 8), tailwind_metadata=None, tailwind_warning=False, corrupt_tailwind=False, metadata_query_fails=False):
         # The default python is an opaque fixture interpreter version, not a pin.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)/'source'; root.mkdir()
@@ -112,7 +113,7 @@ class ApplicationChecksTests(unittest.TestCase):
                     metadata.write_text(json.dumps(records))
                     data = b'warning: fixture Mix warning\n' if tailwind_warning else b''
                 elif name == 'curl':
-                    Path(argv[argv.index('--output') + 1]).write_bytes(b'fixture binary')
+                    Path(argv[argv.index('--output') + 1]).write_bytes(b'corrupt binary' if corrupt_tailwind and 'tailwindcss-' in argv[-1] else b'fixture binary')
                 elif command[1:] == ('-l', '.') and formatted: data = b'cmd/main.go\n'
                 elif command[1:3] == ('test', '-json'):
                     module = Path(cwd).name
@@ -125,7 +126,8 @@ class ApplicationChecksTests(unittest.TestCase):
                 return 1 if metadata_query_fails and name == 'mix' and command[1:2] == ('run',) else 0
             def which(name): return None if name == missing else '/fixture/bin/' + name
             with mock.patch.object(self.apps.shutil, 'which', side_effect=which), \
-                    mock.patch.object(self.apps.sys, 'version_info', python):
+                    mock.patch.object(self.apps.sys, 'version_info', python), \
+                    mock.patch.dict(self.apps.TAILWIND_SHA256, {'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64': hashlib.sha256(b'fixture binary').hexdigest()}):
                 self.apps.check_applications(root, self.inventory, execute)
             return observed, root
 
@@ -302,6 +304,7 @@ class ApplicationChecksTests(unittest.TestCase):
                       lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': 'https://example.com/tool'}],
                       lambda root: [{'path': str(root/'apps/control_plane/_build/../escaped-tool'), 'url': official}],
                       lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': official, 'extra': 'x'}],
+                      lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': official.replace('v4.3.3/', 'v4.3.4/')}],
                       symlink_escape):
             observed = []
             with self.subTest(value=value):
@@ -339,3 +342,37 @@ class ApplicationChecksTests(unittest.TestCase):
         self.assertFalse(any(Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1] for argv in observed))
         self.assertFalse(any(argv[1:2] in (['assets.setup'], ['assets.build'], ['test']) and Path(argv[0]).name == 'mix' for argv in observed))
 
+    def test_tailwind_checksum_failure_stops_before_executable_or_assets(self):
+        seen = []
+        checked = []
+        original = self.apps.hashlib.file_digest
+        def digest(artifact, algorithm):
+            self.assertEqual(0, os.fstat(artifact.fileno()).st_mode & 0o111)
+            checked.append(True)
+            return original(artifact, algorithm)
+        with mock.patch.object(self.apps.hashlib, 'file_digest', side_effect=digest), self.assertRaisesRegex(ValueError, 'Tailwind.*SHA-256'):
+            self.exercise(corrupt_tailwind=True, observe=lambda argv, env: seen.append(argv))
+        self.assertEqual([True], checked)
+        download = next(argv for argv in seen if Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1])
+        # The disposable directory is gone, but no following command could run
+        # an artifact whose digest was rejected.
+        self.assertTrue(download)
+        self.assertFalse(any(argv[1:2] in (['assets.setup'], ['assets.build']) for argv in seen))
+
+    def test_tailwind_release_digest_pins_are_complete(self):
+        prefix = 'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/'
+        self.assertEqual({'linux-arm64', 'linux-arm64-musl', 'linux-x64', 'linux-x64-musl',
+                          'macos-arm64', 'macos-x64', 'windows-x64.exe'},
+                         {url.removeprefix(prefix + 'tailwindcss-') for url in self.apps.TAILWIND_SHA256})
+        for digest in self.apps.TAILWIND_SHA256.values():
+            self.assertRegex(digest, r'^[0-9a-f]{64}$')
+        sums = (Path(__file__).resolve().parents[1]/'tests/fixtures/tailwind-v4.3.3.sha256').read_bytes()
+        # Official release checksum file; its digest is published in GitHub's
+        # release asset metadata. Keep tests offline and check every target pin.
+        self.assertEqual('527b4fcd96950f9ae8f83bbbff27c61e4ff3596cb0b2eb760f9b3516de5d3c56',
+                         hashlib.sha256(sums).hexdigest())
+        expected = {}
+        for line in sums.decode('ascii').splitlines():
+            digest, name = line.split()
+            expected[prefix + name.removeprefix('./')] = digest
+        self.assertEqual(expected, self.apps.TAILWIND_SHA256)
