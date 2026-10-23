@@ -1,0 +1,171 @@
+# Implementation Plan: Host and workspace panes
+
+**Branch**: `docs/010-implementation-plan-20261023` | **Date**: 2026-10-23 | **Spec**: [spec.md](spec.md)
+**Baseline**: `e4caa8465e7abd183fcd87e8e8a9ffcd53ddbcaf` (`main`).
+**Status**: Proposed implementation plan; no product implementation or real-host verification.
+The owner requested this plan. [PR #212](https://github.com/wstein/workharbor/pull/212) merged the specification and
+[PR #214](https://github.com/wstein/workharbor/pull/214) records the seven owner decisions. The spec still labels its overall status
+Draft; this plan does not invent revision-bound spec/plan approval, task approval, build authority or runtime activation.
+Before implementation, bind the reviewed spec/plan/tasks revisions and owner approval links under [WORKFLOW](../../WORKFLOW.md).
+
+## Summary
+
+Deliver four ordered packages: **P1 `ls --local` (006 FR-066) → P2 `shell --local` → P3 console default `plain` →
+P4 optional plugin in `integrations/herdr/`**. P1 supplies shared discovery; P2 consumes it rather than implementing another
+container finder. P3 reconciles existing schema, vectors and defaults. P4 consumes the public CLI without entering product dependencies.
+The real-host owner gate **SC-009** is separate from offline acceptance and PR readiness.
+
+## Technical Context
+
+**Language/Version**: Go 1.27.2 for `apps/whr`; Python 3.14 for repository checks and the future standalone palette verifier;
+existing shell/TOML conventions for plugin entrypoints. Versions come from `.tool-versions` and `apps/whr/go.mod`.
+**Primary Dependencies**: existing Cobra command registry, standard Go library, existing `golang.org/x/sys/unix` for safe Unix file access,
+local Docker CLI; optional host herdr only in P4. No new product module dependency or Docker SDK.
+**Storage**: no session database or audit transcript; bounded read-only Docker metadata and host `workharbor.json` reads.
+**Testing**: Go table/property tests, fake Docker daemon/client, existing `internal/ptytest`, schema vectors, Python repository checks;
+separate plugin script/manifest checks. Native Linux/macOS PTY evidence and SC-009 remain distinct.
+**Target Platform**: Linux and macOS Docker hosts reached directly or through the owner's SSH/VPN connection; Unix socket only.
+**Project Type**: existing Go CLI plus an optional external multiplexer integration.
+**Performance Goals**: one shared 5-second discovery/preflight budget; interactive shell has no discovery timeout;
+after a nonzero Docker client status, at most one liveness inspect with its own 5-second budget (010 FR-004/008).
+**Constraints**: one owner, explicit `--local`, no control plane/grant/credential access, no lifecycle mutations, no agent launch,
+no implicit shell fallback, no terminal stream relay/filter/recording. Plugin is never required by `make check`.
+**Scale/Scope**: one local daemon, multiple labelled containers, arbitrary separate shell panes; five cosmetic workspace glyph/tint
+choices, with collisions accepted and full title text retaining identity.
+
+## Constitution Check
+
+Pre-research and post-design checks give the same result; no new constitutional exception is proposed.
+
+| Principle | Design evidence / gate |
+| --- | --- |
+| I: scope and independence | No AI runtime, cloud service, queue or required multiplexer. P4 absent leaves P1–P3 usable. |
+| II: portable configuration | Docker-only local adapter; reject unsupported endpoint schemes before Docker; preserve devcontainer semantics. |
+| III: reproducible inputs | Read existing manifest without following links, bounded at 64 KiB; no configuration rewrite or provisioning. |
+| IV: host boundaries | ADR 0015's explicit local capability relaxation only; no sudo, socket exposure, grant bypass for remote commands or host-shell command. Labels are a usability guard. |
+| V: durable operations | No container/storage lifecycle operation is introduced. Fresh exec lifetime, detached/orphan process limits are explicit; no fake cleanup guarantee. |
+| VI: authority | Seven decisions below are fixed inputs. Frozen contract edits are separate reviewed P1–P3 amendments, not changes made by this plan. |
+| VII: executable evidence | Failing behavior tests first; fake-host checks cannot satisfy SC-009. Missing native/host evidence stays unverified. |
+| VIII: human control | Per-package exact-head review and PR; owner merge, artifact approval, standalone builds and real-host operation remain separate gates. |
+
+Implementation readiness remains conditional on recorded artifact approvals and generated task scope; research completion does not
+satisfy that gate. Unknown runtime behavior is covered by SC-009, not an unresolved product choice.
+
+## Fixed owner decisions — do not reopen
+
+Source: [spec Decisions](spec.md#decisions), recorded 2026-10-23 and merged by [PR #214](https://github.com/wstein/workharbor/pull/214).
+Retain these IDs in implementation tasks and review evidence. Changes require an explicit new owner decision and authoritative spec/ADR
+amendment; an implementation difficulty does not silently turn a settled question into a new default.
+
+| ID | Settled answer | Implementation consequence |
+| --- | --- | --- |
+| OQ-2 | Container name or ID only; no manifest/devcontainer name alias. | Exact container name wins, otherwise an unambiguous ID prefix of at least 12 hex characters; no name-prefix expansion. |
+| OQ-5 | Plugin lives in `integrations/herdr/`, separately delivered and outside `make check`. | P4 has its own verification entrypoint; P1–P3 do not import or invoke it. |
+| OQ-6 | Missing shell uses Docker's own 126/127 error/status. | Exactly one interactive exec; no availability exec, remediation rewrite, install or substituted shell. |
+| OQ-7 | Missing `console_mode` means `plain`, including existing manifests. | Apply on new session creation; preserve explicit `herdr` and all live console state. |
+| OQ-8 | No local `agent attach`. | Refuse `--local` there; session-contract/grant requirements remain unchanged. |
+| OQ-9 | Persistent pane title and tab label with emoji identify pane kind. | Plugin sets both; owner sets them manually without it. Prompt markers remain BundleDock shell policy. |
+| OQ-10 | Accept FR-021 glyphs and FR-021a palette, including measured limits. | Marker is default; background is optional priority-P3 functionality in delivery package P4. Change palette only if SC-010 verifier fails. |
+
+Also preserve foreman choices OQ-1 (Docker CLI, not Engine API client) and OQ-4 (`WHR_LOCAL_WORKSPACE`, `WHR_LOCAL_MODE`);
+OQ-3 was withdrawn. They are not additional undecided owner questions.
+
+## Project Structure
+
+```text
+specs/010-host-and-workspace-panes/
+├── spec.md                 # authoritative requirements and settled decisions
+├── plan.md                 # this ordered implementation plan
+├── research.md             # repository evidence and resolved design choices
+├── data-model.md            # ephemeral discovery, exec and identity values
+├── contracts/local-cli.md   # design boundary; not the frozen command table
+├── quickstart.md            # offline validation and SC-009 owner runbook
+└── tasks.md                # later speckit-tasks output; not created by planning
+
+apps/whr/internal/
+├── doctor/                 # existing socket rules; share rather than copy
+├── localdocker/            # planned P1 discovery and Docker adapter
+├── localshell/             # planned P2 policy, exec plan and child supervision
+├── commands/               # existing routing, command mirror and freeze tests
+├── ptytest/                # existing test-only terminal harness
+├── scaffold/               # existing P3 default application
+└── wizard/                 # existing P3 prompt defaults
+contracts/cli/              # gated P1/P2 table/result amendments; P3 default text
+contracts/workspace/        # gated P3 schema and shared vectors
+integrations/herdr/         # planned optional P4 manifest, entrypoints, verifier, tests
+```
+
+Package names are implementation proposals within the existing module (ADR 0010). P1 owns Docker subprocess/socket details behind
+testable ports; P2 owns interactive policy. Reuse existing terminal escaping and PTY support. Do not expose Docker details through
+control-plane or browser interfaces.
+
+## Ordered delivery packages
+
+The package sequence is an owner requirement, including for command publication. Each package may use multiple atomic Conventional
+Commits and focused PRs. Do not mark the broader 006/T038 complete after extracting only its FR-066 discovery slice.
+
+| Package | Dependencies | Scope and concrete acceptance | Boundary of completion |
+| --- | --- | --- | --- |
+| P1: local discovery | 006/T025 command/exit foundation and 006/T027 doctor socket rules | Implement only the read-only `ls --local` slice of 006/T038: recognized labels, running AND stopped containers, roles/label filters, mounts/home/protected-volume metadata, escaped human output and schema-validated `localWorkspaceListResult`. Reuse/extract doctor's socket resolver; pin explicit Unix endpoint; share a 5 s deadline. Tests prove no remote endpoint, context command or lifecycle mutation. Review command/result amendments under 006 FR-051/052. | Discovery library and CLI are accepted independently; `rm`, `stage`, `promote`, `drift` and remaining 006/T038 acceptance stay pending. Shell work starts against this accepted public/library boundary. |
+| P2: local shell | P1; 006/T031 PTY harness | Add `localshell` and explicit local command routing; select across all states then reject stopped/paused/restarting. Build FR-004 inspect/exec vectors from validated metadata, pass full ID and fixed detach keys, validate no-follow manifest/user/path/TERM. Preserve remote refusal; refuse `console --local` with guidance and local flags for ssh/agent attach. Tests cover terminal gating, no credentials, one exec, stream byte preservation, statuses and bounded liveness classification. | `shell --local` works without control plane/herdr. Missing-shell 126/127 remains delegated. Record no guarantee of cleanup after pane closure; no runtime/host activation follows. Run SC-009 base checkpoint only with owner authorization. |
+| P3: default `plain` | P2 accepted; existing scaffold/wizard/schema support | Reconcile FR-020 files: manifest schema/default vectors, scaffold, wizard prompts, output-schema default text, relevant product/architecture text. Tests cover omitted field on new AND existing manifests, explicit `herdr`, explicit `plain`, retention of explicit values and unchanged live console state. Follow frozen-contract amendment gates. | Configuration defaults reconcile; do not implement the absent owner API or claim remote console persistence verified. Runtime session-creation integration remains a prerequisite for claiming that part of SC-007. |
+| P4: optional herdr integration | P1–P3 accepted; owner approves separate plugin implementation scope | In `integrations/herdr/`, implement overlay picker and tab/split launch from public `whr` commands, name validation, fixed argv/env, persistent glyph title AND tab label, optional per-pane OSC 11 tint. Add independent fake-whr/herdr script checks and SC-010 verifier; no product dependencies, installation or make-check requirement. | Optional plugin may be reviewed separately; full SC-009 plugin checkpoint must be owner-accepted before claiming verified end-to-end pane behavior. Never use plugin absence to block accepted P1–P3 scope. |
+
+P1's registry amendment must add the FR-066 `--local`, `--label` and `--role` interface and output schema without activating remote
+`ls`. P2's amendment must distinguish local availability and JSON refusal from the still-unavailable remote shell/events contract;
+removing an `owner_api` blocker globally is not sufficient.
+
+### Process, environment and error handling
+
+P2 must supervise the Docker child long enough to wait for status and perform the FR-008 liveness check; replacing `whr` with Docker
+via process `exec` would prevent that check. Give the child direct terminal descriptors; do not proxy or log shell bytes.
+Discovery/preflight errors get the prescribed `whr:` line; after handover only diagnosed transport loss may add one (FR-008).
+On nonzero client exit, an inspect response proving daemon reachability preserves the client status even if the container has vanished;
+connection failure/deadline maps to 72. Test reachable-daemon container-not-found separately from daemon loss.
+
+Construct the Docker client environment from an explicit minimal host-process allowlist (executable search/runtime essentials only),
+never a wholesale copy containing tokens. Separately assert that its `--env` additions to the CONTAINER are exactly TERM plus the two
+WHR markers. Container baseline environment inherited by Docker is not host forwarding; SC-005 tests must distinguish those boundaries.
+This plan does not promise removal of credentials already configured in the owner's container.
+
+## Requirements and planned evidence
+
+| Requirements | Package | Required evidence |
+| --- | --- | --- |
+| 006 FR-060/066; 010 FR-002/003 | P1, P2 | Socket-order regression, fake daemon discovery/filter/state/deadline tests; local result schema vectors; zero lifecycle/remote calls. |
+| FR-001, FR-004–010, FR-013–017; SC-001–006 | P2 | Exact argv, hostile metadata/property tests, manifest no-follow bounds, PTY input/output gating, env canaries, status 0/1/7/126/127/137/255 and transport/deadline tests. |
+| FR-011/012/020; SC-007 | P2 refusal, P3 defaults | Command freeze tests, schema/shared vectors, scaffold/wizard tests; live-console criterion remains pending until runtime consumer exists. |
+| FR-018/019/021/021a; SC-008/010 | P4 | Standalone fake-whr/herdr tests, picker cancellation and invalid names, fixed-name hash table, palette verifier, one OSC 11 only when enabled. |
+| SC-009 | Owner, after P2 and after P4 | Versioned real-host record: terminal keys, detach, exit, SSH reconnect/state, titles/tab labels, narrow emoji labels and pane-only tint. |
+
+## SC-009 owner gate and evidence
+
+Use [quickstart.md](quickstart.md#sc-009-real-host-owner-gate); no fake or native CI PTY run substitutes for this gate.
+Record evidence under `docs/quality/010-host-and-workspace-panes/` in a reviewed follow-up, with exact tested product/plugin SHAs,
+OS/architecture, Docker/herdr versions, notebook terminal/font, fixture/container identity, steps, expected/observed results and explicit
+owner acceptance link. Capture only controlled fixture evidence; never session contents, host environment or credentials.
+
+Checkpoint A follows P2: all five individual keys, fixed two-key detach, shell status, resize, manual persistent identity and SSH
+reconnection to the same shell/working directory/running command. Checkpoint B follows P4: repeat A with plugin, then title AND tab
+glyph persistence after `clear`, narrow-label readability and optional background affecting only the opened pane.
+Until both applicable checkpoints are recorded, SC-009 remains **unverified**; a failed visual capability blocks its acceptance,
+not a redesign of OQ-9/OQ-10 without owner approval. An omitted optional background run must be explicitly marked not tested;
+it cannot establish background verification.
+
+## Validation and handoff
+
+For this documentation change: repository checker, diff whitespace check, independent exact-head review, then PR against `main`.
+Run `make check` as required and report its actual outcome; do not translate a blocked, interrupted or missing-tool check to a pass.
+Feature 010 is not in the current `ci_changes.py` prose allowlist, so do not assume docs-only CI. Do not widen that allowlist as part
+of this plan. Associated PR CI may run the full accepted check set under workspace publication policy.
+
+For future product packages: red-first affected Go/schema/PTY checks, formatting, build/test evidence under applicable authorization,
+required CI and independent review of exact head. Run the plugin verifier separately from repository-required checks.
+SC-009, whole-feature completion, artifact approval, PR readiness, merge and deployment are distinct gates. Generate dependency-ordered
+`tasks.md` next, preserving the four package IDs and seven decision IDs; this plan creates no implementation task completion claims.
+
+## Complexity Tracking
+
+No additional database, Docker SDK, control-plane endpoint, session protocol or product dependency is needed. Optional plugin assets
+and verification remain isolated. The post-exit inspect is required by the current spec; background/titles remain cosmetic and cannot
+be treated as a security boundary or as globally unique by glyph alone.
