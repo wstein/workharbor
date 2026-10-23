@@ -14,6 +14,18 @@ HEX_VERSION = '2.5.2'
 REBAR_URL = 'https://github.com/erlang/rebar3/releases/download/3.27.3/rebar3'
 REBAR_SHA512 = ('30410ea3222f52f0af90e6ba7df483d9a1e3452dc6ed6f60f372008fc017dbd8a'
                 'e22c45e1359302796f2dbb805bbcfce53bf5d08fdd43885203b0ae015ff0516')
+TAILWIND_METADATA = '''Tailwind.profiles()
+|> Enum.map(fn {profile, _} ->
+  version = Tailwind.configured_version(profile)
+  url = Tailwind.default_base_url()
+    |> String.replace("$version", version)
+    |> String.replace("$target", Tailwind.configured_target(profile))
+  %{path: Tailwind.bin_path(version), url: url}
+end)
+|> Enum.uniq()
+|> Jason.encode!()
+|> IO.puts()'''
+
 
 
 def validate_inventory(value):
@@ -166,6 +178,9 @@ def check_applications(root, inventory, run):
             if run(argv, cwd, env=env, output_path=output) != 0:
                 raise ValueError('Application command failed: ' + ' '.join(argv))
             return output
+        def download(url, destination, cwd):
+            execute([tools['curl'], '--disable', '--fail', '--location', '--proto', '=https',
+                     '--proto-redir', '=https', '--max-time', '60', '--output', str(destination), url], cwd)
         versions = [
             ([tools['go'], 'version'], lambda value: value.startswith('go version go' + pins['golang'] + ' ')),
             ([tools['elixir'], '--version'], lambda value: bool(re.search(
@@ -212,12 +227,33 @@ def check_applications(root, inventory, run):
         # with the isolated curl process, then let Mix verify the same pinned
         # SHA-512 before installing the local file in its private MIX_HOME.
         rebar = cache/'rebar3'
-        execute([tools['curl'], '--disable', '--fail', '--location', '--proto', '=https',
-                 '--proto-redir', '=https', '--max-time', '60', '--output', str(rebar), REBAR_URL], cwd)
+        download(REBAR_URL, rebar, cwd)
         execute([tools['mix'], 'local.rebar', 'rebar3', str(rebar), '--sha512', REBAR_SHA512, '--force'], cwd)
         execute([tools['mix'], 'deps.get', '--check-locked'], cwd)
         execute([tools['mix'], 'format', '--check-formatted'], cwd)
         execute([tools['mix'], 'compile', '--warnings-as-errors'], cwd)
+        # Query the locked package instead of duplicating its platform/version
+        # selection. Preinstall the same binaries in the fresh build directory;
+        # assets.setup still runs and verifies them through --if-missing.
+        result = execute([tools['mix'], 'run', '--no-start', '--no-compile', '-e', TAILWIND_METADATA], cwd)
+        try:
+            assets = json.loads(result.read_text(), object_pairs_hook=unique_object)
+        except (OSError, UnicodeError, ValueError) as error:
+            raise ValueError('Invalid Tailwind installation metadata') from error
+        if not isinstance(assets, list) or not assets:
+            raise ValueError('Missing Tailwind installation metadata')
+        for asset in assets:
+            if (not isinstance(asset, dict) or set(asset) != {'path', 'url'}
+                    or not all(isinstance(value, str) for value in asset.values())
+                    or not re.fullmatch(r'https://github\.com/tailwindlabs/tailwindcss/releases/download/'
+                                        r'v[0-9][0-9A-Za-z.+-]*/tailwindcss-[a-z0-9_.-]+', asset['url'])):
+                raise ValueError('Invalid Tailwind installation metadata')
+            destination = Path(asset['path'])
+            if not destination.is_absolute() or not destination.resolve().is_relative_to(cwd/'_build'):
+                raise ValueError('Tailwind destination must remain inside the disposable build directory')
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            download(asset['url'], destination, cwd)
+            destination.chmod(0o755)
         execute([tools['mix'], 'assets.setup'], cwd)
         execute([tools['mix'], 'assets.build'], cwd)
         events = cache/'exunit.jsonl'

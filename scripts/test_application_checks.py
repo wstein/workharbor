@@ -86,7 +86,7 @@ class ApplicationChecksTests(unittest.TestCase):
                 path.write_bytes(content)
                 with self.subTest(content=content), self.assertRaises(ValueError): self.apps.read_events(path)
 
-    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None, python=(3, 14, 8)):
+    def exercise(self, *, missing=None, fail=None, formatted=False, wrong_version=False, observe=None, python=(3, 14, 8), tailwind_metadata=None):
         # The default python is an opaque fixture interpreter version, not a pin.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)/'source'; root.mkdir()
@@ -104,6 +104,13 @@ class ApplicationChecksTests(unittest.TestCase):
                     data = (b'Elixir 1.20.4 (compiled with Erlang/OTP 29)\n' if name == 'elixir' else b'v26.11.1\n')
                     if wrong_version: data = b'wrong version\n'
                 elif name == 'erl': data = b'29.1.1\n'
+                elif name == 'mix' and command[1:2] == ('run',):
+                    records = (tailwind_metadata(root) if callable(tailwind_metadata) else tailwind_metadata) if tailwind_metadata is not None else [{
+                        'path': str(root/'apps/control_plane/_build/tailwind-fixture'),
+                        'url': 'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64'}]
+                    data = json.dumps(records).encode()
+                elif name == 'curl':
+                    Path(argv[argv.index('--output') + 1]).write_bytes(b'fixture binary')
                 elif command[1:] == ('-l', '.') and formatted: data = b'cmd/main.go\n'
                 elif command[1:3] == ('test', '-json'):
                     module = Path(cwd).name
@@ -225,7 +232,7 @@ class ApplicationChecksTests(unittest.TestCase):
         with mock.patch.dict(os.environ, canaries):
             observed, root = self.exercise()
         self.assertEqual('https://github.com/erlang/rebar3/releases/download/3.27.3/rebar3', self.apps.REBAR_URL)
-        downloads = [(i, argv, env) for i, (argv, _, env) in enumerate(observed) if Path(argv[0]).name == 'curl']
+        downloads = [(i, argv, env) for i, (argv, _, env) in enumerate(observed) if Path(argv[0]).name == 'curl' and argv[-1] == self.apps.REBAR_URL]
         self.assertEqual(1, len(downloads))
         index, argv, env = downloads[0]
         install_index, install = next((i, argv) for i, (argv, _, _) in enumerate(observed) if argv[1:2] == ['local.rebar'])
@@ -252,3 +259,57 @@ class ApplicationChecksTests(unittest.TestCase):
             self.assertFalse(any(argv[1:2] == ['deps.get'] for argv in observed))
             if failed == 'curl':
                 self.assertFalse(any(argv[1:2] == ['local.rebar'] for argv in observed))
+
+    def test_tailwind_queries_native_config_and_downloads_before_asset_setup(self):
+        seen = []
+        def observe(argv, env):
+            seen.append(argv)
+            if argv[1:2] == ['assets.setup']:
+                download = next(row for row in seen if Path(row[0]).name == 'curl' and 'tailwindcss-' in row[-1])
+                binary = Path(download[download.index('--output') + 1])
+                self.assertEqual(b'fixture binary', binary.read_bytes())
+                self.assertEqual(0o755, binary.stat().st_mode & 0o777)
+        observed, root = self.exercise(observe=observe)
+        commands = [argv for argv, _, _ in observed]
+        query = next(argv for argv in commands if argv[1:2] == ['run'])
+        self.assertEqual(['run', '--no-start', '--no-compile', '-e', self.apps.TAILWIND_METADATA], query[1:])
+        self.assertIn('Tailwind.configured_version(profile)', query[-1])
+        self.assertIn('Tailwind.configured_target(profile)', query[-1])
+        self.assertIn('Tailwind.bin_path(version)', query[-1])
+        download = next(argv for argv in commands if Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1])
+        self.assertEqual(['--disable', '--fail', '--location', '--proto', '=https', '--proto-redir', '=https',
+                          '--max-time', '60', '--output', str(root/'apps/control_plane/_build/tailwind-fixture'),
+                          'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64'], download[1:])
+        self.assertLess(commands.index(query), commands.index(download))
+        self.assertLess(commands.index(download), next(i for i, a in enumerate(commands) if a[1:2] == ['assets.setup']))
+        self.assertTrue(any(a[1:2] == ['assets.build'] for a in commands))
+
+    def test_tailwind_metadata_refuses_external_paths_and_unofficial_urls(self):
+        official = 'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64'
+        def symlink_escape(root):
+            build = root/'apps/control_plane/_build'
+            build.mkdir(parents=True)
+            outside = root.parent/'symlink-target'
+            outside.mkdir()
+            (build/'link').symlink_to(outside, target_is_directory=True)
+            return [{'path': str(build/'link/tool'), 'url': official}]
+        for value in ([], {}, lambda root: [{'path': str(root.parent/'outside-tool'), 'url': official}],
+                      [{'path': '/outside/tool', 'url': 'http://example.com/tool'}],
+                      [{'path': '/outside/tool'}],
+                      lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': 'http://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64'}],
+                      lambda root: [{'path': str(root/'apps/control_plane/_build/tool'), 'url': 'https://example.com/tool'}],
+                      lambda root: [{'path': str(root/'apps/control_plane/_build/../escaped-tool'), 'url': official}],
+                      symlink_escape):
+            observed = []
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(ValueError, 'Tailwind'):
+                    self.exercise(tailwind_metadata=value, observe=lambda argv, env: observed.append(argv))
+                self.assertFalse(any(Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1] for argv in observed))
+                self.assertFalse(any(argv[1:2] in (['assets.setup'], ['assets.build']) for argv in observed))
+
+    def test_tailwind_transfer_failure_stops_asset_gates(self):
+        observed = []
+        with self.assertRaisesRegex(ValueError, 'Application command failed'):
+            self.exercise(fail=lambda argv: Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1],
+                          observe=lambda argv, env: observed.append(argv))
+        self.assertFalse(any(Path(argv[0]).name == 'mix' and argv[1:2] in (['assets.setup'], ['assets.build'], ['test']) for argv in observed))

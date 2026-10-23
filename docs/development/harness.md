@@ -95,6 +95,16 @@ the unchanged checksum before installing the local artifact. The pinned
 supports local files with checksum verification. No dependency version or TLS
 verification was relaxed. `mix deps.get --check-locked` uses committed
 `mix.lock`; Tailwind/esbuild versions come from committed Phoenix configuration.
+Before `assets.setup`, a non-starting `mix run --no-start --no-compile` query asks
+locked Tailwind for each configured profile's official URL and binary path.
+The same isolated HTTPS-only curl transfer preinstalls those binaries inside the
+fresh disposable `_build` directory, matching the package's executable mode.
+Unrecognized URLs, destinations outside that directory and failed transfers
+stop acceptance. `assets.setup` still verifies installed Tailwind versions through
+its existing `--if-missing` tasks, installs esbuild normally, and `assets.build`
+and the full control-plane tests still run. No product config, tool version or
+framework download cache is substituted. This also avoids the locked Tailwind
+HTTP client's 10-KiB header limit on GitHub downloads.
 No owner global tool state is written. A private temporary HOME, Mix/Hex state,
 Go module/build caches, Go command build output and acceptance event files live
 outside the source tree. Phoenix dependency checkouts, build intermediates, test

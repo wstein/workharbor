@@ -529,7 +529,10 @@
     "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_catalogue_order_of_codes",
     "test_check_ci.SourceTests.test_workflow_runs_local_shell_native_ptys",
     "test_application_checks.ApplicationChecksTests.test_rebar_download_uses_isolated_https_and_local_checksum",
-    "test_application_checks.ApplicationChecksTests.test_rebar_download_or_install_failure_stops_later_gates"
+    "test_application_checks.ApplicationChecksTests.test_rebar_download_or_install_failure_stops_later_gates",
+    "test_application_checks.ApplicationChecksTests.test_tailwind_queries_native_config_and_downloads_before_asset_setup",
+    "test_application_checks.ApplicationChecksTests.test_tailwind_metadata_refuses_external_paths_and_unofficial_urls",
+    "test_application_checks.ApplicationChecksTests.test_tailwind_transfer_failure_stops_asset_gates"
   ],
   "retained_assertion_failures": [],
   "application_tests": {
