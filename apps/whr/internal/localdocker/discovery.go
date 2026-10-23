@@ -43,24 +43,36 @@ type inspection struct {
 
 // Discover shares one total five-second wall-clock deadline across socket
 // selection and both read-only Docker calls. It includes stopped containers.
-func (c Client) Discover(parent context.Context, p doctor.Ports) ([]Workspace, error) {
+type Snapshot struct {
+	Endpoint   string
+	Workspaces []Workspace
+}
+
+// Snapshot retains the admitted endpoint so shell preflight and exec cannot
+// rediscover a different daemon. Discovery itself keeps its five-second cap.
+func (c Client) Snapshot(parent context.Context, p doctor.Ports) (Snapshot, error) {
 	ctx, cancel := context.WithTimeout(parent, doctor.Budget)
 	defer cancel()
+	endpoint, err := ResolveEndpoint(ctx, p)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	workspaces, err := c.discoverAt(ctx, endpoint)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	return Snapshot{Endpoint: endpoint, Workspaces: workspaces}, nil
+}
+func (c Client) Discover(parent context.Context, p doctor.Ports) ([]Workspace, error) {
+	snapshot, err := c.Snapshot(parent, p)
+	return snapshot.Workspaces, err
+}
+func (c Client) discoverAt(ctx context.Context, endpoint string) ([]Workspace, error) {
 	fail := func(message string) ([]Workspace, error) {
-		if parent.Err() != nil {
-			return nil, parent.Err()
-		}
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		return nil, exitcode.Errorf(exitcode.PathConflict, "%s", message).WithRemediation("Check whr doctor and the local Docker CLI; no container was changed.")
-	}
-	endpoint, err := ResolveEndpoint(ctx, p)
-	if err != nil {
-		if parent.Err() != nil {
-			return nil, parent.Err()
-		}
-		return nil, err
 	}
 	raw, err := c.read(ctx, endpoint, "container", "ls", "--all", "--no-trunc", "--format", "{{json .}}")
 	if err != nil {
