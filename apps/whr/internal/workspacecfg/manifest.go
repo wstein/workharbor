@@ -165,7 +165,12 @@ func CheckManifest(raw []byte) ManifestResult {
 			return "", false
 		}
 		if v.kind != jString {
-			schema("%s must be a string", name)
+			if name == "human_shell" {
+				kind := map[jkind]string{jNull: "null", jBool: "boolean", jNumber: "number", jArray: "array", jObject: "object"}[v.kind]
+				schema("human_shell must be a string (got %s)", kind)
+			} else {
+				schema("%s must be a string", name)
+			}
 			return "", false
 		}
 		return v.str, true
@@ -173,7 +178,11 @@ func CheckManifest(raw []byte) ManifestResult {
 	enum := func(name string, set map[string]bool) string {
 		s, ok := str(name)
 		if ok && !set[s] {
-			schema("%s is not one of the allowed values", name)
+			if name == "human_shell" {
+				schema("human_shell %s is not one of the allowed values", quoteKey(s))
+			} else {
+				schema("%s is not one of the allowed values", name)
+			}
 			return ""
 		}
 		return s
