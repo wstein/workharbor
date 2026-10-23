@@ -23,7 +23,7 @@ func main() {
 // run is the thin entry point: all behavior lives in internal/commands.
 func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 	return commands.Execute(ctx, args, commands.Env{
-		Stdout: out, Stderr: errOut, Stdin: wizard.Reader(ctx, os.Stdin), InputTerminal: wizard.IsTerminal(os.Stdin), Getenv: os.Getenv, IsTerminal: isTerminal,
+		Stdout: out, Stderr: errOut, Stdin: wizard.Reader(ctx, os.Stdin), TerminalInput: os.Stdin, InputTerminal: wizard.IsTerminal(os.Stdin), Getenv: os.Getenv, IsTerminal: isTerminal,
 	}, commands.DefaultHandlers())
 }
 

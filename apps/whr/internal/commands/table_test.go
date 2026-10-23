@@ -322,7 +322,7 @@ func TestCompletionKnowsBothForms(t *testing.T) {
 	}
 	// Production handlers: unavailable commands are not offered.
 	prod := complete(nil, "")
-	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws", "init", "ls"} {
+	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws", "init", "ls", "shell"} {
 		if !contains(prod, want) {
 			t.Errorf("production completion lacks %q: %v", want, prod)
 		}
@@ -373,6 +373,9 @@ func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 			extras := [][]string{nil, {"some-name"}, {"--cpus", "2", "--memory", "1GiB"}, {"--bogus"}}
 			// FR-066 parses its own local flags now. Unknown flags retain exit
 			// 64 via Cobra; known flags without --local retain owner_api refusal.
+			if e.ID == "workspace.shell" {
+				extras = [][]string{nil, {"some-name"}, {"--local=false"}}
+			}
 			if e.ID == "workspace.ls" {
 				extras = [][]string{nil, {"some-name"}, {"--role", "primary"}}
 			}
@@ -799,4 +802,19 @@ func TestLocalLsContractAmendment(t *testing.T) {
 		}
 	}
 	t.Fatal("workspace.ls missing")
+}
+
+func TestLocalShellContractAmendment(t *testing.T) {
+	found := 0
+	for _, e := range commands.Table() {
+		if e.ID == "workspace.shell" || e.ID == "workspace.console" {
+			found++
+			if strings.Join(e.Flags, ",") != "--local" || e.JSON != "events" || e.BlockedOn != "owner_api" || e.Needs != "control_plane" || e.Writes != "none" {
+				t.Fatalf("local mode changed remote contract: %+v", e)
+			}
+		}
+	}
+	if found != 2 {
+		t.Fatal("shell/console registry entries missing")
+	}
 }

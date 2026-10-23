@@ -53,10 +53,20 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 	if e.ID == "workspace.ls" {
 		b.WriteString("Local: --local lists running and stopped labelled containers (5 s total); no runtime is started.\nWithout --local: waits for owner_api and exits 64.\n")
 	}
+	if e.ID == "workspace.shell" {
+		b.WriteString("Local: --local <ws> opens one fresh login shell; terminal stdin/stdout required; no --json or trailing command.\n")
+		b.WriteString("Docker owns direct terminal descriptors; the stream is not filtered or recorded by whr.\n")
+		b.WriteString("Detach with ctrl-] ctrl-^; the container shell survives detaching. Closing a pane/connection does not guarantee process termination.\n")
+		b.WriteString("Persistent identity: manually set 🟥 HOST or the workspace glyph + ws:<name> in both pane title and tab label (docs/container-runtime.md).\n")
+		b.WriteString("WHR_LOCAL_WORKSPACE and WHR_LOCAL_MODE=1 are available to an optional prompt; whr does not configure the prompt or multiplexer.\n")
+	}
+	if e.ID == "workspace.console" {
+		b.WriteString("console --local is refused; use whr shell --local <ws> in the host multiplexer session.\n")
+	}
 	if e.JSON == "rejected" {
 		b.WriteString("JSON: not supported (--json is a usage error)\n")
 	}
-	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.init" || e.ID == "workspace.ls") {
+	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console") {
 		fmt.Fprintf(b, "\nFlags:\n%s", usages)
 	}
 	b.WriteString("\n" + globalFlagsHelp)
