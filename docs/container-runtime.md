@@ -55,5 +55,60 @@ host credentials, contexts and credential helpers from being loaded. Responses
 larger than 4 MiB are refused rather than truncated.
 
 Without `--local`, listing still refuses with exit 64 because the remote owner API
-is pending. Local shell entry is the next Feature 010 package; this discovery
-slice does not implement removal, volume cleanup or the owner-host pane gates.
+is pending. Local discovery does not implement removal or volume cleanup.
+
+## Local workspace shell
+
+From an existing host shell or host multiplexer pane, run
+`whr shell --local <container-name>` (also `whr workspace shell --local` or
+`whr ws shell --local`). An exact full name wins; otherwise use a unique
+12–64-character container ID prefix. Matching includes stopped containers,
+which are refused with exit 68. Ambiguous selectors exit 64; absent/foreign
+containers exit 65. Labels are a usability guard for callers who already have
+host Docker access, as explained in [ADR 0015](adr/0015-host-session-and-local-shell.md).
+
+Both stdin and stdout must be terminals. JSON, trailing commands and `--shell`
+are refused before Docker runs. `console --local` exits 64 and directs the caller
+to this shell command inside the host multiplexer session. Remote shell access
+remains unavailable; this local path needs no login, grant or control plane.
+
+Preflight shares a five-second budget and pins one Unix endpoint and full
+container ID through inspect, exec and any post-exit check. Operational preflight
+failures exit 68; interruption exits 72. The host manifest is read through the
+existing no-symlink, 64-KiB workspace reader. Its `human_shell` selects fish, bash,
+zsh or nu; an absent manifest or shell preference uses fish, as does an absent
+workspace-folder label. A label naming a missing host directory is intentionally
+refused with exit 68: an unreadable/nonexistent directory cannot establish that
+the manifest file is absent. Other manifest read/validation failures also refuse
+entry. The container user comes from
+`devcontainer.metadata` remoteUser, configured user, then captain. The working
+directory is the container mount destination corresponding to the host workspace
+folder, otherwise the validated configured container working directory.
+
+On a terminal stderr the command prints its local-access/detach notice. A
+working-directory fallback also prints, including with redirected stderr:
+
+```text
+whr: warning: no workspace folder mount in <name>; starting in <dir>
+```
+
+Names and directories in these messages are escaped. Invalid metadata is refused
+before exec. Docker receives the original terminal descriptors: raw output is
+unfiltered and unrecorded by whr. Only TERM and the optional prompt inputs
+WHR_LOCAL_WORKSPACE/WHR_LOCAL_MODE are added to the container environment; no
+prompt configuration is changed. Docker client credentials/settings are excluded
+by the shared minimal environment and empty temporary config.
+
+Use `ctrl-] ctrl-^` to detach; the container shell survives. Closing a pane or
+losing the client does not guarantee process termination. Normal child exit
+status passes through; a nonzero status triggers one bounded daemon-reachability
+inspect. A reachable daemon preserves that status even if the container is gone;
+unreachable/timeout exits 72 with a whr diagnostic.
+
+For persistent visual identity, set BOTH pane title and tab label manually:
+`🟥 HOST` for the host, and a distinct workspace glyph plus `ws:<name>` for each
+workspace. No multiplexer is started by whr. Real Docker key/detach behavior,
+resize, rendering and SSH persistence require the
+[SC-009 owner checkpoint A](quality/010-host-and-workspace-panes/sc009-base.md);
+offline tests do not establish those outcomes. Console defaults and the optional
+Herdr plugin belong to later packages.
