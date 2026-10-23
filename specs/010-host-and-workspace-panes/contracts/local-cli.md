@@ -85,12 +85,13 @@ The optional `integrations/herdr/` manifest provides an overlay picker and tab/s
 validated data through `WHR_PANE_WORKSPACE`/fixed argv, never a shell-evaluated command string. It reads no credentials or manifest
 aliases. Cancellation opens no pane; stale or non-running selection is safely refused by P2.
 
-P1 returns all states and has no running-state filter flag. Before implementing the running-only picker, P4 must include a separately
-owner-approved specification reconciliation: US3 requires running workspaces, while FR-018 currently permits reading only `name`.
-The proposed amendment permits reading the existing public `state` field solely for running eligibility alongside `name`, without
-adding a CLI flag, reading labels/provider metadata or implementing independent Docker discovery. Until that amendment is accepted,
-the running-only picker implementation is blocked; this plan does not silently waive FR-018 or substitute an all-state picker.
-This is a P4 contract prerequisite, not a reopening of any settled OQ answer.
+P1 returns all states and has no running-state filter flag. The required FR-018/US3 amendment is now owner-approved and merged in
+[PR #217](https://github.com/wstein/workharbor/pull/217), commit `82136e51c82ccf62ceaf7491667e23f59035847a` (OQ-12).
+The picker reads only each result's `name` and `state`, uses state solely to decide eligibility, offers only exact `running` records
+and displays the name only. It adds no CLI filter and reads no labels/provider metadata or independent Docker discovery.
+P2 refuses stale/non-running selections with 68. The amendment gate is fulfilled; do not request it again or substitute an all-state
+picker. Normal P4 artifact and prior-package merge gates still apply. Fake picker tests cover running, stopped, paused, restarting,
+unknown/missing state and the name-only display without changing the settled name validation.
 
 The workspace entrypoint ultimately replaces itself with `whr shell --local <name>`, allowing the parent `whr` process to supervise
 its own Docker child. Fixed FNV-1a identity sets both pane title and tab label. Host configuration/action sets `🟥 HOST`; `whr` never
