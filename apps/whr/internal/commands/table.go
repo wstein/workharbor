@@ -89,7 +89,7 @@ var descriptions = map[string]string{
 	"workspace.stop":         "Stop a workspace",
 	"workspace.rebuild":      "Rebuild a workspace",
 	"workspace.rm":           "Remove a workspace",
-	"workspace.shell":        "Open a shell in a workspace",
+	"workspace.shell":        "Open a local workspace login shell with --local (remote waits for owner_api)",
 	"workspace.console":      "Attach to the persistent workspace console",
 	"workspace.ssh":          "Connect to a workspace over SSH",
 	"workspace.open":         "Open a workspace in the browser",

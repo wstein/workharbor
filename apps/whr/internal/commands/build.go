@@ -89,6 +89,14 @@ func (a *app) build() {
 		e := e
 		runE := func(c *cobra.Command, args []string) error {
 			ctx := c.Context()
+			if e.ID == "workspace.shell" {
+				ctx = context.WithValue(ctx, localShellKey{}, a.localShellOptions(c))
+			}
+			if e.ID == "workspace.console" {
+				if local, _ := c.Flags().GetBool("local"); local {
+					return exitcode.Errorf(exitcode.PathBadArguments, "console --local is unavailable; use whr shell --local <ws> inside the host multiplexer session")
+				}
+			}
 			if e.ID == "workspace.ls" {
 				ctx = context.WithValue(ctx, localLsKey{}, localLsOptions(c))
 			}
@@ -123,6 +131,11 @@ func (a *app) build() {
 				c.Flags().Bool("local", false, "discover local workspace containers; no control plane")
 				c.Flags().String("role", "", "local role: primary, staging or temp")
 				c.Flags().String("label", "", "local label selector: key or key=value")
+			} else if e.ID == "workspace.shell" || e.ID == "workspace.console" {
+				c.Flags().Bool("local", false, "local Docker login shell (console refuses; use host session)")
+				if !a.available(e.ID) {
+					c.FParseErrWhitelist.UnknownFlags = true
+				}
 			} else if !a.available(e.ID) {
 				// Unavailable commands accept and ignore any flags so that they refuse
 				// with their one-line explanation instead of a flag error.

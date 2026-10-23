@@ -6,11 +6,13 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/doctor"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/localshell"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/output"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/version"
 )
@@ -20,6 +22,8 @@ type Env struct {
 	Stdout, Stderr io.Writer
 	Stdin          io.Reader
 	InputTerminal  bool
+	// TerminalInput bypasses the prompt reader for direct interactive children.
+	TerminalInput *os.File
 	// Getenv reads an environment variable (NO_COLOR, TERM).
 	Getenv func(string) string
 	// IsTerminal reports whether a stream is an interactive terminal.
@@ -33,11 +37,13 @@ type Call struct {
 	Args []string
 }
 
-// Result is a successful outcome: Value is the --json "result" object and
+// Result is a command outcome: Value is the --json "result" object and
 // Human the text for standard output in human mode (escape untrusted text).
 type Result struct {
 	Value any
 	Human string
+	// terminalStatus is an already-written direct child outcome, without an envelope or whr error line.
+	terminalStatus *int
 }
 
 // Handler implements one command. A command without a handler is registered
@@ -57,7 +63,8 @@ func DefaultHandlers() map[string]Handler {
 		"workspace.ls": LocalLsHandler(func(ctx context.Context) ([]localdocker.Workspace, error) {
 			return (localdocker.Client{}).Discover(ctx, doctor.SystemPorts(nil))
 		}),
-		"workspace.init": initHandler,
+		"workspace.init":  initHandler,
+		"workspace.shell": LocalShellHandler(localshell.SystemPorts()),
 	}
 }
 
@@ -177,6 +184,10 @@ func (a *app) run(ctx context.Context, e Entry, args []string) error {
 			_, _ = io.WriteString(a.env.Stdout, res.Human)
 		}
 		a.exit = w.Failure(e.ID, asError(err))
+		return nil
+	}
+	if res.terminalStatus != nil {
+		a.exit = exitcode.Code(*res.terminalStatus)
 		return nil
 	}
 	if err := w.Success(e.ID, res.Value, res.Human); err != nil {
