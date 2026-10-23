@@ -98,6 +98,9 @@ verification was relaxed. `mix deps.get --check-locked` uses committed
 `mix.lock`; Tailwind/esbuild versions come from committed Phoenix configuration.
 Before `assets.setup`, a non-starting `mix run --no-start --no-compile` query asks
 locked Tailwind for each configured profile's official URL and binary path.
+The query writes JSON exclusively to a new private cache file; stdout/stderr
+warnings remain in the normal command log and do not corrupt that metadata.
+Additional JSON keys are refused.
 The same isolated HTTPS-only curl transfer preinstalls those binaries inside the
 fresh disposable `_build` directory, matching the package's executable mode.
 Unrecognized URLs, destinations outside that directory and failed transfers
