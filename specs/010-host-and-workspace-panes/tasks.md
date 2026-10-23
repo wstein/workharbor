@@ -3,15 +3,16 @@
 **Input**: [spec.md](spec.md), then [plan.md](plan.md), [contracts/local-cli.md](contracts/local-cli.md),
 [data-model.md](data-model.md), [research.md](research.md), [quickstart.md](quickstart.md), ADR 0015 and reconciled Feature 006.
 **Status**: Proposed execution tasks; all unchecked. No task, runtime capability or owner-host observation is claimed complete.
-**Baseline**: `29ce650184b4015ff02759c0b07835c914ba4db1`; OQ-11/FR-010/SC-011 merged by
+**Baseline**: `82136e51c82ccf62ceaf7491667e23f59035847a`; OQ-11/FR-010/SC-011 merged by
 [PR #216](https://github.com/wstein/workharbor/pull/216). The prior plan was merged by [PR #215](https://github.com/wstein/workharbor/pull/215).
+FR-018/US3 is owner-approved and merged in [PR #217](https://github.com/wstein/workharbor/pull/217), recording OQ-12; that amendment gate is fulfilled.
 
 ## Execution contract and fixed decisions
 
 Deliver this docs PR first, then **one PR per package, P1 → P2 → P3 → P4**. Owner merges, never the agent. Before each
 package, record reviewed artifact revisions, owner approval links and accepted prerequisites under WORKFLOW; a new tasks file does
-not approve itself. Stop at owner merge/approval, FR-018 and real-host gates; do not manufacture approval from a label or task checkbox.
-Eight settled owner decisions are **OQ-2/5/6/7/8/9/10/11**; retain foreman OQ-1/4 and withdrawn OQ-3. No task reopens them.
+not approve itself. Stop at owner merge/approval and real-host gates; preserve proof of the already-merged FR-018 amendment; do not manufacture approval from a label or task checkbox.
+Nine settled owner decisions are **OQ-2/5/6/7/8/9/10/11/12**; retain foreman OQ-1/4 and withdrawn OQ-3. No task reopens them.
 
 Each behavior task is one independently verifiable unit: write the named test first, record its meaningful failing result, implement
 only that unit, make it green and refactor. This groups test and implementation in the same task rather than adding test-only dead
@@ -79,11 +80,11 @@ Independent test: shared schema/manifest vectors and scaffold/wizard transcript 
 Goal: independent integration with deterministic identity, optional per-pane tint and safely selected workspace shells.
 Independent test: separate fake-whr/herdr manifest/script/PTY checks and SC-010 verifier; no plugin dependency added to make check.
 
-- [ ] T023 [US3] OWNER GATE G-FR018: Record the separate owner-approved and MERGED FR-018/US3 amendment in `specs/010-host-and-workspace-panes/contracts/local-cli.md` and `docs/quality/010-host-and-workspace-panes/p4.md` before any picker implementation. Current FR-018 allows only name reads while US3 asks for running-only and P1 returns all states; do not assume a new filter, read state under an implicit exception or build an all-state substitute. Stop/request the owner amendment; follow its authoritative approved resolution without changing OQ answers. Prerequisite: T022 accepted/merged and P4 scope approval. This gate is open; no implementation task may mark it done.
+- [ ] T023 [US3] P4: Bind the already owner-approved and MERGED FR-018/US3 amendment from PR #217 (`82136e51c82ccf62ceaf7491667e23f59035847a`, OQ-12) in `docs/quality/010-host-and-workspace-panes/p4.md` before picker implementation. Verify authoritative `contracts/local-cli.md`/spec parity: read name/state only, state solely for exact-running eligibility, display name only, no added CLI filter; stale/non-running choice still refused by P2. No new amendment request or policy choice: G-FR018 is fulfilled by the merged evidence. Normal P4 scope/artifact approval remains. Prerequisite: T022 accepted/merged and P4 approval. Documentation verification only; no invented red test or owner-host operation. Trace: FR-018, US3, OQ-12.
 - [ ] T024 [US3] P4: Implement fixed identity mapping in `integrations/herdr/identity.py`; red-first `test_identity_fnv1a_fixed_names`, `test_identity_never_uses_host_glyph` in `integrations/herdr/tests/test_identity.py`. FNV-1a 32-bit over name bytes modulo 5, glyph order 🔷/🟠/🟣/🟡/⬜ and exactly FR-021a tints; host 🟥 HOST. Collisions accepted, full ws:name text distinguishes panes; markers cosmetic. Trace: FR-021/021a, SC-010, OQ-9/10. Prerequisite: T023 and P4 approved implementation scope.
 - [ ] T025 [P] [US3] P4: Implement independent palette verifier in `integrations/herdr/check_palette.py`; red-first `test_palette_contrast_and_ciede2000` and `test_palette_simulations_use_linear_srgb` in `integrations/herdr/tests/test_palette.py`. Keep fixed palette unless this verifier fails; contrast ≥4.5 against #c0c0c0, all host/workspace tint pairs CIEDE2000 ≥8 normal and ≥6 under each Machado 2009 severity-1 simulation in linear sRGB. Record approximation/known five-tint limits, no accessibility guarantee. Trace: FR-021a, SC-010, OQ-10. Prerequisite: T023; separate files from T024, no invented palette revision.
 - [ ] T026 [US3] P4: Add reviewed `integrations/herdr/herdr-plugin.toml` and pane/host action entrypoints under `integrations/herdr/`; red-first `test_plugin_title_and_tab_label`, `test_plugin_background_optional_one_osc_before_exec` in `integrations/herdr/tests/test_entrypoints.py`. Set same glyph text in pane title AND tab label; default marker, optional tint exactly one OSC 11 before replacing entrypoint with whr shell --local; tint disabled emits none. Host title/action is outside whr; no credentials/agent/containers started. Trace: FR-018/019/021/021a, SC-008/010, OQ-5/9/10. Prerequisites: T024, T025.
-- [ ] T027 [US3] P4: Implement the overlay picker in `integrations/herdr/picker.py` only after T023 is accepted; red-first `test_picker_uses_approved_cli_fields`, `test_picker_rejects_invalid_name`, `test_picker_cancel_opens_nothing`, `test_picker_passes_selection_as_data` in `integrations/herdr/tests/test_picker.py`. Follow the approved running-eligibility contract, public whr ls --local --json only, name rule `^[a-z0-9]$|^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`, no manifest aliases/shell string/independent Docker discovery; fixed argv/env opens tab/split, stale choice refused by P2. Trace: FR-018, US3, OQ-2/5/8. Prerequisites: T023, T026.
+- [ ] T027 [US3] P4: Implement the overlay picker in `integrations/herdr/picker.py` only after T023 is accepted; red-first `test_picker_uses_approved_cli_fields`, `test_picker_rejects_invalid_name`, `test_picker_cancel_opens_nothing`, `test_picker_passes_selection_as_data` in `integrations/herdr/tests/test_picker.py`. Follow merged OQ-12: public whr ls --local --json name/state only, exact-running eligibility (non-running/unknown/missing state not offered), name-only display, name rule `^[a-z0-9]$|^[a-z0-9][a-z0-9-]{0,62}[a-z0-9]$`, no manifest aliases/shell string/independent Docker discovery; fixed argv/env opens tab/split, stale choice refused by P2. Trace: FR-018, US3, OQ-2/5/8/12. Prerequisites: T023, T026.
 - [ ] T028 [US3] P4: Add standalone `integrations/herdr/check.py` and fake-whr/herdr integration/PTY coverage in `integrations/herdr/tests/`, with red-first `test_plugin_end_to_end_with_fakes`, `test_plugin_absence_leaves_local_shell_usable`, `test_plugin_does_not_join_required_repo_checks`. Document owner-only install/enable and separate verification in `integrations/herdr/README.md`; no required repository check/install hook, product import or dependency. Trace: FR-016/018/021/021a, SC-008/010, OQ-5. Prerequisite: T027.
 - [ ] T029 [US3] P4: Record standalone checks, fixed hash/palette and fake-pane evidence in `docs/quality/010-host-and-workspace-panes/p4.md`; publish one P4 Draft PR, independent exact-head CLEAR and required CI green before Ready, then STOP for owner merge. Mark all actual title/emoji/tint/SSH effects unverified until owner checkpoint B. Trace: FR-018/021/021a, SC-009/010. Prerequisite: T028.
 - [ ] T030 [US3] OWNER GATE G-B: Owner installs/enables only the reviewed accepted P4 under separate authorization, executes/accepts checkpoint B from `specs/010-host-and-workspace-panes/quickstart.md`, and records `docs/quality/010-host-and-workspace-panes/sc009-plugin.md`. Repeat A; verify pane title AND tab label glyphs survive clear, narrow notebook emoji rendering, shared-tab behavior, optional background affecting only opened pane and disabled tint preserving identity. Include exact product/plugin SHAs and Docker/herdr/terminal versions. Agent stops and requests this real-host gate; no fake evidence closes it. Trace: SC-009; OQ-9/10. Prerequisites: T029 accepted product and separate owner host-run authorization.
@@ -100,13 +101,13 @@ P1: T002 → T003 → T004 → T005 → T006 → T007 → owner merge
 P2: (T008 + T009) → T010 → T011 → T012 → T013 → T014 → T015 → T016 → T017 → owner merge
                                                        SC-011 ^                     └→ G-A/T018 (owner)
 P3: T019 → T020 → T021 → T022 → owner merge
-P4: G-FR018/T023 → (T024 + T025) → T026 → T027 → T028 → T029 → owner merge → G-B/T030 (owner)
+P4: OQ-12 already merged → T023 binding → (T024 + T025) → T026 → T027 → T028 → T029 → owner merge → G-B/T030 (owner)
 All accepted package scopes + applicable owner evidence → T031
 ```
 
 Package publication/implementation order is P1 → P2 → P3 → P4; P3 depends on accepted P2, not a fabricated offline substitute for G-A.
 G-A/G-B are owner operations; agents stop when a real-host action/acceptance is required and report the precise outstanding record.
-P4 picker is blocked until G-FR018 is approved AND merged. FR-010/OQ-11 is already merged, not an open gate.
+P4 picker requires approved AND merged G-FR018 evidence, now satisfied by PR #217/OQ-12; T023 records that binding at P4 start. FR-010/OQ-11 is likewise merged. Neither amendment remains an open gate; package/merge and real-host gates remain.
 Every product PR stops at owner merge; do not merge or bypass unmet artifact approvals. Follow-up code starts from fresh accepted
 main using stw; changes to the reviewed artifact requirements need renewed owner approval under WORKFLOW.
 
@@ -114,11 +115,11 @@ main using stw; changes to the reviewed artifact requirements need renewed owner
 
 - Within US1/P2, T008 selection and T009 manifest reuse have distinct files and can proceed in separate stw workspaces after P1/approvals;
   user-facing argv/output/PTY work follows their shared dependency chain. US2 builds on the same P2 behavior and is not a second PR.
-- Within US3/P4, T024 identity and T025 numeric verifier have distinct files after the owner amendment; the entrypoints/picker depend
-  on both. Never use parallel work to cross G-FR018 or start another package early.
+- Within US3/P4, T024 identity and T025 numeric verifier have distinct files after binding the merged owner amendment; the entrypoints/picker depend
+  on both. Never lose the merged G-FR018 evidence or use parallel work to start another package early.
 - US4/P3 is ordered after P2; schema/default vectors must agree before scaffold/wizard completion. No useful cross-package parallel
   authoring is assumed. CI observation may run while exact-head review runs with the configured cheapest helper.
 
 MVP: accepted P1 discovery plus P2 local shell/US1+US2, with real-host behavior explicitly pending G-A. Incrementally reconcile P3,
-then optional P4 only after its owner amendment. All units preserve the spec's bounded inputs, labels-as-usability guard and no-token
+then optional P4 using its already-merged OQ-12 amendment and separately approved package scope. All units preserve the spec's bounded inputs, labels-as-usability guard and no-token
 Docker environment; no new remote APIs or session cleanup guarantees are introduced.
