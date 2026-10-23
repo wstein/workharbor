@@ -50,6 +50,9 @@ func (c Client) Discover(parent context.Context, p doctor.Ports) ([]Workspace, e
 		if parent.Err() != nil {
 			return nil, parent.Err()
 		}
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		return nil, exitcode.Errorf(exitcode.PathConflict, "%s", message).WithRemediation("Check whr doctor and the local Docker CLI; no container was changed.")
 	}
 	endpoint, err := ResolveEndpoint(ctx, p)
