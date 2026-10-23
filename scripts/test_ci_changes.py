@@ -1,6 +1,7 @@
 """Docs-only pull request classification must fail closed."""
 import importlib.util
 import io
+import json
 import os
 import subprocess
 import tempfile
@@ -60,6 +61,56 @@ class ClassifyTests(unittest.TestCase):
             for old, new in ((mode, REGULAR), (REGULAR, mode), (mode, mode)):
                 with self.subTest(old=old, new=new):
                     self.assertFalse(changes.docs_only([entry('docs/adr/a.md', old, new)]))
+
+
+def needs(changes_result='success', docs_only='false', **results):
+    jobs = {'docs': 'skipped', 'bootstrap': 'skipped', 'macos-pty': 'skipped', 'macos-hostsetup': 'skipped',
+            'macos-dotfiles': 'skipped'}
+    jobs.update({name.replace('_', '-'): result for name, result in results.items()})
+    value = {name: {'result': result, 'outputs': {}} for name, result in jobs.items()}
+    value['changes'] = {'result': changes_result, 'outputs': {'docs_only': docs_only}}
+    return value
+
+
+FULL = dict(bootstrap='success', macos_pty='success', macos_hostsetup='success', macos_dotfiles='success')
+
+
+class GateTests(unittest.TestCase):
+    def test_full_run_needs_every_full_job_and_no_docs_job(self):
+        self.assertTrue(changes.gate(needs(**FULL)))
+        for name in FULL:
+            for result in ('failure', 'cancelled', 'skipped'):
+                with self.subTest(name=name, result=result):
+                    self.assertFalse(changes.gate(needs(**dict(FULL, **{name: result}))))
+        self.assertFalse(changes.gate(needs(docs='success', **FULL)))
+
+    def test_docs_only_run_needs_the_docs_job_and_skips_the_rest(self):
+        self.assertTrue(changes.gate(needs(docs_only='true', docs='success')))
+        for result in ('failure', 'cancelled', 'skipped'):
+            self.assertFalse(changes.gate(needs(docs_only='true', docs=result)))
+        self.assertFalse(changes.gate(needs(docs_only='true', docs='success', bootstrap='success')))
+        self.assertFalse(changes.gate(needs(docs_only='true', docs='success', macos_pty='success')))
+
+    def test_failed_detection_is_full_and_never_passes_on_its_own(self):
+        self.assertFalse(changes.gate(needs('failure', '', **FULL)))
+        self.assertFalse(changes.gate(needs('failure', 'true', docs='success')))
+        self.assertFalse(changes.gate(needs('cancelled', '', docs='success')))
+
+    def test_unexpected_values_fail(self):
+        self.assertFalse(changes.gate(needs(docs_only='yes', docs='success')))
+        self.assertFalse(changes.gate({}))
+        self.assertFalse(changes.gate(None))
+        self.assertFalse(changes.gate({'changes': {'result': 'success'}}))
+        missing = needs(**FULL)
+        del missing['macos-pty']
+        self.assertFalse(changes.gate(missing))
+
+    def test_main_gate_exit_status_comes_from_the_needs_context(self):
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            self.assertEqual(0, changes.main(['--gate'], env={'NEEDS': json.dumps(needs(**FULL))}))
+            self.assertEqual(1, changes.main(['--gate'], env={'NEEDS': json.dumps(needs(bootstrap='failure'))}))
+            self.assertEqual(1, changes.main(['--gate'], env={'NEEDS': 'not json'}))
+            self.assertEqual(1, changes.main(['--gate'], env={}))
 
 
 class GitTests(unittest.TestCase):
