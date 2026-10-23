@@ -238,7 +238,7 @@ class ApplicationChecksTests(unittest.TestCase):
         install_index, install = next((i, argv) for i, (argv, _, _) in enumerate(observed) if argv[1:2] == ['local.rebar'])
         path = install[3]
         self.assertEqual(['--disable', '--fail', '--location', '--proto', '=https', '--proto-redir', '=https',
-                          '--max-time', '60', '--output', path, self.apps.REBAR_URL], argv[1:])
+                          '--retry', '2', '--retry-delay', '1', '--retry-max-time', '60', '--max-time', '60', '--output', path, self.apps.REBAR_URL], argv[1:])
         self.assertEqual(['local.rebar', 'rebar3', path, '--sha512', self.apps.REBAR_SHA512, '--force'], install[1:])
         self.assertEqual('30410ea3222f52f0af90e6ba7df483d9a1e3452dc6ed6f60f372008fc017dbd8a'
                          'e22c45e1359302796f2dbb805bbcfce53bf5d08fdd43885203b0ae015ff0516', self.apps.REBAR_SHA512)
@@ -278,7 +278,7 @@ class ApplicationChecksTests(unittest.TestCase):
         self.assertIn('Tailwind.bin_path(version)', query[-1])
         download = next(argv for argv in commands if Path(argv[0]).name == 'curl' and 'tailwindcss-' in argv[-1])
         self.assertEqual(['--disable', '--fail', '--location', '--proto', '=https', '--proto-redir', '=https',
-                          '--max-time', '60', '--output', str(root/'apps/control_plane/_build/tailwind-fixture'),
+                          '--retry', '2', '--retry-delay', '1', '--retry-max-time', '60', '--max-time', '60', '--output', str(root/'apps/control_plane/_build/tailwind-fixture'),
                           'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64'], download[1:])
         self.assertLess(commands.index(query), commands.index(download))
         self.assertLess(commands.index(download), next(i for i, a in enumerate(commands) if a[1:2] == ['assets.setup']))
