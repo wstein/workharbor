@@ -112,7 +112,7 @@ jobs:
         with:
           go-version: '1.27.2'
           cache: false
-      - name: Verify native harness and wizard PTYs
+      - name: Verify native harness, wizard and local shell PTYs
         shell: bash
         working-directory: apps/whr
         env:
@@ -128,6 +128,12 @@ jobs:
             TestPTYNoLeakedProcess
             TestWizardPTYHappyPath
             TestWizardPTYInterruptRollsBack
+            TestLocalShellPTYDirectStreamsAndResize
+            TestLocalShellPTYRejectsNonTerminalBeforeDocker
+            TestLocalShellPTYEnvironmentCanaries
+            TestLocalShellPTYRedirectedStderrFallback
+            TestLocalShellPTYExitAndLiveness
+            TestLocalShellPTYPreflightSignalsExit72
           )
           selection=$(printf '%s|' "${expected[@]}")
           selection="^(${selection%|})$"

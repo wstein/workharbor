@@ -1009,5 +1009,21 @@ class SourceTests(unittest.TestCase):
             self.assertRegex(action, r'^[\w.-]+/[\w.-]+@[0-9a-f]{40}$')
 
 
+    def test_workflow_runs_local_shell_native_ptys(self):
+        native = self.jobs()['macos-pty']
+        for name in (
+                'TestLocalShellPTYDirectStreamsAndResize',
+                'TestLocalShellPTYRejectsNonTerminalBeforeDocker',
+                'TestLocalShellPTYEnvironmentCanaries',
+                'TestLocalShellPTYRedirectedStderrFallback',
+                'TestLocalShellPTYExitAndLiveness',
+                'TestLocalShellPTYPreflightSignalsExit72'):
+            self.assertIn('            ' + name + '\n', native)
+        self.assertIn('selection="^(${selection%|})$"', native)
+        self.assertIn('grep -Fx -- "$name"', native)
+        self.assertIn('^--- PASS: ${name}', native)
+        self.assertIn('--- SKIP:', native)
+
+
 if __name__ == '__main__':
     unittest.main()
