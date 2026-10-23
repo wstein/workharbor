@@ -534,7 +534,9 @@
     "test_application_checks.ApplicationChecksTests.test_tailwind_metadata_refuses_external_paths_and_unofficial_urls",
     "test_application_checks.ApplicationChecksTests.test_tailwind_transfer_failure_stops_asset_gates",
     "test_application_checks.ApplicationChecksTests.test_tailwind_metadata_file_ignores_mix_warnings",
-    "test_application_checks.ApplicationChecksTests.test_tailwind_query_failure_blocks_even_with_valid_metadata"
+    "test_application_checks.ApplicationChecksTests.test_tailwind_query_failure_blocks_even_with_valid_metadata",
+    "test_application_checks.ApplicationChecksTests.test_tailwind_checksum_failure_stops_before_executable_or_assets",
+    "test_application_checks.ApplicationChecksTests.test_tailwind_release_digest_pins_are_complete"
   ],
   "retained_assertion_failures": [],
   "application_tests": {

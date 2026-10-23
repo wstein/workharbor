@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: EUPL-1.2
 """Fixed application gates; manifest data supplies test identities, never argv."""
 import json
+import hashlib
 import os
 import re
 import shutil
@@ -25,6 +26,24 @@ end)
 |> Enum.uniq()
 |> Jason.encode!()
 |> then(&File.write!(System.fetch_env!("WORKHARBOR_TAILWIND_METADATA"), &1, [:exclusive]))'''
+
+# Official v4.3.3 sha256sums.txt, pinned for every published native artifact.
+TAILWIND_SHA256 = {
+    'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-arm64':
+        '55fd0b241214eff3de1e8ee4f22796662f2d2e7a49bcfca7477cfd0bac398195',
+    'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-arm64-musl':
+        '71ea4be79c9de9827545682df3e040053fb535d37c71ed2cfdedf9385a0868e0',
+    'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64':
+        'dc61b3ac6b8c9ca874c0cc4c57b2409791a64c5540404ca5f5367360babc313a',
+    'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64-musl':
+        'a04d34ceacc8f52cbe8920ad846cdeb61d3d0021dba32db0d1f77c9d9fad7a6c',
+    'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-macos-arm64':
+        'cdf646702987a743464dff4d9c60fd4480d1c1e73dd819a9a67f1078815dce9d',
+    'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-macos-x64':
+        '7922e0953f2110c05976e3bf58f14e643d90427575e766b7d433f5f80cbee7e1',
+    'https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-windows-x64.exe':
+        'e0e260ce048014e9268f6237ff18f8ccf02cef521cbd0ae04e82c2cdf7aa3955',
+}
 
 
 
@@ -254,11 +273,18 @@ def check_applications(root, inventory, run):
                     or not re.fullmatch(r'https://github\.com/tailwindlabs/tailwindcss/releases/download/'
                                         r'v[0-9][0-9A-Za-z.+-]*/tailwindcss-[a-z0-9_.-]+', asset['url'])):
                 raise ValueError('Invalid Tailwind installation metadata')
+            expected = TAILWIND_SHA256.get(asset['url'])
+            if expected is None:
+                raise ValueError('Tailwind artifact has no reviewed SHA-256 pin')
             destination = Path(asset['path'])
             if not destination.is_absolute() or not destination.resolve().is_relative_to(cwd/'_build'):
                 raise ValueError('Tailwind destination must remain inside the disposable build directory')
             destination.parent.mkdir(parents=True, exist_ok=True)
             download(asset['url'], destination, cwd)
+            with destination.open('rb') as artifact:
+                actual = hashlib.file_digest(artifact, 'sha256').hexdigest()
+            if actual != expected:
+                raise ValueError('Tailwind artifact SHA-256 mismatch')
             destination.chmod(0o755)
         execute([tools['mix'], 'assets.setup'], cwd)
         execute([tools['mix'], 'assets.build'], cwd)
