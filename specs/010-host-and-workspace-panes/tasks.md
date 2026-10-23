@@ -2,7 +2,7 @@
 
 **Input**: [spec.md](spec.md), then [plan.md](plan.md), [contracts/local-cli.md](contracts/local-cli.md),
 [data-model.md](data-model.md), [research.md](research.md), [quickstart.md](quickstart.md), ADR 0015 and reconciled Feature 006.
-**Status**: Proposed execution tasks; all unchecked. No task, runtime capability or owner-host observation is claimed complete.
+**Status**: Execution started; checked units link to recorded evidence. Runtime and owner-host acceptance remain separate gates.
 **Baseline**: `82136e51c82ccf62ceaf7491667e23f59035847a`; OQ-11/FR-010/SC-011 merged by
 [PR #216](https://github.com/wstein/workharbor/pull/216). The prior plan was merged by [PR #215](https://github.com/wstein/workharbor/pull/215).
 FR-018/US3 is owner-approved and merged in [PR #217](https://github.com/wstein/workharbor/pull/217), recording OQ-12; that amendment gate is fulfilled.
@@ -27,7 +27,7 @@ P4 is optional and its standalone checks never become a dependency of `make chec
 
 ## Phase 1 — Setup and approval binding
 
-- [ ] T001 Record docs approval/merge and the exact spec/plan/task revisions in `docs/quality/010-host-and-workspace-panes/implementation.md`; verify 006/T025 command foundation, 006/T027 doctor rules and 006/T031 PTY harness exist before their consumers, select the feature with `scripts/select_feature.py`, and create package workspaces with `stw workspace plan/apply --task --owner`. Preserve native permissions, owner identity and all OQ answers; stop on an unexpected code/spec contradiction. Prerequisites: this docs PR reviewed and owner-approved/merged. Evidence: artifact/approval links and real source paths; no product change in this task.
+- [x] T001 Record docs approval/merge and the exact spec/plan/task revisions in `docs/quality/010-host-and-workspace-panes/implementation.md`; verify 006/T025 command foundation, 006/T027 doctor rules and 006/T031 PTY harness exist before their consumers, select the feature with `scripts/select_feature.py`, and create package workspaces with `stw workspace plan/apply --task --owner`. Preserve native permissions, owner identity and all OQ answers; stop on an unexpected code/spec contradiction. Prerequisites: this docs PR reviewed and owner-approved/merged. Evidence: artifact/approval links and real source paths; no product change in this task.
 
 ## Phase 2 — P1 foundation: `ls --local` (006 FR-066)
 
