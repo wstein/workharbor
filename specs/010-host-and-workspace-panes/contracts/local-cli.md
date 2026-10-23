@@ -49,6 +49,17 @@ line; otherwise preserve status including 1, 126, 127, 137 and 255. No extra ava
 The local handler waits on the child; terminal descriptors go directly to Docker. Resize/signal behavior must be tested at the process
 boundary and under SC-009, without a `whr` stream relay. Preserve the FR-010 start notice exactly, only on terminal stderr.
 
+Working directory: choose the workspace-folder mount destination matching the host folder; if none is determinable, use the container's
+configured working directory and retain a fallback reason for its required FR-005 warning. Validate the chosen directory before exec;
+an invalid fallback is a 68 refusal, not a successful fallback. Escape the fallback path/reason in every diagnostic under FR-022.
+
+**P2 publication prerequisite:** reconcile FR-005's required warning with FR-010's exactly-one-line notice by a separately reviewed,
+owner-approved spec amendment. Proposed output: keep the exact TTY-only start notice, then emit one additional pre-handover stderr
+warning naming the validated fallback directory/reason, even when stderr is redirected; a matched mount emits no warning. This is a
+proposal, not an implicit FR-010 exception, and no fallback warning is deferred into the shell stream after handover.
+P2 must add `TestLocalShellWorkingDirFallbackWarnsBeforeHandover`, including matched-mount/no-warning, redirected-stderr,
+invalid-fallback/no-exec, timing, escaping and unchanged child-stream cases. The later tasks must carry this prerequisite and test.
+
 ## P3: default preference
 
 Missing `console_mode` resolves to `plain` at new-session creation, including existing manifests. Explicit `plain` or `herdr` is

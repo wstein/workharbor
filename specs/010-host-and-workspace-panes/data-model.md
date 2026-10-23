@@ -8,7 +8,7 @@ This design adds no database or durable console state.
 | Local endpoint | Unix socket endpoint, discovery source, remaining deadline | FR-060 order; reject non-Unix schemes before Docker; pin same endpoint across calls. Discovery/preflight shares 5 s. |
 | Local workspace record | FR-066 `id`, `name`, `role`, `image`, `state`, `status`, `workspace_folder`, `labels`, `home_volume`, `protected_volumes` | Full 64-hex ID; recognized label required. Both running and stopped records participate in selection. Only schema-approved public fields leave discovery. |
 | Workspace selection | One local record plus original selector in memory | Exact full name first, otherwise unique ID prefix of at least 12 hex chars; no manifest/devcontainer alias or name prefix. Missing 65, ambiguous 64, then non-running 68. |
-| Shell preferences | `human_shell`, resolved remote user, in-container workspace path, TERM | FR-005 precedence/validation. Manifest host read ≤64 KiB without following links; absent shell defaults fish, no executable availability exec. |
+| Shell preferences | `human_shell`, resolved remote user, in-container workspace path, directory source (`workspace_mount` or `container_working_dir`), fallback reason/warning, TERM | FR-005 precedence/validation; absent matching mount uses the validated configured working directory and requires a warning naming it before exec, gated on the FR-005/FR-010 spec reconciliation in the plan. Manifest host read ≤64 KiB without following links; absent shell defaults fish, no executable availability exec. |
 | Exec plan | Pinned endpoint and full ID, fixed inspect/exec argv, minimal host child env, three explicit container env additions | Names/users/path/TERM validated before interactive exec; no command string or provider credential. No mutation of container/network/volume. |
 | Exec result | Docker child status; optional liveness outcome | Status 0 passes immediately; nonzero performs one 5 s inspect. Reachable daemon preserves status; unavailable/timeout returns 72 with `whr:` diagnostic. No session transcript retained. |
 | Pane identity | Container name, FNV-1a 32-bit index modulo 5, glyph, optional tint, pane ID and tab ID | Plugin only; name validates against 006 FR-058. Same name bytes yield stable glyph/tint. Host marker is reserved. Labels remain cosmetic. |
@@ -18,6 +18,7 @@ This design adds no database or durable console state.
 
 `usage/terminal admission → endpoint admission → labelled discovery → unique selection → state check → bounded inspect and manifest
 resolution → validated argv → one interactive exec → status classification → exit`.
+Directory selection retains its source and fallback reason so P2 cannot lose the required warning while building exec argv; a matching mount needs no fallback warning. Warning placement follows the explicit FR-005/FR-010 amendment prerequisite in [plan.md](plan.md#p2-working-directory-fallback-and-warning-prerequisite), with a dedicated P2 test.
 All preflight work spends the common discovery deadline. No preflight refusal runs interactive exec. Nonzero exec adds at most one
 post-exit liveness inspect with a separate deadline. Paused/restarting are rejected even where a Docker boolean reports running.
 
