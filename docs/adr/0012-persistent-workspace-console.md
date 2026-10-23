@@ -35,6 +35,10 @@ the specs that use the console. No persistent console is implemented or verified
 
 ## Proposed backend selection (2026-10-16; pending human spec review)
 
+Amended 2026-10-23: [ADR 0015](0015-host-session-and-local-shell.md) proposes `plain` instead of herdr as the default in-container
+backend, because the owner's herdr session runs on the host. The paragraph below stays as the record of the earlier proposal; it is
+superseded for the default once ADR 0015 is accepted. The lifetime decision above is untouched.
+
 Feature 006 [FR-048](../../specs/006-whr-cli/spec.md) proposes herdr as the default
 backend for the human persistent console, with an explicit plain alternative.
 Both must implement this ADR's lifetime/access rules and the spec's one-console,
