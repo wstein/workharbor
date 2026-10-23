@@ -35,8 +35,8 @@ P1 → P2 → P3 → P4, each stopping for owner merge. SC-009 checkpoints A/B r
 owner-operated real-host gates; fake Docker and PTY tests cannot close them.
 
 P1 red/green implementation and verification evidence: [local discovery](p1.md).
-T002–T006 are implemented; T007 remains open through publication/review/CI and
-the owner merge boundary. No later package or owner-host task is completed.
+T002–T007 are complete through owner merge of PR #220, recorded below.
+Later package and owner-host gates retain their separate acceptance boundaries.
 
 ## P2 approval and prerequisite binding
 
@@ -54,3 +54,7 @@ markers/evidence were added. Reviewer-owned quality checklist markers stay intac
 
 P2 scope is T008–T017 and preparing the SC-009 checkpoint A runbook. It stops at
 its own owner merge; actual host execution/acceptance T018 remains owner-operated.
+
+P2 implementation evidence: [local shell](p2.md). The prepared
+[SC-009 base runbook/result template](sc009-base.md) is UNVERIFIED.
+No real Docker, herdr or SSH operation has been performed by this agent.

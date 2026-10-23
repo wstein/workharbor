@@ -1,7 +1,10 @@
 # Validation guide: Host and workspace panes
 
-Status: planned acceptance procedure, **not an execution record**. None of the future local commands/plugin files is claimed
-implemented by this plan. Requirements and settled answers are in [spec](spec.md); package order is in [plan](plan.md).
+Status: acceptance procedure, **not an execution record**. P1 discovery is merged in
+[PR #220](https://github.com/wstein/workharbor/pull/220); P2 shell implementation and offline evidence are
+[recorded separately](../../docs/quality/010-host-and-workspace-panes/p2.md). P3 defaults and P4 plugin remain pending.
+Requirements and settled answers are in [spec](spec.md); package order is in [plan](plan.md).
+The [checkpoint A result template](../../docs/quality/010-host-and-workspace-panes/sc009-base.md) remains UNVERIFIED.
 
 ## Offline package validation
 
