@@ -138,10 +138,11 @@ def check_applications(root, inventory, run):
     if sys.version_info[:len(floor)] < floor:
         raise ValueError('Python ' + pins['python'] + ' or newer required by .tool-versions')
     tools = {}
-    for name in ('go', 'gofmt', 'mix', 'elixir', 'erl', 'node', 'npm'):
+    for name in ('go', 'gofmt', 'mix', 'elixir', 'erl', 'node', 'npm', 'curl'):
         tools[name] = shutil.which(name)
         if not tools[name]:
-            raise ValueError('Missing required tool: ' + name + '; install .tool-versions before checking')
+            remedy = 'install curl before checking' if name == 'curl' else 'install .tool-versions before checking'
+            raise ValueError('Missing required tool: ' + name + '; ' + remedy)
     with tempfile.TemporaryDirectory(prefix='workharbor-app-checks-') as directory:
         cache = Path(directory)
         # No inherited GOFLAGS, Mix/Hex mirrors, BEAM flags, server activation or
@@ -207,7 +208,13 @@ def check_applications(root, inventory, run):
             print(f'Application {module}: {count} Go tests passed; all required IDs present.', flush=True)
         cwd = root/'apps/control_plane'
         execute([tools['mix'], 'local.hex', HEX_VERSION, '--force'], cwd)
-        execute([tools['mix'], 'local.rebar', 'rebar3', REBAR_URL, '--sha512', REBAR_SHA512, '--force'], cwd)
+        # Mix's HTTP client rejects GitHub's large redirect headers. Download
+        # with the isolated curl process, then let Mix verify the same pinned
+        # SHA-512 before installing the local file in its private MIX_HOME.
+        rebar = cache/'rebar3'
+        execute([tools['curl'], '--disable', '--fail', '--location', '--proto', '=https',
+                 '--proto-redir', '=https', '--max-time', '60', '--output', str(rebar), REBAR_URL], cwd)
+        execute([tools['mix'], 'local.rebar', 'rebar3', str(rebar), '--sha512', REBAR_SHA512, '--force'], cwd)
         execute([tools['mix'], 'deps.get', '--check-locked'], cwd)
         execute([tools['mix'], 'format', '--check-formatted'], cwd)
         execute([tools['mix'], 'compile', '--warnings-as-errors'], cwd)
