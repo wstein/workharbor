@@ -44,3 +44,19 @@ The pinned Symphony/Spec Kit development sources above remain unchanged.
   issue polling, dispatch, retries and per-issue workspace model.
 - [Symphony Elixir README, main](https://github.com/openai/symphony/blob/main/elixir/README.md) —
   Codex app-server execution and repository workflow configuration.
+
+## Agent sandbox comparison: AgentBox
+
+Inspected: 2026-10-23 at
+[`605ee75`](https://github.com/madarco/agentbox/tree/605ee75d63319003c188bc532d4e5b2ba36a51d6)
+(MIT, pre-1.0, CLI 0.33.0, one maintainer). The sources are read for comparison only.
+They are not a product dependency, a parity or compliance claim, or permission to
+integrate anything; WorkHarbor decisions stay in its own specifications.
+
+- [Architecture](https://github.com/madarco/agentbox/blob/605ee75d63319003c188bc532d4e5b2ba36a51d6/docs/architecture.md)
+  — disposable per-agent boxes, a git worktree per box, `docker pause` for idle boxes,
+  `docker commit` checkpoints, a host relay that holds credentials.
+- [Security policy](https://github.com/madarco/agentbox/blob/605ee75d63319003c188bc532d4e5b2ba36a51d6/SECURITY.md)
+  — the stated isolation boundary: a box must not reach host files, credentials or other boxes.
+- [Provider plugins](https://github.com/madarco/agentbox/blob/605ee75d63319003c188bc532d4e5b2ba36a51d6/docs/provider-plugins.md)
+  — a provider contract (`CloudBackend`) behind a versioned SDK.
