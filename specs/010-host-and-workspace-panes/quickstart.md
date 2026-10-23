@@ -63,8 +63,12 @@ provider settings or credential-bearing Docker/context output. The application i
    container process. Avoid interpreting a shell's editing action as proof that a byte arrived. Then verify the fixed sequence
    **ctrl-] ctrl-^** detaches, the exec shell remains running, and no alternative default Docker detach sequence steals ctrl-p/q.
    Use an already-authorized observer for process survival; `whr` offers no session reattach or cleanup command.
-4. In a separate shell pane run `exit 7`; in its containing host shell confirm status 7. Also record a clean exit and any controlled
-   signal-status check. A daemon-loss probe, if desired, needs separate authorization; never stop the owner's daemon for this guide.
+4. Open a separate ordinary HOST shell pane through herdr, leaving the reconnect fixture panes intact. At that host prompt run
+   `whr shell --local <container-name>` as a foreground child; do not use `exec whr`, a plugin entrypoint or a pane whose top-level
+   process is `whr`. Inside that workspace shell run `exit 7`; the command then returns to the SAME host prompt. Immediately inspect
+   its status (`echo $?` in bash/zsh, `echo $status` in fish); it must be 7. Also record a clean exit and any controlled signal-status
+   check in this host-parent setup. A daemon-loss probe, if desired, needs separate authorization; never stop the owner's daemon for
+   this guide.
 5. In a surviving workspace pane choose a known directory, set a harmless fixture-local shell variable and start a recognizable
    controlled long-running command. Drop only the notebook SSH connection, leaving host herdr running.
 6. Reconnect over SSH and attach to the SAME herdr session. Verify the same pane, working directory, shell variable, running command
