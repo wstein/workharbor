@@ -75,7 +75,7 @@ warnings-as-errors compile, asset tool installation/build and warnings-as-errors
 tests, with required ExUnit identities listed in the same inventory. The test-only formatter records
 actual test outcomes alongside the ordinary CLI formatter; missing IDs, skipped or
 excluded tests, duplicate outcomes and incomplete streams fail. New green tests
-are collected without requiring new manifest entries. Thirteen required Python controls
+are collected without requiring new manifest entries. Required Python controls
 cover the added validators, tool/setup failures and integration into full acceptance.
 Manifest changes remain proposals until owner review and merge.
 
@@ -83,7 +83,17 @@ Both CI and local full acceptance execute this gate inside the runner's fresh
 disposable checkout. `make check-apps` runs the same application function as a focused
 development check; it does not replace full `make check` or source qualification.
 Hex 2.5.2 is installed through Mix's signed installer and Rebar 3.27.3 through its
-exact official URL and SHA-512. `mix deps.get --check-locked` uses committed
+exact official URL and SHA-512. System curl is a required development tool: the
+runner downloads Rebar into its private temporary directory with curl, then runs
+`mix local.rebar rebar3 <local-file> --sha512 <pin> --force`. This avoids Mix's
+HTTP client's `header_too_long` failure on GitHub redirect headers. Curl ignores
+configuration files, requires HTTPS for the initial request and redirects, and
+has a 60-second limit. It uses the same isolated process environment as the other
+application commands. Download failure stops before installation; Mix verifies
+the unchanged checksum before installing the local artifact. The pinned
+[Mix implementation](https://github.com/elixir-lang/elixir/blob/v1.20.4/lib/mix/lib/mix/tasks/local.rebar.ex)
+supports local files with checksum verification. No dependency version or TLS
+verification was relaxed. `mix deps.get --check-locked` uses committed
 `mix.lock`; Tailwind/esbuild versions come from committed Phoenix configuration.
 No owner global tool state is written. A private temporary HOME, Mix/Hex state,
 Go module/build caches, Go command build output and acceptance event files live

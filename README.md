@@ -36,7 +36,7 @@ make check
 
 The bundle must be supplied separately; it is not required for the GitHub clone.
 
-Requires Git, Make, Bash, native C build tools and the exact versions in
+Requires Git, Make, Bash, curl, native C build tools and the exact versions in
 `.tool-versions` (Python, Go, Node, Elixir and Erlang). The application check fetches
 locked dependencies and pinned build tools; see the [harness](docs/development/harness.md). On macOS the built-in Python may need a
 newer installation. Open Codex in this repository; generated `$speckit-*` skills

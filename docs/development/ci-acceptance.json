@@ -527,7 +527,9 @@
     "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_duplicate_vector_ids_rejected",
     "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_check_follows_the_schema_file",
     "test_workspace_manifest_vectors.WorkspaceManifestVectorTests.test_catalogue_order_of_codes",
-    "test_check_ci.SourceTests.test_workflow_runs_local_shell_native_ptys"
+    "test_check_ci.SourceTests.test_workflow_runs_local_shell_native_ptys",
+    "test_application_checks.ApplicationChecksTests.test_rebar_download_uses_isolated_https_and_local_checksum",
+    "test_application_checks.ApplicationChecksTests.test_rebar_download_or_install_failure_stops_later_gates"
   ],
   "retained_assertion_failures": [],
   "application_tests": {

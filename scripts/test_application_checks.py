@@ -121,8 +121,12 @@ class ApplicationChecksTests(unittest.TestCase):
             return observed, root
 
     def test_missing_tool_blocks_before_any_application_command(self):
-        for name in ('go', 'gofmt', 'mix', 'elixir', 'erl', 'node'):
-            with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'Missing required tool'): self.exercise(missing=name)
+        for name in ('go', 'gofmt', 'mix', 'elixir', 'erl', 'node', 'npm', 'curl'):
+            observed = []
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, 'Missing required tool'):
+                    self.exercise(missing=name, observe=lambda argv, env: observed.append(argv))
+                self.assertEqual([], observed, 'missing tool must block before every application command')
 
     def test_wrong_tool_version_unformatted_source_and_failed_gates_block(self):
         for options in (dict(wrong_version=True), dict(formatted=True),
@@ -135,7 +139,9 @@ class ApplicationChecksTests(unittest.TestCase):
         observed, root = self.exercise()
         commands = [argv[1:] for argv, _, _ in observed]
         self.assertIn(['local.hex', '2.5.2', '--force'], commands)
-        self.assertIn(['local.rebar', 'rebar3', self.apps.REBAR_URL, '--sha512', self.apps.REBAR_SHA512, '--force'], commands)
+        rebar = next(argv for argv in commands if argv[:1] == ['local.rebar'])
+        self.assertEqual(['local.rebar', 'rebar3', rebar[2], '--sha512', self.apps.REBAR_SHA512, '--force'], rebar)
+        self.assertTrue(Path(rebar[2]).is_absolute())
         self.assertIn(['deps.get', '--check-locked'], commands)
         self.assertIn(['format', '--check-formatted'], commands)
         self.assertIn(['compile', '--warnings-as-errors'], commands)
@@ -212,3 +218,37 @@ class ApplicationChecksTests(unittest.TestCase):
             calls.append(True)
         self.exercise(observe=observe)
         self.assertEqual([True], calls)
+
+    def test_rebar_download_uses_isolated_https_and_local_checksum(self):
+        canaries = {key: 'host-canary-secret' for key in
+                    ('CURL_HOME', 'CURL_CA_BUNDLE', 'HTTPS_PROXY', 'ALL_PROXY', 'GITHUB_TOKEN')}
+        with mock.patch.dict(os.environ, canaries):
+            observed, root = self.exercise()
+        self.assertEqual('https://github.com/erlang/rebar3/releases/download/3.27.3/rebar3', self.apps.REBAR_URL)
+        downloads = [(i, argv, env) for i, (argv, _, env) in enumerate(observed) if Path(argv[0]).name == 'curl']
+        self.assertEqual(1, len(downloads))
+        index, argv, env = downloads[0]
+        install_index, install = next((i, argv) for i, (argv, _, _) in enumerate(observed) if argv[1:2] == ['local.rebar'])
+        path = install[3]
+        self.assertEqual(['--disable', '--fail', '--location', '--proto', '=https', '--proto-redir', '=https',
+                          '--max-time', '60', '--output', path, self.apps.REBAR_URL], argv[1:])
+        self.assertEqual(['local.rebar', 'rebar3', path, '--sha512', self.apps.REBAR_SHA512, '--force'], install[1:])
+        self.assertEqual('30410ea3222f52f0af90e6ba7df483d9a1e3452dc6ed6f60f372008fc017dbd8a'
+                         'e22c45e1359302796f2dbb805bbcfce53bf5d08fdd43885203b0ae015ff0516', self.apps.REBAR_SHA512)
+        self.assertLess(index, install_index)
+        self.assertTrue(Path(path).is_absolute())
+        self.assertFalse(Path(path).is_relative_to(root))
+        self.assertEqual(Path(env['HOME']).parent, Path(path).parent)
+        for key in ('CURL_HOME', 'CURL_CA_BUNDLE', 'HTTPS_PROXY', 'ALL_PROXY', 'GITHUB_TOKEN'):
+            self.assertNotIn(key, env)
+
+    def test_rebar_download_or_install_failure_stops_later_gates(self):
+        for failed in ('curl', 'install'):
+            observed = []
+            def fail(argv):
+                return (Path(argv[0]).name == 'curl' if failed == 'curl' else argv[1:2] == ('local.rebar',))
+            with self.subTest(failed=failed), self.assertRaisesRegex(ValueError, 'Application command failed'):
+                self.exercise(fail=fail, observe=lambda argv, env: observed.append(argv))
+            self.assertFalse(any(argv[1:2] == ['deps.get'] for argv in observed))
+            if failed == 'curl':
+                self.assertFalse(any(argv[1:2] == ['local.rebar'] for argv in observed))
