@@ -64,3 +64,16 @@ func TestLocalDockerOutputBound(t *testing.T) {
 		t.Fatalf("output bound did not fire: %v", err)
 	}
 }
+
+// Independent literal: a production-format mutation must not change the oracle.
+const expectedInspectFormat = `{"Id":{{json .Id}},"Name":{{json .Name}},"Image":{{json .Config.Image}},"State":{{json .State.Status}},"Labels":{{json .Config.Labels}},"Mounts":{{json .Mounts}}}`
+
+func TestLocalDockerInspectArgvOmitsEnvironment(t *testing.T) {
+	exe := fakeDocker(t, `printf '%s\n' "$@"`)
+	id := strings.Repeat("a", 64)
+	raw, err := (Client{Executable: exe}).read(context.Background(), "unix:///test/socket", "container", "inspect", "--format", inspectFormat, id)
+	want := "--host=unix:///test/socket\ncontainer\ninspect\n--format\n" + expectedInspectFormat + "\n" + id + "\n"
+	if err != nil || string(raw) != want {
+		t.Fatalf("inspect must request only approved fields: %q %v", raw, err)
+	}
+}
