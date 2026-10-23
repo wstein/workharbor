@@ -25,7 +25,8 @@ type vectorCase struct {
 		Padding             string `json:"padding"`
 		PaddingAfterTemplte bool   `json:"padding_after_template"`
 	} `json:"generate_bytes"`
-	ExpectCodes []string `json:"expect_codes"`
+	ExpectCodes       []string `json:"expect_codes"`
+	ExpectConsoleMode *string  `json:"expect_console_mode"`
 }
 
 func (c vectorCase) bytes(t *testing.T) []byte {
@@ -81,7 +82,11 @@ func loadVectors(t *testing.T) []vectorCase {
 func TestManifestVectors(t *testing.T) {
 	for _, c := range loadVectors(t) {
 		t.Run(c.ID, func(t *testing.T) {
-			got := manifestCodes(workspacecfg.CheckManifest(c.bytes(t)).Findings)
+			checked := workspacecfg.CheckManifest(c.bytes(t))
+			got := manifestCodes(checked.Findings)
+			if c.ExpectConsoleMode != nil && (checked.Manifest == nil || checked.Manifest.EffectiveConsoleMode() != *c.ExpectConsoleMode) {
+				t.Errorf("effective console mode differs from vector %s", c.ID)
+			}
 			want := append([]string{}, c.ExpectCodes...)
 			sort.Strings(want)
 			if strings.Join(got, ",") != strings.Join(want, ",") {
@@ -233,6 +238,34 @@ func TestManifestProjectURLDerivation(t *testing.T) {
 		r := workspacecfg.CheckManifest(v2(`,"project":{"url":"` + tc.url + `","path":"` + tc.path + `"}`))
 		if (len(r.Findings) == 0) != tc.ok {
 			t.Errorf("%s -> %s: %v", tc.url, tc.path, r.Findings)
+		}
+	}
+}
+
+// FR-012/020, OQ-7: old and new omitted-field manifests resolve at use time.
+func TestManifestMissingConsoleModeDefaultsPlain(t *testing.T) {
+	for _, version := range []int{1, 2} {
+		raw, _ := json.Marshal(map[string]any{"schema_version": version, "devcontainer_path": "d", "projects_path": "p", "bundles": []string{}})
+		before := string(raw)
+		r := workspacecfg.CheckManifest(raw)
+		if len(r.Findings) != 0 || r.Manifest == nil {
+			t.Fatalf("version %d: %v", version, r.Findings)
+		}
+		if got := r.Manifest.EffectiveConsoleMode(); got != "plain" {
+			t.Errorf("version %d: effective mode %q, want plain", version, got)
+		}
+		if r.Manifest.ConsoleMode != "" || string(raw) != before {
+			t.Fatal("default changed stored preference or input")
+		}
+	}
+}
+
+func TestManifestExplicitHerdrPreserved(t *testing.T) {
+	for _, mode := range []string{"plain", "herdr"} {
+		raw, _ := json.Marshal(map[string]any{"schema_version": 2, "devcontainer_path": "d", "projects_path": "p", "bundles": []string{}, "console_mode": mode})
+		r := workspacecfg.CheckManifest(raw)
+		if len(r.Findings) != 0 || r.Manifest == nil || r.Manifest.EffectiveConsoleMode() != mode || r.Manifest.ConsoleMode != mode {
+			t.Fatalf("explicit %s lost: %+v", mode, r)
 		}
 	}
 }

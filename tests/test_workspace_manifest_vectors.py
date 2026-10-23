@@ -69,12 +69,23 @@ class WorkspaceManifestVectorTests(unittest.TestCase):
 
     def test_version2_defaults_documented(self):
         properties = json.loads(SCHEMA.read_text(encoding='utf-8'))['$defs']['v2']['properties']
-        self.assertEqual({'start_dir': '.', 'human_shell': 'fish', 'console_mode': 'herdr', 'shortcuts': 'on'},
+        self.assertEqual({'start_dir': '.', 'human_shell': 'fish', 'console_mode': 'plain', 'shortcuts': 'on'},
                          {name: properties[name].get('default') for name in
                           ('start_dir', 'human_shell', 'console_mode', 'shortcuts')})
         for name in ('name', 'project'):
             self.assertNotIn('default', properties[name])
         self.assertEqual([], checks.manifest_codes(raw(dict(BASE, schema_version=2))))
+
+    def test_console_default_vectors_match_schema_and_preserve_explicit_herdr(self):
+        default = json.loads(SCHEMA.read_text())['$defs']['v2']['properties']['console_mode']['default']
+        checked = {}
+        for case in self.cases():
+            if 'expect_console_mode' in case:
+                self.assertEqual([], checks.manifest_codes(checks.vector_bytes(case)))
+                mode = case['document'].get('console_mode', default)
+                self.assertEqual(case['expect_console_mode'], mode)
+                checked[case['id']] = mode
+        self.assertEqual({'v1-valid': 'plain', 'v2-minimal': 'plain', 'v2-full': 'herdr'}, checked)
 
     def test_version2_has_no_resolver_or_agent_shell_field(self):
         properties = json.loads(SCHEMA.read_text(encoding='utf-8'))['$defs']['v2']['properties']
