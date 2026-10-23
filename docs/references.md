@@ -84,3 +84,16 @@ Ideas worth weighing in feature work, each needing its own specification and mea
 
 Not adopted: agent queues and idle-triggered starts (they contradict D57), a VNC desktop
 per box, and cloud providers as a first tier.
+
+## Host session and local shell design inputs
+
+Inspected: 2026-10-23. These sources inform [Feature 010](../specs/010-host-and-workspace-panes/spec.md) and
+[ADR 0015](adr/0015-host-session-and-local-shell.md); they are not product dependencies or integration approvals.
+
+- [herdr plugin documentation](https://herdr.dev/docs/plugins) — manifest (`herdr-plugin.toml`), panes, actions and the environment
+  passed to plugin commands; no colour option is documented. Checked against the installed `herdr` 0.9.3 help, no session started.
+- [herdr-colors](https://github.com/ariel-ps/herdr-colors) (commit `3e1e78cf829f0bc1d1a8c5cff3a3d4a8ba5b4f21`, MIT, v0.1.0 unreleased, one author) —
+  per-pane colouring for herdr. Compared with [Feature 010](../specs/010-host-and-workspace-panes/spec.md) FR-021a and not adopted: it assigns
+  layout-based slots instead of fixed semantics (host versus workspace), its shell hook runs only in the host shell, it builds Rust and clones
+  Kitty themes at install, its palette selection has a provenance and licence gap (`docs/selection-provenance.md`), and running it beside our
+  plugin would overwrite our fixed colours.

@@ -40,6 +40,7 @@
 - [Proposed local devcontainer and temporary container lifecycle in `whr`](design/local-devcontainer-lifecycle.md)
 - [BundleDock workspace shell integration (proposal)](papers/bundledock-workspace-shell.md)
 - [Bounded workspace shell policy contract (candidate)](../contracts/workspace-shell-policy.md)
+- [Feature 010: host and workspace panes (draft specification)](../specs/010-host-and-workspace-panes/spec.md)
 - [Container runtime prerequisite](container-runtime.md)
 - [Source references](references.md)
 - [Archive of the superseded workharbor-old documents](archive/workharbor-old/README.md)
