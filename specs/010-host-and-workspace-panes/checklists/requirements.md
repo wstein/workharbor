@@ -29,4 +29,4 @@ review CLEAR or owner approval.
 - [x] Contracts, schema, vectors, command table and code that still say `herdr` are listed as follow-up work (FR-020), not edited.
 - [ ] Independent review CLEAR for the exact head.
 - [ ] Explicit owner approval of the exact head, evidenced by a tracker or PR link.
-- [x] Owner decisions on OQ-2, OQ-5, OQ-6, OQ-7, OQ-8, OQ-9 and OQ-10 recorded 2026-10-23 (OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn).
+- [x] Owner decisions on OQ-2, OQ-5, OQ-6, OQ-7, OQ-8, OQ-9, OQ-10 and OQ-11 recorded 2026-10-23 (OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn).

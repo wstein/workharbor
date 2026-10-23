@@ -175,11 +175,14 @@ BundleDock shell-policy matter and not part of this feature (OQ-9). The plugin's
    `WHR_LOCAL_WORKSPACE=<container name>` and `WHR_LOCAL_MODE=1`, and nothing else from the host environment except `TERM`.
 2. **Given** a terminal, **When** the command starts, **Then** it first writes one line to standard error, `whr: local shell in
    <container name> (no grant; host Docker access; detach keys ctrl-] ctrl-^)`, with the name escaped per FR-022, and then writes
-   nothing of its own to the terminal stream.
+   nothing of its own to the terminal stream (the fallback warning of scenario 5 comes before the hand-over, never after it).
 3. **Given** the optional plugin of User Story 3, **When** a workspace pane is opened, **Then** its title is `<glyph> ws:<name>` and a plain host
    pane is titled `🟥 HOST` (FR-021); the titles do not depend on background colour.
 4. **Given** no plugin, **When** the owner renames panes by hand per the documentation (without the plugin identity relies on that
    manual title or on prompt setup), **Then** the variable and the notice still identify the workspace.
+5. **Given** no mount destination matches the host `workspace_folder` (FR-005), **When** the command starts, **Then** `whr` writes one
+   additional warning line to standard error after the notice and before the hand-over, also when standard error is redirected, naming the fallback reason
+   and the container's configured working directory used as `<dir>` (both escaped per FR-022); with a matching mount no warning is written.
 
 ---
 
@@ -326,8 +329,11 @@ multiplexer nested in their host pane.
 
 **Distinguishing panes**
 
-- **FR-010**: Local mode MUST write exactly one line to standard error before the hand-over, `whr: local shell in <name> (no grant; host
-  Docker access; detach keys ctrl-] ctrl-^)`, with the name escaped per FR-022, only when standard error is a terminal. After the hand-over `whr` MUST write
+- **FR-010**: Local mode MUST write the notice (one line) to standard error before the hand-over, `whr: local shell in <name> (no grant; host
+  Docker access; detach keys ctrl-] ctrl-^)`, with the name escaped per FR-022, only when standard error is a terminal; the notice text is
+  byte-exact. Only when the configured-working-directory fallback of FR-005 is used, `whr` MUST write one additional warning line to standard
+  error after the notice and before the hand-over, also when standard error is redirected: `whr: warning: no workspace folder mount in <name>;
+  starting in <dir>`, with name and directory (the fallback reason and directory) escaped per FR-022 (OQ-11). After the hand-over `whr` MUST write
   nothing to the terminal stream. The container environment carries `WHR_LOCAL_WORKSPACE=<name>` and `WHR_LOCAL_MODE=1` (FR-004) so
   a prompt can show them. The notice also names the detach sequence of FR-004. Colour MUST NOT be required anywhere.
 
@@ -454,6 +460,11 @@ This feature amends Feature 006 as follows. The same sentences are applied to
 - **SC-010**: Offline, a script in the plugin follow-up proves that the hash maps a fixed table of workspace names to the same glyph and
   tint on every run, that no workspace glyph equals the host glyph, that every tint meets the contrast and CIEDE2000 constraints of
   FR-021a, and that the pane command writes exactly one OSC 11 sequence before `exec`. Not claimed verified by this specification.
+- **SC-011**: With a fake `docker` whose inspect shows no mount destination for the host `workspace_folder`, `whr` writes the one fallback
+  warning line `whr: warning: no workspace folder mount in <name>; starting in <dir>` (escaped) to standard error after the notice and before the child starts and uses the configured working directory as `<dir>`;
+  with a matching mount no warning is written; with standard error redirected to a file the warning is still written and the notice is not;
+  nothing is written after the hand-over; a fallback directory that fails FR-005 validation (absolute, at most 4096 bytes, no NUL or newline)
+  exits 68 naming the value (escaped), starts no exec and writes no warning line.
 
 ## Dependencies
 
@@ -471,7 +482,7 @@ This feature amends Feature 006 as follows. The same sentences are applied to
 
 ## Decisions
 
-Owner decisions of 2026-10-23 on the former open questions, ids kept; no rule changes. OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn.
+Owner decisions of 2026-10-23 on the former open questions, ids kept; no rule changes except OQ-11. OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn.
 
 - **OQ-1** (foreman decision): the `docker` command line client with the fixed argument vectors of FR-004; no Engine API client.
 - **OQ-2** (owner-decided 2026-10-23: no): `<ws>` matches only the container name or ID, not the workspace name from `workharbor.json` or the devcontainer name, until the final WorkHarbor workspace label exists; the spike did not verify it.
@@ -487,3 +498,7 @@ Owner decisions of 2026-10-23 on the former open questions, ids kept; no rule ch
   without the plugin, and `WHR_LOCAL_WORKSPACE` stays available to a prompt.
 - **OQ-10** (owner-decided 2026-10-23: yes): the glyph set of FR-021 and the tint palette of FR-021a are accepted with their measured limits (lowest pairwise CIEDE2000 10.5 normal, 8.2
   protanopia, 7.3 deuteranopia, 7.0 tritanopia; five tints; marker default, background optional P3). The palette is changed only if the SC-010 script fails.
+- **OQ-11** (owner-decided 2026-10-23: fallback with warning): when no workspace-folder mount destination is determinable, `<dir>` is the container's
+  configured working directory and `whr` writes one warning line naming the fallback (FR-005, FR-010), instead of a silent fallback or exit 68. This amends
+  the earlier "exactly one line" rule of FR-010: the notice stays one byte-exact, terminal-only line, and the warning is written also when standard error is
+  redirected, before the hand-over only.
