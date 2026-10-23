@@ -115,6 +115,7 @@ func (r *run) socket() Check {
 		err := r.p.DialUnix(dctx, p)
 		cancel()
 		if err == nil {
+			r.selectedSocket = p
 			return passed(id, "A Docker-compatible socket accepted a connection; nothing was sent.", map[string]any{"path": c.shown, "source": source})
 		}
 		res := classify(err)
@@ -159,3 +160,16 @@ func cutUnix(h string) (string, bool) {
 }
 
 func isUnixHost(h string) bool { return len(h) >= 5 && strings.EqualFold(h[:5], "unix:") }
+
+// ResolveLocalSocket shares doctor's exclusive DOCKER_HOST and ordered candidate
+// selection with local commands. The raw Unix endpoint is for the Docker argv,
+// never diagnostics. Only the socket check runs; no config or Git checks run.
+// Callers supply their shared operation deadline in ctx.
+func ResolveLocalSocket(ctx context.Context, p Ports) (string, Check) {
+	r := newRun(ctx, p.withDefaults())
+	check := r.socket()
+	if check.Status != StatusPass {
+		return "", check
+	}
+	return "unix://" + r.selectedSocket, check
+}
