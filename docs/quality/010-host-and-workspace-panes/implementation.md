@@ -37,3 +37,20 @@ owner-operated real-host gates; fake Docker and PTY tests cannot close them.
 P1 red/green implementation and verification evidence: [local discovery](p1.md).
 T002–T006 are implemented; T007 remains open through publication/review/CI and
 the owner merge boundary. No later package or owner-host task is completed.
+
+## P2 approval and prerequisite binding
+
+Owner `wstein` merged [P1 PR #220](https://github.com/wstein/workharbor/pull/220)
+on 2026-10-23 at `5e4966a26fc0a84d82d8d9ed821f2e2d31f599d8`.
+Its accepted head was `afccf59172c5d15390717689507b71cf4d07986a` (code/QA CLEAR,
+required CI green). The complete merged tree is byte-identical to that reviewed
+head. This closes T007's package merge gate and permits the already-authorized P2.
+
+P2 starts from that exact main revision in a fresh stw workspace, task
+`010-p2-local-shell`, owner `codex`, plan `c0d3be1d20f26688d355ee5a33ac95be`.
+Feature selection/prerequisite checks pass; extension hooks remain empty.
+Authoritative requirements and decisions are unchanged; only prior task completion
+markers/evidence were added. Reviewer-owned quality checklist markers stay intact.
+
+P2 scope is T008–T017 and preparing the SC-009 checkpoint A runbook. It stops at
+its own owner merge; actual host execution/acceptance T018 remains owner-operated.
