@@ -211,11 +211,12 @@ func exhausted(id string) Check {
 
 // run holds one run's state.
 type run struct {
-	ctx  context.Context
-	p    Ports
-	b    *budget
-	home string
-	cwd  string
+	selectedSocket string // actual selected path; never included in doctor reports
+	ctx            context.Context
+	p              Ports
+	b              *budget
+	home           string
+	cwd            string
 	// dockerHost is the value of DOCKER_HOST (never reported).
 	dockerHost string
 }
