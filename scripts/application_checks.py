@@ -180,7 +180,8 @@ def check_applications(root, inventory, run):
             return output
         def download(url, destination, cwd):
             execute([tools['curl'], '--disable', '--fail', '--location', '--proto', '=https',
-                     '--proto-redir', '=https', '--max-time', '60', '--output', str(destination), url], cwd)
+                     '--proto-redir', '=https', '--retry', '2', '--retry-delay', '1',
+                     '--retry-max-time', '60', '--max-time', '60', '--output', str(destination), url], cwd)
         versions = [
             ([tools['go'], 'version'], lambda value: value.startswith('go version go' + pins['golang'] + ' ')),
             ([tools['elixir'], '--version'], lambda value: bool(re.search(

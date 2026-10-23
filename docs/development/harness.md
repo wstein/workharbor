@@ -88,7 +88,8 @@ runner downloads Rebar into its private temporary directory with curl, then runs
 `mix local.rebar rebar3 <local-file> --sha512 <pin> --force`. This avoids Mix's
 HTTP client's `header_too_long` failure on GitHub redirect headers. Curl ignores
 configuration files, requires HTTPS for the initial request and redirects, and
-has a 60-second limit. It uses the same isolated process environment as the other
+allows two transient-error retries with a one-second delay, a 60-second retry
+window and a 60-second limit per attempt. Permanent failures still stop the gate. It uses the same isolated process environment as the other
 application commands. Download failure stops before installation; Mix verifies
 the unchanged checksum before installing the local artifact. The pinned
 [Mix implementation](https://github.com/elixir-lang/elixir/blob/v1.20.4/lib/mix/lib/mix/tasks/local.rebar.ex)
