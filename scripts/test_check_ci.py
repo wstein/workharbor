@@ -960,10 +960,53 @@ class SourceTests(unittest.TestCase):
             "  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}\n"
             "  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n", workflow)
 
-    def test_workflow_keeps_job_names_reported_for_pull_requests(self):
+    def jobs(self):
         workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
-        self.assertEqual(['bootstrap', 'macos-pty', 'macos-hostsetup', 'macos-dotfiles'], re.findall(r'^  ([a-z-]+):$', workflow.split('\njobs:\n')[1], re.M))
-        self.assertNotRegex(workflow, r'(?m)^    if:')
+        body = workflow.split('\njobs:\n')[1]
+        names = re.findall(r'^  ([a-z-]+):$', body, re.M)
+        blocks = re.split(r'(?m)^  [a-z-]+:$', body)[1:]
+        return dict(zip(names, blocks))
+
+    def test_workflow_keeps_job_names_reported_for_pull_requests(self):
+        # `check` is the single aggregate a branch-protection rule may require.
+        self.assertEqual(['changes', 'docs', 'bootstrap', 'macos-pty', 'macos-hostsetup', 'macos-dotfiles', 'check'],
+                         list(self.jobs()))
+
+    def test_workflow_skips_only_by_the_classifier_and_never_for_unsure_detection(self):
+        full = "    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}\n"
+        jobs = self.jobs()
+        for name in ('bootstrap', 'macos-pty', 'macos-hostsetup', 'macos-dotfiles'):
+            self.assertIn('    needs: changes\n' + full, jobs[name])
+        self.assertIn("    if: ${{ !cancelled() && needs.changes.outputs.docs_only == 'true' }}\n", jobs['docs'])
+        self.assertIn('    if: ${{ always() }}\n', jobs['check'])
+        self.assertNotIn('    if:', jobs['changes'])
+        self.assertEqual(6, len(re.findall(r'(?m)^    if:', '\n'.join(jobs.values()))))
+
+    def test_workflow_gate_aggregates_every_job_with_the_tested_script(self):
+        check = self.jobs()['check']
+        self.assertIn('needs: [changes, docs, bootstrap, macos-pty, macos-hostsetup, macos-dotfiles]', check)
+        self.assertIn('NEEDS: ${{ toJSON(needs) }}', check)
+        self.assertIn('python3 -I -B scripts/ci_changes.py --gate', check)
+
+    def test_workflow_fast_subset_runs_the_repository_check_and_full_path_is_unchanged(self):
+        jobs = self.jobs()
+        self.assertIn('python3 -I -B scripts/check_repo.py', jobs['docs'])
+        self.assertIn('git diff --check', jobs['docs'])
+        self.assertNotIn('check_ci.py', jobs['docs'])
+        self.assertIn('python3 -I -B scripts/check_ci.py', jobs['bootstrap'])
+        self.assertIn('fetch-depth: 0', jobs['bootstrap'])
+        self.assertIn('fetch-depth: 0', jobs['changes'])
+        self.assertIn('--base "$BASE" --head "$HEAD"', jobs['changes'])
+        for name in ('macos-pty', 'macos-hostsetup', 'macos-dotfiles'):
+            self.assertIn('ref: ${{ github.event.pull_request.head.sha || github.sha }}', jobs[name])
+            self.assertIn('Verify exact tested head', jobs[name])
+
+    def test_workflow_actions_stay_pinned_to_full_commit_shas(self):
+        workflow = (ci.ROOT/'.github/workflows/check.yml').read_text()
+        uses = re.findall(r'(?m)^\s*- uses: (\S+)', workflow)
+        self.assertTrue(uses)
+        for action in uses:
+            self.assertRegex(action, r'^[\w.-]+/[\w.-]+@[0-9a-f]{40}$')
 
 
 if __name__ == '__main__':

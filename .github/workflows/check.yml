@@ -9,7 +9,49 @@ concurrency:
 permissions:
   contents: read
 jobs:
+  # Tiering: a pull request that changes only prose no check reads runs `docs`
+  # instead of the full jobs. Any other change, unclear case or detection error,
+  # and every push to main, runs everything. `check` is the one aggregate verdict.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.classify.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: classify
+        name: Classify changed paths (fail closed)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: python3 -I -B scripts/ci_changes.py --event "$GITHUB_EVENT_NAME" --base "$BASE" --head "$HEAD"
+  docs:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.14'
+      - name: Check repository documents
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python3 -I -B scripts/check_repo.py
+          git diff --check "$BASE...$HEAD"
   bootstrap:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -45,6 +87,8 @@ jobs:
       - name: Validate explicit repository acceptance
         run: python3 -I -B scripts/check_ci.py
   macos-pty:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: macos-15
     timeout-minutes: 10
     steps:
@@ -105,6 +149,8 @@ jobs:
             exit 1
           fi
   macos-hostsetup:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: macos-15
     timeout-minutes: 10
     steps:
@@ -180,6 +226,8 @@ jobs:
             exit 1
           fi
   macos-dotfiles:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}
     runs-on: macos-15
     timeout-minutes: 10
     steps:
@@ -258,3 +306,16 @@ jobs:
           if grep -q -- '^[[:space:]]*--- SKIP:' <<< "$output"; then
             exit 1
           fi
+  check:
+    needs: [changes, docs, bootstrap, macos-pty, macos-hostsetup, macos-dotfiles]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Require the jobs this change needs
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: python3 -I -B scripts/ci_changes.py --gate
