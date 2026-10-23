@@ -16,7 +16,7 @@ review CLEAR or owner approval.
 
 ## Requirement Completeness
 
-- [x] No unresolved clarification markers; the open questions each carry a recommended default or a recorded foreman decision.
+- [x] No unresolved clarification markers; each former open question carries a recorded owner or foreman decision (Decisions).
 - [x] Verified facts and unverified claims are separated, with the sources (repository revision, herdr 0.9.3 help, plugin docs).
 - [x] Success criteria SC-001 to SC-008 and SC-010 are testable offline with a fake daemon and a fake `docker`; SC-009 is a real-host owner gate,
   unverified until run.
@@ -29,4 +29,4 @@ review CLEAR or owner approval.
 - [x] Contracts, schema, vectors, command table and code that still say `herdr` are listed as follow-up work (FR-020), not edited.
 - [ ] Independent review CLEAR for the exact head.
 - [ ] Explicit owner approval of the exact head, evidenced by a tracker or PR link.
-- [ ] Owner answers to OQ-2, OQ-5, OQ-6, OQ-7, OQ-8, OQ-9 and OQ-10 (OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn).
+- [x] Owner decisions on OQ-2, OQ-5, OQ-6, OQ-7, OQ-8, OQ-9 and OQ-10 recorded 2026-10-23 (OQ-1 and OQ-4 are foreman decisions; OQ-3 is withdrawn).
