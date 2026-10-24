@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -231,6 +232,78 @@ func TestBundlePinsRejectNoncanonicalMountKeysBeforeRelevance(t *testing.T) {
 			pins, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
 			if err == nil || pins != nil {
 				t.Fatalf("noncanonical mount hid a declared bundle: %s pins=%+v err=%v", name, pins, err)
+			}
+		})
+	}
+}
+
+func TestBundlePinsNormalizeValidDockerAliases(t *testing.T) {
+	raw := bundleConfig(t)
+	baseline, err := ReadBundlePins(context.Background(), pinDirectory(t, raw))
+	if err != nil || len(baseline) == 0 {
+		t.Fatalf("invalid fixture: %+v %v", baseline, err)
+	}
+	p := baseline[0]
+	canonical := "type=volume,source=" + p.Volume + ",target=" + p.Target + ",readonly,volume-nocopy"
+	reordered := "ro,destination=" + p.Target + ",src=" + p.Volume + ",volume-nocopy,type=volume"
+	cases := map[string]string{
+		"src":                strings.ReplaceAll(raw, "source=", "src="),
+		"dst":                strings.ReplaceAll(raw, "target=", "dst="),
+		"destination":        strings.ReplaceAll(raw, "target=", "destination="),
+		"ro":                 strings.ReplaceAll(raw, ",readonly", ",ro"),
+		"combined_reordered": strings.Replace(raw, canonical, reordered, 1),
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			if data == raw {
+				t.Fatal("alias fixture transform changed no bytes")
+			}
+			got, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
+			if err != nil || !reflect.DeepEqual(got, baseline) {
+				t.Fatalf("valid Docker alias did not preserve pins: alias=%s got=%+v err=%v", name, got, err)
+			}
+		})
+	}
+}
+
+func TestBundlePinsRejectNormalizedAliasCollisionsAndValues(t *testing.T) {
+	raw := bundleConfig(t)
+	pins, err := ReadBundlePins(context.Background(), pinDirectory(t, raw))
+	if err != nil || len(pins) == 0 {
+		t.Fatalf("invalid fixture: %+v %v", pins, err)
+	}
+	p := pins[0]
+	canonical := "type=volume,source=" + p.Volume + ",target=" + p.Target + ",readonly,volume-nocopy"
+	src := "source=" + p.Volume
+	target := "target=" + p.Target
+	cases := map[string]string{
+		"source_then_src":         "type=volume," + src + ",src=" + p.Volume + "," + target + ",readonly",
+		"src_then_source":         "type=volume,src=" + p.Volume + "," + src + "," + target + ",readonly",
+		"target_then_dst":         "type=volume," + src + "," + target + ",dst=" + p.Target + ",readonly",
+		"dst_then_target":         "type=volume," + src + ",dst=" + p.Target + "," + target + ",readonly",
+		"target_then_destination": "type=volume," + src + "," + target + ",destination=" + p.Target + ",readonly",
+		"destination_then_target": "type=volume," + src + ",destination=" + p.Target + "," + target + ",readonly",
+		"dst_then_destination":    "type=volume," + src + ",dst=" + p.Target + ",destination=" + p.Target + ",readonly",
+		"destination_then_dst":    "type=volume," + src + ",destination=" + p.Target + ",dst=" + p.Target + ",readonly",
+		"readonly_then_ro":        "type=volume," + src + "," + target + ",readonly,ro",
+		"ro_then_readonly":        "type=volume," + src + "," + target + ",ro,readonly",
+		"duplicate_alias":         "type=volume," + src + "," + target + ",ro,ro",
+		"ro_empty_assignment":     "type=volume," + src + "," + target + ",ro=",
+		"ro_true_assignment":      "type=volume," + src + "," + target + ",ro=true",
+		"ro_false_assignment":     "type=volume," + src + "," + target + ",ro=false",
+		"unknown_dest":            "type=volume," + src + ",dest=" + p.Target + ",readonly",
+		"unknown_readonly":        "type=volume," + src + "," + target + ",read-only",
+		"uppercase_unknown":       "type=volume,SRC=" + p.Volume + "," + target + ",readonly",
+	}
+	for name, mount := range cases {
+		t.Run(name, func(t *testing.T) {
+			data := strings.Replace(raw, canonical, mount, 1)
+			if data == raw {
+				t.Fatal("collision fixture transform changed no bytes")
+			}
+			got, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
+			if err == nil || got != nil {
+				t.Fatalf("ambiguous or unsupported normalized alias accepted: %s pins=%+v err=%v", name, got, err)
 			}
 		})
 	}
