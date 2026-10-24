@@ -100,6 +100,15 @@ headers. Sources: [endpoint](../../../apps/control_plane/lib/workharbor_web/endp
 [security](../../../apps/control_plane/lib/workharbor_web/security.ex),
 [client](../../../apps/control_plane/assets/js/app.js).
 
+Keep `img-src 'self'` exact: no `data:` image exception. The bundled
+[heroicons plugin](../../../apps/control_plane/assets/vendor/heroicons.js) emits
+`data:image/svg+xml` CSS mask URLs, incompatible with that policy. W1 adapts
+`lib/workharbor_web/components/{core_components.ex,layouts.ex}`
+(relative to `apps/control_plane/`, both already W1-owned): render needed icons
+as static, vetted inline SVG markup, or omit decorative icons where text labels
+suffice. Include theme-toggle, flash and connection-state icons; preserve accessible
+names. Do not use data-image masks or fetch/inline untrusted SVG.
+
 Data pages distinguish loading, empty, error, stale/disconnected and success.
 Last-known data requires uncertainty and observation time; missing projections
 never mean healthy/running or zero records. Apply [FR-022](../spec.md) visible
@@ -191,6 +200,15 @@ start red for every FR-022 control class plus HTML/script/attribute payloads.
 Forged-event probes must leave DB/audit unchanged, produce no payload log and keep
 the page alive. Static checks reject Repo, context writes and `raw` in page modules.
 Prove timer cancellation, queued-tick suppression and ordered first-failure stopping.
+W1 adds the named `owner shell icons obey strict CSP` assertion in
+`test/workharbor_web/owner_shell_test.exs`: check inline SVG/text rendering,
+including the theme toggle; reject `data:image` URLs in owner page/component
+sources and the actual generated `priv/static/assets/css/app.css` served to those
+pages, including generated icon selectors and runtime-selected classes. Missing
+bundle evidence is not a pass. This static/bundle check complements the later
+owner-browser check for visible icons and CSP violations; LiveViewTest alone
+cannot enforce CSP. No new dependencies or browser-in-CI assumption.
+
 Record red/green evidence and independent exact-head review per PR.
 
 CI proves scoped tests and required format/compile/assets/test plus `make check`,
