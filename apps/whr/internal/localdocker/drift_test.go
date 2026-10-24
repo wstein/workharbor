@@ -133,7 +133,7 @@ func TestBundleDriftSelectionAndSource(t *testing.T) {
 		record                 inspection
 	}{
 		{"prefix", strings.Repeat("a", 12), source, driftRecord(source, []mount{syncedMount()})},
-		{"wrong_source", "primary", t.TempDir(), driftRecord(source, []mount{syncedMount()})},
+		{"wrong_source", "primary", driftSource(t), driftRecord(source, []mount{syncedMount()})},
 		{"stopped", "primary", source, func() inspection { r := driftRecord(source, []mount{syncedMount()}); r.State = "exited"; return r }()},
 		{"foreign", "primary", source, func() inspection { r := driftRecord(source, []mount{syncedMount()}); r.Labels = nil; return r }()},
 		{"staging", "primary", source, func() inspection {
@@ -152,6 +152,9 @@ func TestBundleDriftSelectionAndSource(t *testing.T) {
 			got, err := driftFixture(t, tc.record).Drift(context.Background(), socketPorts(), tc.source, tc.selector)
 			if exitcode.FromError(err) != 68 || got.Status != "cannot_determine" {
 				t.Fatalf("%+v %v", got, err)
+			}
+			if tc.name == "wrong_source" && got.Reason != "source_mismatch" {
+				t.Fatalf("wrong source was not rejected by source gate: %+v %v", got, err)
 			}
 		})
 	}
@@ -232,5 +235,23 @@ func TestBundleDriftAmbiguousSelectorCannotMatch(t *testing.T) {
 	got, err := (Client{Executable: exe}).Drift(context.Background(), socketPorts(), source, "primary")
 	if exitcode.FromError(err) != 68 || got.Reason != "selection_undetermined" || got.ContainerID != nil {
 		t.Fatalf("%+v %v", got, err)
+	}
+}
+
+func TestBundleDriftWrongValidSourceRefusedWithoutEffects(t *testing.T) {
+	selectedSource := driftSource(t)
+	wrongSource := driftSource(t) // Fully valid pins must not mask a missing source gate.
+	raw, _ := json.Marshal(driftRecord(selectedSource, []mount{syncedMount()}))
+	forbidden := filepath.Join(t.TempDir(), "forbidden-runtime-call")
+	exe := fakeDocker(t, fmt.Sprintf(`case "$2 $3" in
+ 'container ls') printf '%%s\n' '{"ID":"%s","Status":"fixture"}';;
+ 'container inspect') printf '%%s\n' '%s';;
+ *) touch '%s';exit 99;;esac`, strings.Repeat("a", 64), raw, forbidden))
+	got, err := (Client{Executable: exe}).Drift(context.Background(), socketPorts(), wrongSource, "primary")
+	if exitcode.FromError(err) != 68 || got.Status != "cannot_determine" || got.Reason != "source_mismatch" {
+		t.Fatalf("independently valid wrong source escaped source gate: %+v %v", got, err)
+	}
+	if _, err := os.Stat(forbidden); !os.IsNotExist(err) {
+		t.Fatalf("wrong source attempted a forbidden runtime call: %v", err)
 	}
 }

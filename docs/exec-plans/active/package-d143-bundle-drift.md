@@ -68,3 +68,27 @@ an actual Docker daemon. Missing native toolchain or qualified checks remain
 Draft blockers; reviewer CLEAR, required CI and the owner's live-operation gate
 are separate. No push, PR creation, merge, deployment or runtime activation was
 performed by this author at this handoff.
+
+## Independent test-quality correction
+
+The independent reviewer found that `wrong_source` used an empty temporary
+folder: removing only source-path equality could still return unknown because
+its pins were unreadable. The revised table uses a second independently valid
+`driftSource` and requires reason `source_mismatch`. A dedicated negative-path
+fixture additionally requires exit 68 and a zero-forbidden-runtime-call canary.
+
+Mutation proof: temporarily disable only `local != declared` while retaining
+all other source checks and compile-time variable use. The dedicated test fails
+an actual assertion: an independently valid wrong source incorrectly returns
+`in_sync` / `reference_match` / nil error. Raw evidence:
+`/tmp/whr-d143-source-equality-mutant.log`. Production bytes were restored in a
+`finally` block and have no diff. The focused source selection and wrong-valid-
+source tests then pass (exit 0), with evidence at
+`/tmp/whr-d143-source-gate-green.log`; formatting is empty and diff checks pass.
+
+This correction changes tests and this evidence only. The running full
+`make check` remains bound to predecessor
+`869fe1bc624d5689d76b0a7c16450cb324093bd8`, not the correction commit. No new broad
+suite was started for this test-only change, and no predecessor qualification
+is carried over as exact-head evidence. Exact-head independent code review and
+test-quality recheck remain required before publication.
