@@ -28,6 +28,7 @@ func decodeDockerRecord(dec *json.Decoder, dst any) error {
 	if _, err := check.Token(); err != io.EOF {
 		return errors.New("trailing Docker value")
 	}
+	var projectedMounts []map[string]json.RawMessage
 	if _, ok := dst.(*inspection); ok {
 		var fields map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &fields); err != nil {
@@ -44,6 +45,7 @@ func decodeDockerRecord(dec *json.Decoder, dst any) error {
 				return err
 			}
 		}
+		projectedMounts = mounts
 		for _, m := range mounts {
 			for key := range m {
 				for _, known := range []string{"Type", "Name", "Source", "Destination", "RW"} {
@@ -54,7 +56,16 @@ func decodeDockerRecord(dec *json.Decoder, dst any) error {
 			}
 		}
 	}
-	return json.Unmarshal(raw, dst)
+	if err := json.Unmarshal(raw, dst); err != nil {
+		return err
+	}
+	if item, ok := dst.(*inspection); ok {
+		for i, m := range projectedMounts {
+			value := strings.TrimSpace(string(m["RW"]))
+			item.Mounts[i].readOnlyUnknown = value != "false" && value != "true"
+		}
+	}
+	return nil
 }
 
 func uniqueDockerValue(dec *json.Decoder, depth int) error {

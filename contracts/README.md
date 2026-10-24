@@ -62,6 +62,11 @@ these accepted ports or approve runtime integration.
 - [`cli/doctor-checks.json`](cli/doctor-checks.json): the `whr doctor` check catalogue, thresholds and the
   first-increment boundary; proposed, not implemented.
 
+The bounded local bundle drift report uses the existing exit table and the
+`bundleDriftResult` output schema; its supported pin format, reference-only
+semantics and offline evidence boundary are defined in
+[the local drift contract](../specs/006-whr-cli/contracts/local-bundle-drift.md).
+
 ## Workspace configuration manifest
 [`workspace/workharbor.schema.json`](workspace/workharbor.schema.json) describes `workharbor.json`
 (schema_version 1) as read today by the host agent resolver and `scripts/check_repo.py`; its version 1 definition adds no field.

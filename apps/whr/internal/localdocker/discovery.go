@@ -33,6 +33,7 @@ type Workspace struct {
 type mount struct {
 	Type, Name, Source, Destination string
 	RW                              bool
+	readOnlyUnknown                 bool // missing/null RW is not evidence of a read-only mount
 }
 type inspection struct {
 	ID                 string `json:"Id"`

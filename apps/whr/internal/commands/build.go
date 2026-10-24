@@ -89,6 +89,11 @@ func (a *app) build() {
 		e := e
 		runE := func(c *cobra.Command, args []string) error {
 			ctx := c.Context()
+			if e.ID == "workspace.drift" {
+				local, _ := c.Flags().GetBool("local")
+				source, _ := c.Flags().GetString("source")
+				ctx = context.WithValue(ctx, localDriftKey{}, localDriftInvocation{local: local, source: source})
+			}
 			if e.ID == "workspace.shell" {
 				ctx = context.WithValue(ctx, localShellKey{}, a.localShellOptions(c))
 			}
@@ -130,6 +135,9 @@ func (a *app) build() {
 			}
 			if e.ID == "workspace.init" {
 				addInitFlags(c, e)
+			} else if e.ID == "workspace.drift" {
+				c.Flags().Bool("local", false, "compare local running primary bundle references")
+				c.Flags().String("source", "", "explicit local source directory matching the primary label")
 			} else if e.ID == "workspace.rm" {
 				c.Flags().Bool("local", false, "remove local workspace containers; no control plane")
 				c.Flags().String("role", "", "local cleanup role: staging or temp")

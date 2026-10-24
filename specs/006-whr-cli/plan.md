@@ -505,3 +505,19 @@ relevant existing guard regressions. Fake success does not verify actual Docker,
 image promotion, builds or owner-host panes. SC-009/T030 and Anchorage #14 retain
 separate owner live-operation gates. No resource operation, hook, install, standalone
 build or host acceptance is performed or authorized by preparing this amendment.
+
+
+## Package D bounded drift report (#143, 2026-10-24)
+
+The owner-authorized side slice implements the read-only
+[local bundle drift contract](contracts/local-bundle-drift.md): explicit source and
+running primary, existing local Docker projected inspection, existing workspacecfg
+no-follow JSONC reader, canonical digest-named volume comparison and closed-schema
+reports including nonzero outcomes. It runs no init hook or container command.
+The frozen exit table is unchanged: both drift and unknown use 68, differentiated
+by report status; unknown evidence dominates. Volume reference equality does not
+attest payloads. Offline fixtures do not establish real-host acceptance.
+
+This bounded delivery does not alter T039's description, prerequisites or checkbox.
+Full T038 remains required for T039 completion. Alternative bundle-pins/lock formats,
+payload verification, installation/build and live operation are outside this slice.

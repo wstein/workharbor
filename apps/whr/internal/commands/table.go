@@ -82,6 +82,7 @@ func WaitsFor(id string) string {
 }
 
 var descriptions = map[string]string{
+	"workspace.drift":        "Report local bundle reference drift without changing the workspace",
 	"workspace.ls":           "List local workspaces with --local (remote listing waits for owner_api)",
 	"workspace.show":         "Show one workspace",
 	"workspace.create":       "Create a workspace",
