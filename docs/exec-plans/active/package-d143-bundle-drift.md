@@ -227,3 +227,51 @@ formatting, bootstrap validation and diff checks passing. No full repository
 rerun, race run, installation, standalone build or real-host operation was done.
 Prior local full-check failures remain historical and predecessor-bound. Fresh
 exact-head review/QA and publication remain with the coordinator; no author push.
+
+## Owner-requested admitted mount alias normalization
+
+The owner's subsequent request on top of
+`9f517bdb94c461a9308ec1889476a050abdd909a` replaces the earlier conservative
+alias-refusal choice with normalization of aliases for the existing admitted
+keys. The current contract is updated explicitly; the preceding refusal records
+remain historical evidence, not the current rule. The
+[official Docker CLI parser](https://raw.githubusercontent.com/docker/cli/master/opts/mount.go)
+was read on 2026-10-24 to verify the `source`/`src`, `target`/`dst`/`destination`
+and `readonly`/`ro` cases. A fresh main fetch again matched current base
+`45c269925295226851ea7268ae4a8cd8d29ecc6c`, so no rebase was required.
+
+Test-first commit `817a7ad0` records actual RED on the old behavior: valid `src`,
+`dst`, `destination`, `ro` and combined reordered options failed pin equality and
+changed matching `in_sync` reports into undetermined reports. Evidence:
+`/tmp/whr-d143-normalize-pins-red.log` and
+`/tmp/whr-d143-normalize-report-red.log`.
+
+Fix `1b1181a8` normalizes these lowercase key aliases before assigned-value
+validation, duplicate detection, allowlist checking and relevance classification.
+It preserves the previously admitted values: assigned readonly/ro remains refused,
+unknown keys and uppercase variants remain unsupported, and equal-value
+canonical/alias or alias/alias collisions refuse in either order. Tests require
+identical pins/reports for each valid alias, reject those collisions and values,
+and retain the undeclared aliased bundle and F7 POSIX target regressions.
+
+Focused suites passed (`/tmp/whr-d143-normalize-focused-green.log`). Five bounded
+mutations each produced a behavioral assertion failure:
+
+- Disable `src` mapping: `/tmp/whr-d143-normalize-src_mapping-mutant.log`.
+- Disable target alias mapping: `/tmp/whr-d143-normalize-target_mapping-mutant.log`.
+- Disable `ro` mapping: `/tmp/whr-d143-normalize-ro_mapping-mutant.log`.
+- Normalize after value checks, wrongly admitting `ro=`:
+  `/tmp/whr-d143-normalize-late_value_normalization-mutant.log`.
+- Normalize after duplicate detection, wrongly allowing alias overwrites:
+  `/tmp/whr-d143-normalize-late_duplicate_normalization-mutant.log`.
+
+All mutated bytes were restored in `finally` blocks. Complete affected
+workspacecfg/localdocker/commands tests pass
+(`/tmp/whr-d143-normalize-affected-green.log`), as do affected vet, formatting,
+bootstrap validation and diff checks. The held-source descriptor protection,
+clean absolute POSIX target guard, exit 68/report semantics and F6's separate
+informational owner question remain unchanged. No duplicate full `make check`,
+race run, installation, standalone build or real-host operation was done; prior
+local qualification limitations are not relabeled passing. Fresh exact-head code
+review and separate QA remain required before coordinator publication. No author
+push was performed.
