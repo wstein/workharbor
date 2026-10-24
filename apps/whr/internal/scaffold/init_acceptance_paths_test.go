@@ -143,14 +143,17 @@ func TestInitSymlinkTarget(t *testing.T) {
 			pathAcceptanceWrite(t, filepath.Join(outside, ".gitkeep"), []byte("owner placeholder\n"))
 			pathAcceptanceWrite(t, filepath.Join(outside, "components", "owner-file"), []byte("nested owner bytes\n"))
 			projects := "source/components"
+			want := "init target is unsafe"
 			switch kind {
 			case "escaping":
+				want = "existing workharbor.json fails current validation"
 				var err error
 				projects, err = filepath.Rel(dir, outside)
 				if err != nil || !strings.HasPrefix(projects, "../") {
 					t.Fatalf("fixture must escape through ../: %q, %v", projects, err)
 				}
 			case "absolute":
+				want = "existing workharbor.json fails current validation"
 				projects = outside
 			case "symlink-leaf":
 				if err := os.Mkdir(filepath.Join(dir, "source"), 0700); err != nil {
@@ -172,8 +175,8 @@ func TestInitSymlinkTarget(t *testing.T) {
 			_, err := DiscoverWithOptions(context.Background(), dir, opts)
 			pathAcceptanceTreeUnchanged(t, outside, outsideBefore)
 			pathAcceptanceTreeUnchanged(t, dir, workspaceBefore)
-			if int(exitcode.FromError(err)) != 68 {
-				t.Fatalf("custom projects_path %q must refuse before preview with exit 68: %v", projects, err)
+			if err == nil || int(exitcode.FromError(err)) != 68 || !strings.Contains(err.Error(), want) {
+				t.Fatalf("custom projects_path %q must refuse before preview with exit 68 and reason %q: %v", projects, want, err)
 			}
 		})
 	}

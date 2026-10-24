@@ -15,8 +15,10 @@ now includes four `custom-projects` subcases. An existing manifest with
 `projects_path` escaping through `../`, an absolute path, a symlink at the
 nested `source/components` leaf, or a symlink at its `source` ancestor must
 refuse discovery before preview with exit 68, even with manifest overwrite
-consent. The first two exercise existing-manifest validation; the latter two
-exercise no-follow discovery, consistent with FR-057(a/b).
+consent. The first two require the reason `existing workharbor.json fails current validation`;
+the latter two require `init target is unsafe`. These distinguish existing-manifest
+validation from no-follow discovery, consistent with FR-057(a/b), so a later
+exit-68 guard cannot mask a missing manifest-validation guard.
 
 Each subcase owns an external temporary directory with a nonempty `.gitkeep`
 and a nested owner file. Before and after discovery, complete inventories of
@@ -85,6 +87,57 @@ expression that ran only the manifest subcase; it passed. The corrected control
 above explicitly ran and passed both pre-existing subcases. This is fresh
 mutation evidence for a regression test, not historical failing-first proof
 for the original implementation.
+
+## Review correction: distinguish the refusing guard
+
+The [PR #253 review](https://github.com/wstein/workharbor/pull/253#pullrequestreview-5640347869)
+identified that exit 68 alone allowed the manifest-findings guard to be weakened
+while later discovery still refused the path. The custom-path cases now require
+both exit 68 and their documented guard reason; complete inventory comparisons
+still run before that assertion. The core pointer now calls this an evidence
+record. No production behavior or requirement changed.
+
+Before the correction, the five topic commits were purely rebased from
+`86008fab4b0131187c3d3b244fef94a48063b48b` onto
+`79d2f4eb336514c27b93d220edf7f5c6efe49b0d`. `git range-diff` between the original
+five-commit range ending `62b431951647d512ef7cc4b52205b318ff513aa9` and the rebased
+range ending `858391c0adffad1301304c1f90fbd12df2f17b55` showed all five commits
+with `=` equality. The literal-name count above stays bound to its historical
+audited base.
+
+For the additional M2 overlay, use this Python recipe from the repository root:
+
+```sh
+python3 - <<'PYCODE'
+import json
+import tempfile
+from pathlib import Path
+
+source = Path("apps/whr/internal/scaffold/discover.go").resolve()
+mutation = Path(tempfile.mkdtemp(prefix="whr-custom-path-m2-"))
+text = source.read_text()
+old = "if m.Manifest == nil || len(m.Findings) != 0 {"
+assert text.count(old) == 1
+mutant = mutation / "discover.go"
+mutant.write_text(text.replace(old, "if m.Manifest == nil {", 1))
+overlay = mutation / "overlay.json"
+overlay.write_text(json.dumps({"Replace": {str(source): str(mutant)}}))
+print(overlay)
+PYCODE
+```
+
+From `apps/whr`, with the same toolchain environment and umask as above:
+
+| Command | Measured correction result |
+| --- | --- |
+| `go test -count=1 -overlay=<M2-overlay.json> -run '^TestInitSymlinkTarget/custom-projects/' -v ./internal/scaffold` | Exit 1: escaping and absolute cases fail the expected manifest-validation reason, even though later discovery returns exit 68 with `init target is unsafe`; both symlink cases pass. Compilation succeeds, all inventory assertions pass, and no case skips. |
+| `go test -count=1 -run '^(TestInitSymlinkTarget\|TestInitGitkeepUnderProjectsPath)$' -v ./internal/scaffold` | Exit 0: both affected top-level tests and all eight subcases pass with unchanged production source. |
+
+The M2 RED was the first execution of the strengthened assertions. The original
+default-path-substitution RED remains recorded above. The focused GREEN, vet,
+source checker, gofmt, typos and whitespace checks were refreshed after this
+correction; the earlier complete scaffold-package result was not rerun for this
+delta. Full-suite and published-head gates remain with the coordinator.
 
 ## Checks and limits
 
