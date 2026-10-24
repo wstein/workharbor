@@ -62,10 +62,14 @@ source unsupported. At least one bundle is required.
 
 Each pin must have exactly one matching string in `mounts`, with `type=volume`,
 matching `source` and `target`, and bare `readonly`; bare `volume-nocopy` is optional.
-No duplicate or additional options are supported on those bundle mounts. Every
-mount under `/opt/bdock` or with a `bundledock-` source must correspond to a pin;
-conflicting, missing or opaque declarations are undetermined. Non-bundle mounts
-remain inert. Mount objects are not part of this initial protocol.
+All mount strings are checked for canonical keys (`type`, `source`, `target`,
+`readonly`, `volume-nocopy`) before determining bundle relevance. Aliases such as
+`src`, `dst` and `destination`, unknown keys, and duplicate options are unsupported
+and make the pin source undetermined; they cannot hide an undeployed bundle as an
+inert mount. Every mount under `/opt/bdock` or with a `bundledock-` source must
+correspond to a pin; conflicting, missing or opaque declarations are undetermined.
+After canonical-key validation, non-bundle mounts remain inert. Mount objects are
+not part of this initial protocol.
 
 ## Comparison, output and exits
 
@@ -91,7 +95,10 @@ configuration, paths or unvalidated identities are output. Rows sort by bundle
 name, then reason; mount order does not affect JSON. Human output escapes
 untrusted text per FR-022 and states the payload-attestation limitation.
 
-Aggregate precedence is `cannot_determine` over `drift` over `in_sync`. Exit 0
+Aggregate precedence is `cannot_determine` over `drift` over `in_sync`, regardless
+of the order of declared pins or runtime mounts. Absent mount metadata gives each
+pin row `mount_unavailable` and the aggregate `incomplete_evidence`; the per-row
+reason does not override the aggregate classification. Exit 0
 means `in_sync`; exit 68 represents either drift or undetermined evidence, with
 the distinct `status` field identifying which. This chooses the already permitted
 68 alternative of FR-069/SC-025 without changing ADR 0013's exit table.
