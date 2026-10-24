@@ -118,7 +118,8 @@ characters) to `TestCandidateHomeScopeAdmission`. Both require conflict 68 befor
 entropy access. The production bounds already existed and remain unchanged.
 
 Author mutation probes used Go source overlays against the candidate-home source
-at commit `a004ba10` without changing the checked-out production file. Each
+at commit `a004ba101d14c3532aff8ff8db1deae16b162e23` without changing the
+checked-out production file. Each
 following edit compiled and failed the named assertion; no compiler failure was
 counted as a killed mutant:
 
