@@ -58,9 +58,14 @@ workspace-folder label matches the canonical source directory. Exclude staging
 and temp roles even when their local-folder labels match. Resolve symlinks in
 both host paths before comparison; macOS `/private` aliases count as equal only
 when host filesystem resolution establishes equality, never by stripping a
-prefix. Unresolvable source paths refuse with 68, no recognized primary match with 65,
-and ambiguous primary selection with 64, all before side effects. The concrete plan must test this canonicalization and label-to-path
-admission; labels remain usability guards, not authorization.
+prefix. Unresolvable source paths refuse with 68. An otherwise eligible primary
+whose workspace-folder label is missing or cannot be resolved also refuses with
+68; do not silently discard it or classify the unresolved label as a non-match.
+No recognized primary match is 65; ambiguous primary selection is 64. Under A,
+excluded staging/temp roles do not count as matches, so they alone yield 65;
+under B, explicitly selecting a recognized container in the wrong role is 68.
+All these checks precede side effects. The concrete plan must test canonicalization
+and label-to-path admission; labels remain usability guards, not authorization.
 
 Selection alternative B preserves the existing container name/ID model: stage
 selects a primary `<id|name>` and separately names its source directory; promote
@@ -193,9 +198,12 @@ There is an existing upstream safety conflict, not a cleanup exception:
 Anchorage's current home template is `anchorage-home-${devcontainerId}` for every
 role, whereas settled FR-067(e) protects the entire `anchorage-home-*` prefix.
 Thus even a distinct staging/temp home with that prefix is refused by #226,
-including container-only removal. The owner must reconcile naming/protection
-before relying on that cleanup path for FR-068 or real-host acceptance; do not
-weaken the code guard or prescribe a bypass in this proposal.
+including container-only removal. The [owner decided on 2026-10-24](https://github.com/wstein/workharbor/pull/226#issuecomment-6382864474)
+to retain the safe refusal, including container-only cleanup. Removing existing
+Anchorage staging/temp containers with these names is not covered by the removal
+task. Any later FR-067(e) change requires its own decision and task; this proposal
+neither reopens that decision nor weakens the guard or prescribes a bypass.
+Stage/promote planning must not claim that this excluded cleanup path is available.
 
 No automatic cleanup/rollback may remove a primary, protected or shared home.
 Candidate cleanup uses the accepted FR-067 engine only after successful primary
@@ -220,9 +228,9 @@ this table proposes no new exit code. Partial effects take precedence as below.
 | 0 | Successful operation or valid dry-run with zero mutations. |
 | 64 | Invalid syntax, missing/conflicting positional selectors, ambiguous primary selection or unsupported flag combinations. |
 | 65 | No recognized primary match, including a selector matching only an unlabelled foreign container. |
-| 68 | Pre-effect conflict/validation failure: wrong primary state/role, collision, source/receipt mismatch, failed health verification, or protected/shared home resolution. |
+| 68 | Pre-effect conflict/validation failure: wrong primary state, explicitly selected wrong role (B), unresolved primary workspace-folder label, collision, source/receipt mismatch, failed health verification, or protected/shared home resolution. |
 | 70 | Required human choice/trust/confirmation absent; unattended mutation without `--yes` or required source trust. |
-| 71 | Deadline exceeded before any partial effects; identify the local phase and target as described below. |
+| 71 | Proposed only after the FR-063 amendment below: deadline exceeded before any partial effects; identify the local phase and target. |
 | 72 | Cancellation/interrupt before any partial effects. |
 | 73 | Completed or uncertain mutation effects with remaining work: failed/interrupted staging, primary replacement or staging cleanup; list attempted/completed/remaining resources and recovery. Takes precedence over 71/72 after partial effects. |
 
@@ -236,9 +244,14 @@ If a candidate receipt already exists, identify that receipt and candidate too.
 Escape all displayed metadata per FR-022 and include the same structured context
 in JSON. Explicitly state that no remote operation ID exists for this local
 operation; do not invent one or imply a control-plane operation was submitted.
-ADR 0013's “operation id printed” wording needs this local reconciliation in the
-authoritative amendment before implementation. Timeout after partial effects
-remains 73 with the effect inventory, rather than 71 or a claim of no changes.
+The authoritative amendment must reconcile both ADR 0013's “operation id printed”
+wording and FR-063: the latter currently excludes timeout 71 from the first
+increment, and T038 is part of that increment. Propose extending FR-063's local
+“71 deadline with nothing applied” exception from Feature 009 to stage/promote,
+likewise without a remote operation ID. Until that amendment is owner-approved,
+this proposed 71 mapping is not an implementation contract or an exception to
+FR-063. Timeout after partial effects remains 73 with the effect inventory,
+rather than 71 or a claim of no changes.
 
 `--json` uses the existing envelope in `contracts/cli/output.schema.json`, with a
 stage/promote result schema name still to be specified in the authoritative
@@ -251,7 +264,8 @@ its test and code rather than treating this proposal as an implemented schema.
 
 1. Record the selected D1/D2 text in the authoritative spec/plan/contract and
    command/result definitions through their owner-reviewed amendment process.
-   Resolve the home-prefix conflict before claiming usable staging cleanup.
+   Respect the recorded home-prefix decision and excluded cleanup scope before
+   claiming usable staging cleanup; any FR-067(e) change is a separate task.
    Define admitted source inputs, exact argv, phase/recovery bounds and refusal
    cases; explicitly reconcile any task-scope or dependency change.
 2. Tests first: primary-only canonical selection and ID/name alternative; stage
