@@ -42,14 +42,15 @@ func removalDocker(t *testing.T, frames [][]inspection, volumeFailure bool, repl
 		containerReply = "printf '%s\\n' '" + strings.ReplaceAll(replies[0], "'", "'\"'\"'") + "'"
 		volumeReply = "printf '%s\\n' '" + strings.ReplaceAll(replies[1], "'", "'\"'\"'") + "'"
 	}
-	script := fmt.Sprintf(`test "$1" = '--host=unix:///var/run/docker.sock' || exit 98
+	script := fmt.Sprintf(`printf '%%s\n' "$*" >> %q
+test "$1" = '--host=unix:///var/run/docker.sock' || exit 98
 case "$2 $3" in
  'container ls') n=$(cat %q); n=$((n+1)); printf '%%s\n' "$n" > %q; cat %q/"$n-list";;
  'container inspect') n=$(cat %q); test "$4" = --format && test "$5" = '%s' || exit 97; cat %q/"$n-inspect";;
  'rm -f') test "$#" -eq 5 && test "$4" = -- || exit 96; printf 'container:%%s\n' "$5" >> %q; %s;;
  'volume rm') test "$#" -eq 5 && test "$4" = -- || exit 95; printf 'volume:%%s\n' "$5" >> %q; %s %s;;
  *) exit 94;;
-esac`, counter, counter, dir, counter, expectedInspectFormat, dir, log, containerReply, log, map[bool]string{false: "", true: "exit 1;"}[volumeFailure], volumeReply)
+esac`, filepath.Join(dir, "calls"), counter, counter, dir, counter, expectedInspectFormat, dir, log, containerReply, log, map[bool]string{false: "", true: "exit 1;"}[volumeFailure], volumeReply)
 	return Client{Executable: fakeDocker(t, script)}, log
 }
 func mutationText(t *testing.T, log string) string {
@@ -102,6 +103,55 @@ func TestLocalRmExecutesFixedOrderAndRechecksAfterConfirmation(t *testing.T) {
 		t.Fatal("transaction repeated mutations")
 	}
 }
+func TestLocalRmAmbiguousIDAndNameRefusesBeforeMutation(t *testing.T) {
+	all := removalFixture()
+	other := removalFixture()[0]
+	other.ID = strings.Repeat("b", 64)
+	other.Name = "/" + all[0].ID
+	all = append(all, other)
+	c, log := removalDocker(t, [][]inspection{all}, false)
+	tx, err := c.PrepareRemoval(context.Background(), socketPorts(), RemovalOptions{Target: all[0].ID})
+	if exitcode.FromError(err) != exitcode.Conflict || tx != nil {
+		t.Fatalf("ambiguous ID/name: transaction=%v error=%v", tx, err)
+	}
+	if got := mutationText(t, log); got != "" {
+		t.Fatalf("ambiguous selector mutated resources: %q", got)
+	}
+}
+
+func TestLocalRmApplyIsOneUseWithoutFurtherDockerCalls(t *testing.T) {
+	// Supply valid repeat snapshots: an absent guard must not merely fail because
+	// the fake runs out of metadata or the previously removed target disappears.
+	c, log := removalDocker(t, [][]inspection{removalFixture(), removalFixture(), removalFixture()}, false)
+	tx, err := c.PrepareRemoval(context.Background(), socketPorts(), RemovalOptions{Target: "sample"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := tx.Apply(context.Background())
+	if err != nil || len(first.Actions) != 1 || !first.Actions[0].Applied {
+		t.Fatalf("first apply: result=%+v error=%v", first, err)
+	}
+	wantMutation := "container:" + strings.Repeat("a", 64) + "\n"
+	if got := mutationText(t, log); got != wantMutation {
+		t.Fatalf("first mutations: got %q want %q", got, wantMutation)
+	}
+	calls := filepath.Join(filepath.Dir(log), "calls")
+	before := mutationText(t, calls)
+	if before == "" {
+		t.Fatal("fake recorded no Docker calls")
+	}
+	_, err = tx.Apply(context.Background())
+	if exitcode.FromError(err) != exitcode.Conflict {
+		t.Fatalf("second apply must refuse with 68: %v", err)
+	}
+	if after := mutationText(t, calls); after != before {
+		t.Fatalf("second apply invoked Docker: before=%q after=%q", before, after)
+	}
+	if got := mutationText(t, log); got != wantMutation {
+		t.Fatalf("second apply changed mutations: %q", got)
+	}
+}
+
 func TestLocalRmPartialVolumeFailureExits73(t *testing.T) {
 	c, log := removalDocker(t, [][]inspection{removalFixture(), removalFixture(), {}}, true)
 	tx, err := c.PrepareRemoval(context.Background(), socketPorts(), RemovalOptions{Target: "sample", Volumes: true, Force: true})
