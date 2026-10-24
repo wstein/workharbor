@@ -384,7 +384,10 @@ the subsequent local fetch source; it retains no candidate alternates or hardlin
 Generate fixed explicit refspecs per exported ref, targeting fresh
 refs/workharbor/stage/OP/REPO/{head,heads/NAME,tags/NAME,notes/NAME}. OP is 128-bit
 random; REPO is a path digest. Preview exact original/export/ref/OID mappings and
-objects to transfer. Reject any preexisting target ref 68, never force/update it.
+objects to transfer. In the human preview, label each exported OID as matching
+that repository's recorded stage-verification HEAD or as an unverified result,
+without presenting fetched results as verified code.
+Reject any preexisting target ref 68, never force/update it.
 Count the complete planned result refs across root/submodules before any Git
 import or other promote effect: more than 1024 refuses 68, never truncate or start
 a partial transfer. Zero changed refs is a valid empty transfer. Persist the
