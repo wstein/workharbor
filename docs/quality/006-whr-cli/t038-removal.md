@@ -68,6 +68,26 @@ with a private Unix listener and fake Docker executable, covering dry-run parity
 fixed full-ID mutation, JSON/schema and credential canaries. This is fixture
 evidence, not a real Docker operation or an installed binary acceptance test.
 
+## Current Anchorage naming limitation and owner question
+
+The [Opus review of #226](https://github.com/wstein/workharbor/pull/226#pullrequestreview-5637841455)
+identified a real usability limit of the settled FR-067(e) rule, not a code
+exception. Anchorage's current `.devcontainer/devcontainer.json` uses
+`anchorage-home-${devcontainerId}` for every role. Staging/temp containers therefore
+also have distinct homes named `anchorage-home-*`. The prefix guard treats all
+such homes as protected and refuses staging/temp cleanup with 68 and zero mutations,
+**even for container-only removal without --volumes**. It does not merely compare
+against the currently mounted primary home. The Makefile's actual-primary
+comparison is different and is not substituted for the approved rule.
+
+Owner question before FR-068 cleanup or Anchorage #14 acceptance: retain this
+whole-prefix protection and choose compatible staging/temp naming, or approve an
+explicit spec amendment defining different protection semantics? Also confirm
+that container-only refusal remains intended under “resolve to, unlink, or delete.”
+Until resolved, whr cannot clean up existing Anchorage staging/temp containers
+using that home template. No flag, force mode or undocumented fallback bypasses it.
+This PR retains the settled code guard; changes to Anchorage are outside its scope.
+
 ## Remaining gates
 
 Author verification: `go -C apps/whr test ./... -count=1` passed, including
@@ -103,3 +123,22 @@ to the full-suite-verified candidate. Pristine make check at that candidate was
 explicitly bounded to five seconds and interrupted with124, not passed; required
 CI remains authoritative. The final exact-head delta review and CI belong to the
 PR, with no real-Docker or host evidence inferred.
+
+## Opus correction evidence
+
+[Review 5637841455](https://github.com/wstein/workharbor/pull/226#pullrequestreview-5637841455)
+requested the naming limitation above and two direct guard regressions:
+
+- `TestLocalRmAmbiguousIDAndNameRefusesBeforeMutation` gives two recognized
+  containers: one's full ID equals the other's exact name. Preparation must
+  return 68, a nil transaction and zero mutations.
+- `TestLocalRmApplyIsOneUseWithoutFurtherDockerCalls` successfully applies once,
+  then requires 68 and no additional Docker call of any kind on the second apply.
+  The fake provides a valid repeated snapshot, so an absent one-use guard cannot
+  pass merely because the target disappeared or fixture metadata ran out.
+
+Both tests pass with unchanged production. The exact previously surviving
+mutations (`len(selected) != 1` to `== 0`, and bypassing `if r.used`) each fail the
+corresponding named regression. Restoring production makes all `TestLocalRm`
+cases pass. These are test-gap corrections, not new product behavior or a change
+to the protected-prefix decision. Fresh exact-head review/CI remain PR gates.

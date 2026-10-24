@@ -93,5 +93,13 @@ names the volumes and mount targets. Protected/shared/primary homes cannot be
 removed through staging/temp cleanup. Inspect a 73 partial-failure inventory
 before retrying: attempted but unacknowledged actions may already have happened.
 
+Current Anchorage limitation: its home template is
+`anchorage-home-${devcontainerId}` for every role. FR-067(e) protects the entire
+`anchorage-home-*` prefix, so whr refuses existing Anchorage staging/temp cleanup
+with 68, including container-only removal without --volumes. A distinct staging
+ID does not waive the prefix guard. The owner must reconcile naming/protection
+before relying on this path for FR-068 or Anchorage #14; no bypass is provided.
+See the [owner question](../../docs/quality/006-whr-cli/t038-removal.md#current-anchorage-naming-limitation-and-owner-question).
+
 Stage/promote and bundle drift are separate remaining T038/T039 work, not
 available commands in this increment. See the [removal evidence and limits](../../docs/quality/006-whr-cli/t038-removal.md).
