@@ -1329,6 +1329,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   pre/post actual-byte checks, honest race limits) requires exact artifact approval
   before code. No existing-candidate rerun-verification path is added: retain work,
   refuse stale verification, then guarded cleanup/fresh stage provide recovery.
+  Result-only candidate commits/ref moves do not invalidate unchanged actual
+  execution verification; Git identities/state consumed by execution remain bound
+  and refuse on change. Original-source correspondence and D1/D2 stay unchanged.
   This note registers no flag
   or new task
   and preserves D1/D2, no-host-hook promote and FR-067.

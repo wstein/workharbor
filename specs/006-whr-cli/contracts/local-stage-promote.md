@@ -218,6 +218,15 @@ workspace binding remains; fetched code is available for owner integration, not
 automatically active. These Git metadata effects amend prior source-preservation
 claims and must appear in preview/receipt/failure inventory.
 
+Result-only candidate commits/HEAD/ref moves do not by themselves invalidate
+unchanged image/config/user/mount/hook/smoke/dependency verification. Original
+source provenance stays bound; any Git identity/state actually consumed as an
+execution input also stays bound and requires fresh stage on change. Promotion
+preview/confirmation covers exact result refs/OIDs and the unchanged trusted
+execution manifest, without treating --yes as trust in changed source execution.
+This explicit clarification preserves normal Git work/result fetch and D1/D2;
+it adds no rerun-verification or replacement attestation interface.
+
 No existing-candidate rerun-verification interface is added. Current collision,
 no-adoption and changed-input refusal remain: retain project work, then guarded
 cleanup and a fresh stage with explicit trust/verification provide the known-safe
