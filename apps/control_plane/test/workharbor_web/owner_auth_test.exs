@@ -170,9 +170,15 @@ defmodule WorkHarborWeb.OwnerAuthTest do
   end
 
   defp base_conn do
-    build_conn()
-    |> Map.merge(%{scheme: :https, host: "localhost", port: 443})
-    |> put_req_header("host", "localhost")
+    conn = build_conn()
+
+    %{
+      conn
+      | scheme: :https,
+        host: "localhost",
+        port: 443,
+        req_headers: [{"host", "localhost"} | conn.req_headers]
+    }
   end
 
   defp assert_security_headers(conn, csp) do
