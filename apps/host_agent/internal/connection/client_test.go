@@ -575,3 +575,46 @@ func TestRunDoesNotStageOutsideRenewalWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// Keep elapsed scheduling time fixed while advancing only the UTC clock. Advancing
+// runNow with Add alone advances both clocks and misses this transition.
+func TestRunForwardWallClockJumpRestoresFastPendingRetry(t *testing.T) {
+	dir, state, _ := savedPendingDir(t)
+	oldRenew, oldSession, oldNow, oldWall := renewFn, sessionFn, runNow, retryWallNow
+	defer func() { renewFn, sessionFn, runNow, retryWallNow = oldRenew, oldSession, oldNow, oldWall }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	expires, err := identity.Expires(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	now = now.Add(expires.Add(-8 * time.Hour).Sub(now))
+	runNow = func() time.Time { return now }
+	wallOffset := time.Duration(0)
+	retryWallNow = func() time.Time { return now.Round(0).Add(wallOffset) }
+	renews, sessions := 0, 0
+	renewFn = func(context.Context, string) error { renews++; return ErrTransport }
+	sessionFn = func(_ context.Context, _ *identity.State, limit time.Time, event func(Event)) error {
+		sessions++
+		event(Event{Kind: "connected", HostID: host})
+		if sessions < 7 {
+			now = limit
+			return ErrTransport
+		}
+		if sessions == 7 {
+			// A separate wall-clock observation models a UTC correction without
+			// modifying time.Time's private monotonic representation.
+			wallOffset = 2 * time.Hour
+			return ErrTransport
+		}
+		cancel()
+		if renews != 8 || limit.Sub(now) > 30*time.Second {
+			t.Errorf("inside six-hour window retained retry=%v renews=%d; want <=30s and immediate attempt 8", limit.Sub(now), renews)
+		}
+		return ErrTransport
+	}
+	if err := Run(ctx, dir, nil); err != nil {
+		t.Fatal(err)
+	}
+}

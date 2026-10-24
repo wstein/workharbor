@@ -320,9 +320,10 @@ func ack(ctx context.Context, in <-chan incomingMessage, kind string) error {
 
 // Seams for tests; production values are Renew and session.
 var (
-	renewFn   = Renew
-	sessionFn = session
-	runNow    = time.Now
+	renewFn      = Renew
+	sessionFn    = session
+	runNow       = time.Now
+	retryWallNow = time.Now
 	// renewRetry bounds a session on a credential whose renewal is due but failed.
 	renewRetry = 30 * time.Second
 )
