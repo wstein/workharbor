@@ -184,3 +184,44 @@ func TestLocalRmNewlyMountedVolumeAfterContainerRemovalIsPartial(t *testing.T) {
 		t.Fatalf("result=%+v error=%v mutations=%s", result, err, mutationText(t, log))
 	}
 }
+
+func TestLocalRmMutationAdmitsOnlyFixedLocalVectors(t *testing.T) {
+	log := filepath.Join(t.TempDir(), "executed")
+	exe := fakeDocker(t, "printf executed > '"+log+"'")
+	c := Client{Executable: exe}
+	for _, args := range [][]string{{"rm", "-f", "--", "sample"}, {"rm", "-f", "--", strings.Repeat("a", 12)}, {"rm", "-f", "--", strings.Repeat("a", 64), "extra"}, {"volume", "rm", "--", "-v"}, {"volume", "rm", "--", "bundledock-toolbox"}, {"volume", "rm", "--", "home;touch fixture"}, {"system", "prune"}} {
+		if _, err := c.mutate(context.Background(), "unix:///fixture", args...); err == nil {
+			t.Fatalf("admitted:%q", args)
+		}
+	}
+	for _, endpoint := range []string{"tcp://localhost:2375", "ssh://fixture", "unix://relative"} {
+		if _, err := c.mutate(context.Background(), endpoint, "rm", "-f", "--", strings.Repeat("a", 64)); err == nil {
+			t.Fatalf("admitted endpoint:%s", endpoint)
+		}
+	}
+	if _, err := os.Stat(log); !os.IsNotExist(err) {
+		t.Fatal("refused mutation started a child")
+	}
+}
+
+func TestLocalRmBatchRechecksBeforeEachContainer(t *testing.T) {
+	first := removalFixture()[0]
+	first.Labels = map[string]string{"anchorage-temp": "1"}
+	second := removalFixture()[0]
+	second.ID = strings.Repeat("b", 64)
+	second.Name = "/second"
+	second.Labels = map[string]string{"anchorage-temp": "1"}
+	second.Mounts[0].Name = "other-home"
+	initial := []inspection{first, second}
+	changed := second
+	changed.Labels = nil
+	c, log := removalDocker(t, [][]inspection{initial, initial, {changed}}, false)
+	tx, err := c.PrepareRemoval(context.Background(), socketPorts(), RemovalOptions{Role: "temp"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := tx.Apply(context.Background())
+	if exitcode.FromError(err) != exitcode.PartialFailure || !result.Actions[0].Applied || result.Actions[1].Attempted || mutationText(t, log) != "container:"+first.ID+"\n" {
+		t.Fatalf("result=%+v error=%v mutations=%s", result, err, mutationText(t, log))
+	}
+}
