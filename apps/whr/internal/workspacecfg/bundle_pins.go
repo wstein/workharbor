@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -131,6 +132,11 @@ func readBundlePins(ctx context.Context, d *dir) ([]BundlePin, error) {
 			}
 		}
 		target := values["target"]
+		// Container mount targets use POSIX paths on every client platform. Refuse
+		// spellings Docker would clean before deciding whether they name a bundle.
+		if !path.IsAbs(target) || path.Clean(target) != target {
+			return fail()
+		}
 		relevant := strings.HasPrefix(target, "/opt/bdock") || strings.HasPrefix(values["source"], "bundledock-")
 		if !relevant {
 			continue
