@@ -304,3 +304,33 @@ func TestBundleDriftNilMountMetadataHasIncompleteAggregateEvidence(t *testing.T)
 		t.Fatalf("nil mount evidence was not classified per bundle and in aggregate: %+v", got)
 	}
 }
+
+func TestBundleDriftNoncanonicalTargetCannotReportInSync(t *testing.T) {
+	for _, target := range []string{"//opt/bdock/hidden", "/opt//bdock/hidden", "/opt/./bdock/hidden", "opt/bdock/hidden"} {
+		t.Run(target, func(t *testing.T) {
+			source := driftSource(t)
+			configPath := filepath.Join(source, ".devcontainer/devcontainer.json")
+			raw, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var config map[string]any
+			if err := json.Unmarshal(raw, &config); err != nil {
+				t.Fatal(err)
+			}
+			// An opaque source ensures only the target spelling determines relevance.
+			config["mounts"] = append(config["mounts"].([]any), "type=volume,source=opaque,target="+target+",readonly")
+			raw, err = json.Marshal(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(configPath, raw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := driftFixture(t, driftRecord(source, []mount{syncedMount()})).Drift(context.Background(), socketPorts(), source, "primary")
+			if exitcode.FromError(err) != 68 || got.Status != "cannot_determine" || got.Reason != "pins_unavailable" {
+				t.Fatalf("noncanonical target incorrectly aligned: target=%q report=%+v err=%v", target, got, err)
+			}
+		})
+	}
+}
