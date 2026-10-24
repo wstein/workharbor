@@ -175,9 +175,9 @@ Actual local results: `python3 scripts/check_repo.py`, changed-test `typos` and
 `owner_shell_test.exs`, `owner_auth_test.exs`, `authentication_test.exs` and
 `transport_security_test.exs` with `--warnings-as-errors --seed 0` exited **127**:
 `mix: command not found`. Mix/Elixir/Erlang were absent from PATH and inspected
-known installed-tool locations; no installation/download was attempted. Semantic
-RED outcomes, compilation and formatter results remain **unverified**, with
-associated PR CI as the next evidence source. Predicted assertion failures include
+known installed-tool locations; no installation/download was attempted. At that
+local checkpoint, semantic RED outcomes, compilation and formatter results were
+**unverified**. Predicted assertion failures included
 the missing LiveView marker, root response, unescaped payload controls, scaffold
 socket path, CSP and data-image icon CSS. Existing revoked/expired admission and
 foreign-query cases are regression guards expected to pass on main, not RED proof.
@@ -194,3 +194,29 @@ for an exception to the unchanged no-push assertion.
 No standalone build, browser, host/runtime operation or full `make check` was run.
 Implementation waits for the separate TDD/RED-head instruction; no W1 or T012
 completion is claimed.
+
+### Native CI checkpoint and Host-fixture correction
+
+[CI run 40138712728, bootstrap job](https://github.com/wstein/workharbor/actions/runs/40138712728/job/121006872530)
+executed exact head `c798df00fa1974d9169c202b8b8c8815b136b665`. Native format,
+warnings-as-errors application compilation, asset setup and asset build passed
+there. ExUnit reported **222/241 passed, 19 failed**; the overall gate failed.
+Reading all 19 failure records gives:
+
+| Classification | Count | Actual evidence |
+| --- | --- | --- |
+| Semantic assertion RED | 3 | Client expects `/owner/live` but source uses `/live`; root expects 303 but returns 200; `/owner/auth` controller route is absent. |
+| Invalid Host-header fixtures | 16 | `Plug.Conn.InvalidHeaderError`: one asset test, all nine owner-shell tests, and six owner-auth tests fail before their relevant assertions. |
+
+The Host failures are test defects, not W1 behavior evidence. In particular,
+FR-022, shell authorization, CSP, forged events and revocation assertions have not
+yet produced native outcomes. The new fixture correction sets connection authority
+fields and supplies the literal Host header through `conn.req_headers`, matching
+the existing authentication fixture instead of Plug's protected Host setter.
+Production admission and all security assertions are unchanged. Local source,
+spelling, whitespace and required-inventory checks pass; native formatting,
+compilation and ExUnit for the fixture correction remain pending CI. The preceding
+native passes apply only to the recorded historical head. No local tool install,
+standalone build or product implementation follows from these three narrow REDs;
+remaining behavior waits for working fixtures and the separate implementation
+instruction.
