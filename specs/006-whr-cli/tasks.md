@@ -172,7 +172,7 @@ the repository's ordinary `go build`/application checks; no archive, image, rele
 T038 stage/promote amendment (2026-10-24, proposed): follow
 [the selected local interaction](contracts/local-stage-promote.md) and
 [plan packages S0–S4](plan.md#t038-stagepromote-amendment-2026-10-24). D1/D2 direction
-follows [LS-1 and its verbatim answer](spec.md#ls-1-owner-direction-2026-10-24);
+follows [LS-1 and its linked owner decision record](spec.md#ls-1-owner-direction-2026-10-24);
 artifact approval is the owner approval/merge record of [PR #229](https://github.com/wstein/workharbor/pull/229),
 covering interaction only, with S0 still gated afterwards. Before
 stage/promote product code, complete S0's capability/capture/argv/image/receipt/

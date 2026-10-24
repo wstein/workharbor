@@ -1,7 +1,7 @@
 # T038: local stage/promote amendment
 
 Status and authority: interaction amendment following owner direction
-[LS-1, including the verbatim answer](../spec.md#ls-1-owner-direction-2026-10-24).
+[LS-1 and its linked owner decision record](../spec.md#ls-1-owner-direction-2026-10-24).
 The approval record is the owner-authored approval or owner merge of
 [PR #229](https://github.com/wstein/workharbor/pull/229). Until that record this text
 is proposed; that record approves only this interaction, not implementation,

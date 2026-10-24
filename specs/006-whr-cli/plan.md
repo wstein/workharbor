@@ -389,12 +389,13 @@ serialised in graph order. Dependent branches start from the merged `main` that 
 
 Status: proposed direction/interaction reconciliation, **not a ready execution
 plan**. Owner direction [LS-1](spec.md#ls-1-owner-direction-2026-10-24), with its
-verbatim answer, selects container name/full ID plus explicit source directory,
+linked owner decision record, selects container name/full ID plus explicit source directory,
 fingerprint trust, and Docker healthcheck or existing workspace smoke over stdin.
 The approval record is the owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229),
 covering only this interaction; S0 remains gated after that merge. Use [the local contract](contracts/local-stage-promote.md);
 [the earlier brief](contracts/local-stage-promote-proposal.md) retains historical
-alternatives, not outstanding D1/D2 questions. No source behavior is implemented.
+alternatives; D1/D2 were decided by the owner on 2026-10-24, see
+[the decision record](https://github.com/wstein/workharbor/pull/229#issuecomment-6385032899). No source behavior is implemented.
 
 ### Accepted foundation and boundaries
 
