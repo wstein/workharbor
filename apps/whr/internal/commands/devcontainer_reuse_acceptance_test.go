@@ -14,12 +14,18 @@ import (
 // Exercise the public CLI writer as well as proposal construction: reuse must
 // preserve startup files even when changing an existing manifest's selection.
 func TestInitDevcontainerReusePreservesAppliedStartupFiles(t *testing.T) {
-	for _, existingManifest := range []bool{false, true} {
-		name := "new_manifest"
-		if existingManifest {
-			name = "replace_manifest"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		existingManifest bool
+		crlf             bool
+	}{
+		{name: "new_manifest_lf"},
+		{name: "replace_manifest_lf", existingManifest: true},
+		{name: "new_manifest_crlf_no_final_newline", crlf: true},
+		{name: "replace_manifest_crlf_no_final_newline", existingManifest: true, crlf: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			existingManifest := tc.existingManifest
 			dir := t.TempDir()
 			marker := filepath.Join(dir, "HOOK_EXECUTED")
 			hook, err := json.Marshal("touch '" + marker + "'")
@@ -28,6 +34,9 @@ func TestInitDevcontainerReusePreservesAppliedStartupFiles(t *testing.T) {
 			}
 			selected := "custom config/devcontainer.json"
 			custom := []byte("{ // retain JSONC and custom PATH verbatim\n \"image\": \"debian:bookworm\", \"remoteEnv\": {\"PATH\": \"/mine:${containerEnv:PATH}\"}, \"postStartCommand\": " + string(hook) + ",\n}\n")
+			if tc.crlf {
+				custom = []byte(strings.ReplaceAll(strings.TrimSuffix(string(custom), "\n"), "\n", "\r\n"))
+			}
 			originalManifest := []byte(`{"schema_version":1,"devcontainer_path":".devcontainer/devcontainer.json","projects_path":"projects","bundles":[]}` + "\n")
 			files := map[string][]byte{
 				selected:                          custom,
@@ -50,6 +59,11 @@ func TestInitDevcontainerReusePreservesAppliedStartupFiles(t *testing.T) {
 				}
 				if err := os.WriteFile(target, raw, 0600); err != nil {
 					t.Fatal(err)
+				}
+				if relative == ".bashrc" {
+					if err := os.Chmod(target, 0750); err != nil {
+						t.Fatal(err)
+					}
 				}
 				if err := os.Chtimes(target, stamp, stamp); err != nil {
 					t.Fatal(err)
@@ -119,14 +133,21 @@ func TestInitDevcontainerReusePreservesAppliedStartupFiles(t *testing.T) {
 					}
 				}
 				result := decodeEnvelope(t, got.stdout)["result"].(map[string]any)
+				selectedRows := 0
 				for _, value := range result["actions"].([]any) {
 					action := value.(map[string]any)
 					if (mode == "dry" || mode == "rerun") && action["applied"] != false {
 						t.Fatalf("%s applied %v", mode, action)
 					}
-					if action["path"] == selected && (action["action"] != "reuse" || action["applied"] != false) {
-						t.Fatalf("%s did not reuse selected file: %v", mode, action)
+					if action["path"] == selected {
+						selectedRows++
+						if action["action"] != "reuse" || action["applied"] != false {
+							t.Fatalf("%s did not reuse selected file: %v", mode, action)
+						}
 					}
+				}
+				if selectedRows != 1 {
+					t.Fatalf("%s: expected exactly one selected-file JSON action, got %d", mode, selectedRows)
 				}
 			}
 		})
