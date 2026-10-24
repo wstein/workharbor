@@ -363,6 +363,7 @@ defmodule WorkHarbor.HostConnectionsTest do
     assert audits(c) == ["host_connected", "host_connection_authenticated"]
 
     assert {:ok, ref2} = HostConnections.open(c.peer, self())
+
     assert audits(c) == [
              "host_connected",
              "host_connection_authenticated",
@@ -372,6 +373,7 @@ defmodule WorkHarbor.HostConnectionsTest do
 
     assert_receive {:host_connection_close, :replaced}
     assert {:error, _} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+
     assert audits(c) == [
              "host_connected",
              "host_connection_authenticated",
