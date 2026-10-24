@@ -248,8 +248,33 @@ host.env regular/no-follow/nlink 1/owner UID/max 64 KiB, seven unique producer-o
 HOST_NAME/IP/OS/ARCH/ENGINE/ENGINE_ARCH/CONTEXT keys; values max 4096 UTF-8 bytes, no
 controls. Parse producer POSIX single-quoted literals/quote escapes without eval;
 reject extra shell syntax, duplicate keys and leftover temporary output. Record
-size/hash/producer digest. No host smoke orchestrator runs. Generated outputs may
-be supplied to captured execution views, not silently copied to original source.
+size/hash/producer digest. No host smoke orchestrator runs.
+
+Name host execution capture E, writable clone W and original workspace A. After
+validating E/.devcontainer/host.env, publish exactly those validated bytes to
+W/.devcontainer/host.env **before any candidate container hook/smoke**: preview the
+candidate-only write, require target absence/no symlinks, use a private temporary
+regular file (0644, nonsecret facts), fsync and atomic create-if-absent publication,
+then remove the temporary name and reparse/hash W's file. No overwrite of candidate
+work is implied. Journal producer operation/input digest, E output digest, W path/
+digest and publication observation; this output becomes an explicit later-phase
+input, separate from the pre-initialization fingerprint. Recheck before use.
+Refresh requires the same receipt-bound W output; missing/changed output refuses
+68 before verification and requires a fresh stage, never a host hook or republish.
+
+For promote's original live bind, admit A/.devcontainer/host.env separately during
+stage preview: the same literal-data validation and owner trust bind its exact
+bytes/digest/provenance as an existing original output, not as E's fresh output.
+Require it present/valid for this Anchorage greeting profile. Promote revalidates
+that exact A output before primary stop and before container hooks; missing,
+changed or invalid data refuses 68 before effects (73 after effects). Its admitted
+facts are not a claim of fresh host probing. Never copy E/W output into A, run
+host-info at promote or source unvalidated/stale-unbound shell bytes. Thus the
+normal greeting path reads validated W data in candidate and validated A data in
+primary without altering the original worktree. The stage trust manifest includes
+the admitted A output digest. Its earlier producer is unknown: record null producer
+fields and this operation's explicit admission instead of inventing a host-hook
+receipt. Generated E/published W entries retain their known producer binding.
 
 Bounds: metadata 5 s; capture/preflight 120 s; host-init 600 s; build/resources 1800 s;
 container-hooks 600 s; health 120 s; smoke 600 s; stop 30 s; each removal 30 s; total stage 3600 s,
@@ -414,16 +439,18 @@ Future source PR adds schemas/command table together, not in this docs PR.
 | gitObjectsTarget | kind const(git_objects); repository repositoryBinding; export_path string; object_manifest_digest sha256 digest; object_count integer 0..1000000 |
 | refCreate | name string (valid full operation ref, no control bytes); oid oid; expected_absent const(true) |
 | gitRefsTarget | kind const(git_refs); repository repositoryBinding; creates array(refCreate), max 1024 |
-| effectTarget | exactly one of resource, gitObjectsTarget or gitRefsTarget, discriminated by kind; each variant is closed |
-| effect | action enum(create_volume,host_initialize,build,create_container,container_hooks,smoke,import_objects,create_result_refs,stop_primary,remove_primary,create_primary,remove_candidate,remove_home); target effectTarget; state enum(planned,attempted,observed,uncertain,remaining) |
+| cloneOutputTarget | kind const(clone_output); clone_path string; relative_path const(.devcontainer/host.env); digest sha256 digest; producer_operation_id 32-lowercase-hex string |
+| outputEntry | path string; origin enum(generated_E,published_W,admitted_A); size integer 0..65536; digest sha256 digest; producer_operation_id nullable 32-lowercase-hex string; producer_input_digest nullable sha256 digest; admission_operation_id 32-lowercase-hex string; admission_input_digest sha256 digest |
+| effectTarget | exactly one of resource, gitObjectsTarget, gitRefsTarget or cloneOutputTarget, discriminated by kind; each variant is closed |
+| effect | action enum(create_volume,host_initialize,publish_candidate_output,build,create_container,container_hooks,smoke,import_objects,create_result_refs,stop_primary,remove_primary,create_primary,remove_candidate,remove_home); target effectTarget; state enum(planned,attempted,observed,uncertain,remaining) |
 | step | action enum(inspect_retained,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable effectTarget; instruction string |
 
 OID is exactly 40 lowercase hex for sha1 or 64 for sha256, matching its repository.
 Git import effects require gitObjectsTarget; ref publication requires gitRefsTarget;
-Docker effects require resource. The object manifest is a private sorted OID/size
-inventory bound by its digest, not an arbitrary payload. Full original repository
-binding and create OIDs remain in the journal/receipt so Git effects have no
-Docker-only target gap.
+candidate output publication requires cloneOutputTarget; Docker effects require
+resource. The object manifest is a private sorted OID/size inventory bound by its
+digest, not an arbitrary payload. Full original repository binding and create OIDs
+remain in the journal/receipt so Git effects have no Docker-only target gap.
 
 Private receipt adds exactly version=1, operation_id, sequence, previous_hash,
 state, endpoint_identity, original_source, input_manifest_digest, tool_manifest,
@@ -432,7 +459,9 @@ origin_binding, candidate_git_version, execution_manifest_digest, phase_binding_
 clone_repositories, exported_refs, imported_objects, result_ref_transactions,
 primary/candidate/home resource identities, trust_digest, consent flags,
 verification and action inventory. Tool manifest entries are path/version/digest;
-output entries path/producer_phase/size/digest. Detailed byte manifests remain
+output_inventory is array(outputEntry), max 100. Only admitted_A may have null
+producer fields; all entries retain the admitting operation/input binding.
+Detailed byte manifests remain
 private referenced artifacts, not arbitrary embedded JSON or public env dumps.
 Recovery ID is daemon-key/operation-id, never a fabricated remote operation ID.
 
