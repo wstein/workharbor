@@ -58,8 +58,8 @@ workspace-folder label matches the canonical source directory. Exclude staging
 and temp roles even when their local-folder labels match. Resolve symlinks in
 both host paths before comparison; macOS `/private` aliases count as equal only
 when host filesystem resolution establishes equality, never by stripping a
-prefix. Unresolvable paths or missing/ambiguous primary bindings refuse before
-side effects. The concrete plan must test this canonicalization and label-to-path
+prefix. Unresolvable source paths refuse with 68, no recognized primary match with 65,
+and ambiguous primary selection with 64, all before side effects. The concrete plan must test this canonicalization and label-to-path
 admission; labels remain usability guards, not authorization.
 
 Selection alternative B preserves the existing container name/ID model: stage
@@ -218,12 +218,27 @@ this table proposes no new exit code. Partial effects take precedence as below.
 | Exit | Proposed stage/promote case |
 |---|---|
 | 0 | Successful operation or valid dry-run with zero mutations. |
-| 64 | Invalid syntax, missing/conflicting positional selectors or unsupported flag combinations. |
-| 68 | Pre-effect conflict/validation failure: missing/ambiguous/foreign primary, collision, source/receipt mismatch, failed health verification, or protected/shared home resolution. |
+| 64 | Invalid syntax, missing/conflicting positional selectors, ambiguous primary selection or unsupported flag combinations. |
+| 65 | No recognized primary match, including a selector matching only an unlabelled foreign container. |
+| 68 | Pre-effect conflict/validation failure: wrong primary state/role, collision, source/receipt mismatch, failed health verification, or protected/shared home resolution. |
 | 70 | Required human choice/trust/confirmation absent; unattended mutation without `--yes` or required source trust. |
-| 71 | Deadline exceeded before any partial effects. |
+| 71 | Deadline exceeded before any partial effects; identify the local phase and target as described below. |
 | 72 | Cancellation/interrupt before any partial effects. |
 | 73 | Completed or uncertain mutation effects with remaining work: failed/interrupted staging, primary replacement or staging cleanup; list attempted/completed/remaining resources and recovery. Takes precedence over 71/72 after partial effects. |
+
+The selector cases follow the settled [Feature 010 local contract](../../010-host-and-workspace-panes/contracts/local-cli.md):
+no labelled match is 65, ambiguity is 64, and non-running state is 68. This does
+not change FR-067 removal's separately specified refusal mapping.
+
+For local timeout 71, propose printing the phase that timed out and the selected
+primary name/full ID if already resolved; otherwise say the target is unresolved.
+If a candidate receipt already exists, identify that receipt and candidate too.
+Escape all displayed metadata per FR-022 and include the same structured context
+in JSON. Explicitly state that no remote operation ID exists for this local
+operation; do not invent one or imply a control-plane operation was submitted.
+ADR 0013's “operation id printed” wording needs this local reconciliation in the
+authoritative amendment before implementation. Timeout after partial effects
+remains 73 with the effect inventory, rather than 71 or a claim of no changes.
 
 `--json` uses the existing envelope in `contracts/cli/output.schema.json`, with a
 stage/promote result schema name still to be specified in the authoritative
