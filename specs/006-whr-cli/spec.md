@@ -1316,6 +1316,19 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   attempts refuse, never adopt/delete by name or retry uncertain effects.
   Full source capture/argv/capability/receipt proofs are the plan's execution gate;
   this amendment does not claim working-tree support or implementation readiness.
+
+  Proposed execution-profile revision, owner session direction 2026-10-24:
+  independent writable real Git clones with full history/dirty-index preservation,
+  normal owner Git work, non-overwriting result fetch and retained project container
+  hooks replace the unaccepted read-only/synthetic/hook-free proposal. See
+  [the explicit clone/result amendment](contracts/local-stage-promote.md#proposed-cloneresult-revision-owner-session-direction-2026-10-24)
+  and [technical proposal](contracts/local-stage-execution-profile.md). Fetch adds
+  objects/new operation refs, not checkout/merge/current-branch changes; source
+  worktree preservation does not imply all original Git bytes remain unchanged.
+  The proposed refresh path and remaining byte-binding conflicts require exact
+  artifact review/approval before code; this note registers no flag or new task
+  and preserves D1/D2, no-host-hook promote and FR-067.
+
 - **FR-069**: `whr workspace drift --local` (or `whr workspace ls --local --drift`) MUST perform a read-only comparison between
   the bundle references pinned in the workspace configuration (`.devcontainer/bundle-pins.json`, `devcontainer.json`, or bundle locks)
   and the actual mounted image/volume references and version identities on the running container (#143). It lists, per bundle:
