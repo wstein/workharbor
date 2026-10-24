@@ -68,7 +68,7 @@ with a private Unix listener and fake Docker executable, covering dry-run parity
 fixed full-ID mutation, JSON/schema and credential canaries. This is fixture
 evidence, not a real Docker operation or an installed binary acceptance test.
 
-## Current Anchorage naming limitation and owner question
+## Current Anchorage naming limitation and owner decision
 
 The [Opus review of #226](https://github.com/wstein/workharbor/pull/226#pullrequestreview-5637841455)
 identified a real usability limit of the settled FR-067(e) rule, not a code
@@ -80,13 +80,14 @@ such homes as protected and refuses staging/temp cleanup with 68 and zero mutati
 against the currently mounted primary home. The Makefile's actual-primary
 comparison is different and is not substituted for the approved rule.
 
-Owner question before FR-068 cleanup or Anchorage #14 acceptance: retain this
-whole-prefix protection and choose compatible staging/temp naming, or approve an
-explicit spec amendment defining different protection semantics? Also confirm
-that container-only refusal remains intended under “resolve to, unlink, or delete.”
-Until resolved, whr cannot clean up existing Anchorage staging/temp containers
-using that home template. No flag, force mode or undocumented fallback bypasses it.
-This PR retains the settled code guard; changes to Anchorage are outside its scope.
+[Owner decision, 2026-10-24](https://github.com/wstein/workharbor/pull/226#issuecomment-6382864474):
+keep the safe refusal unchanged. Removing Anchorage staging/temp containers with
+these protected home names is **not covered by this task**, including
+container-only removal without --volumes. No flag, force mode or undocumented
+fallback bypasses the guard. A later change to FR-067(e), for example distinguishing
+the role in volume names, requires its own owner decision and its own task.
+This task changes neither the code guard nor Anchorage's volume naming and does
+not claim acceptance of that excluded cleanup path.
 
 ## Remaining gates
 
