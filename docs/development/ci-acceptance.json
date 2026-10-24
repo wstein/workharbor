@@ -1917,7 +1917,8 @@
       "WorkHarborWeb.OwnerShellTest/test read only page source excludes domain persistence raw HTML and event pushes",
       "WorkHarborWeb.OwnerShellTest/test shell refresh performs no domain reads or writes",
       "WorkHarborWeb.TransportSecurityTest/test owner assets are served narrowly without loosening authentication policies",
-      "WorkHarborWeb.TransportSecurityTest/test owner client selects guarded socket without longpoll or embedded credentials"
+      "WorkHarborWeb.TransportSecurityTest/test owner client selects guarded socket without longpoll or embedded credentials",
+      "WorkHarborWeb.OwnerShellTest/test owner routes permit only read pages and existing controller POST exceptions"
     ]
   }
 }
