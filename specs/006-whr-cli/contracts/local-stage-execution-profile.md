@@ -1,5 +1,9 @@
 # Proposed local stage/promote execution profile
 
+Current authority: [owner acceptance of 2026-10-24](#owner-acceptance-2026-10-24)
+supersedes the historical pending-approval statements below. The accepted technical
+body is retained unchanged.
+
 Status: **revised proposal; S0 incomplete**, 2026-10-24. The owner explicitly asked
 in this session to revise the prior profile before implementation and specified:
 (1) a writable independent Git clone with full history and ordinary commits,
@@ -666,3 +670,24 @@ Owner approval concerns this concrete revised profile/amendments, not reapproval
 of D1/D2/naming/deletion. Exact-profile acceptance of the cooperative phase-binding amendment, independent
 review and required checks remain pending; native Linux/macOS evidence later establishes support.
 Full T038/T039 dependencies/checkmarks and all live-operation gates are unchanged.
+
+## Owner acceptance (2026-10-24)
+
+The owner explicitly accepted [PR #236](https://github.com/wstein/workharbor/pull/236)
+at exact revision `115dc61c5bf40d4426fd19573bbe57e2e878c62c` in the current owner
+session and authorized Package B implementation per the
+[candidate-home task proposal](candidate-home-cleanup-task-proposal.md), one PR per
+bounded unit. This records the owner's acceptance, not acceptance inferred from a
+merge. The accepted profile's Git blob is
+`36eef687ed17cb5450f6cc440c88bb909fc4c76c`, also present unchanged at implementation
+base `94c97b453f1421483712814d36c5d5b3582062d5` before this status record.
+
+The first unit is deliberately a non-effectful candidate-home planning and binding
+library: independent random home identity, immutable mount projection and strict
+observed identity admission for a future private receipt. It does not allocate a
+volume, persist intent/receipt/lock, start a candidate or complete the allocation
+matrix row. Stage orchestration, complete collision/recheck/ownership correlation,
+remaining cleanup units and native host evidence remain separate work. No T038,
+T039 or T040 checkbox or dependency changes here. FR-067 and its entire protected
+Anchorage-home guard remain unchanged. No Docker, build, hook, install, runtime
+activation, deployment or merge operation is authorized by this status record.
