@@ -60,3 +60,51 @@ proposal wording; the authoritative resolution is #168, not completion of T010.
 [#173](https://github.com/wstein/workharbor/pull/173) supply documentation, not
 missing runtime implementation. No Feature 008-specific test package exists to
 run at this baseline. Its original approval and live-operation gates are unchanged.
+
+## Feature 009: implemented libraries and open integration
+
+[Tasks](../../specs/009-host-setup-wizard/tasks.md) retain their criteria and
+dependencies. This reconciliation marks only T001 and T004's delivered library
+scope, based on the source/tests below. It does not invent a historical aggregate
+task-acceptance record: older #180/#198 descriptions kept completion separate;
+this new status assessment is itself subject to the package's independent review
+and owner merge. Owner-Mac measurements and live-operation gates are not checked.
+
+| Task | Main evidence / remaining reason | Status |
+| --- | --- | --- |
+| T001 | [#174](https://github.com/wstein/workharbor/pull/174), [#180](https://github.com/wstein/workharbor/pull/180); `hostsetup/catalogue/{catalogue,production}.go`, `production_test.go: TestInitialCatalogueEntries` proves exact 13 IDs/defaults/four config markers/minimums; `assets/README.md` records owner H40 measured minimums. Loader/schema tests pass. | CHECKED: catalogue library criteria evidenced; #176's remaining test-quality follow-up stays open. |
+| T002 | `hostsetup/{detect,plan,native}/`; `TestDetectStates`, `TestDetectCLTGitShimNotExecuted`, `TestPlanHashAndClasses` and fixture/macOS CI exist. Owner-Mac Cellar/Caskroom/shim measurement receipt required by task absent. | OPEN: source delivered, explicit measurement acceptance missing. |
+| T003 | `hostsetup/pkgmgr/`, [#201](https://github.com/wstein/workharbor/pull/201)/[#202](https://github.com/wstein/workharbor/pull/202); `TestBrewArgvAndEnvFixed`, privilege/timeout/network/canary tests and native ownership tests. | OPEN: substantial library implementation; T002 prerequisite acceptance remains missing. Real privileged use is OG-9, not inferred from fakes. |
+| T004 | [#198](https://github.com/wstein/workharbor/pull/198)/[#207](https://github.com/wstein/workharbor/pull/207); `hostsetup/dotfiles/{dotfiles,native_unix}.go`, `TestDotfileDiffBackupAtomic`, consent/symlink/drift/dry-run/failure tests and native descriptor/race/rollback tests; macOS dotfiles CI exists. | CHECKED: temp-home library criteria evidenced; no actual user-home mutation/acceptance claimed. |
+| T005 | `hostsetup/gitmove/` and move/refusal/rollback tests absent; 008/T005 port absent. | OPEN: not implemented. |
+| T006 | [#194](https://github.com/wstein/workharbor/pull/194)/[#195](https://github.com/wstein/workharbor/pull/195)/[#197](https://github.com/wstein/workharbor/pull/197); `hostsetup/profile/`, sealed `plan/apply.go`, durable lock/protocol/checkpoint and adapter tests, `TestRerunIsNoOp`, `TestRunLockExclusive`. | OPEN: source delivered; T002 prerequisite and aggregate engine acceptance incomplete. |
+| T007 | `hostsetup/fix/` and setup/fix parity tests absent. Existing doctor and router callback are prerequisites, not the repair engine. | OPEN: not implemented. |
+| T008 | [#203](https://github.com/wstein/workharbor/pull/203); `hostsetup/plan/{exit,result}.go`, `route.go`; `TestExitMappingMatchesADR0013`, `TestPrecedence73`, `TestResultRedaction`, `TestLinuxSetupRoutesToEnrollment`. | OPEN: internal result/router only; AP-6 public result/reason decision and schema half remain gated. |
+| T009 | AP summaries/text applications exist, but required `amendments.md` is absent on main; #183 explicitly omitted unpublished historical proposal. | OPEN: required deliverable/acceptance missing. |
+| T010 | `hostsetup/wizard/` and setup-specific prompt/opt-out/state tests absent. 006 wizard is only a prerequisite. | OPEN: not implemented. |
+| T011 | No `commands/setup*.go`, macOS setup/doctor-fix registration or host-profile checks. | OPEN: integration absent; AP-6 and named amendment gates remain. |
+| T012 | [#166](https://github.com/wstein/workharbor/pull/166); Feature 006 amendment texts already applied, as task records. | OPEN: retained owner acceptance gate; do not reapply texts or infer exact final acceptance. |
+| T013 | [#167](https://github.com/wstein/workharbor/pull/167), merge `7d870fa7710ad2ae0318463bb3ad990d2c8376c9`; ADR 0014 host setup/fix text exists. | OPEN: AP-6 and exact owner-gate acceptance remain separate. |
+| T014 | Feature 008 carrier text is applied at `9d297da28887ceee35ed6e5669647f07ffb4f220`; [#168](https://github.com/wstein/workharbor/pull/168) records the resolution. | OPEN: task explicitly retains remaining acceptance; not missing text to reapply. |
+| T015 | Several libraries and checks exist, but missing integration/tasks and owner measurements prevent full acceptance. | OPEN: acceptance table, remaining prerequisites and owner evidence incomplete. |
+
+Source paths in this table are beneath `apps/whr/internal/`. The audit reran
+`go test -timeout 90s ./internal/hostsetup/...` (all nine packages passed) and
+`go vet ./internal/hostsetup/...`. No brew, sudo, runtime activation or owner-host
+operation was run. macOS CI is existing evidence, not a new owner-Mac observation.
+
+[#176](https://github.com/wstein/workharbor/issues/176) stays open: production
+`TestInitialCatalogueEntries` addresses its exact-entry finding, but isolated
+agent ID/command rejection, reverse cask/tap mismatch, privileged/host maxima and
+a duplicate-requires fixture independent of self-cycles still need tests. No
+issue is closed or given a completion label by this package.
+
+## Validation boundary
+
+At the audit baseline, focused `TestLocal|TestManifest` tests passed in
+`internal/localdocker`, `internal/localshell` and `internal/workspacecfg`. The
+standalone optional Herdr suite passed all 37 tests; the palette verifier passed.
+These are source/fixture checks, not SC-009 host evidence. Repository/link,
+spelling and whitespace checks are recorded on the PR head. Full local
+`make check` and required CI results must be reported separately; no absent check
+or runtime gate is represented as passing here.
