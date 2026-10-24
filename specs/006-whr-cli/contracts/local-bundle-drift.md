@@ -62,30 +62,26 @@ source unsupported. At least one bundle is required.
 
 Each pin must have exactly one matching string in `mounts`, with `type=volume`,
 matching `source` and `target`, and bare `readonly`; bare `volume-nocopy` is optional.
-All mount strings normalize the admitted
-[Docker CLI option aliases](https://raw.githubusercontent.com/docker/cli/master/opts/mount.go)
-before validating values, detecting duplicates or determining bundle relevance:
-`src` becomes `source`, `dst` and `destination` become `target`, and `ro` becomes
-`readonly`. Valid aliases, including reordered options, produce the same pins and
-reports as canonical keys. The normalized key set remains `type`, `source`,
-`target`, `readonly`, `volume-nocopy`; unknown keys are unsupported. Key spelling
-is lowercase and case-sensitive in this bounded reader; no case folding is added.
+The engineering design accepts only canonical mount keys: `type`, `source`,
+`target`, `readonly`, and `volume-nocopy`. Every mount string is checked against
+this closed set before bundle relevance is determined. Aliases `src`, `dst`,
+`destination`, `ro`, and every other unknown key make the pin source
+`cannot_determine`, even when the mount would otherwise match a valid pin.
+No option-name normalization or case folding is performed.
 
-Duplicate normalized keys refuse even when their values are equal, including a
-canonical key combined with an alias or two different aliases of the same key.
-Both `readonly` and `ro` must be bare flags; assigned forms (including `ro=`,
-`ro=true` and `ro=false`) remain unsupported. Normalizing names does not admit
-additional Docker options, value formats or parsers. Every mount under
-`/opt/bdock` or with a `bundledock-` source after normalization must correspond to
-a pin; aliases cannot hide an undeployed bundle as an inert mount. Conflicting,
-missing or opaque declarations are undetermined.
+Duplicate canonical keys are refused even when their values are equal. Combining
+a canonical key with an unsupported alias also refuses. `readonly` must be a bare
+flag; its assigned forms remain unsupported. Every mount under `/opt/bdock` or
+with a `bundledock-` source must correspond to a pin; unknown keys cannot hide an
+undeployed bundle as an inert mount. Conflicting, missing or opaque declarations
+are undetermined.
 
 Every `target` must also be an absolute, clean POSIX path before relevance is
 classified (`path.IsAbs(target)` and `path.Clean(target) == target`). Empty or
 relative paths, repeated separators and dot components are refused, including
 `//opt/bdock/hidden`, `/opt//bdock/hidden` and `/opt/./bdock/hidden`. The reader
 does not normalize these spellings into supported declarations. After
-normalized-key and target validation, non-bundle mounts remain inert. Mount objects
+canonical-key and target validation, non-bundle mounts remain inert. Mount objects
 are not part of this initial protocol.
 
 ## Comparison, output and exits

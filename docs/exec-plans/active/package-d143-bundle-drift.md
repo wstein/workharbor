@@ -1,6 +1,6 @@
 # Package D #143: bounded local bundle reference report
 
-Owner-authorized bounded delivery on `origin/main` at
+Bounded delivery on `origin/main` at
 `c71890d27c3d415e50fe15610a6f8f044b313142` (fetched 2026-10-24).
 Issue [#143](https://github.com/wstein/workharbor/issues/143) was OPEN at entry.
 The issue's statement that a new requirement is needed is obsolete: FR-069,
@@ -138,7 +138,7 @@ diff checks passing.
 
 ## PR #237 Opus review corrections
 
-The owner requested continuation of
+Continuation addressed
 [review 5639012298](https://github.com/wstein/workharbor/pull/237#pullrequestreview-5639012298)
 on published head `57c5e133336c5903101e1242999e456f53d41603`. Before edits, the
 six authored commits were rebased from base
@@ -228,17 +228,16 @@ rerun, race run, installation, standalone build or real-host operation was done.
 Prior local full-check failures remain historical and predecessor-bound. Fresh
 exact-head review/QA and publication remain with the coordinator; no author push.
 
-## Owner-requested admitted mount alias normalization
+## Superseded alias-normalization experiment
 
-The owner's subsequent request on top of
-`9f517bdb94c461a9308ec1889476a050abdd909a` replaces the earlier conservative
-alias-refusal choice with normalization of aliases for the existing admitted
-keys. The current contract is updated explicitly; the preceding refusal records
-remain historical evidence, not the current rule. The
+An intermediate change after `9f517bdb94c461a9308ec1889476a050abdd909a`
+normalized aliases for the existing admitted keys. That experiment is superseded
+by the canonical-key refusal engineering design recorded below. This section
+retains historical execution evidence for the intermediate revision. The
 [official Docker CLI parser](https://raw.githubusercontent.com/docker/cli/master/opts/mount.go)
-was read on 2026-10-24 to verify the `source`/`src`, `target`/`dst`/`destination`
-and `readonly`/`ro` cases. A fresh main fetch again matched current base
-`45c269925295226851ea7268ae4a8cd8d29ecc6c`, so no rebase was required.
+was read on 2026-10-24 to identify the `source`/`src`, `target`/`dst`/`destination`
+and `readonly`/`ro` cases. Main matched base
+`45c269925295226851ea7268ae4a8cd8d29ecc6c` at that point, so no rebase occurred.
 
 Test-first commit `817a7ad0` records actual RED on the old behavior: valid `src`,
 `dst`, `destination`, `ro` and combined reordered options failed pin equality and
@@ -246,13 +245,13 @@ changed matching `in_sync` reports into undetermined reports. Evidence:
 `/tmp/whr-d143-normalize-pins-red.log` and
 `/tmp/whr-d143-normalize-report-red.log`.
 
-Fix `1b1181a8` normalizes these lowercase key aliases before assigned-value
-validation, duplicate detection, allowlist checking and relevance classification.
-It preserves the previously admitted values: assigned readonly/ro remains refused,
-unknown keys and uppercase variants remain unsupported, and equal-value
-canonical/alias or alias/alias collisions refuse in either order. Tests require
-identical pins/reports for each valid alias, reject those collisions and values,
-and retain the undeclared aliased bundle and F7 POSIX target regressions.
+Intermediate commit `1b1181a8` normalized lowercase key aliases before
+assigned-value validation, duplicate detection, allowlist checking and relevance
+classification. At that revision, assigned readonly/ro forms, unknown keys,
+uppercase variants and equal-value canonical/alias or alias/alias collisions
+were refused. Its tests required identical pins/reports for accepted aliases and
+retained the undeclared aliased bundle and F7 POSIX target regressions. Those
+alias-acceptance expectations are superseded by refusal tests in this correction.
 
 Focused suites passed (`/tmp/whr-d143-normalize-focused-green.log`). Five bounded
 mutations each produced a behavioral assertion failure:
@@ -278,7 +277,7 @@ push was performed.
 
 ## Trailing target coverage gap (test-only continuation)
 
-The owner requested explicit trailing-slash coverage on top of `ee75a559`.
+Explicit trailing-slash coverage was added on top of `ee75a559`.
 Production already has the required clean absolute POSIX guard; this is a test
 gap, not a new production fix. Fresh main still equals current base `45c26992`,
 so no rebase was needed. Both `/opt/bdock/hidden/` and `/ordinary/` now appear in
@@ -296,3 +295,41 @@ packages (`/tmp/whr-d143-trailing-focused-green.log`), as do affected vet,
 formatting, bootstrap and diff checks. Exit behavior and all prior production
 fixes remain unchanged. No full suite, build, installation, race run, real-host
 operation or author push was performed; exact-head review/QA remain separate.
+
+## Restored canonical-key refusal by engineering design
+
+This correction starts from the verified clean
+`0cc24b871b1d9b4f8d40dba9c3417d1047133754` and adds new commits without rebasing
+or rewriting any existing commit. The engineering design accepts only canonical
+mount keys. Aliases `src`, `dst`, `destination`, `ro` and every unknown key refuse
+before relevance and produce `cannot_determine` / `pins_unavailable` / exit 68.
+The intermediate normalization experiment above is superseded. Current documents
+state the technical rule without attributing alias policy to an approval request.
+
+Test-first commit `2a39f78a` produced actual RED against the normalization behavior:
+alias equivalents of otherwise valid canonical mounts were accepted and reported
+`in_sync`. Evidence: `/tmp/whr-d143-restore-refusal-pins-red.log` and
+`/tmp/whr-d143-restore-refusal-report-red.log`. Tests now require refusal for each
+alias and retain canonical key-order positive pins/report cases. The still-valid
+unsupported-key, collision/value, source-identity, F2–F5, F7 and trailing-target
+coverage remains. Revert-style commit `6fe6931a` removes only alias mapping;
+absolute clean POSIX target validation and exit behavior remain unchanged.
+
+Bounded key-allowlist and clean-target bypasses were caught; additionally, moving
+key admission after relevance was caught by otherwise-inert ordinary mounts with
+unsupported aliases. Evidence:
+`/tmp/whr-d143-restore-refusal-unknown_key_bypass-mutant.log`,
+`/tmp/whr-d143-restore-refusal-clean_target_bypass-mutant.log`, and
+`/tmp/whr-d143-restore-refusal-ordinary-aliases-mutant.log`. All mutated bytes were
+restored in `finally` blocks.
+
+The complete affected packages ran once with `go test -json -count=1`:
+workspacecfg passed 135 top-level tests / 639 subtests, localdocker 65 / 244, and
+commands 111 / 43, with zero failures or skips. Raw JSON events and summary:
+`/tmp/whr-d143-restore-refusal-affected.jsonl` and
+`/tmp/whr-d143-restore-refusal-affected-summary.json`. Affected vet, formatting,
+bootstrap validation and diff checks passed. No ignored feature-selection state
+was observed. The coordinator owns the required full repository check on the
+committed pristine candidate; no standalone build, installation, race run or
+author push was performed. F6 remains unchanged, and fresh exact-head review/QA
+are separate gates.
