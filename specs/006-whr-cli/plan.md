@@ -450,6 +450,12 @@ subpackages of T038, not additional task IDs or independent feature completion:
 | S3: promotion/cleanup | `TestLocalPromoteUsesVerifiedImage`, `TestLocalPromotePreservesPrimaryHome`, `TestLocalPromoteConfirmsPaneInterruption`, `TestLocalPromoteRequiresExplicitHomeDeletionConsent`, `TestLocalPromoteNeverBypassesProtectedHome`, `TestLocalPromoteStaleReceiptRefuses`, `TestLocalPromotePartialFailureInventory`. | S2 accepted; preflight full cleanup plan before primary replacement, verify new primary before candidate cleanup. |
 | S4: offline composition/evidence | Default-handler fake Docker/CLI integration, exact argv/minimal-env canaries, canonical JSON, no-local refusal64, deadline71 before effects, interrupt72 and partial/uncertain73 precedence; all SC-024 cases. | Independent exact-head review, required CI and owner merges; task completion only for full T038 scope. |
 
+The [proposed execution profile](contracts/local-stage-execution-profile.md)
+makes the mirror/synthetic-Git capture, hook-free image promotion, bounded host
+initialization, allocation/journal and output choices concrete for independent
+review and explicit owner approval. Its remaining admission/freeze limits are
+not S0 completion. This reference adds no product authorization or task edge.
+
 S0 must resolve engineering details rather than silently introducing requirements
 in source. In particular: source coverage must include executed build/hook/smoke
 bytes and relevant submodules; a live pathname recheck alone is not byte binding.
