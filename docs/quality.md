@@ -10,6 +10,7 @@ Reviewed: 2026-10-14. Owner: project maintainer.
 | Feature 004 local automation | [T017 evidence](../specs/004-speckit-symphony-automation/quickstart.md#t017-combined-local-acceptance): 422 qualified cases at `ebe4833`; raw 41/five failures separately | T001–T017 local tooling/fixture acceptance; T018–T020 pending, live guard/provider/isolation/safe-label gates blocked |
 | Product runtime | Accepted foundation/auth/protocol, HTTP1 mitigation and bounded T008 transport at64541c1; evidence below | Lifecycle/provider/browser/installable-pilot acceptance pending |
 | Docker / persistence / PTY | Acceptance scenarios only | Real-host tests required |
+| Local bundle reference drift (#143) | [Bounded offline evidence](exec-plans/active/package-d143-bundle-drift.md); JSONC pins and fake-Docker report tests | Reference alignment only; final qualified checks, independent review and real-host evidence remain separate gates |
 | Symphony | Pinned workflow and operator runbook | Not installed or activated |
 | Resource footprint | Bounded T008 loopback TLS fixtures measured below | No capacity/load acceptance |
 | License | EUPL-1.2 project license; upstream MIT notice retained | Recorded |
