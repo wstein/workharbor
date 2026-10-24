@@ -87,7 +87,9 @@ for the original implementation.
 ## Checks and limits
 
 From `apps/whr`, `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go vet ./internal/scaffold`
-passed. From the repository root, `gofmt -l` on both affected Go files produced
+passed. The complete affected package, `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off go test -count=1 ./internal/scaffold`,
+also passed (exit 0, 21.188 seconds) before handoff; this was a source test run
+without race instrumentation. From the repository root, `gofmt -l` on both affected Go files produced
 no output, `python3 -I -B scripts/check_repo.py`, `typos` on the four changed
 files, and `git diff --check` passed. The source checker is a bootstrap check
 and does not establish product runtime acceptance.
