@@ -1,8 +1,8 @@
 # T033 devcontainer reuse evidence
 
 Measured on 2026-10-24 against base
-`86008fab4b0131187c3d3b244fef94a48063b48b`, with test commit
-`d6766bfe5dd9daf1a52a09579fa99b990e7c7bea`. Product sources are unchanged.
+`86008fab4b0131187c3d3b244fef94a48063b48b`, with the original test version. The current test commit is listed in the PR
+history. Product sources are unchanged.
 This record adds applied preservation evidence for T033, FR-049 and FR-046a;
 it does not close the feature, T030 or its remaining SC-018 safety evidence.
 
@@ -26,16 +26,20 @@ public command's actual application, independently of the wizard.
 
 ## Added coverage
 
-Both `new_manifest` and `replace_manifest` execute dry-run, write and rerun.
+Both new-manifest and replacement-manifest cases execute dry-run, write and
+rerun, each with LF JSONC and CRLF JSONC without a final newline.
 The replacement begins with an existing v1 manifest and supplies
 `--overwrite=workharbor.json`; the selected custom path contains a space.
 After every mode the test checks bytes, full mode, filesystem identity
 (`os.SameFile`) and modification time for both the selected custom JSONC file
 and the original default devcontainer, plus `.bashrc`, `.profile`, `.zshrc`
 and `.config/fish/config.fish`. Fixtures include custom PATH and GOBIN settings.
-A fixed old modification timestamp makes metadata rewrites observable.
+The `.bashrc` fixture is explicitly set to mode 0750 before observation, so
+executable-bit preservation is checked alongside the other 0600 fixtures.
+A fixed old modification timestamp makes modification-time changes observable.
 
-The test also checks the selected file's reuse action, absence of applied actions
+The test also requires exactly one selected-file JSON action with `action: reuse`
+and `applied: false`, absence of applied actions
 on dry-run/rerun, no dry-run manifest change, and the written manifest's selected
 path. An absolute startup-hook marker must remain absent after every mode.
 These are configuration-preservation checks; no shell or container is launched.
@@ -106,3 +110,52 @@ the reachable test-commit citation reflects the rebase. Source checks, spelling
 and whitespace checks passed on the refreshed tree. Tests were not repeated:
 the newly merged commits change tests and documentation, not product sources.
 Independent review must cover the final exact head before publication.
+
+## Review corrections and remaining evidence gaps
+
+The first review covered historical candidate
+`933872920d60d7a176b5f301137c3c5143aae04c` ([review](https://github.com/wstein/workharbor/pull/255#pullrequestreview-5640394770)).
+Before these corrections, all three owned commits were purely rebased from
+`79d2f4eb336514c27b93d220edf7f5c6efe49b0d` onto
+`d18ccc87926084ca3f51d08774f7a627606b255e`; `git range-diff` showed `=`
+for all three commits. Final exact-head review and independent QA remain pending
+at this author checkpoint; the historical review is not approval of this tree.
+
+The review's M6 probe identified an open unsafe-path/symlink refusal-reason gap:
+the older `TestInitDevcontainerPathTraversalRefused` and
+`TestInitDevcontainerSymlinkRefused` assert exit codes only. In particular, an
+unrelated downstream invalid-configuration refusal can preserve exit 68 while
+a symlink guard is absent, and M6 survived. These older tests therefore do not
+prove the intended refusal reason or complete path-safety acceptance. This
+preservation-only change leaves that gap open, with a follow-up to strengthen
+the old refusal tests using a source-valid hostile fixture and reason-specific
+assertions. It does not edit their file during parallel authoring or claim all
+T033 acceptance is complete.
+
+The portable metadata observations also have a deliberate limit: an in-place
+write of identical bytes that preserves mode and inode and restores mtime is
+invisible to this test. It does not inspect platform-specific ctime or audit all
+write system calls, so byte/metadata equality is not proof that no write occurred.
+
+For the selected-action correction, a freshly compiled Go overlay removed only
+the selected custom path from `result.Actions` immediately before returning the
+JSON result in `commands/init.go`. Human preview and filesystem behavior were
+left intact. Command:
+
+```text
+go test -overlay=/tmp/whr-t033-json-row-overlay.json ./apps/whr/internal/commands -run '^TestInitDevcontainerReusePreservesAppliedStartupFiles$' -count=1
+```
+
+Exit 1 reached the new assertion in all four variants:
+`dry: expected exactly one selected-file JSON action, got 0`. This is a compiled
+assertion failure, not a setup failure. The same focused command without the
+overlay then passed all four variants on unchanged product sources (exit 0).
+`go vet ./apps/whr/internal/commands`, source checks, spelling, formatting and
+whitespace checks passed after the corrections. The full commands suite was not
+repeated for this bounded delta; its earlier run remains historical evidence.
+
+The new preservation test's explicit CI inventory binding is a follow-up after
+PR #251 merges and releases `docs/development/ci-acceptance.json`. The complete
+commands package currently discovers the test, but this record does not claim
+that the new literal ID has an explicit acceptance-inventory binding. No inventory
+file is changed here.
