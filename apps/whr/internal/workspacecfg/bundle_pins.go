@@ -116,6 +116,16 @@ func readBundlePins(ctx context.Context, d *dir) ([]BundlePin, error) {
 		values := map[string]string{}
 		for _, opt := range opts {
 			k, v, assigned := strings.Cut(opt, "=")
+			// Normalize the admitted Docker CLI aliases before value validation and
+			// duplicate detection, so canonical/alias collisions cannot overwrite.
+			switch k {
+			case "src":
+				k = "source"
+			case "dst", "destination":
+				k = "target"
+			case "ro":
+				k = "readonly"
+			}
 			if assigned && (k == "readonly" || k == "volume-nocopy") {
 				return fail()
 			}
@@ -124,8 +134,8 @@ func readBundlePins(ctx context.Context, d *dir) ([]BundlePin, error) {
 			}
 			values[k] = v
 		}
-		// Refuse aliases and unknown keys before deciding whether a mount is a
-		// bundle declaration. Otherwise src/dst can hide an undeployed bundle.
+		// Refuse unknown keys after normalization and before bundle relevance.
+		// Otherwise unsupported options could conceal an undeployed bundle.
 		for k, v := range values {
 			if k != "type" && k != "source" && k != "target" && k != "readonly" && !(k == "volume-nocopy" && v == "") {
 				return fail()
