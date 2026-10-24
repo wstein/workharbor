@@ -36,6 +36,32 @@ primary. Recognized source changes after capture require fresh trust, not a stal
 commit-only fingerprint. Candidate clone data survives container/home cleanup;
 uncommitted and untracked work is retained and reported, never silently discarded.
 
+Clone root is `STATE_ROOT/DAEMON_KEY/OP/workspace/BASENAME`, where STATE_ROOT is
+the private state root below, DAEMON_KEY is the daemon/endpoint digest, OP is the
+operation ID and BASENAME is the validated original basename. Populated submodule
+clones stay at their recorded relative paths inside that root. Require caller UID
+ownership, 0700 administrative/clone-root directories, private metadata files 0600,
+and captured working-file modes (including executable bits); receipt repositories
+bind each physical clone_path, owner/mode and container mount mapping. Native
+admission must establish that the expected container user can use this read-write
+clone without changing the original source's ownership or permissions.
+
+On macOS the physical clone root must be reachable through the admitted daemon's
+already-configured file-sharing roots; do not assume every XDG_STATE_HOME or /tmp
+path is shared. Validate actual platform/path reachability, or refuse unsupported
+mount capability 68 before candidate effects. Never change Docker/OrbStack sharing
+settings, strip /private prefixes or silently relocate the clone. Native acceptance
+must exercise this exact state-root mount; source fixtures are not that evidence.
+
+Report retained clone_path and working/object bytes after success or failure.
+Container/home cleanup never removes this tree, even when apparently clean. The
+explicit removal path is the owner's manual filesystem removal of that exact
+receipt path after inspecting status, refs, transferred results and any remaining
+uncommitted/untracked work; discarding such work requires their deliberate choice.
+Do not follow a changed/symlinked path, silently delete dirty data, infer consent
+from volume flags or invent a whr clone-removal command. Preserve the receipt/ref
+mapping as the recovery record after the owner removes project data.
+
 Proposed fixed capture bounds: 100,000 filesystem entries, 2 GiB working bytes,
 64 MiB/file, 32 populated submodules, depth 8, configuration/smoke 256 KiB, pathname 4096 B;
 full Git object graph additionally 1,000,000 objects/8 GiB per operation (including all required local alternate objects). Exceeding
@@ -524,7 +550,7 @@ Future source PR adds schemas/command table together, not in this docs PR.
 | stageResult/promoteResult | status enum(preview,staged_verified,staged_unverified,promoted,refused,partial); unverified_reason nullable unverifiedReason; phase enum(journal states plus preflight); recovery_id nullable string; fingerprint nullable digest; primary nullable resource; candidate nullable resource; home nullable resource; verification nullable verification; effects array(effect), max 256; recovery array(step), max 32; repositories array(repository), max 33; result_refs array(resultRef), max 1024 |
 | unverifiedReason | enum(missing_smoke,failed_smoke,failed_health,stale_candidate_inputs); no free-form value |
 | resource | kind enum(container,volume,image); name nullable string; id nullable string (container full64hex, image sha256, volume name); daemon_id string |
-| repository | source_path string; clone_path string; head_oid string; object_format enum(sha1,sha256); dirty bool; uncommitted_retained bool |
+| repository | source_path string; clone_path string; clone_owner_uid nonnegative integer; clone_root_mode const(0700); container_workspace_path string; head_oid string; object_format enum(sha1,sha256); dirty bool; uncommitted_retained bool |
 | resultRef | repository_path string; export_ref string; target_ref string; oid string; state enum(planned,created,uncertain,remaining) |
 | verification | policy enum(health,smoke,health_and_smoke); status enum(not_requested,missing,passed,failed,stale); binding_mode const(cooperative_quiescence); quiescence enum(caller_acknowledged,not_acknowledged); pre_input_digest digest; post_input_digest nullable digest; image_id digest; input_digest digest; observed_at UTC timestamp; output_digest nullable digest |
 | repositoryBinding | source_path string; git_dir string; common_dir string (physically resolved original repository paths); object_format enum(sha1,sha256); original_head_oid oid; binding_digest sha256 digest |
