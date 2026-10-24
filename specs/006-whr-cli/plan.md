@@ -1,5 +1,13 @@
 # Implementation Plan: WorkHarbor installable pilot
 
+## Web frontend planning exception (2026-10-24)
+
+The proposed [read-only frontend first increment](contracts/web-frontend-first-increment.md)
+records the owner-requested Step 0 after the current T029/T030 PR. It requires
+automatic independent Opus review and explicit owner approval of the exact plan
+revision before W1; deferred backend work, task dependencies and completion gates
+remain unchanged. This pointer authorizes no implementation or live operation.
+
 ## Owner delivery order (2026-10-20)
 
 Deliver validator/CLI foundation → usable init core → wizard/devcontainer reuse/
