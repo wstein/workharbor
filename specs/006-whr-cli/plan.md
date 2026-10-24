@@ -384,3 +384,97 @@ set per version, type-exact `schema_version`) and a shared-vectors test in `apps
 touches accepted provider inputs. In-flight rebases: a branch with a started single-task state (`.symphony/single-task.json`)
 finishes its completion before rebasing onto a sibling merge, or the owner re-baselines it; otherwise merges of siblings are
 serialised in graph order. Dependent branches start from the merged `main` that contains their prerequisites.
+
+## T038 stage/promote amendment (2026-10-24)
+
+Status: proposed direction/interaction reconciliation, **not a ready execution
+plan**. Owner chat selected container name/full ID plus explicit source directory,
+fingerprint trust, and Docker healthcheck or existing workspace smoke over stdin.
+Exact-head independent review and owner approval of this spec/plan/tasks amendment
+remain required. Use [the local contract](contracts/local-stage-promote.md);
+[the earlier brief](contracts/local-stage-promote-proposal.md) retains historical
+alternatives, not outstanding D1/D2 questions. No source behavior is implemented.
+
+### Accepted foundation and boundaries
+
+PR #226 is merged (`ae9cbb7410df42e62687a476ccdd6f6d1abb25da`): reuse
+`apps/whr/internal/localdocker` endpoint/discovery, fixed-vector process boundary,
+minimal environment and guarded removal; `internal/workspacecfg` supplies safe
+manifest/devcontainer reads and validation. Existing CLI/error/output/escaping
+foundation is present. Do not build these again or mark T025–T037 complete from
+this inventory; the WP0 source/test evidence remains authoritative.
+
+There is no local official-CLI provisioning adapter in whr. The host-agent Docker
+provider has relevant official resource/hook phase, full-override and immutable
+image semantics, but its internal packages require authenticated remote admission
+and are inside another Go module. It is not an importable local API. Do not forge
+its contexts or add T009/control-plane prerequisites to T038. Any narrowly shared
+pure-source extraction needs explicit scope review; neither broad copying nor a
+second Dev Container semantics implementation is an approved shortcut.
+
+The current official companion pins Dev Container CLI 0.89.0; its
+[CLI source](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/devContainersSpecCLI.ts)
+exposes the relevant up/read-configuration/run-user-commands/exec operations.
+`--override-config` replaces the full document. Existing provider evidence says
+skip-post-create suppresses container hooks, not initializeCommand; source/effective
+admission and separate hook phases remain mandatory engineering work. Pinned source
+inspection is not proof of installed tools or actual Docker behavior.
+
+### Cleanup reconciliation without changing FR-067(e)
+
+Keep the [recorded owner decision](https://github.com/wstein/workharbor/pull/226#issuecomment-6382864474):
+all staging/temp `anchorage-home-*` targets refuse 68 even container-only. Current
+Anchorage cleanup remains excluded, with no recovery path promised. No existing
+home is renamed, adopted or exempted and no protected-prefix test is weakened.
+
+For new whr candidates, propose a separately reserved `whr-stage-home-<opaque-id>`
+volume, verified through the complete effective mount plan. This is a new allocation,
+not a change to existing Anchorage names or FR-067(e). To satisfy FR-067(d), propose
+mutating promote require `--volumes --force` plus confirmation (and --yes unattended)
+for the exact candidate home. Absence is 70 before replacing the primary. Private
+removal APIs must not manufacture that consent. This explicit surface addition
+needs owner approval with this amendment; D1/D2 chat direction alone did not approve it.
+
+### Work packages and execution gate
+
+The T038 task and T039 dependency remain unchanged. The following are ordered
+subpackages of T038, not additional task IDs or independent feature completion:
+
+| Package | Verifiable output / red-first coverage | Gate |
+|---|---|---|
+| S0: complete execution profile | Capability matrix, bounded capture/fingerprint and byte-binding algorithm, exact argv/environment/budgets, immutable-image promotion design, new-home/cleanup consent proof, durable receipt/lock/recovery and closed output/schema contract. Cover the actual Anchorage config/hook shape and explicit unsupported cases. | Independently reviewed exact technical contract and owner-approved spec/plan/tasks before S1 product code. This amendment leaves S0 open. |
+| S1: source/preview/trust | Pure local planning and refusal first: `TestLocalStageSelectsExactPrimaryAndSource`, `TestLocalStageRejectsUnresolvedLabel`, `TestLocalStageTrustMatchesCapturedInputs`, `TestLocalStageDryRunExecutesNoEffects`, `TestLocalStageRequiresTrustAndConsent`. Reuse current readers/discovery. | S0 complete; fake tools only; no real build/hook/Docker. |
+| S2: candidate/verification | `TestLocalStageLeavesPrimaryRunning`, `TestLocalStageReservesDistinctHome`, `TestLocalStageRefusesCollision`, `TestLocalStageRejectsChangedInputs`, `TestLocalStageHealthAndSmoke`, `TestLocalStageSmokeUsesTrustedStdin`, `TestLocalStageEscapesSmokeOutput`. | S1 accepted; prove official CLI/candidate binding, do not claim actual host acceptance. |
+| S3: promotion/cleanup | `TestLocalPromoteUsesVerifiedImage`, `TestLocalPromotePreservesPrimaryHome`, `TestLocalPromoteConfirmsPaneInterruption`, `TestLocalPromoteRequiresExplicitHomeDeletionConsent`, `TestLocalPromoteNeverBypassesProtectedHome`, `TestLocalPromoteStaleReceiptRefuses`, `TestLocalPromotePartialFailureInventory`. | S2 accepted; preflight full cleanup plan before primary replacement, verify new primary before candidate cleanup. |
+| S4: offline composition/evidence | Default-handler fake Docker/CLI integration, exact argv/minimal-env canaries, canonical JSON, no-local refusal64, deadline71 before effects, interrupt72 and partial/uncertain73 precedence; all SC-024 cases. | Independent exact-head review, required CI and owner merges; task completion only for full T038 scope. |
+
+S0 must resolve engineering details rather than silently introducing requirements
+in source. In particular: source coverage must include executed build/hook/smoke
+bytes and relevant submodules; a live pathname recheck alone is not byte binding.
+The official CLI can transform/extend images, so final-image identity during
+promotion must be demonstrated, not assumed from an image string. Existing
+Anchorage configuration has host initialization, named users, substitutions,
+mounts and runArgs beyond the remote provider's subset; the local capability
+matrix must handle or explicitly refuse them before effects and retain the actual
+intended workflow in acceptance planning. No complete dirty-tree or hermeticity
+claim is made without evidence. Close S0 before declaring this plan implementation-ready.
+
+One focused source PR per package, tests first, no race/full-suite duplication by
+every reviewer. Code and command-table/schema/freeze-test updates travel together
+only after S0. Retain independently reviewed exact heads, required CI and the
+owner's merge authority. Task T038 remains unchecked until discovery, removal,
+stage and promote all satisfy their scoped acceptance. T039 follows full T038.
+
+### Validation and live gates
+
+This amendment changes Markdown only. Run repository/link, spelling and whitespace
+checks and make check from a committed pristine checkout, recording unavailable
+local tools/raw exits honestly. It neither registers CLI flags nor changes schemas,
+so no product behavior test is added merely to mirror this prose. Required GitHub
+CI is authoritative where local Mix/Python constraints prevent a full run.
+
+Later source work needs meaningful offline fake Docker/official-CLI tests and all
+relevant existing guard regressions. Fake success does not verify actual Docker,
+image promotion, builds or owner-host panes. SC-009/T030 and Anchorage #14 retain
+separate owner live-operation gates. No resource operation, hook, install, standalone
+build or host acceptance is performed or authorized by preparing this amendment.
