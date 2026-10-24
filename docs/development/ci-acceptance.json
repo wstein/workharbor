@@ -1900,7 +1900,24 @@
       "WorkHarbor.StorageBindingTest/test first handle requires executing current scope and repeats immutably",
       "WorkHarbor.StorageBindingTest/test foreign operation storage host owner and stale intent refuse",
       "WorkHarbor.StorageBindingTest/test later approved revision retains original seed and handle",
-      "WorkHarbor.StorageBindingTest/test independent competing handles have one winner and never replace"
+      "WorkHarbor.StorageBindingTest/test independent competing handles have one winner and never replace",
+      "WorkHarborWeb.OwnerAuthTest/test expired and revoked owner credentials cannot mount",
+      "WorkHarborWeb.OwnerAuthTest/test foreign owner query injection is refused before shell reads",
+      "WorkHarborWeb.OwnerAuthTest/test management forms stay in controller and preserve dashboard cookie and logout",
+      "WorkHarborWeb.OwnerAuthTest/test mounted expiry clears the shell and requires fresh authentication",
+      "WorkHarborWeb.OwnerAuthTest/test mounted revocation stops at first denial without a repeating audit loop",
+      "WorkHarborWeb.OwnerAuthTest/test only owner browser credentials admit the live shell",
+      "WorkHarborWeb.OwnerAuthTest/test root redirects owner to the read only overview",
+      "WorkHarborWeb.OwnerShellTest/test forged events keep the page alive without state audit or payload logs",
+      "WorkHarborWeb.OwnerShellTest/test hostile HTML attributes stay inert in shared error components",
+      "WorkHarborWeb.OwnerShellTest/test hostile flash text visibly escapes every FR022 control class and HTML",
+      "WorkHarborWeb.OwnerShellTest/test overview is a live read only shell with inactive future pages",
+      "WorkHarborWeb.OwnerShellTest/test owner page CSP is exact and contains no inline scripts or styles",
+      "WorkHarborWeb.OwnerShellTest/test owner shell icons obey strict CSP",
+      "WorkHarborWeb.OwnerShellTest/test read only page source excludes domain persistence raw HTML and event pushes",
+      "WorkHarborWeb.OwnerShellTest/test shell refresh performs no domain reads or writes",
+      "WorkHarborWeb.TransportSecurityTest/test owner assets are served narrowly without loosening authentication policies",
+      "WorkHarborWeb.TransportSecurityTest/test owner client selects guarded socket without longpoll or embedded credentials"
     ]
   }
 }
