@@ -3,7 +3,7 @@
 Inspected source baseline: `628bc4ded0f96ed0ffebc501eae833fe4e2d3e5f`
 (main after owner merges #223/#224), 2026-10-24. This is the bounded
 reconciliation requested in [#145](https://github.com/wstein/workharbor/issues/145),
-following Anchorage's “init first, then lifecycle” hand-off. It does not replace
+following #145's request to reconcile before lifecycle work. It does not replace
 Feature 006 requirements or approve new behavior.
 
 ## Task matrix
@@ -45,9 +45,15 @@ criterion or approval required by those task texts.
   Mix is unavailable. Required GitHub CI on the published head remains mandatory.
 - No standalone builds, real Docker, host mutations, image activation, installs,
   provider credentials or live IDE/browser/SSH acceptance were performed.
-- Anchorage #14 could not be retrieved through the GitHub connector (404). Its
-  actual checklist state remains unknown; no closure or successful host check is
-  inferred. Feature 010 SC-009 also remains owner-operated and UNVERIFIED.
+- The GitHub connector returned 404 for Anchorage #14, but direct
+  `gh issue view 14 -R wstein/anchorage-workspace` succeeded on 2026-10-24:
+  [issue #14](https://github.com/wstein/anchorage-workspace/issues/14) is OPEN,
+  with zero task-list items and zero comments at the read.
+  It concerns a separately authorized real-Docker check of Anchorage's existing
+  devcontainer-rm/clean and FORCE=1 primary-volume protection (follow-up to #12),
+  not an unimplemented whr prerequisite or Feature 010 SC-009. No real test or
+  issue change was performed. T038/T039 offline work is not blocked by it;
+  Feature 010 SC-009 independently remains owner-operated and UNVERIFIED.
 
 ## Next delivery sequence
 
