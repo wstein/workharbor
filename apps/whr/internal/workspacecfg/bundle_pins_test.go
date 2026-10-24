@@ -239,7 +239,7 @@ func TestBundlePinsRejectNoncanonicalMountKeysBeforeRelevance(t *testing.T) {
 	}
 }
 
-func TestBundlePinsNormalizeValidDockerAliases(t *testing.T) {
+func TestBundlePinsRejectAliasesOnOtherwiseValidMounts(t *testing.T) {
 	raw := bundleConfig(t)
 	baseline, err := ReadBundlePins(context.Background(), pinDirectory(t, raw))
 	if err != nil || len(baseline) == 0 {
@@ -261,14 +261,14 @@ func TestBundlePinsNormalizeValidDockerAliases(t *testing.T) {
 				t.Fatal("alias fixture transform changed no bytes")
 			}
 			got, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
-			if err != nil || !reflect.DeepEqual(got, baseline) {
-				t.Fatalf("valid Docker alias did not preserve pins: alias=%s got=%+v err=%v", name, got, err)
+			if err == nil || got != nil {
+				t.Fatalf("unsupported alias accepted on otherwise valid pins: alias=%s got=%+v err=%v", name, got, err)
 			}
 		})
 	}
 }
 
-func TestBundlePinsRejectNormalizedAliasCollisionsAndValues(t *testing.T) {
+func TestBundlePinsRejectUnsupportedAliasesDuplicatesAndValues(t *testing.T) {
 	raw := bundleConfig(t)
 	pins, err := ReadBundlePins(context.Background(), pinDirectory(t, raw))
 	if err != nil || len(pins) == 0 {
@@ -305,8 +305,27 @@ func TestBundlePinsRejectNormalizedAliasCollisionsAndValues(t *testing.T) {
 			}
 			got, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
 			if err == nil || got != nil {
-				t.Fatalf("ambiguous or unsupported normalized alias accepted: %s pins=%+v err=%v", name, got, err)
+				t.Fatalf("unsupported alias, duplicate or value accepted: %s pins=%+v err=%v", name, got, err)
 			}
 		})
+	}
+}
+
+func TestBundlePinsCanonicalMountKeyOrderPreservesPins(t *testing.T) {
+	raw := bundleConfig(t)
+	baseline, err := ReadBundlePins(context.Background(), pinDirectory(t, raw))
+	if err != nil || len(baseline) == 0 {
+		t.Fatalf("invalid canonical fixture: %+v %v", baseline, err)
+	}
+	p := baseline[0]
+	canonical := "type=volume,source=" + p.Volume + ",target=" + p.Target + ",readonly,volume-nocopy"
+	reordered := "readonly,target=" + p.Target + ",source=" + p.Volume + ",volume-nocopy,type=volume"
+	data := strings.Replace(raw, canonical, reordered, 1)
+	if data == raw {
+		t.Fatal("canonical reorder changed no fixture bytes")
+	}
+	got, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
+	if err != nil || !reflect.DeepEqual(got, baseline) {
+		t.Fatalf("canonical key order changed pins: %+v %v", got, err)
 	}
 }

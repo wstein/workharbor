@@ -336,7 +336,7 @@ func TestBundleDriftNoncanonicalTargetCannotReportInSync(t *testing.T) {
 	}
 }
 
-func TestBundleDriftValidDockerAliasesPreserveInSyncReport(t *testing.T) {
+func TestBundleDriftAliasesCannotReportInSync(t *testing.T) {
 	source := driftSource(t)
 	p := driftPins()[0]
 	canonical := "type=volume,source=" + p.Volume + ",target=" + p.Target + ",readonly,volume-nocopy"
@@ -372,9 +372,37 @@ func TestBundleDriftValidDockerAliasesPreserveInSyncReport(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, err := c.Drift(context.Background(), socketPorts(), source, "primary")
-			if err != nil || !reflect.DeepEqual(got, baseline) {
-				t.Fatalf("valid alias changed in_sync report: alias=%s report=%+v err=%v", name, got, err)
+			if exitcode.FromError(err) != 68 || got.Status != "cannot_determine" || got.Reason != "pins_unavailable" {
+				t.Fatalf("unsupported alias incorrectly aligned: alias=%s report=%+v err=%v", name, got, err)
 			}
 		})
+	}
+}
+
+func TestBundleDriftCanonicalMountKeyOrderPreservesInSyncReport(t *testing.T) {
+	source := driftSource(t)
+	p := driftPins()[0]
+	c := driftFixture(t, driftRecord(source, []mount{syncedMount()}))
+	baseline, err := c.Drift(context.Background(), socketPorts(), source, "primary")
+	if err != nil || baseline.Status != "in_sync" {
+		t.Fatalf("invalid canonical report: %+v %v", baseline, err)
+	}
+	configPath := filepath.Join(source, ".devcontainer/devcontainer.json")
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := "type=volume,source=" + p.Volume + ",target=" + p.Target + ",readonly,volume-nocopy"
+	reordered := "readonly,target=" + p.Target + ",source=" + p.Volume + ",volume-nocopy,type=volume"
+	data := strings.Replace(string(raw), canonical, reordered, 1)
+	if data == string(raw) {
+		t.Fatal("canonical reorder changed no fixture bytes")
+	}
+	if err := os.WriteFile(configPath, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.Drift(context.Background(), socketPorts(), source, "primary")
+	if err != nil || !reflect.DeepEqual(got, baseline) {
+		t.Fatalf("canonical key order changed report: %+v %v", got, err)
 	}
 }
