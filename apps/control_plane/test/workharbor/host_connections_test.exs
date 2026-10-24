@@ -116,6 +116,162 @@ defmodule WorkHarbor.HostConnectionsTest do
     |> List.flatten()
   end
 
+  defp authenticated_audits(c) do
+    Repo.query!(
+      "SELECT owner_id,host_id,action,outcome,channel FROM audit_events WHERE host_id=? AND event='host_connection_authenticated' ORDER BY rowid",
+      [c.peer.host_id]
+    ).rows
+  end
+
+  test "socket open and hello audit no authentication until the first accepted heartbeat", c do
+    assert {:ok, ref} = HostConnections.open(c.peer, self())
+    assert authenticated_audits(c) == []
+    assert {:ok, "unknown"} = HostConnections.host_state(c.peer.host_id)
+
+    assert {:ok, %{"kind" => "hello_ack"}} =
+             HostConnections.receive_hello(ref, message(c, "hello"))
+
+    assert authenticated_audits(c) == []
+    assert {:ok, "unknown"} = HostConnections.host_state(c.peer.host_id)
+
+    assert {:ok, %{"kind" => "heartbeat_ack"}} =
+             HostConnections.heartbeat(ref, message(c, "heartbeat"))
+
+    expected = [[c.peer.owner_id, c.peer.host_id, "host_authenticate", "connected", "internal"]]
+    assert authenticated_audits(c) == expected
+
+    for _ <- 1..3 do
+      assert {:ok, %{"kind" => "heartbeat_ack"}} =
+               HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    end
+
+    assert authenticated_audits(c) == expected
+    Hosts.sql("UPDATE host_connection_slots SET state='unknown' WHERE host_id=?", [c.peer.host_id])
+
+    for i <- 1..5 do
+      Agent.update(c.mono, fn _ -> i * 10_000 end)
+
+      assert {:ok, %{"kind" => "heartbeat_ack"}} =
+               HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    end
+
+    assert authenticated_audits(c) == expected
+  end
+
+  test "replacement authenticates once and the old connection cannot authenticate again", c do
+    old = connect(c)
+    assert length(authenticated_audits(c)) == 1
+    assert {:ok, next} = HostConnections.open(c.peer, self())
+    assert_receive {:host_connection_close, :replaced}
+    assert {:error, :unauthorized_host} = HostConnections.heartbeat(old, message(c, "heartbeat"))
+    assert length(authenticated_audits(c)) == 1
+
+    assert {:ok, %{"kind" => "hello_ack"}} =
+             HostConnections.receive_hello(next, message(c, "hello"))
+
+    assert length(authenticated_audits(c)) == 1
+
+    assert {:ok, %{"kind" => "heartbeat_ack"}} =
+             HostConnections.heartbeat(next, message(c, "heartbeat"))
+
+    assert length(authenticated_audits(c)) == 2
+    assert {:error, :unauthorized_host} = HostConnections.heartbeat(old, message(c, "heartbeat"))
+    assert {:ok, _} = HostConnections.heartbeat(next, message(c, "heartbeat"))
+    assert length(authenticated_audits(c)) == 2
+  end
+
+  test "unnegotiated malformed and foreign first heartbeats never audit authentication", c do
+    assert {:ok, ref} = HostConnections.open(c.peer, self())
+
+    assert {:error, :invalid_connection_message} =
+             HostConnections.heartbeat(ref, message(c, "heartbeat"))
+
+    assert authenticated_audits(c) == []
+
+    for bad <- [
+          Map.put(message(c, "heartbeat"), "schema_version", 2),
+          Map.put(message(c, "heartbeat"), "host_id", Ecto.UUID.generate()),
+          Map.put(message(c, "heartbeat"), "owner_id", Ecto.UUID.generate()),
+          Map.put(message(c, "heartbeat"), "token", "SECRET_SENTINEL")
+        ] do
+      assert {:ok, next} = HostConnections.open(c.peer, self())
+      assert {:ok, _} = HostConnections.receive_hello(next, message(c, "hello"))
+      assert {:error, :invalid_connection_message} = HostConnections.heartbeat(next, bad)
+      assert authenticated_audits(c) == []
+    end
+  end
+
+  test "first heartbeat at the stale boundary never audits authentication", c do
+    assert {:ok, ref} = HostConnections.open(c.peer, self())
+    assert {:ok, _} = HostConnections.receive_hello(ref, message(c, "hello"))
+    Agent.update(c.mono, fn _ -> 30000 end)
+    assert {:error, :unauthorized_host} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert_receive {:host_connection_close, :stale}
+    assert authenticated_audits(c) == []
+  end
+
+  test "expired identity cannot authenticate its first heartbeat", c do
+    assert {:ok, ref} = HostConnections.open(c.peer, self())
+    assert {:ok, _} = HostConnections.receive_hello(ref, message(c, "hello"))
+    Application.put_env(:workharbor, :clock, fn -> c.peer.expires_at end)
+    assert {:error, :unauthorized_host} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert authenticated_audits(c) == []
+  end
+
+  test "revoked identity cannot authenticate its first heartbeat", c do
+    assert {:ok, ref} = HostConnections.open(c.peer, self())
+    assert {:ok, _} = HostConnections.receive_hello(ref, message(c, "hello"))
+    assert :ok = Hosts.revoke(c.principal, c.peer.host_id)
+    assert {:error, :unauthorized_host} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert authenticated_audits(c) == []
+  end
+
+  test "rate refusal adds no authentication event after the first accepted heartbeat", c do
+    ref = connect(c)
+    assert length(authenticated_audits(c)) == 1
+
+    for _ <- 1..3 do
+      assert {:ok, _} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    end
+
+    assert {:error, :heartbeat_too_fast} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert_receive {:host_connection_close, :heartbeat_too_fast}
+    assert length(authenticated_audits(c)) == 1
+  end
+
+  test "first authentication audit failure rolls back liveness and sends no heartbeat ack", c do
+    assert {:ok, ref} = HostConnections.open(c.peer, self())
+    assert {:ok, _} = HostConnections.receive_hello(ref, message(c, "hello"))
+
+    Hosts.sql(
+      "UPDATE hosts SET last_seen='2000-01-01T00:00:00Z',lease_expires_at='2000-01-01T00:00:00Z' WHERE id=?",
+      [c.peer.host_id]
+    )
+
+    before = Hosts.one("SELECT last_seen,lease_expires_at FROM hosts WHERE id=?", [c.peer.host_id])
+
+    Hosts.sql(
+      "CREATE TRIGGER reject_authentication_audit BEFORE INSERT ON audit_events WHEN NEW.event='host_connection_authenticated' BEGIN SELECT RAISE(ABORT,'SECRET_SENTINEL'); END"
+    )
+
+    assert {:error, :persistence_failed} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert_receive {:host_connection_close, :persistence_failed}
+    assert authenticated_audits(c) == []
+
+    assert Hosts.one("SELECT last_seen,lease_expires_at FROM hosts WHERE id=?", [c.peer.host_id]) ==
+             before
+
+    assert %{"state" => "unknown", "connection_id" => nil} =
+             Hosts.one("SELECT state,connection_id FROM host_connection_slots WHERE host_id=?", [
+               c.peer.host_id
+             ])
+
+    assert {:ok, "unknown"} = HostConnections.host_state(c.peer.host_id)
+    refute Map.has_key?(:sys.get_state(c.server).peers, elem(ref, 1))
+    assert {:error, :unauthorized_host} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
+    assert authenticated_audits(c) == []
+  end
+
   test "sustained heartbeat burst beyond capacity closes with one refusal audit", c do
     ref = connect(c)
 
