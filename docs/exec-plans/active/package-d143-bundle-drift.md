@@ -192,3 +192,38 @@ check remains honestly red and predecessor-bound as recorded in
 `/tmp/whr-d143-final-check-result.json`; it does not qualify this candidate.
 Fresh exact-head code review and separate test-quality review are required before
 the coordinator's explicit-lease rewrite push. No author push was performed.
+
+## PR #237 F7 noncanonical target correction
+
+[Opus delta review 5639060245](https://github.com/wstein/workharbor/pull/237#pullrequestreview-5639060245)
+on `a155f038a9b92cab3d5151567e2684ba359d0c01` closed F1–F5 and identified F7:
+Docker's cleaning of destination paths allowed repeated separators or a dot
+component to conceal an undeployed bundle from raw prefix classification.
+A fresh main fetch still selected the branch's current base
+`45c269925295226851ea7268ae4a8cd8d29ecc6c`, so this continuation needed no rebase.
+
+Test-first commit `9321e1b7` produced actual RED for each reported spelling:
+`//opt/bdock/hidden`, `/opt//bdock/hidden`, `/opt/./bdock/hidden`; relative and empty
+target parser cases also failed. Fake-runtime report regressions with an opaque
+source returned the erroneous `in_sync` when only the original toolbox mount was
+present. Evidence: `/tmp/whr-d143-f7-parser-red.log` and
+`/tmp/whr-d143-f7-report-red.log`.
+
+Fix `4308e1a2` checks every target with the POSIX `path` package before relevance:
+reject a nonabsolute target or one changed by `path.Clean`. Host source identity
+still uses the existing filesystem handling and held descriptors; no container
+path is interpreted using host-dependent `filepath` semantics. The canonical
+Anchorage fixture remains accepted. The fix changes neither exit codes nor F6's
+separate informational owner question.
+
+Focused tests pass (`/tmp/whr-d143-f7-focused-green.log`). Separate bounded
+mutations bypassing only the clean-path test and only the absolute-path test are
+caught by the new behavioral assertions:
+`/tmp/whr-d143-f7-clean_bypass-mutant.log` and
+`/tmp/whr-d143-f7-absolute_bypass-mutant.log`. Mutated production bytes were
+restored in `finally` blocks. Complete affected workspacecfg/localdocker/commands
+package tests pass (`/tmp/whr-d143-f7-affected-green.log`), with affected vet,
+formatting, bootstrap validation and diff checks passing. No full repository
+rerun, race run, installation, standalone build or real-host operation was done.
+Prior local full-check failures remain historical and predecessor-bound. Fresh
+exact-head review/QA and publication remain with the coordinator; no author push.

@@ -68,8 +68,13 @@ All mount strings are checked for canonical keys (`type`, `source`, `target`,
 and make the pin source undetermined; they cannot hide an undeployed bundle as an
 inert mount. Every mount under `/opt/bdock` or with a `bundledock-` source must
 correspond to a pin; conflicting, missing or opaque declarations are undetermined.
-After canonical-key validation, non-bundle mounts remain inert. Mount objects are
-not part of this initial protocol.
+Every `target` must also be an absolute, clean POSIX path before relevance is
+classified (`path.IsAbs(target)` and `path.Clean(target) == target`). Empty or
+relative paths, repeated separators and dot components are refused, including
+`//opt/bdock/hidden`, `/opt//bdock/hidden` and `/opt/./bdock/hidden`. The reader
+does not normalize these spellings into supported declarations. After canonical
+key and target validation, non-bundle mounts remain inert. Mount objects are not
+part of this initial protocol.
 
 ## Comparison, output and exits
 
