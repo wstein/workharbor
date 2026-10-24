@@ -131,13 +131,14 @@ before owner-API client work (owner decision, 2026-10-17).
 - Cobra registers short forms as separate root commands generated from the table (Cobra aliases
   only rename siblings), so the freeze tests also cover that generation.
 
-## Proposed local stage/promote amendment (2026-10-24)
+## Local stage/promote amendment (2026-10-24; approval record #229)
 
 The [FR-068 amendment](../../specs/006-whr-cli/contracts/local-stage-promote.md)
 selects canonical `workspace stage` / `workspace promote`, retaining group alias
 `ws` and adding no bare short forms. `--local` is boolean; stage takes a primary
 name/full ID plus explicit `--source`, fingerprint trust and optional smoke;
-promote uses the bound receipt and explicit staging-home deletion consent.
+promote uses the bound receipt. Compatible candidate-home naming and deletion
+consent require their separate owner decision/task; they are not added here.
 These local mutations extend the historical first-increment writing-command
 scope without changing remote commands or creating a control-plane dependency.
 
@@ -146,3 +147,7 @@ the plan's completed execution-profile gate precede product registration/code.
 The authoritative command JSON, its source mirror/freeze tests and closed result
 schemas must change together in the later implementation slice, not by claiming
 these commands already exist. No new alias or numeric exit code is introduced.
+
+The owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229)
+is the approval record for this interaction clarification only; before that record
+it is proposed, and S0 execution-profile approval remains separate afterwards.

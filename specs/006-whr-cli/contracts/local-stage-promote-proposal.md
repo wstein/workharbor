@@ -1,13 +1,12 @@
 # T038 / FR-068: local stage/promote decision proposal
 
-Status: **Historical decision brief; not an execution contract.** The owner
-selected D1 alternative B with fingerprint trust and D2 health/workspace-smoke
-via stdin in chat on 2026-10-24. The later “ok, go on” requested the spec/plan
-amendment. Alternatives below are retained as history, not questions to reopen.
+Status: **Historical decision brief; not an execution contract.**
+[LS-1 records the owner's verbatim answer](../spec.md#ls-1-owner-direction-2026-10-24):
+D1 alternative B with fingerprint trust and D2 health/workspace-smoke via stdin. Alternatives below are retained as history, not questions to reopen.
 The [local stage/promote amendment](local-stage-promote.md) now records the selected
-direction and its remaining engineering gates. Exact-head independent review and
-owner approval of that amendment remain pending; chat direction is not approval
-of precise flags, schemas, execution profile or product implementation.
+direction and its remaining engineering gates. The owner approval/merge of
+[PR #229](https://github.com/wstein/workharbor/pull/229) is the interaction approval
+record; it does not approve the S0 execution profile or product implementation.
 
 ## Existing authority and actual gap
 
@@ -106,7 +105,7 @@ reuse a separately approved local carrier of the provider trust descriptor. That
 simplifies input binding but restricts testing uncommitted devcontainer edits;
 it must not require the absent remote owner API.
 
-**D1 direction selected: B with fingerprint trust.** Exact text and execution
+**D1 direction from [LS-1](../spec.md#ls-1-owner-direction-2026-10-24): B with fingerprint trust.** Exact text and execution
 profile approval belong to the [amendment](local-stage-promote.md); this historical
 brief alone does not authorize flags, a trust store or execution.
 
@@ -154,7 +153,7 @@ check. That avoids requiring the existing workspace-script contract but must
 explicitly describe the weaker health claim; it must not silently assert
 application acceptance.
 
-**D2 direction selected: Docker healthcheck or workspace smoke via stdin.**
+**D2 direction from [LS-1](../spec.md#ls-1-owner-direction-2026-10-24): Docker healthcheck or workspace smoke via stdin.**
 Precise execution-profile approval remains with the [amendment](local-stage-promote.md).
 This reuses an existing Anchorage contract; it does not authorize running its host
 smoke orchestrator or changing Anchorage files.
@@ -289,6 +288,8 @@ its test and code rather than treating this proposal as an implemented schema.
 ## Verification and decision record
 
 This proposal itself needs repository/whitespace checks and independent exact-head
-review, not a synthetic behavioral test. D1/D2 direction is selected in owner chat;
-exact-head approval of the [authoritative amendment](local-stage-promote.md) is
-**PENDING**. Local make-check limitations and required CI belong to that PR.
+review, not a synthetic behavioral test. D1/D2 source is the quoted
+[LS-1 decision input](../spec.md#ls-1-owner-direction-2026-10-24). The owner
+approval/merge record of [PR #229](https://github.com/wstein/workharbor/pull/229)
+approves only the interaction amendment; S0 remains gated. Local make-check
+limitations and required CI belong to that PR.

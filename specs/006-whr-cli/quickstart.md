@@ -107,11 +107,12 @@ available commands in this increment. See the [removal evidence and limits](../.
 
 ## Stage/promote direction (proposed, not available)
 
-The owner-selected name/full-ID plus explicit source, fingerprint trust and
-healthcheck/workspace-smoke direction is recorded in the
+The name/full-ID plus explicit source, fingerprint trust and healthcheck/workspace-
+smoke direction from [LS-1](spec.md#ls-1-owner-direction-2026-10-24) is recorded in the
 [local stage/promote amendment](contracts/local-stage-promote.md). It is not an
-implemented command: exact-head artifact approval and the plan's execution-profile
-gate still precede source work. The amendment proposes explicit candidate-home
-deletion flags for promote; --yes alone must not bypass FR-067 protections.
+implemented command. The owner approval/merge record of [PR #229](https://github.com/wstein/workharbor/pull/229)
+approves the interaction only; the execution-profile gate still precedes source
+work. Candidate-home naming/deletion flags require their separate decision/task;
+--yes alone must not bypass FR-067 protections.
 Current Anchorage protected staging/temp cleanup remains excluded, with no recovery
 cleanup path promised. T038 stays open and T039 follows its complete acceptance.

@@ -1,12 +1,12 @@
 # T038: local stage/promote amendment
 
-Status: **Proposed authoritative amendment; not implemented or approved at this
-head.** The owner selected the direction in chat on 2026-10-24: container name/ID
-plus an explicit source directory; fingerprint trust; Docker healthcheck or the
-existing workspace smoke contract over stdin. The subsequent “ok, go on” authorizes
-preparing this amendment. It is not approval of its precise text, flags, execution
-profile or implementation plan. Exact-head independent review and owner approval
-of the spec/plan/tasks amendment still precede implementation.
+Status and authority: interaction amendment following owner direction
+[LS-1, including the verbatim answer](../spec.md#ls-1-owner-direction-2026-10-24).
+The approval record is the owner-authored approval or owner merge of
+[PR #229](https://github.com/wstein/workharbor/pull/229). Until that record this text
+is proposed; that record approves only this interaction, not implementation,
+cleanup naming/flags, the S0 execution profile or live operations. S0 remains gated
+regardless of whether the interaction amendment has merged.
 
 This contract replaces D1/D2 alternatives in the [historical decision brief](local-stage-promote-proposal.md).
 [FR-068](../spec.md), FR-063 and [the plan](../plan.md#t038-stagepromote-amendment-2026-10-24)
@@ -19,7 +19,7 @@ Canonical forms, with the existing `ws` group alias and no new bare short forms:
 
 ```text
 whr workspace stage --local --source <dir> [--smoke] [--dry-run] [--yes] [--trust <digest>] <id|name>
-whr workspace promote --local [--volumes] [--force] [--dry-run] [--yes] <id|name>
+whr workspace promote --local [--dry-run] [--yes] <id|name>
 ```
 
 `--local` is boolean. Exactly one primary selector is required: exact container
@@ -58,8 +58,11 @@ supplies its exact digest through `--trust` and also `--yes`. Dry-run needs neit
 trust nor mutation consent and may report the fingerprint for a later apply. `--yes` alone grants no source
 trust. Missing required trust/consent is 70; a changed or mismatched binding is 68.
 Promotion needs fresh preview/confirmation (`--yes` unattended/JSON), matching
-receipt and source binding; it does not grant fresh trust or rerun source hooks
-implicitly. A declined confirmation returns 70 with no mutation; an explicit
+receipt and source binding. It runs **no host hook**. Any container lifecycle hook
+it runs must be bound to the receipt-trusted fingerprint after a byte recheck.
+A missing binding refuses 68 before effects; if detected after partial effects,
+report 73 and never run the unverified hook. No new trust is inferred from --yes.
+S0 must prove this separation and byte binding, including official CLI phase flags. A declined confirmation returns 70 with no mutation; an explicit
 interrupt/cancellation remains 72 before effects. Changed source requires a new stage
 and explicit trust, not acceptance of a stale receipt.
 
@@ -128,29 +131,19 @@ not covered by this task. No recovery cleanup path for those protected candidate
 is defined here; a FR-067(e) change is a separate decision and task. Do not rename
 existing homes, weaken the guard or introduce an internal force bypass.
 
-For **newly allocated whr candidates only**, propose a separately reserved
-`whr-stage-home-<opaque-id>` named volume, outside the protected Anchorage prefix.
-Never rename, reuse or adopt an existing home. The effective full launch override
-must replace the source home mount, preserve all protected tool mounts, and prove
-that the candidate home differs from every primary home and is unused elsewhere.
-This does not change FR-067(e) or make existing Anchorage candidates removable.
+FR-068 still requires candidate/container-home cleanup per unchanged FR-067.
+Compatible new-candidate allocation/naming and explicit deletion consent are a
+**separate owner decision and task** under the #226 decision; this amendment does
+not assign a new home prefix, add promote deletion flags or fold that task into
+T038. The surface above is the selected interaction direction, not a complete
+cleanup API. FR-067(d) still requires explicit --volumes plus --force and
+confirmation for home deletion. --yes must not synthesize those options internally.
 
-FR-068 requires candidate/container-home cleanup per FR-067 after verifying the
-new primary. Therefore this amendment proposes **explicit `--volumes --force`
-for mutating promote**, in addition to confirmation (`--yes` unattended/JSON).
-The flags authorize deletion of the exact previewed whr candidate home only;
-they never authorize deletion of the preserved primary home. Preview identifies
-the candidate home and all its mounts. Missing either deletion flag refuses 70
-before primary replacement, even if --yes is present. Dry-run can show the plan
-without those flags and must identify the missing consent. Never privately set
-force/volume options in the removal engine without that explicit consent.
-
-This additional cleanup-surface reconciliation follows FR-067(d); it was not
-approved merely by the owner's D1/D2 chat direction and needs review/owner approval
-with this amendment. Any candidate resolving to protected/shared/foreign storage
-refuses 68 before primary replacement. No primary replacement is authorized while
-its required cleanup plan would violate FR-067. Exact new-volume creation/race,
-mount replacement and receipt binding remain execution-profile proof obligations.
+The S0 execution profile must cite the approved separate decision/task before
+claiming an executable cleanup surface. No primary replacement is authorized
+while its required cleanup plan would violate FR-067. Protected/shared/foreign
+homes refuse 68 before primary replacement. Existing Anchorage homes remain
+protected and this amendment supplies no recovery cleanup path for them.
 
 ## Exit categories and output
 
@@ -193,11 +186,12 @@ and independently reviewed with the same artifact approval rules:
    changes and external inputs. Resolve this before claiming working-tree support.
 3. Exact official CLI/Docker argv and tool/version admission, fixed endpoint,
    environment and phase budgets; full override construction for verified-image
-   promotion while preserving source semantics. Separate host hook effects from
-   resource/container hooks. Prove new-primary image identity independently.
-4. Proof of the proposed new-stage-home/cleanup and explicit consent design under
-   **unchanged** FR-067, plus exact state/lock/receipt durability, per-action
-   rechecks, crash and cancellation semantics. Existing protected Anchorage cleanup remains excluded.
+   promotion while preserving source semantics. Promotion runs no host hook; prove
+   container hooks use receipt-trusted bytes after a recheck, or refuse 68 before
+   effects (73 after partial effects). Separate stage host hooks from container hooks. Prove new-primary image identity independently.
+4. The separately approved candidate-home/cleanup decision and task, with proof
+   of compliance under **unchanged** FR-067, plus exact state/lock/receipt durability,
+   per-action rechecks, crash and cancellation semantics. Existing protected Anchorage cleanup remains excluded.
 5. Closed JSON/schema and command-table changes, exact red-first tests, and a
    reproducible offline fake Docker/official-CLI acceptance matrix. Do not copy
    Go internal packages across module boundaries or forge remote authenticated
