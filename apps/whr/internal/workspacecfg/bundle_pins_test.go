@@ -211,11 +211,16 @@ func TestBundlePinsRejectNoncanonicalMountKeysBeforeRelevance(t *testing.T) {
 	raw := bundleConfig(t)
 	digest := strings.Repeat("c", 64)
 	cases := map[string]string{
-		"src":                  "type=volume,src=bundledock-hidden-" + digest + ",target=/ordinary,readonly",
-		"dst":                  "type=volume,source=opaque,dst=/opt/bdock/hidden,readonly",
-		"destination":          "type=volume,source=opaque,destination=/opt/bdock/hidden,readonly",
-		"extra_aliased_bundle": "type=volume,src=bundledock-hidden-" + digest + ",dst=/opt/bdock/hidden,readonly",
-		"unknown_key":          "type=volume,source=opaque,target=/ordinary,unrecognised=/opt/bdock/hidden,readonly",
+		"src":                             "type=volume,src=bundledock-hidden-" + digest + ",target=/ordinary,readonly",
+		"dst":                             "type=volume,source=opaque,dst=/opt/bdock/hidden,readonly",
+		"destination":                     "type=volume,source=opaque,destination=/opt/bdock/hidden,readonly",
+		"extra_aliased_bundle":            "type=volume,src=bundledock-hidden-" + digest + ",dst=/opt/bdock/hidden,readonly",
+		"unknown_key":                     "type=volume,source=opaque,target=/ordinary,unrecognised=/opt/bdock/hidden,readonly",
+		"target_double_leading_separator": "type=volume,source=opaque,target=//opt/bdock/hidden,readonly",
+		"target_double_inner_separator":   "type=volume,source=opaque,target=/opt//bdock/hidden,readonly",
+		"target_dot_component":            "type=volume,source=opaque,target=/opt/./bdock/hidden,readonly",
+		"target_relative":                 "type=volume,source=opaque,target=opt/bdock/hidden,readonly",
+		"target_empty":                    "type=volume,source=opaque,target=,readonly",
 	}
 	for name, mount := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -225,7 +230,7 @@ func TestBundlePinsRejectNoncanonicalMountKeysBeforeRelevance(t *testing.T) {
 			}
 			pins, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
 			if err == nil || pins != nil {
-				t.Fatalf("noncanonical mount keys hid a declared bundle: %s pins=%+v err=%v", name, pins, err)
+				t.Fatalf("noncanonical mount hid a declared bundle: %s pins=%+v err=%v", name, pins, err)
 			}
 		})
 	}
