@@ -115,10 +115,8 @@ func (i CandidateHomeIntent) Bind(observed CandidateHomeObservation) (CandidateH
 	if !recognized || role != "staging" {
 		return CandidateHomeBinding{}, candidateHomeConflict()
 	}
-	for _, label := range []string{"anchorage-temp", "anchorage-primary"} {
-		if _, ambiguous := observed.Labels[label]; ambiguous {
-			return CandidateHomeBinding{}, candidateHomeConflict()
-		}
+	if _, ambiguous := observed.Labels["anchorage-temp"]; ambiguous {
+		return CandidateHomeBinding{}, candidateHomeConflict()
 	}
 	matches := 0
 	for _, mount := range observed.Mounts {
