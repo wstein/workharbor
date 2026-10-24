@@ -1,0 +1,253 @@
+//go:build linux
+
+// SPDX-License-Identifier: EUPL-1.2
+package commands_test
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"reflect"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"testing"
+	"time"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/commands"
+)
+
+type initNamespaceLog struct {
+	sync.Mutex
+	data     bytes.Buffer
+	overflow bool
+}
+
+func (b *initNamespaceLog) Write(p []byte) (int, error) {
+	b.Lock()
+	defer b.Unlock()
+	keep := min(len(p), 32*1024-b.data.Len())
+	_, _ = b.data.Write(p[:keep])
+	b.overflow = b.overflow || keep != len(p)
+	return len(p), nil
+}
+
+func initNetworkWrite(t *testing.T, path, data string, mode os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(data), mode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The child fails closed before any negative-control dial unless the namespace
+// identity, interfaces and routes prove isolation from the parent.
+func verifyInitNetworkNamespace(t *testing.T) {
+	t.Helper()
+	parent := os.Getenv("WHR_INIT_PARENT_NETNS")
+	current, err := os.Readlink("/proc/self/ns/net")
+	if err != nil || parent == "" || current == parent {
+		t.Fatalf("network namespace is not isolated: parent=%q child=%q error=%v", parent, current, err)
+	}
+	interfaces, err := net.Interfaces()
+	if err != nil || len(interfaces) != 1 || interfaces[0].Name != "lo" || interfaces[0].Flags&net.FlagLoopback == 0 || interfaces[0].Flags&net.FlagUp != 0 {
+		t.Fatalf("fresh namespace must have only down loopback: %+v, %v", interfaces, err)
+	}
+	routes, err := os.ReadFile("/proc/net/route")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(routes), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 0 && fields[0] != "Iface" {
+			t.Fatalf("fresh namespace has IPv4 route: %s", line)
+		}
+	}
+	routes6, err := os.ReadFile("/proc/net/ipv6_route")
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(routes6), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		// Linux may retain reject-only entries on the down loopback.
+		if len(fields) != 10 {
+			t.Fatalf("unrecognized IPv6 route: %s", line)
+		}
+		flags, err := strconv.ParseUint(fields[8], 16, 32)
+		if err != nil || fields[9] != "lo" || flags&syscall.RTF_REJECT == 0 {
+			t.Fatalf("fresh namespace has routable IPv6 entry: %s", line)
+		}
+	}
+	t.Logf("isolated network namespace: parent=%s child=%s; only down loopback, no routable IPv4/IPv6 routes", parent, current)
+}
+
+func initNetworkChild(t *testing.T) {
+	t.Helper()
+	t.Log("owned init namespace child started")
+	verifyInitNetworkNamespace(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	// A literal documentation address avoids DNS. This dial is deliberately
+	// made only after verifying a separate namespace with no external interface.
+	conn, err := (&net.Dialer{Timeout: 250 * time.Millisecond}).DialContext(ctx, "tcp4", "203.0.113.1:443")
+	if conn != nil {
+		_ = conn.Close()
+	}
+	if err == nil || (!errors.Is(err, syscall.ENETUNREACH) && !errors.Is(err, syscall.EHOSTUNREACH)) {
+		t.Fatalf("isolated external-connection negative control: %v", err)
+	}
+	t.Logf("namespace-only external-connection negative control refused: %v", err)
+	root := os.Getenv("WHR_INIT_NETWORK_ROOT")
+	if root == "" {
+		t.Fatal("missing owned fixture root")
+	}
+	calls := filepath.Join(root, "bin", "calls")
+	control := exec.CommandContext(ctx, filepath.Join(root, "bin", "git"), "--version")
+	var exit *exec.ExitError
+	if err := control.Run(); !errors.As(err, &exit) || exit.ExitCode() != 97 {
+		t.Fatalf("Git trace positive control did not exit 97: %v", err)
+	}
+	startup := exec.CommandContext(ctx, "/bin/sh", "-c", `. "$HOME/.profile"`)
+	if err := startup.Run(); err != nil {
+		t.Fatalf("owned startup canary positive control: %v", err)
+	}
+	if raw, err := os.ReadFile(calls); err != nil || string(raw) != "git\nstartup\n" {
+		t.Fatalf("positive controls did not record exact calls: %q, %v", raw, err)
+	}
+	if err := os.Remove(calls); err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Git and owned startup-file positive controls recorded; trace cleared before init")
+	private := filepath.Join(root, "private")
+	beforePrivate := doctorTreeSnapshot(t, private)
+	workspace := filepath.Join(root, "workspace")
+	beforeWorkspace := doctorTreeSnapshot(t, workspace)
+	schema := compileSchema(t)
+	invoke := func(args ...string) map[string]any {
+		t.Helper()
+		var out, diagnostics initNamespaceLog
+		code := commands.Execute(ctx, args, commands.Env{Stdout: &out, Stderr: &diagnostics, Getenv: os.Getenv, IsTerminal: func(io.Writer) bool { return false }}, commands.DefaultHandlers())
+		if out.overflow || diagnostics.overflow {
+			t.Fatal("isolated command exceeded the 32 KiB stdout/stderr bound")
+		}
+		if code != 0 {
+			t.Fatalf("isolated %v failed: exit=%d stderr=%s", args, code, diagnostics.data.String())
+		}
+		value, err := jsonUnmarshal(out.data.String())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(value); err != nil {
+			t.Fatalf("isolated command result schema: %v", err)
+		}
+		if raw, err := os.ReadFile(calls); !os.IsNotExist(err) {
+			t.Fatalf("init/validate invoked an external-program or startup canary: %q, %v", raw, err)
+		}
+		if after := doctorTreeSnapshot(t, private); !reflect.DeepEqual(beforePrivate, after) {
+			t.Fatal("init/validate changed private HOME/XDG/TMP or startup canaries")
+		}
+		return decodeEnvelope(t, out.data.String())["result"].(map[string]any)
+	}
+	base := []string{"init", workspace, "--non-interactive", "--yes", "--name=isolated-demo", "--json"}
+	preview := invoke(append(append([]string{}, base...), "--dry-run")...)
+	if preview["dry_run"] != true || !reflect.DeepEqual(beforeWorkspace, doctorTreeSnapshot(t, workspace)) {
+		t.Fatal("isolated dry-run changed workspace")
+	}
+	written := invoke(base...)
+	if written["git_checks"] != "not_run" || written["runtime_enforcement"] != "not_in_this_release" {
+		t.Fatal("isolated init claimed Git/runtime enforcement")
+	}
+	state := doctorTreeSnapshot(t, workspace)
+	validated := invoke("validate", workspace, "--json")
+	if validated["valid"] != true || !reflect.DeepEqual(state, doctorTreeSnapshot(t, workspace)) {
+		t.Fatal("generated workspace failed read-only validation")
+	}
+	noop := invoke(base...)
+	for _, raw := range noop["actions"].([]any) {
+		if raw.(map[string]any)["applied"] != false {
+			t.Fatal("isolated init rerun applied an action")
+		}
+	}
+	if !reflect.DeepEqual(state, doctorTreeSnapshot(t, workspace)) {
+		t.Fatal("isolated no-op changed workspace")
+	}
+	verifyInitNetworkNamespace(t)
+	t.Log("isolated dry-run, init, validate and no-op passed; no canary execution; private HOME/XDG/TMP unchanged")
+}
+
+func TestInitNoGitNoNetwork(t *testing.T) {
+	if os.Getenv("WHR_INIT_NETWORK_CHILD") == "1" {
+		initNetworkChild(t)
+		return
+	}
+	unshare, err := exec.LookPath("unshare")
+	if err != nil {
+		t.Skipf("SKIPPED, NOT PASSED: Linux unshare unavailable: %v", err)
+	}
+	parent, err := os.Readlink("/proc/self/ns/net")
+	if err != nil {
+		t.Skipf("SKIPPED, NOT PASSED: native network namespace identity unavailable: %v", err)
+	}
+	root := t.TempDir()
+	for _, name := range []string{"bin", "workspace/.devcontainer", "private/home", "private/config", "private/state", "private/cache", "private/tmp", "private/config/fish"} {
+		if err := os.MkdirAll(filepath.Join(root, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	initNetworkWrite(t, filepath.Join(root, "workspace/.devcontainer/devcontainer.json"), `{"image":"debian:bookworm"}`, 0600)
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'" }
+	calls := filepath.Join(root, "bin", "calls")
+	for _, name := range []string{"git", "docker", "devcontainer", "ssh", "curl", "wget", "fish", "bash", "sh"} {
+		initNetworkWrite(t, filepath.Join(root, "bin", name), "#!/bin/sh\nprintf '%s\\n' "+quote(name)+" >> "+quote(calls)+"\nexit 97\n", 0700)
+	}
+	for _, name := range []string{".profile", ".bash_profile", ".bashrc", ".zshrc", ".zshenv"} {
+		initNetworkWrite(t, filepath.Join(root, "private/home", name), "printf '%s\\n' startup >> "+quote(calls)+"\n", 0600)
+	}
+	initNetworkWrite(t, filepath.Join(root, "private/config/fish/config.fish"), "printf '%s\\n' startup >> "+quote(calls)+"\n", 0600)
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, unshare, "-rn", "--", executable, "-test.run=^TestInitNoGitNoNetwork$", "-test.v", "-test.timeout=20s")
+	cmd.Env = []string{"WHR_INIT_NETWORK_CHILD=1", "WHR_INIT_NETWORK_ROOT=" + root, "WHR_INIT_PARENT_NETNS=" + parent, "HOME=" + filepath.Join(root, "private/home"), "XDG_CONFIG_HOME=" + filepath.Join(root, "private/config"), "XDG_STATE_HOME=" + filepath.Join(root, "private/state"), "XDG_CACHE_HOME=" + filepath.Join(root, "private/cache"), "TMPDIR=" + filepath.Join(root, "private/tmp"), "PATH=" + filepath.Join(root, "bin"), "TERM=dumb", "LANG=C"}
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
+	cmd.Cancel = func() error {
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		} else {
+			return err
+		}
+	}
+	cmd.WaitDelay = time.Second
+	log := &initNamespaceLog{}
+	cmd.Stdout, cmd.Stderr = log, log
+	err = cmd.Run()
+	if cmd.Process != nil {
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	text := log.data.String()
+	if ctx.Err() != nil || log.overflow {
+		t.Fatalf("namespace child exceeded time/output bound: %v, overflow=%t; %s", ctx.Err(), log.overflow, text)
+	}
+	if err != nil {
+		lower := strings.ToLower(text)
+		if !strings.Contains(text, "owned init namespace child started") && strings.HasPrefix(lower, "unshare:") && (strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied") || strings.Contains(lower, "function not implemented") || strings.Contains(lower, "invalid argument") || strings.Contains(lower, "no space left on device")) {
+			t.Skipf("SKIPPED, NOT PASSED: native user/network namespaces unavailable: %s", strings.TrimSpace(text))
+		}
+		t.Fatalf("isolated test-binary child failed: %v\n%s", err, text)
+	}
+	if !strings.Contains(text, "isolated dry-run, init, validate and no-op passed") {
+		t.Fatalf("namespace child omitted acceptance evidence: %s", text)
+	}
+	t.Log(strings.TrimSpace(text))
+}
