@@ -358,20 +358,38 @@ func physicalENOSPCCandidates(unshare, sudo, setpriv, env string, uid, gid int, 
 	return candidates
 }
 
-func physicalENOSPCTrustedSystemTool(path string) bool {
+func physicalENOSPCTrustedSystemTool(path string) string {
 	resolved, err := filepath.EvalSymlinks(path)
 	if err != nil || !strings.HasPrefix(resolved, "/usr/bin/") {
-		return false
+		return ""
 	}
 	for current := resolved; ; current = filepath.Dir(current) {
 		info, err := os.Stat(current)
 		if err != nil || info.Sys().(*syscall.Stat_t).Uid != 0 || info.Mode().Perm()&0022 != 0 {
-			return false
+			return ""
 		}
 		if current == "/" {
-			return true
+			return resolved
 		}
 	}
+}
+
+func physicalENOSPCResolvedCandidates(unshare, sudo, setpriv, env string, uid, gid int, childEnv, childArgs []string) [][]string {
+	// The ordinary owner candidate may use PATH. The privileged candidate must
+	// retain only verified canonical paths, never the mutable lookup aliases.
+	candidates := physicalENOSPCCandidates(unshare, "", "", env, uid, gid, childEnv, childArgs)
+	canonicalUnshare := physicalENOSPCTrustedSystemTool(unshare)
+	canonicalSudo := physicalENOSPCTrustedSystemTool(sudo)
+	canonicalSetpriv := physicalENOSPCTrustedSystemTool(setpriv)
+	canonicalEnv := physicalENOSPCTrustedSystemTool(env)
+	if canonicalUnshare == "" || canonicalSudo == "" || canonicalSetpriv == "" || canonicalEnv == "" {
+		return candidates
+	}
+	verified := physicalENOSPCCandidates(canonicalUnshare, canonicalSudo, canonicalSetpriv, canonicalEnv, uid, gid, childEnv, childArgs)
+	if len(verified) == 2 {
+		candidates = append(candidates, verified[1])
+	}
+	return candidates
 }
 
 func physicalENOSPCRunCase(t *testing.T, caseName string, mappedOnly bool) {
@@ -406,12 +424,7 @@ func physicalENOSPCRunCase(t *testing.T, caseName string, mappedOnly bool) {
 	args = append(args, namespaces...)
 	args = append(args, strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()))
 	unshare, sudo, setpriv, env := lookup("unshare"), lookup("sudo"), lookup("setpriv"), lookup("env")
-	// Never elevate an owner-writable PATH wrapper. Only canonical native
-	// system tools and root-owned, non-writable ancestors enter sudo's chain.
-	if !physicalENOSPCTrustedSystemTool(unshare) || !physicalENOSPCTrustedSystemTool(sudo) || !physicalENOSPCTrustedSystemTool(setpriv) || !physicalENOSPCTrustedSystemTool(env) {
-		sudo, setpriv = "", ""
-	}
-	candidates := physicalENOSPCCandidates(unshare, sudo, setpriv, env, os.Getuid(), os.Getgid(), childEnv, args)
+	candidates := physicalENOSPCResolvedCandidates(unshare, sudo, setpriv, env, os.Getuid(), os.Getgid(), childEnv, args)
 	if mappedOnly {
 		if len(candidates) < 2 {
 			physicalENOSPCCapabilityUnavailable(t, "mapped fallback utilities unavailable")
@@ -580,7 +593,43 @@ func TestInitPhysicalENOSPCFallbackRejectsOwnerWritableTool(t *testing.T) {
 	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if physicalENOSPCTrustedSystemTool(path) || physicalENOSPCTrustedSystemTool("") {
+	if physicalENOSPCTrustedSystemTool(path) != "" || physicalENOSPCTrustedSystemTool("") != "" {
 		t.Fatal("an owner-writable PATH wrapper must not enter the privileged chain")
+	}
+}
+
+func TestInitPhysicalENOSPCMappedArgvSurvivesMutableAliases(t *testing.T) {
+	private := t.TempDir()
+	var aliases, canonical []string
+	for _, name := range []string{"unshare", "sudo", "setpriv", "env"} {
+		system, err := filepath.EvalSymlinks(filepath.Join("/usr/bin", name))
+		if err != nil || physicalENOSPCTrustedSystemTool(system) != system {
+			t.Fatalf("canonical native positive control unavailable for %s: %v", name, err)
+		}
+		alias := filepath.Join(private, name)
+		if err := os.Symlink(system, alias); err != nil {
+			t.Fatal(err)
+		}
+		aliases, canonical = append(aliases, alias), append(canonical, system)
+	}
+	candidates := physicalENOSPCResolvedCandidates(aliases[0], aliases[1], aliases[2], aliases[3], 1001, 1002,
+		[]string{"HOME=/private", "TMPDIR=/private", "PATH=/private", "TERM=dumb"}, []string{"/own/test"})
+	if len(candidates) != 2 {
+		t.Fatalf("canonical aliases must resolve to a mapped candidate: %#v", candidates)
+	}
+	for _, alias := range aliases {
+		if err := os.Remove(alias); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(alias, []byte("#!/bin/sh\nexit 99\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// No candidate is executed. Replacing writable aliases after construction
+	// must not change any utility selected for the privileged command chain.
+	for i, position := range []int{3, 0, 13, 16} {
+		if candidates[1][position] != canonical[i] {
+			t.Errorf("privileged argv retained mutable %s alias: %q, want canonical %q", filepath.Base(aliases[i]), candidates[1][position], canonical[i])
+		}
 	}
 }
