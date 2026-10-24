@@ -6,9 +6,10 @@ defmodule WorkHarbor.HostConnections do
   alias WorkHarbor.{Repo, Hosts, Accounts}
   alias WorkHarbor.HostConnections.Protocol
   alias WorkHarbor.Hosts.Peer
-  # Contract cadence is 10 s. Each heartbeat costs a transaction (no audit row; only liveness
-  # transitions are audited), so arrivals are limited by a token bucket (capacity 3, one token per 5 s) measured
-  # on receive time, not on the previous commit; the first heartbeat after hello is free.
+  # Contract cadence is 10 s. Each heartbeat costs a transaction; only the first
+  # accepted heartbeat and liveness transitions are audited. Arrivals use a token bucket
+  # (capacity 3, one token per 5 s) measured on receive time, not on the previous commit.
+  # The first heartbeat after hello is free.
   @heartbeat_refill_ms 5000
   @heartbeat_capacity 3
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
@@ -448,6 +449,16 @@ defmodule WorkHarbor.HostConnections do
                "UPDATE host_connection_slots SET state='connected' WHERE host_id=? AND connection_id=?",
                [entry.peer.host_id, entry.id]
              )
+
+             if is_nil(entry.seen) do
+               Hosts.audit(
+                 entry.peer.owner_id,
+                 entry.peer.host_id,
+                 "host_connection_authenticated",
+                 "host_authenticate",
+                 "connected"
+               )
+             end
            end) do
         {:ok, _} ->
           entry = %{entry | seen: monotonic(), lease: make_ref()}
