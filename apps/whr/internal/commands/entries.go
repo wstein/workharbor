@@ -12,7 +12,7 @@ var entries = []Entry{
 	{ID: "workspace.start", Path: []string{"workspace", "start"}, Short: []string{"start"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api"},
 	{ID: "workspace.stop", Path: []string{"workspace", "stop"}, Short: []string{"stop"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api"},
 	{ID: "workspace.rebuild", Path: []string{"workspace", "rebuild"}, Short: []string{"rebuild"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api"},
-	{ID: "workspace.rm", Path: []string{"workspace", "rm"}, Short: []string{"rm"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api"},
+	{ID: "workspace.rm", Path: []string{"workspace", "rm"}, Short: []string{"rm"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api", Flags: []string{"--local", "--role", "--label", "--volumes", "--force", "--dry-run", "--yes", "--json"}},
 	{ID: "workspace.shell", Path: []string{"workspace", "shell"}, Short: []string{"shell"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "events", BlockedOn: "owner_api", Flags: []string{"--local"}},
 	{ID: "workspace.console", Path: []string{"workspace", "console"}, Short: []string{"console"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "events", BlockedOn: "owner_api", Flags: []string{"--local"}},
 	{ID: "workspace.ssh", Path: []string{"workspace", "ssh"}, Short: []string{"ssh"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "rejected", BlockedOn: "owner_api"},

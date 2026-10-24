@@ -63,6 +63,9 @@ func DefaultHandlers() map[string]Handler {
 		"workspace.ls": LocalLsHandler(func(ctx context.Context) ([]localdocker.Workspace, error) {
 			return (localdocker.Client{}).Discover(ctx, doctor.SystemPorts(nil))
 		}),
+		"workspace.rm": LocalRmHandler(func(ctx context.Context, o localdocker.RemovalOptions) (RemovalTransaction, error) {
+			return (localdocker.Client{}).PrepareRemoval(ctx, doctor.SystemPorts(nil), o)
+		}),
 		"workspace.init":  initHandler,
 		"workspace.shell": LocalShellHandler(localshell.SystemPorts()),
 	}

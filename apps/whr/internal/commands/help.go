@@ -53,6 +53,9 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 	if e.ID == "workspace.ls" {
 		b.WriteString("Local: --local lists running and stopped labelled containers (5 s total); no runtime is started.\nWithout --local: waits for owner_api and exits 64.\n")
 	}
+	if e.ID == "workspace.rm" {
+		b.WriteString("Local: --local requires one container id/name, --role staging|temp, or --label key[=value]. Docker inspection is bounded to 5 s.\nHome volumes are preserved by default. Deletion requires --volumes --force and confirmation; unattended/JSON mutation requires --yes.\nUse --dry-run to preview without mutations. Without --local: waits for owner_api and exits 64.\n")
+	}
 	if e.ID == "workspace.shell" {
 		b.WriteString("Local: --local <ws> opens one fresh login shell; terminal stdin/stdout required; no --json or trailing command.\n")
 		b.WriteString("Docker owns direct terminal descriptors; the stream is not filtered or recorded by whr.\n")
@@ -66,7 +69,7 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 	if e.JSON == "rejected" {
 		b.WriteString("JSON: not supported (--json is a usage error)\n")
 	}
-	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console") {
+	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.rm" || e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console") {
 		fmt.Fprintf(b, "\nFlags:\n%s", usages)
 	}
 	b.WriteString("\n" + globalFlagsHelp)

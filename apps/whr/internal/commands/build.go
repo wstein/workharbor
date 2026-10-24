@@ -97,6 +97,9 @@ func (a *app) build() {
 					return exitcode.Errorf(exitcode.PathBadArguments, "console --local is unavailable; use whr shell --local <ws> inside the host multiplexer session")
 				}
 			}
+			if e.ID == "workspace.rm" {
+				ctx = context.WithValue(ctx, localRmKey{}, a.localRmOptions(c))
+			}
 			if e.ID == "workspace.ls" {
 				ctx = context.WithValue(ctx, localLsKey{}, localLsOptions(c))
 			}
@@ -127,6 +130,14 @@ func (a *app) build() {
 			}
 			if e.ID == "workspace.init" {
 				addInitFlags(c, e)
+			} else if e.ID == "workspace.rm" {
+				c.Flags().Bool("local", false, "remove local workspace containers; no control plane")
+				c.Flags().String("role", "", "local cleanup role: staging or temp")
+				c.Flags().String("label", "", "local label selector: key or key=value")
+				c.Flags().Bool("volumes", false, "delete selected home volumes (requires --force)")
+				c.Flags().Bool("force", false, "authorize selected home volume deletion with --volumes")
+				c.Flags().Bool("dry-run", false, "preview removal without mutations")
+				c.Flags().Bool("yes", false, "confirm the proposed removal")
 			} else if e.ID == "workspace.ls" {
 				c.Flags().Bool("local", false, "discover local workspace containers; no control plane")
 				c.Flags().String("role", "", "local role: primary, staging or temp")
