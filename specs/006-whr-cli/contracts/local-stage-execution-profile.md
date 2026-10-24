@@ -136,6 +136,21 @@ It runs no host hook and does not replace resources or change homes. Without
 requires a new stage/trust. This is the concrete proposed exception to the current
 “Changed source requires a new stage”/no-adoption interaction, not a quiet relaxation.
 
+Refresh accepts only `staged_verified`, or `staged_unverified` with reason
+missing_smoke, failed_smoke, failed_health or stale_candidate_inputs, after known
+completion of resource/container-hook phases. Require the current exact candidate
+ID, daemon, role/labels, immutable image, mounts/users/home and clone binding;
+environment/build/initializer inputs and original-source binding must still match.
+Unknown/allocating/incomplete-hook/promoting/cleanup/uncertain receipts, lost
+receipts or drifted resources refuse 68; never adopt or retry uncertain effects.
+Apply records verifying before executing a freshly trusted verification version.
+Passing requested D2 verification replaces the receipt with staged_verified/exit 0.
+Known missing/failed verification retains staged_unverified/exit 73 with its reason;
+uncertain execution records uncertainty and requires owner reconciliation instead
+of refresh. No healthcheck plus no --smoke remains missing_smoke; never run smoke
+implicitly. Preview names --refresh --smoke as recovery where admissible, otherwise
+guarded cleanup/fresh stage. Default stage does not consume this recovery path.
+
 **Proposed bounded phase-binding amendment — cooperative quiescence:** retain
 fingerprint trust and exact-candidate verification, and make the execution claim
 conditional on the caller pausing ordinary writers to the listed admitted input
@@ -443,7 +458,7 @@ Future source PR adds schemas/command table together, not in this docs PR.
 | outputEntry | path string; origin enum(generated_E,published_W,admitted_A); size integer 0..65536; digest sha256 digest; producer_operation_id nullable 32-lowercase-hex string; producer_input_digest nullable sha256 digest; admission_operation_id 32-lowercase-hex string; admission_input_digest sha256 digest |
 | effectTarget | exactly one of resource, gitObjectsTarget, gitRefsTarget or cloneOutputTarget, discriminated by kind; each variant is closed |
 | effect | action enum(create_volume,host_initialize,publish_candidate_output,build,create_container,container_hooks,smoke,import_objects,create_result_refs,stop_primary,remove_primary,create_primary,remove_candidate,remove_home); target effectTarget; state enum(planned,attempted,observed,uncertain,remaining) |
-| step | action enum(inspect_retained,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable effectTarget; instruction string |
+| step | action enum(inspect_retained,refresh_with_smoke,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable effectTarget; instruction string |
 
 OID is exactly 40 lowercase hex for sha1 or 64 for sha256, matching its repository.
 Git import effects require gitObjectsTarget; ref publication requires gitRefsTarget;
@@ -468,11 +483,13 @@ Recovery ID is daemon-key/operation-id, never a fabricated remote operation ID.
 Success 0 requires operation completion or valid preview. If no healthcheck and
 stage omits --smoke, retain the candidate as **staged_unverified**, return 73
 partial_failure with explicit missing verification and recovery. This is not a
-successful stage or a promotion ticket. Proposed explicit recovery: guarded local
-rm of that receipt-bound candidate/home, then stage --smoke with fresh capture,
-trust and consent. A rerun never adopts it or silently runs smoke. This proposal
-adds no verify/resume flag or orphan-volume deletion API. Lost receipts/partial
-allocation retain and report resources for owner reconciliation.
+successful stage or a promotion ticket. Explicit recovery is receipt-bound
+stage --refresh --smoke with fresh preview/trust/consent when the allowed state
+and exact resource/output checks above pass; otherwise guarded local rm followed
+by fresh stage --smoke. A default rerun never adopts it or silently runs smoke.
+Refresh is the proposed interface amendment above, not a general resume/orphan
+deletion API. Lost receipts/partial allocation retain and report resources for
+owner reconciliation.
 
 Before effects: missing trust/consent 70 needs_human; binding/capability/collision/
 verification refusal 68 conflict; deadline 71 timeout; interrupt 72 interrupted.
