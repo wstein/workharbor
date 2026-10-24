@@ -25,18 +25,26 @@ var d2Prompts = []string{
 // missing setting, and answering it must not invite edits to the other settings.
 func TestWizardD2EachMissingSettingPrompted(t *testing.T) {
 	for _, tc := range []struct {
-		field, answer string
-		prompt        int
+		field, answer, defaultValue string
+		prompt                      int
 	}{
-		{"name", "new-name", 0}, {"project", "https://example.com/new.git", 1},
-		{"start_dir", ".", 2}, {"human_shell", "fish", 4},
-		{"console_mode", "plain", 5}, {"shortcuts", "on", 6},
+		{"name", "new-name", "", 0}, {"project", "https://example.com/new.git", "", 1},
+		{"start_dir", "projects/selected", ".", 2}, {"human_shell", "zsh", "fish", 4},
+		{"console_mode", "herdr", "plain", 5}, {"shortcuts", "off", "on", 6},
 	} {
 		t.Run(tc.field, func(t *testing.T) {
 			s := existing()
 			var manifest map[string]json.RawMessage
 			if err := json.Unmarshal(s.Entries["workharbor.json"].Data, &manifest); err != nil {
 				t.Fatal(err)
+			}
+			// Preserve nondefault existing preferences while filling exactly one
+			// missing value with an answer distinct from its displayed default.
+			for key, value := range map[string]string{
+				"start_dir": "projects/existing", "human_shell": "zsh",
+				"console_mode": "herdr", "shortcuts": "off",
+			} {
+				manifest[key] = json.RawMessage(strconv.Quote(value))
 			}
 			delete(manifest, tc.field)
 			raw, err := json.Marshal(manifest)
@@ -57,6 +65,9 @@ func TestWizardD2EachMissingSettingPrompted(t *testing.T) {
 				if got := strings.Count(diag.String(), prompt); got != want {
 					t.Fatalf("%q count = %d, want %d: %s", prompt, got, want, diag.String())
 				}
+			}
+			if !strings.Contains(diag.String(), d2Prompts[tc.prompt]+tc.defaultValue+"]: ") {
+				t.Fatalf("missing setting displayed wrong default: %s", diag.String())
 			}
 			if !strings.Contains(diag.String(), "Modify workharbor.json? [y/N]: ") {
 				t.Fatal("answer bypassed existing-file consent")
@@ -96,12 +107,27 @@ func TestWizardD2CancelAtEveryStepPreservesSnapshot(t *testing.T) {
 			s := fixture()
 			before := fixture()
 			var diag bytes.Buffer
-			p, err := wizard.Run(context.Background(), s, scaffold.Options{Yes: true}, strings.NewReader(strings.Repeat("\n", stage)+"cancel\n"), &diag)
+			// Keep valid input and explicit write consent after cancel. A wizard
+			// that swallows cancel must not accidentally pass by reaching EOF.
+			tail := "write\n"
+			if stage < len(d2Prompts) {
+				tail = strings.Repeat("\n", len(d2Prompts)-stage-1) + tail
+			}
+			p, err := wizard.Run(context.Background(), s, scaffold.Options{Yes: true}, strings.NewReader(strings.Repeat("\n", stage)+"cancel\n"+tail), &diag)
 			if p != nil || int(exitcode.FromError(err)) != 72 {
 				t.Fatalf("stage %d: proposal=%v error=%v; %s", stage, p, err, diag.String())
 			}
 			if stage < len(d2Prompts) && !strings.Contains(diag.String(), d2Prompts[stage]) {
 				t.Fatal("did not reach cancellation step")
+			}
+			if stage < len(d2Prompts) {
+				nextPrompt := "Review:"
+				if stage+1 < len(d2Prompts) {
+					nextPrompt = d2Prompts[stage+1]
+				}
+				if strings.Contains(diag.String(), nextPrompt) {
+					t.Fatal("cancel advanced to the next prompt")
+				}
 			}
 			if stage == len(d2Prompts) && !strings.Contains(diag.String(), "Review:") {
 				t.Fatal("did not reach review")
