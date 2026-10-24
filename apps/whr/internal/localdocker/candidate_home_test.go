@@ -53,6 +53,11 @@ func TestCandidateHomeNewOpaqueName(t *testing.T) {
 				t.Fatalf("scope binding lost: %+v", plan)
 			}
 			observed := candidateHomeObservation(plan)
+			// Official-CLI candidates retain ordinary workspace identity labels.
+			// The established role parser still recognizes the explicit staging role.
+			observed.Labels["devcontainer.local_folder"] = "/workspace/project"
+			observed.Labels["devcontainer.config_file"] = "/workspace/project/.devcontainer/devcontainer.json"
+			observed.Labels["workharbor.workspace"] = "fixture-workspace"
 			binding, err := intent.Bind(observed)
 			if err != nil {
 				t.Fatal(err)
@@ -173,7 +178,6 @@ func TestCandidateHomeBindingRefusesDrift(t *testing.T) {
 		"label missing":        func(o *CandidateHomeObservation) { o.Labels = nil },
 		"label foreign":        func(o *CandidateHomeObservation) { o.Labels["anchorage-staging"] = "0" },
 		"role ambiguous":       func(o *CandidateHomeObservation) { o.Labels["anchorage-temp"] = "1" },
-		"role primary":         func(o *CandidateHomeObservation) { o.Labels["anchorage-primary"] = "1" },
 		"mount missing":        func(o *CandidateHomeObservation) { o.Mounts = nil },
 		"mount bind":           func(o *CandidateHomeObservation) { o.Mounts[0].Type = "bind" },
 		"mount foreign":        func(o *CandidateHomeObservation) { o.Mounts[0].Name = "foreign" },

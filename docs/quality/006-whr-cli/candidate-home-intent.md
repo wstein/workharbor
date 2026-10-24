@@ -20,7 +20,7 @@ canonical Unix endpoint spelling without filesystem or daemon inspection.
 `CandidateHomeIntent.Bind` compares fresh supplied candidate metadata with the
 intent: same daemon/endpoint/primary, distinct full lowercase 64-hex candidate ID,
 fixed candidate name/staging label and exact single writable home mount. Explicit
-primary/temp role conflicts, duplicate or substituted home mounts refuse 68.
+temp role conflicts, duplicate or substituted home mounts refuse 68.
 Any candidate mount named as the original primary home refuses 68, regardless of
 its supplied type or destination. `CandidateHomeBinding.Check` also refuses a replacement candidate ID. All returned
 plans/identities are value copies; caller maps/slices are never retained.
@@ -98,3 +98,14 @@ same cases now pass, including the retained binding's drift check. This is a
 pure supplied-metadata admission check; complete fresh daemon inspection and all
 allocation/ownership preconditions remain necessary. Raw author evidence is in
 `/tmp/whr-b-home-fixes-evidence-20261024/f2-red.log` and `f2-green.log`.
+
+## PR 240 correction: established role metadata
+
+[Review F1](https://github.com/wstein/workharbor/pull/240#discussion_r4368239598)
+removed an unrecognized primary-role label guard and its misleading negative
+fixture. Admission continues to use the existing workspace role parser, requires
+`anchorage-staging=1`, and refuses an explicit `anchorage-temp` conflict. The two
+home-destination success cases now include the actual `devcontainer.local_folder`,
+`devcontainer.config_file` and `workharbor.workspace` labels to demonstrate that
+ordinary workspace metadata legitimately remains present on staging candidates.
+No new label, producer contract or specification rule is introduced.
