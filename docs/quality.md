@@ -177,6 +177,13 @@ foreign-query cases are regression guards expected to pass on main, not RED proo
 The database snapshot detects writes; only the static source boundary guards domain
 reads. Process termination and stable audit counts check observable revocation
 stopping without claiming inspection of queued state in an already-dead process.
+
+The negative asset contract requires unknown/static-adjacent requests to return a
+denial without raising; literal and encoded dot segments both permit 400. During
+W1 implementation, flash dismissal must use client-only `JS.hide`, or the shell
+must omit `flash_group`; its existing `JS.push("lv:clear-flash")` does not qualify
+for an exception to the unchanged no-push assertion.
+
 No standalone build, browser, host/runtime operation or full `make check` was run.
 Implementation waits for the separate TDD/RED-head instruction; no W1 or T012
 completion is claimed.

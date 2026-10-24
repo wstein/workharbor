@@ -67,6 +67,7 @@ defmodule WorkHarborWeb.TransportSecurityTest do
       assert_owner_asset_headers(response, csp)
     end
 
+    # Unknown and static-adjacent paths must return a denial without raising.
     for {path, statuses} <- [
           {"/images/logo.svg", [403, 404]},
           {"/robots.txt", [403, 404]},
@@ -74,7 +75,7 @@ defmodule WorkHarborWeb.TransportSecurityTest do
           {"/assets/js/app.js.map", [403, 404]},
           {"/assets/css/app.css.map", [403, 404]},
           {"/assets/js/app.js/extra", [403, 404]},
-          {"/assets/../robots.txt", [403, 404]},
+          {"/assets/../robots.txt", [400, 403, 404]},
           {"/assets/%2e%2e/robots.txt", [400, 403, 404]},
           {"/assets/", [400, 403, 404]},
           {"/assets/js/", [400, 403, 404]}
