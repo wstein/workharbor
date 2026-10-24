@@ -17,7 +17,10 @@ T038 S0, expected paths are `apps/whr/internal/localdocker/`,
 `contracts/cli/output.schema.json`, focused tests and command docs. S0 fixes exact
 argv/budgets, fresh absence/rechecks, journal/receipt/lock correlation, explicit
 same-Docker-user race limits, recovery identity and closed output schemas first.
-A successful idempotent volume-create reply or name prefix proves no ownership.
+The [proposed S0 execution profile](local-stage-execution-profile.md) supplies a
+concrete review candidate for those details; its exact-profile approval and
+remaining engineering limits still gate product work. A successful idempotent
+volume-create reply or name prefix proves no ownership.
 Reuse T038's endpoint, selectors, trusted-byte/image binding and verification;
 retain merged removal invariants without a second provisioning adapter.
 
