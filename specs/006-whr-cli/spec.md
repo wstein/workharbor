@@ -26,6 +26,23 @@ by a tracker or PR link. Implementation record: the separate owner-gated work it
 [#222](https://github.com/wstein/workharbor/pull/222), reconciling the local command contracts and the `plain` configuration default
 (Feature 010 FR-020). Remote console session creation and real-host acceptance remain separate.
 
+## Amendment (2026-10-24): selected local stage/promote interaction
+
+Owner chat direction selects a primary by container name/full ID plus an explicit
+source directory, fingerprint trust, and Docker healthcheck or the existing
+workspace smoke script over stdin. This proposed amendment records that direction
+in FR-068, FR-063 and SC-024 with [the local contract](contracts/local-stage-promote.md).
+It requires exact-head independent review and owner approval before execution;
+chat direction is not approval of this text. The plan explicitly retains an
+execution-profile gate before product implementation. No command is activated,
+T038 stays open, and the dependency of T039 on full T038 is unchanged.
+
+The owner decision on #226 keeps the whole-prefix home protection and excludes
+existing Anchorage staging/temp cleanup from that task. This amendment neither
+changes FR-067(e) nor claims a cleanup path for those protected containers.
+The proposed new whr-only staging home and explicit promote deletion flags are
+reviewed here, not inferred as approved by the D1/D2 chat answer.
+
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
 **Created**: 2026-10-13
@@ -1229,11 +1246,41 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   volume (`docker volume rm -- <name>`). If volume deletion fails after container removal, `whr` exits 73 (`partial_failure`)
   naming the residual volume and recovery instructions. `--dry-run` previews all container and volume actions with zero mutations
   (`applied: false`). Omitting `--local` preserves the remote control-plane contract (exit 64).
-- **FR-068**: `whr workspace stage --local` and `whr workspace promote --local` implement side-by-side devcontainer verification
-  and promotion without disruption: `stage --local` builds and starts a candidate container (`whr-anchorage-staging`,
-  `anchorage-staging=1`, isolated staging home volume) alongside the running primary container, optionally running smoke checks
-  (`--smoke`); `promote --local` verifies the healthy candidate, recreates the primary container using the verified image while
-  preserving the primary home volume, and cleans up the staging container and its staging home volume per FR-067.
+- **FR-068**: `whr workspace stage --local --source <dir> <id|name>` and
+  `whr workspace promote --local <id|name>` implement side-by-side devcontainer
+  verification and promotion per [the local interaction contract](contracts/local-stage-promote.md).
+  `--local` is boolean; the primary selector is an exact container name or full
+  64-hex ID, with no new bare short form. Stage resolves the explicit source
+  directory against that primary's workspace-folder label; promote uses the bound
+  candidate receipt, not an inferred workspace or mutable image tag.
+  Stage builds/starts candidate `whr-anchorage-staging`, label `anchorage-staging=1`,
+  alongside the running primary with an isolated staging home. Trust in the exact
+  previewed source fingerprint is separate from mutation consent; unattended/JSON
+  stage application requires both `--trust <digest>` and `--yes`. Dry-run needs
+  neither source trust nor mutation consent and executes no source
+  hook, smoke, pull, build or resource mutation. Changed inputs require fresh trust.
+  The candidate must be running with expected image/mount/user configuration and
+  a passing declared Docker healthcheck, or a successful workspace smoke when no
+  healthcheck exists. `--smoke` explicitly requests the existing workspace smoke
+  contract even with a healthcheck: trusted host bytes of
+  `.devcontainer/smoke-container.sh` over stdin to fixed `bash -s -- <workspace-path>`
+  in the exact candidate. Displayed output is escaped per FR-022; do not execute
+  Anchorage's host smoke orchestrator or retain raw output/environment in receipts.
+  Promote revalidates the candidate and recreates the primary from the exact
+  immutable verified image, preserving its original home. Preview warns that
+  primary exec/shell panes end; require confirmation (`--yes` unattended/JSON).
+  After verifying the resulting primary, remove the candidate/container home per
+  unchanged FR-067. Proposed new whr candidates use a distinct newly reserved
+  `whr-stage-home-<opaque-id>` volume; never rename/adopt existing homes. Mutating
+  promote requires explicit `--volumes --force` for its exact previewed staging
+  home, plus confirmation; absence refuses 70 before primary replacement.
+  Protected/shared/foreign homes refuse 68 before effects. Current Anchorage
+  candidates with `anchorage-home-*` homes remain refused even container-only;
+  no recovery cleanup path for those excluded candidates is defined here.
+  The fixed name allows one candidate per Docker daemon; collisions/abandoned
+  attempts refuse, never adopt/delete by name or retry uncertain effects.
+  Full source capture/argv/capability/receipt proofs are the plan's execution gate;
+  this amendment does not claim working-tree support or implementation readiness.
 - **FR-069**: `whr workspace drift --local` (or `whr workspace ls --local --drift`) MUST perform a read-only comparison between
   the bundle references pinned in the workspace configuration (`.devcontainer/bundle-pins.json`, `devcontainer.json`, or bundle locks)
   and the actual mounted image/volume references and version identities on the running container (#143). It lists, per bundle:
@@ -1257,8 +1304,17 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   command, permission denied creating the target (path named), an unreadable `dir` or manifest (a finding) 68; bundle drift detected (FR-069) 1 (or 68); SIGINT
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback or volume removal failure after container deletion (FR-067) 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
-  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag. Timeout (71), unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur in the first
-  increment. The macOS `setup` wizard and `doctor --fix` of [Feature 009](../009-host-setup-wizard/spec.md) use the same table without a new code: 0 success or an answer `no`; 64 usage; 68 refusal
+  74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag.
+  Unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur
+  in the first increment. Timeout (71) does not occur there except for the proposed
+  local stage/promote amendment (FR-068): a deadline with nothing applied is 71,
+  reporting the local phase/target and existing receipt when available, with no
+  remote operation ID. Partial/uncertain effects instead return 73, which takes
+  precedence over 68/71/72. Stage/promote uses 64 for bad arguments/ambiguity, 65
+  for no labelled primary match, 68 for wrong role/state or invalid/unresolved
+  source/label/receipt bindings, and 70 for missing required trust/confirmation or
+  explicit candidate-home deletion flags; FR-067 removal's mapping is unchanged.
+  The macOS `setup` wizard and `doctor --fix` of [Feature 009](../009-host-setup-wizard/spec.md) use the same table without a new code: 0 success or an answer `no`; 64 usage; 68 refusal
   (unsupported platform, root start, run lock, blocked or failed with nothing applied, failed doctor check); 70 needs-human (unattended without
   confirmation, privileged step without terminal); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial
   failure, which takes precedence over 72, 71 and 68; 74 internal (Feature 009 FR-020). Every CLI failure also writes the `whr:` line (FR-017). The `--json` `error.code` is the name of the
@@ -1489,7 +1545,17 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   exiting 70; (5) staging/temp cleanup refusing to touch the primary home volume (68); (6) volume shared with another running container
   refusing deletion (68); (7) read-only, `/opt/bdock/*`, and `bundledock-*` tool volumes never deleted; (8) foreign unlabelled containers
   refused (68); (9) `--dry-run` parity with zero mutations; (10) partial failure exiting 73; and (11) invocation without `--local`
-  still refusing (64).
+  still refusing (64). The FR-068 amendment additionally requires fake-Docker/CLI
+  tests for (12) exact primary/source selection and no-effects refusals;
+  (13) fingerprint trust/consent and changed-byte refusal; (14) stage leaving the
+  primary running with a distinct admissible new candidate home; (15) health/smoke
+  success/failure, exact stdin bytes and FR-022 output; (16) immutable verified-image
+  promotion, original primary home retained and pane-loss confirmation;
+  (17) explicit candidate-home deletion consent and protected/shared-home refusal;
+  (18) collision, stale receipt, interrupted/uncertain effects and honest recovery,
+  with dry-run zero effects, exact exit codes and JSON conformance throughout.
+  Existing protected Anchorage staging/temp cleanup is excluded by the recorded
+  owner decision, never counted as passing through an invented recovery path.
 - **SC-025**: Bundle mount drift reporting (FR-069; #143) passes offline unit and fake-Docker integration tests covering:
   (1) all bundles in sync (exit 0); (2) one or more bundles drifted (exit 1 or 68, reporting pinned vs mounted identities); (3) missing mount
   or unreadable pin file (status `cannot_determine`, exit 68); (4) stable, parseable `--json` output (`bundleDriftResult`) with no secrets;

@@ -99,3 +99,14 @@ Confirmed (H15:b, H69:a): the 64-79 range, the 74 internal catch-all and the acc
 Release documentation publishes this table (FR-018). Only the scaffold's usage exit 64
 exists (`apps/whr/cmd/whr/main.go`); the table and the tests above are not
 implemented.
+
+## Proposed local stage/promote clarification (2026-10-24)
+
+The [FR-068 amendment](../../specs/006-whr-cli/contracts/local-stage-promote.md)
+proposes local deadline 71 only when nothing has been applied, identifying the
+phase/target and existing receipt if available. There is no remote operation ID
+for this local command. This is a narrow proposed exception to the table's
+operation-ID wording and requires the same exact-head owner approval as FR-063's
+first-increment amendment; it changes neither the numeric table nor remote wait
+semantics. Partial/uncertain effects are 73 and take precedence over 68/71/72.
+No code or execution approval is claimed by this clarification.

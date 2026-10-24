@@ -1,11 +1,13 @@
 # T038 / FR-068: local stage/promote decision proposal
 
-Status: **PROPOSED; not an implemented command or approved execution contract.**
-The owner requested T038 followed by T039. FR-068's outcome is settled; the choices
-below fill its missing local interaction and verification contract. No existing
-FR, SC, task, dependency, ADR status or approval marker is changed by this file.
-An independent exact-head CLEAR review and owner decision must precede applying
-selected text to the authoritative artifacts or implementing these choices.
+Status: **Historical decision brief; not an execution contract.** The owner
+selected D1 alternative B with fingerprint trust and D2 health/workspace-smoke
+via stdin in chat on 2026-10-24. The later “ok, go on” requested the spec/plan
+amendment. Alternatives below are retained as history, not questions to reopen.
+The [local stage/promote amendment](local-stage-promote.md) now records the selected
+direction and its remaining engineering gates. Exact-head independent review and
+owner approval of that amendment remain pending; chat direction is not approval
+of precise flags, schemas, execution profile or product implementation.
 
 ## Existing authority and actual gap
 
@@ -35,11 +37,11 @@ Constitution II requires official Dev Container CLI semantics; IV requires
 explicit trust before repository hooks; VI says: “Resolve product ambiguity
 before an implementation plan becomes ready.” Those rules motivate this proposal.
 
-## Choices for the owner
+## Historical alternatives and selected direction
 
 ### D1 — workspace selection and exact local trust
 
-Selection recommendation A: use an explicit existing workspace directory. This
+Historical selection recommendation A (not selected): use an explicit existing workspace directory. This
 would be a new selector for stage/promote, deliberately different from FR-067(a)'s
 container `<id|name>` and Feature 010 OQ-2's container name/ID selection. The reason
 is to bind the build source and primary lookup to one explicit checkout; it is
@@ -68,7 +70,7 @@ under B, explicitly selecting a recognized container in the wrong role is 68.
 All these checks precede side effects. The concrete plan must test canonicalization
 and label-to-path admission; labels remain usability guards, not authorization.
 
-Selection alternative B preserves the existing container name/ID model: stage
+Selected direction B preserves the existing container name/ID model: stage
 selects a primary `<id|name>` and separately names its source directory; promote
 selects that primary and its bound candidate receipt. Proposed surface B:
 
@@ -104,8 +106,9 @@ reuse a separately approved local carrier of the provider trust descriptor. That
 simplifies input binding but restricts testing uncommitted devcontainer edits;
 it must not require the absent remote owner API.
 
-**Owner choice D1: pending: selection A or B, and source-trust model.** Neither
-the proposed flags nor a source-trust store are authorized by this proposal alone.
+**D1 direction selected: B with fingerprint trust.** Exact text and execution
+profile approval belong to the [amendment](local-stage-promote.md); this historical
+brief alone does not authorize flags, a trust store or execution.
 
 ### D2 — candidate health and reuse of existing smoke checks
 
@@ -151,10 +154,10 @@ check. That avoids requiring the existing workspace-script contract but must
 explicitly describe the weaker health claim; it must not silently assert
 application acceptance.
 
-**Owner choice D2: pending: health model and, if reusing workspace smoke, stdin
-(recommended) or a proven file-entrypoint binding.** This reuses an existing
-Anchorage contract; it does not authorize running its host smoke orchestrator or
-changing Anchorage files.
+**D2 direction selected: Docker healthcheck or workspace smoke via stdin.**
+Precise execution-profile approval remains with the [amendment](local-stage-promote.md).
+This reuses an existing Anchorage contract; it does not authorize running its host
+smoke orchestrator or changing Anchorage files.
 
 ### Settled obligation — promotion reuses the exact verified image
 
@@ -286,5 +289,6 @@ its test and code rather than treating this proposal as an implemented schema.
 ## Verification and decision record
 
 This proposal itself needs repository/whitespace checks and independent exact-head
-review, not a synthetic behavioral test. Owner choices and approval reference:
-**PENDING**. Local make-check limitations and required CI are recorded in its PR.
+review, not a synthetic behavioral test. D1/D2 direction is selected in owner chat;
+exact-head approval of the [authoritative amendment](local-stage-promote.md) is
+**PENDING**. Local make-check limitations and required CI belong to that PR.
