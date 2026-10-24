@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -183,18 +184,87 @@ func initNetworkChild(t *testing.T) {
 	t.Log("isolated dry-run, init, validate and no-op passed; no canary execution; private HOME/XDG/TMP unchanged")
 }
 
+// Mirror workspacecfg's reviewed userns/sudo strategy. The fallback drops UID,
+// GID and supplementary groups before env -i restores the exact child environment.
+func initNetworkCandidates(look func(string) string, executable string, uid, gid int, childEnv []string) [][]string {
+	unshare, sudo, setpriv, env := look("unshare"), look("sudo"), look("setpriv"), look("env")
+	var candidates [][]string
+	childArgs := []string{executable, "-test.run=^TestInitNoGitNoNetwork$", "-test.v", "-test.timeout=20s"}
+	if unshare != "" {
+		candidates = append(candidates, append([]string{unshare, "-rn", "--"}, childArgs...))
+	}
+	if unshare != "" && sudo != "" && setpriv != "" && env != "" {
+		argv := []string{sudo, "-n", unshare, "--net", "--", setpriv,
+			fmt.Sprintf("--reuid=%d", uid), fmt.Sprintf("--regid=%d", gid), "--clear-groups", env, "-i"}
+		argv = append(argv, childEnv...)
+		candidates = append(candidates, append(argv, childArgs...))
+	}
+	return candidates
+}
+
+func initNetworkLookPath(name string) string {
+	path, err := exec.LookPath(name)
+	if err != nil || !filepath.IsAbs(path) {
+		return ""
+	}
+	return path
+}
+
+func initNetworkNoProof(t *testing.T, reasons []string) {
+	t.Helper()
+	message := "network-namespace run did not happen: " + strings.Join(reasons, "; ")
+	if os.Getenv("CI") != "" || os.Getenv("WHR_REQUIRE_NETNS") == "1" {
+		t.Fatalf("FAILED, NOT SKIPPED: %s", message)
+	}
+	t.Skip("SKIPPED, NOT PASSED: " + message)
+}
+
+func initNetworkNativeUnavailable(text string) bool {
+	if strings.Contains(text, "owned init namespace child started") {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimSpace(text))
+	if strings.HasPrefix(lower, "sudo:") || strings.HasPrefix(lower, "setpriv:") || strings.HasPrefix(lower, "env:") {
+		return true
+	}
+	return strings.HasPrefix(lower, "unshare:") && (strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied") || strings.Contains(lower, "function not implemented") || strings.Contains(lower, "invalid argument") || strings.Contains(lower, "no space left on device"))
+}
+
+func runInitNetworkCandidate(argv, env []string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd.Env = env
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
+	cmd.Cancel = func() error {
+		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); errors.Is(err, syscall.ESRCH) {
+			return os.ErrProcessDone
+		} else {
+			return err
+		}
+	}
+	cmd.WaitDelay = time.Second
+	log := &initNamespaceLog{}
+	cmd.Stdout, cmd.Stderr = log, log
+	err := cmd.Run()
+	if cmd.Process != nil {
+		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	}
+	text := log.data.String()
+	if ctx.Err() != nil || log.overflow {
+		return text, fmt.Errorf("namespace child exceeded time/output bound: %v, overflow=%t", ctx.Err(), log.overflow)
+	}
+	return text, err
+}
+
 func TestInitNoGitNoNetwork(t *testing.T) {
 	if os.Getenv("WHR_INIT_NETWORK_CHILD") == "1" {
 		initNetworkChild(t)
 		return
 	}
-	unshare, err := exec.LookPath("unshare")
-	if err != nil {
-		t.Skipf("SKIPPED, NOT PASSED: Linux unshare unavailable: %v", err)
-	}
 	parent, err := os.Readlink("/proc/self/ns/net")
 	if err != nil {
-		t.Skipf("SKIPPED, NOT PASSED: native network namespace identity unavailable: %v", err)
+		initNetworkNoProof(t, []string{"native network namespace identity unavailable: " + err.Error()})
 	}
 	root := t.TempDir()
 	for _, name := range []string{"bin", "workspace/.devcontainer", "private/home", "private/config", "private/state", "private/cache", "private/tmp", "private/config/fish"} {
@@ -216,38 +286,82 @@ func TestInitNoGitNoNetwork(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, unshare, "-rn", "--", executable, "-test.run=^TestInitNoGitNoNetwork$", "-test.v", "-test.timeout=20s")
-	cmd.Env = []string{"WHR_INIT_NETWORK_CHILD=1", "WHR_INIT_NETWORK_ROOT=" + root, "WHR_INIT_PARENT_NETNS=" + parent, "HOME=" + filepath.Join(root, "private/home"), "XDG_CONFIG_HOME=" + filepath.Join(root, "private/config"), "XDG_STATE_HOME=" + filepath.Join(root, "private/state"), "XDG_CACHE_HOME=" + filepath.Join(root, "private/cache"), "TMPDIR=" + filepath.Join(root, "private/tmp"), "PATH=" + filepath.Join(root, "bin"), "TERM=dumb", "LANG=C"}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
-	cmd.Cancel = func() error {
-		if err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL); errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		} else {
-			return err
+	childEnv := []string{"WHR_INIT_NETWORK_CHILD=1", "WHR_INIT_NETWORK_ROOT=" + root, "WHR_INIT_PARENT_NETNS=" + parent, "HOME=" + filepath.Join(root, "private/home"), "XDG_CONFIG_HOME=" + filepath.Join(root, "private/config"), "XDG_STATE_HOME=" + filepath.Join(root, "private/state"), "XDG_CACHE_HOME=" + filepath.Join(root, "private/cache"), "TMPDIR=" + filepath.Join(root, "private/tmp"), "PATH=" + filepath.Join(root, "bin"), "TERM=dumb", "LANG=C"}
+	candidates := initNetworkCandidates(initNetworkLookPath, executable, os.Getuid(), os.Getgid(), childEnv)
+	var reasons []string
+	if len(candidates) == 0 {
+		reasons = append(reasons, "unshare unavailable")
+	}
+	for _, argv := range candidates {
+		text, err := runInitNetworkCandidate(argv, childEnv)
+		if err != nil {
+			if initNetworkNativeUnavailable(text) {
+				reasons = append(reasons, filepath.Base(argv[0])+": "+strings.TrimSpace(text))
+				continue
+			}
+			t.Fatalf("isolated test-binary child failed: %v\n%s", err, text)
 		}
+		if !strings.Contains(text, "isolated dry-run, init, validate and no-op passed") {
+			t.Fatalf("namespace child omitted acceptance evidence: %s", text)
+		}
+		path := "unprivileged user namespace (-rn)"
+		if len(argv) > 1 && argv[1] == "-n" {
+			path = "sudo network namespace with setpriv and closed env"
+		}
+		t.Logf("namespace path used: %s", path)
+		t.Log(strings.TrimSpace(text))
+		return
 	}
-	cmd.WaitDelay = time.Second
-	log := &initNamespaceLog{}
-	cmd.Stdout, cmd.Stderr = log, log
-	err = cmd.Run()
-	if cmd.Process != nil {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-	}
-	text := log.data.String()
-	if ctx.Err() != nil || log.overflow {
-		t.Fatalf("namespace child exceeded time/output bound: %v, overflow=%t; %s", ctx.Err(), log.overflow, text)
-	}
+	initNetworkNoProof(t, reasons)
+}
+
+func TestInitNetworkNamespaceRestrictionFailsRequired(t *testing.T) {
+	executable, err := os.Executable()
 	if err != nil {
-		lower := strings.ToLower(text)
-		if !strings.Contains(text, "owned init namespace child started") && strings.HasPrefix(lower, "unshare:") && (strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied") || strings.Contains(lower, "function not implemented") || strings.Contains(lower, "invalid argument") || strings.Contains(lower, "no space left on device")) {
-			t.Skipf("SKIPPED, NOT PASSED: native user/network namespaces unavailable: %s", strings.TrimSpace(text))
-		}
-		t.Fatalf("isolated test-binary child failed: %v\n%s", err, text)
+		t.Fatal(err)
 	}
-	if !strings.Contains(text, "isolated dry-run, init, validate and no-op passed") {
-		t.Fatalf("namespace child omitted acceptance evidence: %s", text)
+	bin := t.TempDir()
+	initNetworkWrite(t, filepath.Join(bin, "unshare"), "#!/bin/sh\nprintf '%s\\n' 'unshare: write failed /proc/self/uid_map: Operation not permitted' >&2\nexit 1\n", 0700)
+	for _, required := range []string{"CI=true", "WHR_REQUIRE_NETNS=1"} {
+		t.Run(required, func(t *testing.T) {
+			env := []string{required, "PATH=" + bin, "HOME=" + t.TempDir(), "TMPDIR=" + t.TempDir()}
+			text, err := runInitNetworkCandidate([]string{executable, "-test.run=^TestInitNoGitNoNetwork$", "-test.v"}, env)
+			if err == nil || !strings.Contains(text, "FAILED, NOT SKIPPED") || strings.Contains(text, "--- SKIP:") {
+				t.Fatalf("required namespace proof accepted restricted unshare: error=%v; %s", err, text)
+			}
+		})
 	}
-	t.Log(strings.TrimSpace(text))
+}
+
+func TestInitNetworkNamespaceFallbackContract(t *testing.T) {
+	look := func(name string) string { return "/abs/" + name }
+	closed := []string{"WHR_INIT_NETWORK_CHILD=1", "HOME=/private/home", "PATH=/private/bin", "TMPDIR=/private/tmp"}
+	before := append([]string(nil), closed...)
+	got := initNetworkCandidates(look, "/owned/test-binary", 1001, 1002, closed)
+	childArgs := []string{"/owned/test-binary", "-test.run=^TestInitNoGitNoNetwork$", "-test.v", "-test.timeout=20s"}
+	wantDirect := append([]string{"/abs/unshare", "-rn", "--"}, childArgs...)
+	wantFallback := []string{"/abs/sudo", "-n", "/abs/unshare", "--net", "--", "/abs/setpriv", "--reuid=1001", "--regid=1002", "--clear-groups", "/abs/env", "-i"}
+	wantFallback = append(wantFallback, closed...)
+	wantFallback = append(wantFallback, childArgs...)
+	if len(got) != 2 || !reflect.DeepEqual(got[0], wantDirect) || !reflect.DeepEqual(got[1], wantFallback) || !reflect.DeepEqual(closed, before) {
+		t.Fatalf("namespace fallback must drop privileges and clear inherited env before exact child execution: got=%v", got)
+	}
+	for _, absent := range []string{"unshare", "sudo", "setpriv", "env"} {
+		t.Run("missing-"+absent, func(t *testing.T) {
+			missing := func(name string) string {
+				if name == absent {
+					return ""
+				}
+				return look(name)
+			}
+			got := initNetworkCandidates(missing, "/owned/test-binary", 1001, 1002, closed)
+			want := 1
+			if absent == "unshare" {
+				want = 0
+			}
+			if len(got) != want {
+				t.Fatalf("unavailable tool candidate count=%d, want %d: %v", len(got), want, got)
+			}
+		})
+	}
 }
