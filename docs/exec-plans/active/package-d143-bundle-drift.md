@@ -121,3 +121,17 @@ Affected complete package tests (workspacecfg, localdocker, commands) and their
 `/tmp/whr-d143-held-root-package-tests.log`. Bootstrap link/JSON validation and
 format/diff checks also passed. No standalone build or new full repository run
 was invoked for the correction.
+
+## Pin-refresh test reliability correction
+
+Test-quality review identified two negative cases whose transformations embedded
+the fixture's toolbox digest/volume. A simulated legitimate pin refresh made both
+transformations no-ops and produced actual assertion failures (`accepted tag_only`
+and `accepted opaque_volume`), recorded at
+`/tmp/whr-d143-fixture-refresh-red.log`. Negative transformations now derive the
+reference, digest and volume from the fixture and assert they changed its bytes.
+The same refreshed fixture passes the complete negative matrix; evidence:
+`/tmp/whr-d143-fixture-refresh-green.log`. Restoring the original fixture and
+running all `TestBundlePins` tests also passes. The fixture itself is unchanged;
+this correction edits only tests and this evidence record, with formatting and
+diff checks passing.

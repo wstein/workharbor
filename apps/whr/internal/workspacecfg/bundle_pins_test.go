@@ -47,12 +47,18 @@ func TestBundlePinsActualAnchorageConfiguration(t *testing.T) {
 }
 func TestBundlePinsRejectAmbiguousUnsafeAndOpaqueConfiguration(t *testing.T) {
 	raw := bundleConfig(t)
+	baseline, err := ReadBundlePins(context.Background(), pinDirectory(t, raw))
+	if err != nil || len(baseline) == 0 {
+		t.Fatalf("invalid source fixture: %+v %v", baseline, err)
+	}
+	pin := baseline[0]
+	_, digest, _ := strings.Cut(pin.Reference, "@sha256:")
 	cases := map[string]string{
 		"duplicate":           strings.Replace(raw, `"name": "Anchorage",`, `"name":"a","name":"b",`, 1),
-		"tag_only":            strings.ReplaceAll(raw, "@sha256:c84e2e79315393b62a156cc3529a29229da71d9c44b1341be0a3e6dfc1d1afb6", ""),
-		"credential":          strings.Replace(raw, "quay.io/bundledock/toolbox:", "user:secret@quay.io/bundledock/toolbox:", 1),
+		"tag_only":            strings.ReplaceAll(raw, "@sha256:"+digest, ""),
+		"credential":          strings.Replace(raw, pin.Reference, "user:secret@"+pin.Reference, 1),
 		"control":             strings.Replace(raw, "quay.io/bundledock/toolbox:", `quay.io/bundledock/toolbox:\u001b`, 1),
-		"opaque_volume":       strings.Replace(raw, "bundledock-toolbox-c84e2e79315393b62a156cc3529a29229da71d9c44b1341be0a3e6dfc1d1afb6", "custom-tools", 1),
+		"opaque_volume":       strings.Replace(raw, pin.Volume, "custom-tools", 1),
 		"unknown_hook":        strings.Replace(raw, "initialize.sh", "other.sh", 1),
 		"unknown_branch":      strings.Replace(raw, `"toolbox": [`, `"other": [`, 1),
 		"unknown_host":        strings.Replace(raw, "host-info.sh", "anything.sh", 1),
@@ -66,6 +72,9 @@ func TestBundlePinsRejectAmbiguousUnsafeAndOpaqueConfiguration(t *testing.T) {
 	}
 	for name, data := range cases {
 		t.Run(name, func(t *testing.T) {
+			if data == raw {
+				t.Fatal("negative transformation left fixture unchanged")
+			}
 			if pins, err := ReadBundlePins(context.Background(), pinDirectory(t, data)); err == nil || pins != nil {
 				t.Fatalf("accepted %s: %+v %v", name, pins, err)
 			}
