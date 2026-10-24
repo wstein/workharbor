@@ -455,8 +455,11 @@ follows the owner's 2026-10-24 session priorities: independent writable/full-his
 clones, explicit non-overwriting result refs, preserved project container hooks and
 a restriction review. Clone/fetch is a visible proposed amendment; no existing-
 candidate rerun-verification interface is added. Changed-input refusal, retained
-project work and guarded cleanup/fresh stage remain the recovery policy. Cooperative
-phase quiescence plus exact pre/post checks is the explicitly proposed
+project work and guarded cleanup/fresh stage remain the recovery policy.
+Result-only candidate Git ref changes remain transferable when actual verified
+execution inputs are unchanged; consumed Git identities/state remain bound. This
+clarifies normal Git work without replacing stage verification or adding an API.
+Cooperative phase quiescence plus exact pre/post checks is the explicitly proposed
 resolution for writable exact-candidate/original-path execution: conditional
 evidence, never hashes-as-freeze. Exact-profile approval remains the gate;
 implementation fixtures follow approval. No product authorization, task edge or
