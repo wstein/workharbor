@@ -275,3 +275,24 @@ race run, installation, standalone build or real-host operation was done; prior
 local qualification limitations are not relabeled passing. Fresh exact-head code
 review and separate QA remain required before coordinator publication. No author
 push was performed.
+
+## Trailing target coverage gap (test-only continuation)
+
+The owner requested explicit trailing-slash coverage on top of `ee75a559`.
+Production already has the required clean absolute POSIX guard; this is a test
+gap, not a new production fix. Fresh main still equals current base `45c26992`,
+so no rebase was needed. Both `/opt/bdock/hidden/` and `/ordinary/` now appear in
+the parser and report matrices and the default-handler CLI schema fixture. They
+require exit 68, `cannot_determine`, `pins_unavailable` and a schema-valid report.
+
+A temporary clean-guard bypass, with alias normalization retained, produced
+actual historical/mutation RED in the new ordinary trailing-path assertions:
+`/tmp/whr-d143-trailing-guard-bypass-red.log`. The bundle trailing path still
+refuses through unmapped-bundle detection, so it alone would not prove validation
+before relevance. This probe is not a claim that current guarded code failed;
+production bytes were restored exactly in `finally` and have no diff.
+Focused target/alias/parser/report/schema tests pass across the three affected
+packages (`/tmp/whr-d143-trailing-focused-green.log`), as do affected vet,
+formatting, bootstrap and diff checks. Exit behavior and all prior production
+fixes remain unchanged. No full suite, build, installation, race run, real-host
+operation or author push was performed; exact-head review/QA remain separate.

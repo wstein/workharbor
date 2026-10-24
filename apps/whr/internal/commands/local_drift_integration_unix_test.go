@@ -6,6 +6,7 @@ package commands_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -39,12 +40,36 @@ func TestBundleDriftDefaultHandlerOffline(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := filepath.Join(dir, "forbidden")
-	for _, status := range []string{"in_sync", "drift", "cannot_determine"} {
+	for _, scenario := range []string{"in_sync", "drift", "cannot_determine", "bundle_trailing_target", "ordinary_trailing_target"} {
+		status := scenario
+		currentConfig := []byte(config)
+		trailingTarget := ""
+		if scenario == "bundle_trailing_target" {
+			trailingTarget = "/opt/bdock/hidden/"
+		}
+		if scenario == "ordinary_trailing_target" {
+			trailingTarget = "/ordinary/"
+		}
+		if trailingTarget != "" {
+			status = "cannot_determine"
+			var values map[string]any
+			if err := json.Unmarshal(currentConfig, &values); err != nil {
+				t.Fatal(err)
+			}
+			values["mounts"] = append(values["mounts"].([]any), "type=volume,source=opaque,target="+trailingTarget+",readonly")
+			currentConfig, err = json.Marshal(values)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(source, ".devcontainer/devcontainer.json"), currentConfig, 0600); err != nil {
+			t.Fatal(err)
+		}
 		mounted := volume
-		if status == "drift" {
+		if scenario == "drift" {
 			mounted = "bundledock-toolbox-" + strings.Repeat("b", 64)
 		}
-		if status == "cannot_determine" {
+		if scenario == "cannot_determine" {
 			mounted = "opaque-custom-volume"
 		}
 		script := fmt.Sprintf(`#!/bin/sh
@@ -74,6 +99,12 @@ func TestBundleDriftDefaultHandlerOffline(t *testing.T) {
 			t.Fatalf("%s exit=%d %s %s", status, code, out.String(), diag.String())
 		}
 		envelope := decodeEnvelope(t, out.String())
+		if trailingTarget != "" {
+			report, ok := envelope["result"].(map[string]any)
+			if !ok || report["status"] != "cannot_determine" || report["reason"] != "pins_unavailable" {
+				t.Fatalf("trailing target lost unknown report: target=%q %s", trailingTarget, out.String())
+			}
+		}
 		if err := compileSchema(t).Validate(envelope); err != nil {
 			t.Fatal(err)
 		}

@@ -307,7 +307,7 @@ func TestBundleDriftNilMountMetadataHasIncompleteAggregateEvidence(t *testing.T)
 }
 
 func TestBundleDriftNoncanonicalTargetCannotReportInSync(t *testing.T) {
-	for _, target := range []string{"//opt/bdock/hidden", "/opt//bdock/hidden", "/opt/./bdock/hidden", "opt/bdock/hidden"} {
+	for _, target := range []string{"//opt/bdock/hidden", "/opt//bdock/hidden", "/opt/./bdock/hidden", "opt/bdock/hidden", "/opt/bdock/hidden/", "/ordinary/"} {
 		t.Run(target, func(t *testing.T) {
 			source := driftSource(t)
 			configPath := filepath.Join(source, ".devcontainer/devcontainer.json")
