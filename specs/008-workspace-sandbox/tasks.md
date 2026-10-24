@@ -10,6 +10,15 @@ or host mutation (FR-032). Paths are in module `apps/whr` unless a path starts w
 Exit codes: only the ADR 0013 table. Stage 1 registers no command; each task states the codes its library returns
 through `sandbox.ExitFor` (T004).
 
+## Implementation status audit (2026-10-24)
+
+At main `c71890d27c3d415e50fe15610a6f8f044b313142`, none of T001–T017 has full
+implementation/test acceptance evidence. T010 has only the recorded OD-5 resolution;
+its remaining proposal work is open. All checkboxes and #151–#162 remain open.
+The [task-by-task evidence audit](../../docs/quality/package-a-status-20261024.md#feature-008-no-completed-implementation-tasks)
+records the missing paths/tests. This status note changes no requirement, task
+acceptance, dependency, approval or runtime gate.
+
 ## Stage 1: contracts, capability model, refusal, Git profile, fake provider
 
 - [ ] T001 [US3] Capability and refusal types in `internal/runtime/` (`capabilities.go`, `refusal.go`) with freeze tests against `specs/008-workspace-sandbox/contracts/refusal-codes.json` and the capability field list. Failing tests first: `TestRefusalCodesMatchContract`, `TestRefusalCodesUniqueAndStable`, `TestCapabilityFieldsCompleteAndTyped`, `TestCapabilityUnknownIsNotEnforced`. Traces FR-012, FR-015; SC-001. Exit: refusals map to 68 (T004). Prerequisite: 006/T025 (exit table, merged in tree).
