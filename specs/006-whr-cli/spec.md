@@ -1325,8 +1325,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   and [technical proposal](contracts/local-stage-execution-profile.md). Fetch adds
   objects/new operation refs, not checkout/merge/current-branch changes; source
   worktree preservation does not imply all original Git bytes remain unchanged.
-  The proposed refresh path and remaining byte-binding conflicts require exact
-  artifact review/approval before code; this note registers no flag or new task
+  The proposed refresh path and explicit cooperative phase-binding amendment
+  (pause ordinary input writers, pre/post actual-byte checks, honest race limits)
+  require exact artifact review/approval before code; this note registers no flag
+  or new task
   and preserves D1/D2, no-host-hook promote and FR-067.
 
 - **FR-069**: `whr workspace drift --local` (or `whr workspace ls --local --drift`) MUST perform a read-only comparison between

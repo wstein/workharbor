@@ -222,6 +222,10 @@ It also proposes an unregistered receipt-bound stage --refresh workflow for
 edited candidates. The current default collision/no-adoption and changed-source
 rules are not silently relaxed: fresh trust/verification and unchanged environment
 inputs are required, otherwise guarded cleanup and a fresh stage remain necessary.
-The proposal identifies exact-candidate concurrent-writer and promote hook/path
-byte-binding conflicts; neither hash comparisons nor this paragraph closes S0.
+The proposal explicitly amends unconditional byte binding to a cooperative phase
+contract: pause ordinary writers, compare actual trusted inputs before/after each
+phase, refuse detected drift 68 before effects or 73 after effects, and report that
+hashes neither freeze paths nor detect changed-and-restored bytes. Hooks retain
+normal project paths; no hostile/concurrent-writer isolation is claimed. This
+tradeoff requires exact-profile review; this paragraph does not close S0.
 No D1/D2, host-hook, home guard, naming or deletion-consent decision is reopened.

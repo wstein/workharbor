@@ -14,7 +14,7 @@ The [interaction contract](local-stage-promote.md), [FR-068/LS-1](../spec.md),
 [home decision](candidate-home-cleanup-decision.md) and
 [cleanup task proposal](candidate-home-cleanup-task-proposal.md) remain the
 foundation. D1/D2, no-host-hook promotion, FR-067 and deletion consent do not change.
-Clone/result-transfer and the receipt-bound refresh workflow below are **proposed
+Clone/result-transfer, receipt-bound refresh and conditional phase binding are **proposed
 focused amendments**, not behavior already authorized by the old interaction text.
 
 ## Writable candidate and full-history Git capture
@@ -37,9 +37,9 @@ commit-only fingerprint. Candidate clone data survives container/home cleanup;
 uncommitted and untracked work is retained and reported, never silently discarded.
 
 Proposed fixed capture bounds: 100,000 filesystem entries, 2 GiB working bytes,
-64 MiB/file, 32 populated submodules, depth8, configuration/smoke256KiB, pathname4096B;
-full Git object graph additionally 1,000,000 objects/8GiB per operation (including all required local alternate objects). Exceeding
-bounds refuses68 before hooks; it never silently truncates or makes a shallow clone.
+64 MiB/file, 32 populated submodules, depth 8, configuration/smoke 256 KiB, pathname 4096 B;
+full Git object graph additionally 1,000,000 objects/8 GiB per operation (including all required local alternate objects). Exceeding
+bounds refuses 68 before hooks; it never silently truncates or makes a shallow clone.
 Normal clone full history means all ancestors reachable from admitted heads/tags/
 remote-tracking/notes refs and detached HEAD, plus index objects; source reflogs and
 unreachable garbage are not ordinary clone history. Reject shallow/partial source
@@ -103,7 +103,7 @@ intent. Unchanged preview/apply must produce equal source digests.
 
 Trusted host initialization/build uses a separate captured execution tree, never
 the mutable original or candidate clone. Its relative layout includes Anchorage's
-initialize.sh and sibling BundleDock helper. CLI0.89 awaits initialize before
+initialize.sh and sibling BundleDock helper. CLI 0.89 awaits initialize before
 resource creation; generated host.env is validated before container hooks/smoke.
 Build uses captured Dockerfile/context. Stage leaves the primary running.
 
@@ -136,23 +136,59 @@ It runs no host hook and does not replace resources or change homes. Without
 requires a new stage/trust. This is the concrete proposed exception to the current
 “Changed source requires a new stage”/no-adoption interaction, not a quiet relaxation.
 
-**Open byte-binding conflict:** CLI0.89 exec/run-user-commands reads project paths
-in the running candidate. A fully writable normal clone can have ordinary writers
-editing transitive hook/test inputs concurrently. Captured stdin protects only the
-top-level smoke script; before/after hashes detect drift but do not freeze reads.
-Cooperative quiescence is an operational assumption, not proof that only captured
-bytes executed. No read-only-project overlay or privileged runner is silently
-introduced. To retain D2's exact-candidate smoke and ordinary writable project
-semantics, a concrete phase-scoped execution mechanism remains an S0 engineering
-gap. Source-trusted code generation and external tools need no invented hostile
-sandbox, but this local executable-byte check/use issue cannot be declared solved.
+**Proposed bounded phase-binding amendment — cooperative quiescence:** retain
+fingerprint trust and exact-candidate verification, and make the execution claim
+conditional on the caller pausing ordinary writers to the listed admitted input
+paths during each managed hook/build/smoke phase. This includes editor autosave,
+Git checkout/rebase, formatters and background project writers; ordinary candidate
+work remains available between operations. This explicitly amends the prior
+unconditional captured-byte binding language; hashes do not freeze files and the
+amendment is not already approved by D1/D2.
+
+Literal phase rules for owner review:
+
+1. Preview lists the trusted input version, hook/smoke argv, expected user/cwd,
+   permitted generated outputs/home effects, deadline and no-concurrent-input-writer
+   condition. Existing mutation confirmation acknowledges that operating condition;
+   fingerprint trust stays separate. No new trust is inferred from --yes.
+2. Immediately before launch, hash actual admitted input paths in the real phase
+   view and require equality with the trusted execution manifest. Check exact
+   container/image/source/mount/user identities. Mismatch before effects is 68;
+   no source hook/smoke runs. Stage uses the writable clone, promote the unchanged
+   original live workspace. No pathname rewrite or protected project-file overlay.
+3. Execute official hooks or exact stdin smoke in that view under the quiescence
+   condition. Trusted code generation, image tools/network dependencies and declared
+   output/home writes retain their explicit trust; this is not hermetic execution.
+4. Re-enumerate/hash the same inputs after the phase and before success or the next
+   mutation; validate outputs separately. Detected source/identity drift, unexpected
+   writes, cancellation or uncertain effects invalidate verification and return 73
+   with phase/resources/recovery. Recheck before primary stop and each later phase.
+5. Evidence is conditional: pre/post inputs match the trusted version **and** the
+   cooperative no-writer assumption held. Hashes cannot detect a writer changing
+   and restoring bytes mid-phase. Preview/receipt state this limitation; no hostile
+   same-UID/Docker-owner or ordinary concurrent-writer guarantee is claimed.
+
+Receipt separates original source binding, candidate Git/worktree version and the
+execution-byte manifest; the previewed trust digest binds all three. Refresh may
+update candidate identities/results with fresh trust without pretending the original
+HEAD moved. Promote requires original binding unchanged and actual original hook
+bytes equal to that trusted execution manifest. Candidate hook/config changes not
+present in the original cannot become active merely through fetched refs; refuse
+before replacement and retain the clone/results for owner integration/restaging.
+
+This is the concrete proposed resolution without adding a privileged runner. If
+binding despite concurrent writers is required, official CLI alone lacks a per-exec
+alternate mount view; that stronger profile needs a demonstrated additional runtime
+capability. Do not silently restore read-only project restrictions or call hashes
+enforced snapshots. Exact-profile approval chooses this tradeoff before source;
+implementation tests then exercise it rather than circularly preceding all code.
 
 ## Tool, endpoint, argv and output contract
 
-Use official Dev Container CLI0.89.0, trusted installed Node/Docker/Git/shell tools;
+Use official Dev Container CLI 0.89.0, trusted installed Node/Docker/Git/shell tools;
 record actual absolute paths, versions and content digests, recheck before launch.
-Retain existing Git>=2.39.5 baseline; do not invent Node26-only, Docker27-only or
-API1.46 safety gates. Test actual official-CLI/runtime capability and report exact
+Retain existing Git >= 2.39.5 baseline; do not invent Node 26-only, Docker 27-only or
+API 1.46 safety gates. Test actual official-CLI/runtime capability and report exact
 unsupported capability. No npx, install, download fallback or new native runner.
 Pin the physical admitted Unix socket and daemon ID throughout. Every Docker call
 uses --host unix://SOCKET and empty private DOCKER_CONFIG; no ambient endpoint,
@@ -208,18 +244,18 @@ lock metadata writes; FR-067 removal protection remains absolute. This cooperati
 routing does not sandbox the Docker owner or attest OCI contents against local code.
 
 Output: omit preexisting host.env/smoke.env in execution input. Require fresh
-host.env regular/no-follow/nlink1/owner UID/max64KiB, seven unique producer-order
-HOST_NAME/IP/OS/ARCH/ENGINE/ENGINE_ARCH/CONTEXT keys; values max4096 UTF-8 bytes, no
+host.env regular/no-follow/nlink 1/owner UID/max 64 KiB, seven unique producer-order
+HOST_NAME/IP/OS/ARCH/ENGINE/ENGINE_ARCH/CONTEXT keys; values max 4096 UTF-8 bytes, no
 controls. Parse producer POSIX single-quoted literals/quote escapes without eval;
 reject extra shell syntax, duplicate keys and leftover temporary output. Record
 size/hash/producer digest. No host smoke orchestrator runs. Generated outputs may
 be supplied to captured execution views, not silently copied to original source.
 
-Bounds: metadata5s; capture/preflight120s; host-init600s; build/resources1800s;
-container-hooks600s; health120s; smoke600s; stop30s; each removal30s; total stage3600s,
-promote1800s. Each phase consumes remaining total. Child output max1MiB, metadata4MiB;
-no raw output/env in receipt. TERM group, wait2s, KILL then inspect; killing a client
-is not proof daemon effects stopped. Uncertain/partial effects are73, no auto retry.
+Bounds: metadata 5 s; capture/preflight 120 s; host-init 600 s; build/resources 1800 s;
+container-hooks 600 s; health 120 s; smoke 600 s; stop 30 s; each removal 30 s; total stage 3600 s,
+promote 1800 s. Each phase consumes remaining total. Child output max 1 MiB, metadata 4 MiB;
+no raw output/env in receipt. TERM group, wait 2 s, KILL then inspect; killing a client
+is not proof daemon effects stopped. Uncertain/partial effects are 73, no auto retry.
 
 ## Promotion fetch: add results without moving existing work
 
@@ -238,7 +274,7 @@ submodule repository and map its export separately; this does not update origina
 gitlinks. Retain clone data for uncommitted/untracked work not transferable by Git.
 
 Generate fixed explicit refspecs per exported ref, targeting fresh
-refs/workharbor/stage/OP/REPO/{head,heads/NAME,tags/NAME,notes/NAME}. OP is128-bit
+refs/workharbor/stage/OP/REPO/{head,heads/NAME,tags/NAME,notes/NAME}. OP is 128-bit
 random; REPO is a path digest. Preview exact original/export/ref/OID mappings and
 objects to transfer. Reject any preexisting target ref68, never force/update it.
 Fetch uses an isolated generated Git directory/config and the original object
@@ -263,11 +299,11 @@ credential helper, upload-pack or packObjectsHook; never invoke a source hook.
 Thus clone/push races cannot overwrite a just-created foreign ref. Multi-repository
 publication is not globally atomic: journal each object's import/ref transaction,
 report observed/remaining repositories on failure. Cancellation/uncertainty after
-imports or any ref creation is73, even if current branches/worktrees stayed intact.
+imports or any ref creation is 73, even if current branches/worktrees stayed intact.
 Unreferenced imported objects may remain; do not GC/rollback or retry automatically.
 All result refs are added before primary replacement; failure leaves primary running.
 
-## Promote container hooks and exact remaining execution gap
+## Promote container hooks under the proposed phase contract
 
 Promote uses the exact verified image and original primary home; never copies or
 transplants candidate home. Fresh preview lists lifecycle hooks, trusted digest,
@@ -275,30 +311,22 @@ home effects, result-ref additions, original live workspace bind, pane loss and
 cleanup consent. Hook-generated home files are normal project behavior, not a
 migration guarantee. No host hook, rebuild or mutable-image resolution occurs.
 
-Existing requirement: any executed container hook must use receipt-trusted bytes.
-Actual setup.sh derives WORKSPACE from its pathname and reads sibling assets/config.
-Running a captured top-level script against the original live tree does not bind
-its transitive reads; changing its path also changes generated home configuration.
-No silent original-source overwrite, permanent protected-file overlay or relaxed
-fingerprint is proposed to conceal this.
+The existing requirement binds every executed container hook to trusted inputs.
+Under the proposed cooperative phase-binding amendment above, promote hashes the
+actual original workspace dependency paths before/after official hooks against
+the trusted execution manifest. setup.sh therefore executes at its normal path,
+reads matching sibling assets/config and records original WORKSPACE while updating
+the original home. No candidate-home transplant, alternate source mount,
+intermediate primary or hook rewrite is needed. Drift before replacement refuses
+68; detected drift after effects returns 73 and blocks cleanup/success. Fetched
+refs do not activate changed working files.
 
-Concrete engineering alternative for **actual home-oriented Anchorage setup**:
-after removing old primary, prepare an intermediate primary runtime from the same
-verified image, original home and captured project at the normal container path;
-run official container hooks, preserve home, remove only that runtime, then launch
-final primary with original live workspace and hooks already completed. No host
-hook or candidate-home transfer. This adds explicit create/remove journal actions
-and is not generic lifecycle equivalence: container-local hook effects disappear,
-so non-home/data effects need a different mechanism. Stage D2 still requires smoke
-in the exact candidate; this alternative does not solve its concurrent-writer issue.
-It is an option for concrete review, **not an accepted scope expansion or a guard
-bypass** (never label a primary-home runtime staging/temp to evade FR-067).
-
-Consequently two precise S0 engineering conflicts remain: phase-scoped byte-bound
-execution in a writable exact candidate, and promote hook execution preserving
-normal source-path semantics on the original live bind. The current official CLI
-alone provides no per-exec alternate mount view. Resolve these concretely before
-product code; no repeated generic permission question or hermeticity claim helps.
+Owner review concerns this explicitly conditional phase contract, not a claim that
+mutable paths are immutable. A stronger enforced snapshot view is a different
+runtime capability. Remaining implementation work is concrete: input/identity
+checks, output/phase journals, exact official hook phases, drift/failure fixtures
+and honest conditional verification reporting. Tests accompany source after
+contract approval; native evidence later establishes compatibility.
 
 ## Allocation, durable intent and cleanup
 
@@ -364,24 +392,25 @@ of the old primary is automatic. Original primary home is never a cleanup target
 
 All proposed objects below are closed: exactly listed required keys; explicitly
 nullable fields admit null values, not omitted keys. Unknown fields refuse. IDs/digests use the formats
-above; host paths max4096 bytes, strings max1024 unless specified. Public text is
+above; host paths max 4096 bytes, strings max 1024 unless specified. Public text is
 escaped; no secret, raw env, script body, child transcript or remote operation_id.
 Keep existing schema_version=1 envelope and error {code,message,remediation?}.
 Future source PR adds schemas/command table together, not in this docs PR.
 
 | Object | Exact proposed fields / types |
 |---|---|
-| stageResult/promoteResult | status enum(preview,staged_verified,staged_unverified,promoted,refused,partial); phase enum(journal states plus preflight); recovery_id nullable string; fingerprint nullable digest; primary nullable resource; candidate nullable resource; home nullable resource; verification nullable verification; effects array(effect), max256; recovery array(step), max32; repositories array(repository), max33; result_refs array(resultRef), max1024 |
+| stageResult/promoteResult | status enum(preview,staged_verified,staged_unverified,promoted,refused,partial); phase enum(journal states plus preflight); recovery_id nullable string; fingerprint nullable digest; primary nullable resource; candidate nullable resource; home nullable resource; verification nullable verification; effects array(effect), max 256; recovery array(step), max 32; repositories array(repository), max 33; result_refs array(resultRef), max 1024 |
 | resource | kind enum(container,volume,image); name nullable string; id nullable string (container full64hex, image sha256, volume name); daemon_id string |
 | repository | source_path string; clone_path string; head_oid string; object_format enum(sha1,sha256); dirty bool; uncommitted_retained bool |
 | resultRef | repository_path string; export_ref string; target_ref string; oid string; state enum(planned,created,uncertain,remaining) |
-| verification | policy enum(health,smoke,health_and_smoke); status enum(not_requested,missing,passed,failed,stale); image_id digest; input_digest digest; observed_at UTC timestamp; output_digest nullable digest |
+| verification | policy enum(health,smoke,health_and_smoke); status enum(not_requested,missing,passed,failed,stale); binding_mode const(cooperative_quiescence); quiescence enum(caller_acknowledged,not_acknowledged); pre_input_digest digest; post_input_digest nullable digest; image_id digest; input_digest digest; observed_at UTC timestamp; output_digest nullable digest |
 | effect | action enum(create_volume,host_initialize,build,create_container,container_hooks,smoke,import_objects,create_result_refs,prepare_primary,remove_preparation_runtime,stop_primary,remove_primary,create_primary,remove_candidate,remove_home); target resource; state enum(planned,attempted,observed,uncertain,remaining) |
 | step | action enum(inspect_retained,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable resource; instruction string |
 
 Private receipt adds exactly version=1, operation_id, sequence, previous_hash,
 state, endpoint_identity, original_source, input_manifest_digest, tool_manifest,
 config_digest, image_metadata_digest, effective_config_digest, output_inventory,
+origin_binding, candidate_git_version, execution_manifest_digest, phase_binding_mode,
 clone_repositories, exported_refs, imported_objects, result_ref_transactions,
 primary/candidate/home resource identities, trust_digest, consent flags,
 verification and action inventory. Tool manifest entries are path/version/digest;
@@ -402,7 +431,7 @@ Before effects: missing trust/consent 70 needs_human; binding/capability/collisi
 verification refusal 68 conflict; deadline 71 timeout; interrupt 72 interrupted.
 After attempted effects with any retained/uncertain resource, 73 partial_failure
 supersedes those categories and carries attempted/observed/remaining inventory.
-Selection/usage 64, absent labelled primary65 and internal74 retain ADR0013 mapping.
+Selection/usage 64, absent labelled primary 65 and internal 74 retain ADR0013 mapping.
 Timeout diagnostics identify phase/local target, never invent remote operations.
 No receipt is evidence of success; no receipt is also not evidence of no effects.
 
@@ -414,12 +443,12 @@ No receipt is evidence of success; no receipt is also not evidence of no effects
 | Normal commits/rebases/owner pushes | Keep enabled: ordinary user activity. whr never autonomously pushes or supplies credentials. |
 | Host config/hooks/credentials copied wholesale | Keep sanitation: avoids executing/relaying ambient host authorization; real Git objects/history are retained. |
 | No overwrite on result fetch | Keep: existing owner work/refs must survive; create-only operation refs, no checkout/FETCH_HEAD writes. |
-| Fresh trust on changed executed bytes | Keep D1: prevents stale-source approval; proposed receipt-bound refresh is explicit amendment. |
+| Fresh trust on changed executed bytes | Keep D1: prevents stale-source approval; refresh and cooperative phase binding are explicit proposed amendments, never hashes-as-freeze claims. |
 | Original source unchanged during candidate work | Keep: candidate is independent clone; promotion's explicit object/ref additions are separately previewed. |
 | Zero promote container hooks | Drop: conflicts with owner priority; preserve trusted project hooks on original home. |
 | No promote host hooks / immutable image | Keep settled semantics: no unexpected host execution or rebuilding an unverified image. |
 | Arbitrary privilege/runArgs/features bans | Drop blanket security claims against Docker owner. Admit actual official-CLI semantics with explicit effects; report real unsupported resource/ownership/capability cases. |
-| Version-only Node26/Docker27/API gates | Drop invented thresholds; retain pinned companion and actually needed/tested capabilities. |
+| Version-only Node 26/Docker 27/API gates | Drop invented thresholds; retain pinned companion and actually needed/tested capabilities. |
 | Bounded files/objects/deadlines | Keep resource/latency limits, never silently truncate history or discard dirty work; tune with measured intended-tree evidence. |
 | Unix endpoint/owner/home/deletion guards | Keep existing native boundary and FR-067; labels remain usability, not authorization. |
 | Hostile same-UID/Docker-user isolation | Drop claim: owner already has Docker exec. No new generic sandbox or external-tool hermeticity prerequisite. |
@@ -431,15 +460,15 @@ Source-only basis: official CLI v0.89.0
 [initialize ordering](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/configContainer.ts),
 [metadata](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/imageMetadata.ts)
 and [unchanged-image/UID paths](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/containerFeatures.ts).
-Read-only Anchorage graph at observed umbrella HEAD28a9662f61ab6b8b2853bdc7453b78685ed63f64:
+Read-only Anchorage graph at observed umbrella HEAD 28a9662f61ab6b8b2853bdc7453b78685ed63f64:
 [config](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/devcontainer.json),
 [setup](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/setup.sh),
 [smoke](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/smoke-container.sh).
 No runtime proof follows. Tests must cover real clone/history/index/dirty submodules,
-normal Git operations, changed-input refresh, concurrent writers, exact official
+normal Git operations, changed-input refresh, detected drift/conditional reporting, exact official
 phases, hook origin/order/path semantics, create-only multi-repo result refs,
 FETCH_HEAD/index/worktree preservation, transfer cancellation and all FR-067 cases.
 Owner approval concerns this concrete revised profile/amendments, not reapproval
-of D1/D2/naming/deletion. Engineering conflicts above, independent review and
-required checks remain open; native Linux/macOS evidence later establishes support.
+of D1/D2/naming/deletion. Exact-profile acceptance of the cooperative phase-binding amendment, independent
+review and required checks remain pending; native Linux/macOS evidence later establishes support.
 Full T038/T039 dependencies/checkmarks and all live-operation gates are unchanged.
