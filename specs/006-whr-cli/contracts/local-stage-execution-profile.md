@@ -7,8 +7,8 @@ The [interaction contract](local-stage-promote.md), [LS-1](../spec.md#ls-1-owner
 [home decision](candidate-home-cleanup-decision.md) and
 [cleanup task proposal](candidate-home-cleanup-task-proposal.md) retain their
 separate authority. Owner direction to implement Package B does not establish
-approval of this exact execution profile. The unresolved items below keep the S0 gate
-closed to product code until resolved, independently reviewed and owner approved.
+approval of this exact execution profile. S0 remains gated on independent review
+and exact-profile owner approval; the choices below are proposed, not accepted.
 No task entry, dependency, checkbox, FR-067 protection or D1/D2 decision changes.
 
 ## Proposed workspace semantics and admitted capabilities
@@ -17,13 +17,13 @@ No task entry, dependency, checkbox, FR-067 protection or D1/D2 decision changes
 bounded mirror of the whole admitted workspace and populated submodules, retaining
 its basename and layout. `${localWorkspaceFolder}` resolves to that mirror;
 `${localWorkspaceFolderBasename}` retains the original basename. The mirror is
-mounted at the original container workspace target. Stage edits affect disposable
-candidate files only. Edits to the original after capture are absent; no candidate
-edit is copied back. Promotion restores the original source bind and original
-primary home and executes zero host or container lifecycle hooks. This initial
-hook-free promotion profile is also proposed for explicit owner approval: it
-preserves existing home configuration without migrating candidate setup outputs. This is a visible change to candidate editing semantics, not a
-transparent config-file copy or a committed-files-only restriction.
+mounted **read-only** at the original container workspace target. Candidate source
+editing is prohibited; candidate home and private temporary storage remain writable.
+Edits to the original after capture are absent; no candidate file is copied back.
+Promotion restores the original source bind and original primary home and executes
+zero host or container lifecycle hooks. Mirror/synthetic-Git semantics and this
+initial hook-free promotion are explicit proposed owner profile choices; neither
+is transparent configuration reuse or a committed-files-only restriction.
 
 The original physical source path and primary ID remain identity inputs. Snapshot
 labels never select a primary. Source correspondence, exact selector admission,
@@ -37,10 +37,10 @@ acceptance targets; neither has been verified by this document.
 | Image/build | Local Dockerfile/context inside capture, or image reference. Record Dockerfile/context bytes and effective image ID. Stage may build/pull after trust; network, apt and mutable base images are explicitly trusted external dependencies, not reproducibility claims. |
 | Build expansion | No Compose, Features/additional Features, external context, SSH/secret mount, remote ADD, arbitrary frontend or build context outside the mirror. Unsupported syntax refuses 68; do not silently omit it. |
 | Users | Preserve distinct containerUser and remoteUser, effective image defaults, numeric identities and home target; home only `/home/captain` or `/home/vscode`. UID rewriting disabled in both phases; a profile needing UID extension refuses. |
-| Mounts | One explicit workspace bind, one home, digest-bound BundleDock volumes read-only with volume-nocopy. Preserve target/options and reject duplicate/conflicting targets, escaping host binds, anonymous volumes and socket/credential mounts. |
+| Mounts | One read-only mirror workspace bind during stage (original live bind on promote), one home, digest-bound BundleDock volumes read-only with volume-nocopy. Preserve target/options and reject duplicate/conflicting targets, escaping host binds, anonymous volumes and socket/credential mounts. |
 | Runtime fields | Admit validated name/hostname runArgs only; preserve effective containerEnv, remoteEnv, overrideCommand, init and working directory. Privilege, devices, capabilities, security options, extra network and arbitrary runArgs refuse. |
 | Substitutions | Admit local workspace/basename, devcontainerId, explicit localEnv entries and inspected containerEnv references. Resolve once with unset/empty/default distinguished; unknown references refuse. |
-| Hooks | Admit array/string/object forms and official lifecycle ordering only after their local dependency closure is captured. Object initialization remains parallel. No host hook during promotion, as already decided; this profile additionally suppresses every container lifecycle hook during promote. Host initialization is limited to the closed protocol below. |
+| Hooks | Admit the inventoried Anchorage hooks below in their declared array/string/object forms and official ordering; unknown dependency patterns refuse. Object initialization remains parallel. No host hook during promotion, as already decided; this profile additionally suppresses every container lifecycle hook during promote. Host initialization is limited to the closed protocol below. |
 | Verification | Native declared healthcheck passing, or explicitly requested existing smoke over stdin. Smoke requires captured transitive Make/scripts/assets and expected interpreter/user. Running alone never qualifies. |
 
 This matrix covers the actual Anchorage shape instead of inheriting the narrower
@@ -68,10 +68,10 @@ there is no automatic fallback to a smaller capture or network fetch.
    default. A tracked private path refuses rather than silently disappearing.
    Explicit admitted ignored inputs require a reviewed exact path inventory;
    ignore status alone never classifies an executable input as safe.
-3. Output paths are exclusively `.devcontainer/host.env`, `.devcontainer/smoke.env`
-   and host.env's bounded PID-suffix temporary sibling. Omit preexisting bytes;
-   record omission and require fresh generation before any later read. Additional
-   generated outputs require profile revision, not permissive ignored-tree copying.
+3. Omit preexisting host.env/smoke.env; record omissions. Only host.env and its
+   PID-suffix temporary sibling may be written into W by host initialization;
+   smoke.env remains absent (this profile never invokes its orchestrator). Further
+   output paths need a profile revision, not permissive ignored-tree copying.
    Tests may write only bounded candidate-home/private temporary data outside
    input regions; Python bytecode/cache writes into source are disabled explicitly.
 4. Read regular files through verified handles; compare identity/size/mode before
@@ -82,19 +82,20 @@ there is no automatic fallback to a smaller capture or network fetch.
 5. Generate synthetic standalone Git repositories, never copy `.git` wholesale.
    Materialize only admitted HEAD-tree files into a safe baseline tree, reconstruct
    the admitted index's staged entries, then overlay actual working bytes without
-   checkout. Create synthetic commits/submodule gitlinks bottom-up; original
-   commit/gitlink identities remain separate provenance in the receipt. Generated
-   config contains only core repository/submodule layout settings, no host config,
-   hooks, credentials, alternates or worktree pointers. No historical object graph
-   is imported. Snapshot Git IDs differ deliberately; full Git-history semantics
-   are not promised. Git status must retain admitted modified/staged/untracked
-   classifications; original-submodule status equivalence needs an explicit test.
+   checkout. Use the fixed safe-Git protocol below. Original commit/gitlink IDs
+   remain provenance; snapshot IDs differ. Full Git-history semantics are excluded.
 6. Canonical input manifest is UTF-8 JSON, sorted object keys and path records by
    unsigned UTF-8 bytes, no insignificant whitespace, LF terminator. Paths use
    slash-separated relative components; non-UTF-8 names refuse. Each record has
    exactly path, kind, mode (permission bits), size and sha256 (or link target).
    Include resolved config, submodule identities, safe Git inventory, substitutions,
-   output omissions, profile version and tool identities. Digest is
+   output omissions, profile version and tool identities. Normalize only assigned
+   private roots to typed `$CAPTURE`, `$USERDATA` and `$DRIVER` placeholders before
+   hashing resolved documents; record the exact substitution map privately. Preserve
+   original physical source path/identity. Opaque operation/home IDs are allocation
+   intent, not source inputs. Repeated unchanged preview/apply captures must match;
+   no arbitrary path/string replacement or normalization of executable file bytes.
+   Digest is
    `sha256:<64-lowercase-hex>` over these bytes, with no host secrets or file bodies
    in the public result. Private capture retains admitted executable bytes.
 7. Preview and owner trust bind this manifest. Apply captures again and requires
@@ -103,31 +104,88 @@ there is no automatic fallback to a smaller capture or network fetch.
    manifest, not a single-instant filesystem snapshot. Advisory locks do not stop
    editors; private state is not isolation against a hostile same-user process.
 
-Maintain an immutable base capture and a separate execution mirror. Before every
-hook/build/smoke phase compare all input regions with the base; only declared
-phase outputs may differ. Freeze source capture before host initialization.
-Outputs become later-phase inputs only after validation and a receipt hash.
-Refuse unexpected source writes; after any executed hook this is 73, not rollback
-or new trust. Candidate writes are disposable data and invalidate verification
-when they touch input regions. No stale host.env/smoke.env is silently sourced.
+Keep a frozen base capture and execution mirror W. The full stage override sets
+`workspaceMount=type=bind,source=W,target=CONTAINER_WORKSPACE,readonly` before up.
+Official 0.89.0 awaits all host initialize branches before resource creation; they
+write only declared outputs in W, while Docker mounts W read-only for the candidate.
+After up, compare input regions with the base and validate outputs before invoking
+any container hook or smoke. Recheck before each later phase; reject unexpected
+writes (73 after executed effects). Candidate home/tmp remain writable. No stale
+host.env/smoke.env is sourced. Trusted host initialization/CLI processes cooperate
+with this write inventory; neither file modes nor the read-only container bind
+sandbox same-UID host processes, which are outside this profile's threat boundary.
 
-**Unresolved execution-freeze detail:** these comparisons detect input mutation;
-they do not prevent a running candidate from changing bytes between checks. The
-concrete minimal alternative is a read-only mirror workspace mount after host
-initialization, with only home/tmp writable and Python source-cache writes disabled.
-That would prohibit candidate workspace editing in this initial profile, a visible
-restriction requiring owner profile approval and actual Anchorage smoke evidence.
-A writable candidate instead requires a proven separate sealed execution view;
-permission bits alone are insufficient. Do not claim byte-bound execution or S0
-completion until one mechanism and its output paths are selected and specified.
+Safe-Git protocol, bottom-up per admitted repository (all subprocesses bounded):
+
+- Parse original HEAD/index/gitlink identities without running repository config.
+  A generated empty Git directory reads the resolved original object directory
+  via explicit GIT_OBJECT_DIRECTORY and the original index via GIT_INDEX_FILE;
+  use fixed `ls-tree -rz`, `ls-files --stage -z`, `cat-file --batch` protocols.
+  No checkout/status/fetch/submodule update, hook, filter or network. Refuse source
+  alternates, replace refs, unmerged/intent-to-add/sparse/split indexes, non-SHA1
+  objects and missing original trees. Source attributes are captured data only.
+- Use an empty environment plus recorded PATH, private HOME and TMPDIR; set
+  GIT_CONFIG_NOSYSTEM=1, GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_COUNT=0,
+  GIT_NO_REPLACE_OBJECTS=1, GIT_OPTIONAL_LOCKS=0 and GIT_TERMINAL_PROMPT=0. Fixed
+  `-c core.fsmonitor=false -c core.hooksPath=/dev/null` applies to every call.
+  Never inherit GIT_DIR/WORK_TREE/INDEX_FILE/OBJECT_DIRECTORY/SSH or credentials;
+  only the protocol's explicitly assigned private paths/object reader are allowed.
+- Create each synthetic `.git` with `git init --template= --object-format=sha1`;
+  only generated core/submodule layout config is allowed. Feed raw captured blobs
+  to `hash-object -w --stdin --no-filters`, build baseline trees with `mktree -z`,
+  and create deterministic parentless `commit-tree` commits (fixed synthetic
+  author/committer `WorkHarbor Snapshot <snapshot@workharbor.invalid>`, timestamp
+  `1970-01-01T00:00:00Z`, message `snapshot <original-commit-id>`; no git identity
+  config is written). Including the original ID distinguishes different commits.
+  Original history/config is excluded.
+- For each populated submodule map three original states separately: parent
+  HEAD-tree gitlink, parent stage-0 gitlink and child checked-out HEAD. Synthesize
+  each referenced committed tree bottom-up (max3 distinct snapshots per repo),
+  substituting corresponding nested synthetic IDs; missing/unrepresentable states
+  refuse. Parent baseline uses mapped HEAD gitlinks, parent index uses mapped
+  stage-0 gitlinks, child HEAD uses mapped actual HEAD. Build each working index
+  with `update-index -z --index-info`, then overlay captured working bytes/deletions/
+  untracked paths without add/checkout. Preserve staged, unstaged, untracked and
+  dirty-submodule categories, not original status hashes: reject a mapping that
+  collapses an original difference. Record original IDs/status provenance separately.
+  Submodule links resolve inside W; read-only Git metadata prevents candidate writes.
+  Describe/revision/upstream/history equivalence is unsupported, never fake clean.
+
+Anchorage dependency admission is the captured `.devcontainer` script/config/assets
+inventory (initialize, host-info, setup, greeting-info, prompt TOML/logo, pins-hash,
+smoke-container, test-integration/test-pins/test-setup and their fixture-invoked
+up/smoke/Git helpers), root Makefile/.gitignore/.gitmodules, and the captured
+BundleDock bundle-volume script plus referenced publication receipts/docs. Scripts
+must match this reviewed dependency/effect inventory; dynamic source selection,
+external scripts or additional executable roots refuse 68 before hooks. Inputs
+may be modified working bytes when the owner trusts their digest; this is explicit
+trust in the inventoried cooperative programs, not arbitrary shell-closure proof.
+Container image/bundle tools and generated candidate-home startup code are trusted
+external/runtime inputs, separately recorded; no host credential stores are copied.
+
+Output validation after up, before hooks/smoke: require one new no-follow regular
+host.env, owner UID, nlink1, max64KiB, seven unique keys exactly HOST_NAME/IP/OS/ARCH/
+ENGINE/ENGINE_ARCH/CONTEXT in producer order. Each value is max4096 UTF-8 bytes,
+no control characters; parse only POSIX single-quoted literals with the producer's
+literal quote-escape concatenation, never eval/source for validation. Reject extra
+shell tokens, keys, duplicate records, remaining PID temporary files or smoke.env.
+Record raw output size/hash and producer/input digest. Invalid/absent output after
+up is 73, and no container hook/smoke runs. Candidate home/tmp outputs are disposable
+runtime data, bounded by phase deadlines, not a claimed filesystem quota/sandbox.
 
 ## Tool boundary, endpoint, environment and budgets
 
 Use the already selected official Dev Container CLI **0.89.0**, trusted installed
-Node, Docker CLI, Git, shell and host utilities. Resolve absolute executables once,
-record version/path/content digest, recheck before launch; no npx/download/install
-fallback. Exact supported Node/Docker/Git version matrix still requires native
-measurement. No new broad dependency or native isolation runner is proposed.
+Node **26.11.1** (repository pin), Git **>=2.39.5**, Docker CLI/Engine **>=27.0**
+with negotiated API **>=1.46**, POSIX sh and Bash **>=3.2**. These are proposed
+admission thresholds, not measured compatibility. Require local Unix transport,
+inspect/mount/health fields and `run --pull never`; missing capability refuses 68.
+Resolve absolute executables, record actual version/path/content digest, recheck
+before launch; no npx/download/install fallback. Host utilities are the installed
+uname, hostname, awk, sed, dirname, mv and platform host-info probes (scutil,
+sw_vers, route/ipconfig or ip when present), inventoried by path/digest. Missing
+optional probes follow captured script fallbacks; missing required tools refuse.
+No new broad dependency or native isolation runner is proposed.
 
 Pin the admitted physical Unix socket and daemon ID throughout; all Docker
 processes use `--host unix://<socket>` and empty private DOCKER_CONFIG. Reinspect
@@ -138,10 +196,10 @@ boundary; hooks' literal `docker` also require that driver first in fixed PATH.
 This is cooperative trusted-tool routing, not a same-user security sandbox.
 
 Construct env from empty: PATH of recorded tool directories, HOME/private user
-and cache directories, TMPDIR, DOCKER_CONFIG, fixed DOCKER_HOST, LANG=C.UTF-8,
-LC_ALL=C.UTF-8 and TZ=UTC. Set GIT_CONFIG_NOSYSTEM=1 and GIT_CONFIG_GLOBAL=/dev/null.
+and cache directories, TMPDIR, DOCKER_CONFIG, fixed DOCKER_HOST, LANG=C,
+LC_ALL=C and TZ=UTC. Set GIT_CONFIG_NOSYSTEM=1 and GIT_CONFIG_GLOBAL=/dev/null.
 Set only admitted ANCHORAGE_CONTAINER_NAME/HOSTNAME/ROLE substitutions and explicit
-nonsecret HOST_LABEL/HOST_IP values, preserving unset versus empty. No tokens,
+nonsecret ANCHORAGE_HOST_LABEL/ANCHORAGE_HOST_IP values, distinguishing unset/empty. No tokens,
 SSH agent, arbitrary localEnv, host user Docker config or ambient XDG state.
 Container env is separate and comes from the inspected image plus admitted config;
 resolve remoteEnv after image inspection, never by importing host PATH.
@@ -149,9 +207,15 @@ resolve remoteEnv after image inspection, never by importing host PATH.
 Proposed argv vectors below are specifications for fake/native conformance, not
 commands run here. `D` is absolute private Docker driver, `W` execution mirror,
 `C` captured config, `O` full private override, `U` private user-data directory.
+For promote, W is the original source directory, C remains receipt-captured and O
+is the image-only config with explicit original workspace mount; no live config
+is reevaluated or hook executed. All private argv paths are materialized from the
+receipt's normalized map and checked before launch.
 `L` is an explicit ordered list of exact `--id-label key=value` pairs binding
 original source identity, operation and stage role; do not use mirror paths as
-original identity. Configurations set userEnvProbe=none explicitly.
+original identity. Configurations set userEnvProbe=none explicitly. Stage
+containerEnv/remoteEnv also set PYTHONDONTWRITEBYTECODE=1 and GIT_OPTIONAL_LOCKS=0;
+record these visible additions in effective configuration and trust inputs.
 
 ```text
 devcontainer read-configuration --workspace-folder W --config C --override-config O
@@ -250,8 +314,8 @@ of the old primary is automatic. Original primary home is never a cleanup target
 
 Promotion override is image-only with `image=sha256:<verified candidate image ID>`;
 no build, Features, additional Features, initializeCommand or UID extension. The
-private driver denies build/buildx/pull/tag during promote, and native run must use
---pull never. A missing local image refuses before primary stop. Inspect resulting
+private driver denies build/buildx/pull/tag during promote and inserts the fixed
+`--pull never` option in validated native run argv (reject a conflicting option). A missing local image refuses before primary stop. Inspect resulting
 `.Image` independently and require exact equality; a CLI success message is not proof.
 
 Keep ordered image metadata and source contribution separate in the receipt.
@@ -290,15 +354,18 @@ docker volume create V
 docker run --rm --network none --mount type=volume,src=V,dst=/bundle,volume-nocopy IMAGE_ID
 ```
 
-Require inspected IMAGE_ID to equal the pulled R identity; `V` must equal that
+After pulling digest reference R, inspect R and bind its returned `.Id` to the
+initializer's exact IMAGE_ID; retain both R (OCI manifest/index digest provenance)
+and `.Id` (Docker image configuration identity). These digests need not be equal; `V` must equal that
 bundle's declared read-only destination volume. No arbitrary image, host bind,
 primary home, unknown option or extra command is admitted. The driver prefixes
 the fixed endpoint and uses empty config; label correlation does not manufacture
 ownership of shared tool volumes. host-info additionally admits only docker info
-with the two captured exact format strings and docker context show; that diagnostic
+with exact formats `{{.OperatingSystem}} {{.ServerVersion}}` and `{{.Architecture}}`,
+and `docker context show`; that diagnostic
 context value grants no endpoint selection. Record per-branch effects before
 forwarding commands; any uncertainty is 73. Bundle pull/initializer invocations are
-explicit previewed trusted effects, including shared-volume lock metadata writes.
+explicit previewed trusted effects, including shared-volume lock metadata writes; original primary home remains untouched.
 
 Read-only source at BundleDock `6886cd12bc9a50f7709e0e52cf9b6dda6cb9db95`
 ([initializer](https://github.com/wstein/bundledock/blob/6886cd12bc9a50f7709e0e52cf9b6dda6cb9db95/internal/toolvolume/volume.go))
@@ -321,8 +388,8 @@ home, require separate path/output/trusted-byte semantics before implementing it
 
 ## Closed result, error and recovery proposal
 
-All proposed objects below are closed: exactly listed keys, all required except
-explicitly nullable fields; unknown fields refused. IDs/digests use the formats
+All proposed objects below are closed: exactly listed required keys; explicitly
+nullable fields admit null values, not omitted keys. Unknown fields refuse. IDs/digests use the formats
 above; host paths max4096 bytes, strings max1024 unless specified. Public text is
 escaped; no secret, raw env, script body, child transcript or remote operation_id.
 Keep existing schema_version=1 envelope and error {code,message,remediation?}.
@@ -375,9 +442,13 @@ Read-only Anchorage references: [config](https://github.com/wstein/anchorage-wor
 [smoke](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/smoke-container.sh).
 Source inspection establishes feasibility constraints only; no runtime passed.
 
-Execution freeze and exact Git/output/tool admission still need review before S0 approval; obtain
-explicit approval of mirror/synthetic-Git and hook-free promotion semantics.
-Then red-first fake tools must cover source swaps/dirty submodules/ignored secrets,
+Remaining owner decisions: approve this exact profile's read-only mirror,
+synthetic Git semantics and hook-free promotion limits. Naming/deletion scope
+follows Package B direction; no old proposal merge is substituted for profile
+approval. Engineering evidence still required: independent contract review, safe
+Git/status fixtures, output parser and official CLI fake conformance; native
+Linux/macOS runs later establish compatibility, never this source-only proposal.
+Red-first fake tools must cover source swaps/dirty submodules/ignored secrets,
 output freshness, exact argv/env, hook origins/order, no promotion host hook,
 UID/build/pull/tag refusal, image equality, allocation races, crash at every intent,
 unverified outcomes, all deletion consent combinations and every unchanged FR-067

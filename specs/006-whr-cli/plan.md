@@ -453,8 +453,8 @@ subpackages of T038, not additional task IDs or independent feature completion:
 The [proposed execution profile](contracts/local-stage-execution-profile.md)
 makes the mirror/synthetic-Git capture, hook-free image promotion, bounded host
 initialization, allocation/journal and output choices concrete for independent
-review and explicit owner approval. Its remaining admission/freeze limits are
-not S0 completion. This reference adds no product authorization or task edge.
+review and explicit owner approval. Its concrete read-only execution and admission choices remain proposed;
+this is not S0 completion. This reference adds no product authorization or task edge.
 
 S0 must resolve engineering details rather than silently introducing requirements
 in source. In particular: source coverage must include executed build/hook/smoke
