@@ -39,21 +39,37 @@ All four failures were the intended new assertions:
   acknowledgement instead of `{:error, :persistence_failed}`.
 
 The remaining new tests cover unnegotiated, malformed, foreign, stale, expired and
-revoked first heartbeats without authentication events. Once the behavior passes,
-the positive tests also exercise steady/catch-up traffic, persisted-slot recovery,
+revoked first heartbeats without authentication events. The positive tests also
+exercise steady/catch-up traffic, persisted-slot recovery,
 replacement fencing, rate refusal and transactional audit-failure rollback of host
 last_seen/lease, conservative unknown slot, peer removal and refusal of the old ref.
 
-## Green verification gate
+## Green verification evidence
 
-Implementation and updated aggregate-audit expectations await exact-head CI and
-independent review. No green ExUnit or Mix formatting result is claimed locally.
-The local environment has no Mix; no tool installation, standalone build, Docker,
-actual-host or browser run was performed. Available repository static validation
-and `git diff --check` passed during authoring. The initial local `make check` was
-interrupted during Python checks at the coordinator's direction and is incomplete,
-not passing. Required full `make check`, application formatting/build/test and
-transport evidence must come from the published candidate's CI before readiness.
+[CI run 40109341317](https://github.com/wstein/workharbor/actions/runs/40109341317)
+succeeded at historical head `067ed3f8ffa08b5db53de53ae3933b7e5812e284`, including
+**223/223 ExUnit tests**, application formatting/build/test and the required check
+gate. This executed result follows the genuine four-assertion red phase above.
+
+The [Opus review](https://github.com/wstein/workharbor/pull/234#pullrequestreview-5638962109)
+reviewed that same historical head, accepted the implementation and identified this
+stale evidence section as its sole actionable finding (F1); its verdict was
+NOT CLEAR pending that documentation correction. This update records the missing
+CI and review links and removes the obsolete pending-verification instructions.
+
+The issue branch was subsequently rebased from
+`c71890d27c3d415e50fe15610a6f8f044b313142` onto
+`179005e6faf50aa356a38d61fd88a79121f96534`; all five issue patches compared equal
+with `git range-diff` before this documentation-only correction. The linked CI and
+review cover `067ed3f8`, not the rebased documentation head. Fresh candidate checks
+and review remain separate evidence; historical success is not transferred to a
+new SHA.
+
+The local environment has no Mix; no local ExUnit or formatter pass is claimed.
+No tool installation, standalone build, Docker, actual-host or browser run was
+performed locally. Available repository static validation and `git diff --check`
+passed during authoring. The initial local `make check` was interrupted during
+Python checks at the coordinator's direction and is incomplete, not passing.
 
 No real-host/browser, deployment, load or broader feature completion follows from
-these unit tests. Record the final exact-head CI and review links here before handoff.
+this bounded maintenance verification.
