@@ -190,7 +190,9 @@ func TestInitWriterSignalsEveryStep(t *testing.T) {
 					cmd := exec.Command(executable, "-test.run=^TestInitWriterSignalProcess$", "--", mode, event, dir)
 					cmd.Dir = dir
 					cmd.Env = []string{"HOME=" + private, "TMPDIR=" + private, "PATH=" + private, "TERM=dumb"}
-					cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+					if testing.CoverMode() != "" {
+						cmd.Env = append(cmd.Env, "GOCOVERDIR="+private)
+					}
 					stdout := &writerSignalCapture{ready: make(chan string, 1)}
 					stderr := &writerSignalCapture{}
 					cmd.Stdout, cmd.Stderr = stdout, stderr
@@ -208,9 +210,9 @@ func TestInitWriterSignalsEveryStep(t *testing.T) {
 					reaped := false
 					defer func() {
 						if !reaped {
-							// Only the process group of this successfully started
-							// owned child is eligible for timeout cleanup.
-							_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+							// This helper spawns no grandchildren. Use the owned
+							// process handle so a reaped PID cannot target a foreign group.
+							_ = cmd.Process.Kill()
 							select {
 							case <-waited:
 							case <-time.After(2 * time.Second):
