@@ -3,6 +3,7 @@ package workspacecfg
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,13 +81,21 @@ func TestBundlePinsRejectAmbiguousUnsafeAndOpaqueConfiguration(t *testing.T) {
 			}
 		})
 	}
-	for _, unsafe := range []string{"alternate_pins", "file_symlink", "parent_symlink", "directory_leaf", "missing"} {
+	for _, unsafe := range []string{"alternate_pins", "alternate_pins_symlink", "alternate_pins_directory", "file_symlink", "parent_symlink", "directory_leaf", "missing"} {
 		t.Run(unsafe, func(t *testing.T) {
 			dir := pinDirectory(t, raw)
 			path := filepath.Join(dir, ".devcontainer/devcontainer.json")
 			switch unsafe {
 			case "alternate_pins":
 				if err := os.WriteFile(filepath.Join(dir, ".devcontainer/bundle-pins.json"), []byte("{}"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "alternate_pins_symlink":
+				if err := os.Symlink("missing-alternate-pins", filepath.Join(dir, ".devcontainer/bundle-pins.json")); err != nil {
+					t.Fatal(err)
+				}
+			case "alternate_pins_directory":
+				if err := os.Mkdir(filepath.Join(dir, ".devcontainer/bundle-pins.json"), 0700); err != nil {
 					t.Fatal(err)
 				}
 			case "file_symlink":
@@ -195,5 +204,29 @@ func TestBundlePinsRefusesReplacedLabelRootIdentity(t *testing.T) {
 	pins, err := readBoundBundlePins(context.Background(), d, source)
 	if err != ErrBundleSourceMismatch || pins != nil {
 		t.Fatalf("replacement root accepted: %+v %v", pins, err)
+	}
+}
+
+func TestBundlePinsRejectNoncanonicalMountKeysBeforeRelevance(t *testing.T) {
+	raw := bundleConfig(t)
+	digest := strings.Repeat("c", 64)
+	cases := map[string]string{
+		"src":                  "type=volume,src=bundledock-hidden-" + digest + ",target=/ordinary,readonly",
+		"dst":                  "type=volume,source=opaque,dst=/opt/bdock/hidden,readonly",
+		"destination":          "type=volume,source=opaque,destination=/opt/bdock/hidden,readonly",
+		"extra_aliased_bundle": "type=volume,src=bundledock-hidden-" + digest + ",dst=/opt/bdock/hidden,readonly",
+		"unknown_key":          "type=volume,source=opaque,target=/ordinary,unrecognised=/opt/bdock/hidden,readonly",
+	}
+	for name, mount := range cases {
+		t.Run(name, func(t *testing.T) {
+			data := strings.Replace(raw, `"mounts": [`, `"mounts": [`+"\n"+fmt.Sprintf("%q,", mount), 1)
+			if data == raw {
+				t.Fatal("fixture mount insertion failed")
+			}
+			pins, err := ReadBundlePins(context.Background(), pinDirectory(t, data))
+			if err == nil || pins != nil {
+				t.Fatalf("noncanonical mount keys hid a declared bundle: %s pins=%+v err=%v", name, pins, err)
+			}
+		})
 	}
 }
