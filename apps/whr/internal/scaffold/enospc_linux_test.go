@@ -604,7 +604,7 @@ func TestInitPhysicalENOSPCMappedArgvSurvivesMutableAliases(t *testing.T) {
 	for _, name := range []string{"unshare", "sudo", "setpriv", "env"} {
 		system, err := filepath.EvalSymlinks(filepath.Join("/usr/bin", name))
 		if err != nil || physicalENOSPCTrustedSystemTool(system) != system {
-			t.Fatalf("canonical native positive control unavailable for %s: %v", name, err)
+			physicalENOSPCCapabilityUnavailable(t, fmt.Sprintf("canonical native positive control missing or untrusted for %s: %v", name, err))
 		}
 		alias := filepath.Join(private, name)
 		if err := os.Symlink(system, alias); err != nil {
