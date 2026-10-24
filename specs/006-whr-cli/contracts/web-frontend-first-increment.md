@@ -3,7 +3,8 @@
 Status: Step 0 proposal, 2026-10-24; documentation only. The owner's sequencing
 condition is met: T028 [#238](https://github.com/wstein/workharbor/pull/238) and
 T029 [#239](https://github.com/wstein/workharbor/pull/239) merged; the T030 honest-status
-[PR #241](https://github.com/wstein/workharbor/pull/241) is open. T030/SC-018 remain open.
+record was submitted as [PR #241](https://github.com/wstein/workharbor/pull/241).
+T030/SC-018 remain open.
 
 ## Scope and approval
 
@@ -69,7 +70,7 @@ Every page distinguishes loading, empty, error, stale/disconnected and successfu
 reads. Retain last-known data only with explicit uncertainty and read time; absent
 or failed projections never imply healthy/running or zero records. Host stale
 marking becomes visible within the existing 001/T015 five-second bound. Errors
-use redacted actionable text. Apply [FR-022](../spec.md#terminal-text-safety)
+use redacted actionable text. Apply [FR-022](../spec.md)
 visible control escaping **and** HEEx HTML escaping to every untrusted name,
 identifier, error and remote text; never use raw HTML or executable Markdown.
 
@@ -129,14 +130,17 @@ unverified; documentation approval claims no product acceptance.
 Paths below are exact proposed files relative to `apps/control_plane/`; shared
 files have one active author. Each package gets its own issue/branch and focused
 Conventional Commits. Dependents use merged prerequisites; only a real code
-dependency justifies a stack, at most two levels deep.
+dependency justifies a stack, at most two levels deep. W1 registers only the
+implemented overview; future-page routes remain unregistered and navigation items
+inactive until their page package supplies the module. No missing-module routes
+or dummy data make W1 appear complete.
 
 | Package / dependency | Files and acceptance |
 | --- | --- |
 | W1 shell, after plan gates | `lib/workharbor_web/{router.ex,endpoint.ex,security.ex,owner_socket.ex}`, `lib/workharbor_web/live/{owner_auth.ex,overview_live.ex}`, `lib/workharbor_web/components/{layouts.ex,layouts/root.html.heex,core_components.ex}`, `assets/{css/app.css,js/app.js}`, `test/workharbor_web/{owner_auth_test.exs,owner_shell_test.exs,transport_security_test.exs}`. Shell/navigation, all common states, auth/security and theme proof first. |
-| W2 hosts, after W1 | `lib/workharbor/hosts.ex`, `lib/workharbor_web/live/hosts_live.ex`, `test/workharbor/host_identity_test.exs`, `test/workharbor_web/live/hosts_live_test.exs`. Scoped enumeration, metadata and truthful liveness. |
-| W3 workspaces, after W2 | `lib/workharbor/foundation.ex`, `lib/workharbor_web/live/workspaces_live.ex`, `test/workharbor/foundation_test.exs`, `test/workharbor_web/live/workspaces_live_test.exs`. Scoped recorded state and conservative runtime projection. |
-| W4 trust/enrollment, after W3 | `lib/workharbor/{hosts.ex,config_trust.ex}`, `lib/workharbor_web/live/trust_live.ex`, `test/workharbor/{host_identity_test.exs,config_trust_test.exs}`, `test/workharbor_web/live/trust_live_test.exs`. Secret-free read-only metadata and exact-revision distinctions. |
+| W2 hosts, after W1 | `lib/workharbor/hosts.ex`, `lib/workharbor_web/live/hosts_live.ex`, `lib/workharbor_web/{router.ex,components/layouts.ex}`, `test/workharbor/host_identity_test.exs`, `test/workharbor_web/live/hosts_live_test.exs`. Activate the hosts route/navigation; scoped enumeration, metadata and truthful liveness. |
+| W3 workspaces, after W2 | `lib/workharbor/foundation.ex`, `lib/workharbor_web/live/workspaces_live.ex`, `lib/workharbor_web/{router.ex,components/layouts.ex}`, `test/workharbor/foundation_test.exs`, `test/workharbor_web/live/workspaces_live_test.exs`. Activate the workspaces route/navigation; scoped recorded state and conservative runtime projection. |
+| W4 trust/enrollment, after W3 | `lib/workharbor/{hosts.ex,config_trust.ex}`, `lib/workharbor_web/live/trust_live.ex`, `lib/workharbor_web/{router.ex,components/layouts.ex}`, `test/workharbor/{host_identity_test.exs,config_trust_test.exs}`, `test/workharbor_web/live/trust_live_test.exs`. Activate the trust route/navigation; secret-free read-only metadata and exact-revision distinctions. |
 
 Each package also scopes `docs/quality.md` and required test IDs in
 `docs/development/ci-acceptance.json` explicitly before implementation. Paths with
