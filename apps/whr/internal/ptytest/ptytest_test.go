@@ -714,8 +714,8 @@ func TestExpectRegexpWorkIsBounded(t *testing.T) {
 		t.Fatalf("regexp match = %q, want END", got)
 	}
 	// The 64 KiB per-search contract does not depend on PTY read wake-ups.
-	if work := s.Work() - before; work == 0 || work > 64<<10 {
-		t.Fatalf("regexp matcher work %d: want 1..65536 bytes for one search", work)
+	if work := s.Work() - before; work != 64<<10 {
+		t.Fatalf("regexp matcher work %d: want exactly 65536 bytes for one search", work)
 	}
 }
 
