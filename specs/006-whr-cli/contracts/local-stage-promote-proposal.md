@@ -13,8 +13,9 @@ selected text to the authoritative artifacts or implementing these choices.
 `--smoke`, verification of a healthy candidate, recreation of the primary using
 the verified image while preserving its home, and staging cleanup under FR-067.
 [T038](../tasks.md) includes this work; [PR #226](https://github.com/wstein/workharbor/pull/226)
-(open Draft at this proposal's review) proposes removal only and leaves T038 open.
-Its code is not accepted on main. T039 requires accepted T038.
+merged on main as `ae9cbb7410df42e62687a476ccdd6f6d1abb25da` and delivers removal
+only. Stage/promote remains unimplemented, so T038 stays open. T039 requires
+accepted T038.
 
 The command table currently has no stage/promote entry. FR-068 does not define
 workspace selection, local source trust, what `--smoke` executes or what counts
