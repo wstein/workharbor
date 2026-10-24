@@ -291,7 +291,7 @@ defmodule WorkHarbor.HostConnectionsTest do
   test "steady heartbeats add no audit rows and still renew host last_seen and lease", c do
     ref = connect(c)
     before = audits(c)
-    assert before == ["host_connected"]
+    assert before == ["host_connected", "host_connection_authenticated"]
 
     hb = fn ->
       Hosts.one("SELECT last_seen,lease_expires_at FROM hosts WHERE id=?", [c.peer.host_id])
@@ -329,7 +329,12 @@ defmodule WorkHarbor.HostConnectionsTest do
     assert :ok = HostConnections.disconnect(ref)
     assert {:ok, _} = HostConnections.open(c.peer, self())
 
-    assert audits(c) == ["host_connected", "host_connection_unknown", "host_connected"]
+    assert audits(c) == [
+             "host_connected",
+             "host_connection_authenticated",
+             "host_connection_unknown",
+             "host_connected"
+           ]
 
     ref2 = connect(c)
     assert :ok = HostConnections.disconnect(ref2)
@@ -355,18 +360,30 @@ defmodule WorkHarbor.HostConnectionsTest do
 
   test "each liveness transition adds exactly one audit row", c do
     ref = connect(c)
-    assert audits(c) == ["host_connected"]
+    assert audits(c) == ["host_connected", "host_connection_authenticated"]
 
     assert {:ok, ref2} = HostConnections.open(c.peer, self())
-    assert audits(c) == ["host_connected", "host_connection_replaced", "host_connected"]
+    assert audits(c) == [
+             "host_connected",
+             "host_connection_authenticated",
+             "host_connection_replaced",
+             "host_connected"
+           ]
+
     assert_receive {:host_connection_close, :replaced}
     assert {:error, _} = HostConnections.heartbeat(ref, message(c, "heartbeat"))
-    assert audits(c) == ["host_connected", "host_connection_replaced", "host_connected"]
+    assert audits(c) == [
+             "host_connected",
+             "host_connection_authenticated",
+             "host_connection_replaced",
+             "host_connected"
+           ]
 
     assert :ok = HostConnections.disconnect(ref2)
 
     assert audits(c) == [
              "host_connected",
+             "host_connection_authenticated",
              "host_connection_replaced",
              "host_connected",
              "host_connection_unknown"
