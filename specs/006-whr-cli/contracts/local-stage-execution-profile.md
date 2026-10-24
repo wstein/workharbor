@@ -487,6 +487,14 @@ Each action records intent/observed/uncertain independently. An uncertain transi
 is retained and blocks fresh staging; rerun reports it, never reruns hooks/builds.
 Only a receipt-bound verified candidate can enter promoting.
 
+Before entering exporting_results, complete fresh source/fingerprint trust checks,
+all mutation/deletion consent (--volumes plus --force and confirmation/--yes), the
+entire FR-067 cleanup preflight, result-ref count/collision checks and exact
+resource/verification rechecks. This ordering precedes export/import/object/ref
+effects, not merely primary stop. Missing consent is 70 and inadmissible cleanup
+is 68 with zero promote effects. Recheck again before import and primary stop;
+late drift after an applied effect follows partial-73 rules, never unsafe cleanup.
+
 Before primary stop, recheck endpoint, exact primary/candidate/image IDs, source
 manifest, original home, effective users/mounts/env, verification freshness and
 **entire** candidate cleanup plan. Apply requires explicit --volumes --force and
