@@ -4,8 +4,12 @@ package commands_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/doctor"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -88,5 +92,54 @@ func TestBundleDriftHumanEscapesUntrustedValues(t *testing.T) {
 	raw, err := json.Marshal(r)
 	if err != nil || strings.Contains(string(raw), "\x1b") {
 		t.Fatalf("%s %v", raw, err)
+	}
+}
+
+func TestBundleDriftRuntimeUnavailableKeepsSchemaReport(t *testing.T) {
+	for _, failure := range []string{"endpoint", "container_ls"} {
+		t.Run(failure, func(t *testing.T) {
+			dir := t.TempDir()
+			calls := filepath.Join(dir, "runtime-calls")
+			script := fmt.Sprintf("#!/bin/sh\nif test \"$2 $3\" = 'container ls'; then printf 'ls\\n' >> '%s';exit 1;fi\nprintf 'forbidden\\n' >> '%s';exit 99\n", calls, calls)
+			executable := filepath.Join(dir, "docker")
+			if err := os.WriteFile(executable, []byte(script), 0700); err != nil {
+				t.Fatal(err)
+			}
+			ports := doctor.Ports{Getenv: func(key string) string {
+				if key == "DOCKER_HOST" {
+					return "unix:///fixture/drift.sock"
+				}
+				return ""
+			}, DialUnix: func(context.Context, string) error {
+				if failure == "endpoint" {
+					return os.ErrNotExist
+				}
+				return nil
+			}}
+			handlers := baseHandlers()
+			handlers["workspace.drift"] = commands.LocalDriftHandler(func(ctx context.Context, source, selector string) (localdocker.BundleDriftResult, error) {
+				return (localdocker.Client{Executable: executable}).Drift(ctx, ports, source, selector)
+			})
+			got := run(t, handlers, "workspace", "drift", "--local", "--source", "/source", "primary", "--json")
+			if got.code != 68 {
+				t.Fatalf("runtime failure exit=%d stdout=%s stderr=%s", got.code, got.stdout, got.err)
+			}
+			envelope := decodeEnvelope(t, got.stdout)
+			report, ok := envelope["result"].(map[string]any)
+			if !ok || report["status"] != "cannot_determine" || report["reason"] != "runtime_unavailable" || report["container_id"] != nil {
+				t.Fatalf("runtime failure lost report: %s", got.stdout)
+			}
+			if err := compileSchema(t).Validate(envelope); err != nil {
+				t.Fatal(err)
+			}
+			raw, err := os.ReadFile(calls)
+			if failure == "endpoint" {
+				if !os.IsNotExist(err) {
+					t.Fatalf("unavailable endpoint reached Docker: %q %v", raw, err)
+				}
+			} else if err != nil || string(raw) != "ls\n" {
+				t.Fatalf("listing failure admitted additional calls: %q %v", raw, err)
+			}
+		})
 	}
 }

@@ -255,3 +255,52 @@ func TestBundleDriftWrongValidSourceRefusedWithoutEffects(t *testing.T) {
 		t.Fatalf("wrong source attempted a forbidden runtime call: %v", err)
 	}
 }
+
+func TestBundleDriftExtraAliasedBundleCannotReportInSync(t *testing.T) {
+	source := driftSource(t)
+	path := filepath.Join(source, ".devcontainer/devcontainer.json")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(raw, &config); err != nil {
+		t.Fatal(err)
+	}
+	config["mounts"] = append(config["mounts"].([]any), "type=volume,src=bundledock-hidden-"+strings.Repeat("c", 64)+",dst=/opt/bdock/hidden,readonly")
+	raw, err = json.Marshal(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0600); err != nil {
+		t.Fatal(err)
+	}
+	// The running container predates the added aliased declaration. Its existing
+	// toolbox mount alone cannot establish alignment with the desired config.
+	got, err := driftFixture(t, driftRecord(source, []mount{syncedMount()})).Drift(context.Background(), socketPorts(), source, "primary")
+	if exitcode.FromError(err) != 68 || got.Status != "cannot_determine" || got.Reason != "pins_unavailable" {
+		t.Fatalf("extra aliased bundle incorrectly aligned: %+v %v", got, err)
+	}
+}
+
+func TestBundleDriftUnknownPinBeforeLaterDriftDominates(t *testing.T) {
+	pin := func(name string) workspacecfg.BundlePin {
+		digest := strings.Repeat("a", 64)
+		return workspacecfg.BundlePin{Bundle: name, Reference: "quay.io/bundledock/" + name + "@sha256:" + digest, Volume: "bundledock-" + name + "-" + digest, Target: "/opt/bdock/" + name}
+	}
+	missing, drifted := pin("aaa"), pin("bbb")
+	mounts := []mount{{Type: "volume", Name: "bundledock-bbb-" + strings.Repeat("b", 64), Destination: drifted.Target}}
+	for _, pins := range [][]workspacecfg.BundlePin{{missing, drifted}, {drifted, missing}} {
+		got := compareBundlePins(strings.Repeat("a", 64), pins, mounts)
+		if got.Status != "cannot_determine" || got.Reason != "incomplete_evidence" || len(got.Bundles) != 2 || got.Bundles[0].Status != "cannot_determine" || got.Bundles[1].Status != "drift" {
+			t.Fatalf("unknown pin lost precedence to later drift: %+v", got)
+		}
+	}
+}
+
+func TestBundleDriftNilMountMetadataHasIncompleteAggregateEvidence(t *testing.T) {
+	got := compareBundlePins(strings.Repeat("a", 64), driftPins(), nil)
+	if got.Status != "cannot_determine" || got.Reason != "incomplete_evidence" || len(got.Bundles) != 1 || got.Bundles[0].Reason != "mount_unavailable" {
+		t.Fatalf("nil mount evidence was not classified per bundle and in aggregate: %+v", got)
+	}
+}
