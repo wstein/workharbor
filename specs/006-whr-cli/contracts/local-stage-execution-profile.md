@@ -150,6 +150,9 @@ uncertain execution records uncertainty and requires owner reconciliation instea
 of refresh. No healthcheck plus no --smoke remains missing_smoke; never run smoke
 implicitly. Preview names --refresh --smoke as recovery where admissible, otherwise
 guarded cleanup/fresh stage. Default stage does not consume this recovery path.
+Refresh eligibility reads the explicit closed receipt unverified_reason, never an
+inference from verification policy/status. Missing/null/unknown reason in a
+staged_unverified receipt refuses 68; no health_and_smoke ambiguity is inferred.
 
 **Proposed bounded phase-binding amendment — cooperative quiescence:** retain
 fingerprint trust and exact-candidate verification, and make the execution claim
@@ -456,7 +459,8 @@ Future source PR adds schemas/command table together, not in this docs PR.
 
 | Object | Exact proposed fields / types |
 |---|---|
-| stageResult/promoteResult | status enum(preview,staged_verified,staged_unverified,promoted,refused,partial); phase enum(journal states plus preflight); recovery_id nullable string; fingerprint nullable digest; primary nullable resource; candidate nullable resource; home nullable resource; verification nullable verification; effects array(effect), max 256; recovery array(step), max 32; repositories array(repository), max 33; result_refs array(resultRef), max 1024 |
+| stageResult/promoteResult | status enum(preview,staged_verified,staged_unverified,promoted,refused,partial); unverified_reason nullable unverifiedReason; phase enum(journal states plus preflight); recovery_id nullable string; fingerprint nullable digest; primary nullable resource; candidate nullable resource; home nullable resource; verification nullable verification; effects array(effect), max 256; recovery array(step), max 32; repositories array(repository), max 33; result_refs array(resultRef), max 1024 |
+| unverifiedReason | enum(missing_smoke,failed_smoke,failed_health,stale_candidate_inputs); no free-form value |
 | resource | kind enum(container,volume,image); name nullable string; id nullable string (container full64hex, image sha256, volume name); daemon_id string |
 | repository | source_path string; clone_path string; head_oid string; object_format enum(sha1,sha256); dirty bool; uncommitted_retained bool |
 | resultRef | repository_path string; export_ref string; target_ref string; oid string; state enum(planned,created,uncertain,remaining) |
@@ -472,6 +476,10 @@ Future source PR adds schemas/command table together, not in this docs PR.
 | step | action enum(inspect_retained,refresh_with_smoke,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable effectTarget; instruction string |
 
 OID is exactly 40 lowercase hex for sha1 or 64 for sha256, matching its repository.
+unverified_reason is a required result/receipt key: non-null unverifiedReason
+exactly when result status/receipt state is staged_unverified, null otherwise.
+Known verification failures persist their precise reason; ambiguous/unknown state
+does not become refresh-eligible by inference.
 Git import effects require gitObjectsTarget; ref publication requires gitRefsTarget;
 candidate output publication requires cloneOutputTarget; Docker effects require
 resource. The object manifest is a private sorted OID/size inventory bound by its
@@ -484,7 +492,7 @@ config_digest, image_metadata_digest, effective_config_digest, output_inventory,
 origin_binding, candidate_git_version, execution_manifest_digest, phase_binding_mode,
 clone_repositories, exported_refs, imported_objects, result_ref_transactions,
 primary/candidate/home resource identities, trust_digest, consent flags,
-verification and action inventory. Tool manifest entries are path/version/digest;
+verification, unverified_reason and action inventory. Tool manifest entries are path/version/digest;
 output_inventory is array(outputEntry), max 100. Only admitted_A may have null
 producer fields; all entries retain the admitting operation/input binding.
 Detailed byte manifests remain
