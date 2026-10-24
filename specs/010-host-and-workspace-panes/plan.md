@@ -6,8 +6,8 @@
 binds their accepted scopes. G-A/G-B real-host acceptance and T031 closure remain open;
 SC-007 runtime session creation remains outside the delivered configuration scope.
 The owner requested this plan. [PR #212](https://github.com/wstein/workharbor/pull/212) merged the specification and
-[PR #214](https://github.com/wstein/workharbor/pull/214) records seven owner decisions; [PR #216](https://github.com/wstein/workharbor/pull/216) adds the eighth, OQ-11, and SC-011. [PR #217](https://github.com/wstein/workharbor/pull/217) adds the ninth, OQ-12, and resolves picker eligibility. The spec still labels its overall status
-Draft; this plan does not invent revision-bound spec/plan approval, task approval, build authority or runtime activation.
+[PR #214](https://github.com/wstein/workharbor/pull/214) records seven owner decisions; [PR #216](https://github.com/wstein/workharbor/pull/216) adds the eighth, OQ-11, and SC-011. [PR #217](https://github.com/wstein/workharbor/pull/217) adds the ninth, OQ-12, and resolves picker eligibility. The spec retains its Draft/approval state separately from implemented package scope;
+this plan does not invent revision-bound spec/plan approval, task approval, build authority or runtime activation.
 Before implementation, bind the reviewed spec/plan/tasks revisions and owner approval links under [WORKFLOW](../../WORKFLOW.md).
 
 ## Summary

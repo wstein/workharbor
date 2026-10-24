@@ -3,7 +3,10 @@
 **Feature identifier**: `010-host-and-workspace-panes`
 **Feature Branch**: `docs/spec-010-host-and-workspace-panes`
 **Created**: 2026-10-23
-**Status**: P1–P4 implementation packages are merged; see the
+**Status**: Draft specification; no revision-bound owner approval of this full
+specification is recorded. Such approval requires independent exact-head CLEAR
+and explicit owner approval evidenced by a tracker or PR link ([WORKFLOW](../../WORKFLOW.md)).
+P1–P4 implementation packages are merged; see the
 [implementation and acceptance evidence](../../docs/quality/010-host-and-workspace-panes/implementation.md).
 The settled decisions below are unchanged. Whole-feature acceptance remains open:
 SC-009 owner gates G-A/T018 and G-B/T030 are UNVERIFIED, T031 is incomplete, and
