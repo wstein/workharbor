@@ -274,3 +274,5 @@ later documentation head does not claim a Linux run of its own SHA; exercised
 runtime/config/dependency/test-input blobs remain exactly the accepted 64541c1 source.
 Only Feature006 T008 is newly checked; Feature001 markers/frozen history are unchanged.
 S001 remains mitigation-only; no provider/browser/load/pilot/release acceptance follows.
+
+WP0 source reconciliation at `628bc4ded0f96ed0ffebc501eae833fe4e2d3e5f`: [first-increment evidence and remaining work](../../docs/quality/006-whr-cli/first-increment.md). This reference changes no task text, dependency, approval marker or completion checkbox.
