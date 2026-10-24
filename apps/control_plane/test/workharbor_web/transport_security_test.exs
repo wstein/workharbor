@@ -42,6 +42,34 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     if tags[:tls], do: start_tls(ctx), else: ctx
   end
 
+  test "owner client selects guarded socket without longpoll or embedded credentials" do
+    source = File.read!(Path.expand("../../assets/js/app.js", __DIR__))
+    assert source =~ ~r/new LiveSocket\(["']\/owner\/live["']/
+    refute source =~ "longPollFallbackMs"
+    refute source =~ "localStorage.setItem(\"credential"
+    refute source =~ "sessionStorage.setItem(\"credential"
+  end
+
+  test "owner assets are served narrowly without loosening authentication policies" do
+    for path <- ["/assets/js/app.js", "/assets/css/app.css"] do
+      conn = Plug.Test.conn(:get, "https://localhost" <> path)
+        |> Plug.Conn.put_req_header("host", "localhost")
+      response = Endpoint.call(conn, Endpoint.init([]))
+      assert response.status == 200
+      refute response.resp_body == ""
+      refute response.resp_body =~ "data:image"
+    end
+
+    for path <- ["/login/owner", "/api/v1/auth/status", "/owner/auth"] do
+      conn = Plug.Test.conn(:get, "https://localhost" <> path)
+        |> Plug.Conn.put_req_header("host", "localhost")
+      response = WorkHarborWeb.Security.call(conn, [])
+      assert Plug.Conn.get_resp_header(response, "content-security-policy") == [
+        "default-src 'none'; script-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+      ]
+    end
+  end
+
   # Each profile is evaluated from the real runtime file; the listener tests use
   # these exact adapter child specs, so changing runtime protocol options is caught.
   defp runtime(ctx, env, port) do
