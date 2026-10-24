@@ -4,6 +4,7 @@ package commands
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -96,6 +97,12 @@ func LocalRmHandler(prepare func(context.Context, localdocker.RemovalOptions) (R
 			// Read one bounded line from the existing input stream; malformed, absent,
 			// unterminated and oversized answers fail closed without another prompt.
 			answer, err := bufio.NewReader(io.LimitReader(v.input, 1025)).ReadString('\n')
+			if ctx.Err() != nil {
+				return Result{}, ctx.Err()
+			}
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return Result{}, err
+			}
 			answer = strings.ToLower(strings.TrimSpace(answer))
 			if err != nil || len(answer) > 1024 || answer != "yes" && answer != "y" {
 				return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionRefused, "removal was not confirmed")

@@ -203,3 +203,37 @@ func TestLocalRmBackendRefusalPreservesResult(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+type removalAnswerReader func([]byte) (int, error)
+
+func (read removalAnswerReader) Read(p []byte) (int, error) { return read(p) }
+
+func TestLocalRmConfirmationCancellationAndDeadline(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		readError error
+		code      int
+	}{
+		{"cancellation", context.Canceled, 72},
+		{"deadline", context.DeadlineExceeded, 71},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := &removalFixture{result: removalResult()}
+			n := 0
+			var o localdocker.RemovalOptions
+			var out, diag bytes.Buffer
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			input := removalAnswerReader(func([]byte) (int, error) {
+				if tc.readError == context.Canceled {
+					cancel()
+				}
+				return 0, tc.readError
+			})
+			code := commands.Execute(ctx, []string{"rm", "--local", "one", "--no-color"}, commands.Env{Stdout: &out, Stderr: &diag, Stdin: input, InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}, removalHandlers(f, &n, &o))
+			if code != tc.code || n != 1 || f.applies != 0 {
+				t.Fatalf("code %d, want %d; prepares=%d applies=%d: %s", code, tc.code, n, f.applies, diag.String())
+			}
+		})
+	}
+}
