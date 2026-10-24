@@ -29,8 +29,10 @@ defmodule WorkHarborWeb.OwnerShellTest do
 
   test "hostile flash text visibly escapes every FR022 control class and HTML" do
     controls =
-      (Enum.to_list(0..31) -- [9]) ++ Enum.to_list(127..159) ++
-        [0x061C, 0x200E, 0x200F, 0x2028, 0x2029] ++ Enum.to_list(0x202A..0x202E) ++
+      (Enum.to_list(0..31) -- [9]) ++
+        Enum.to_list(127..159) ++
+        [0x061C, 0x200E, 0x200F, 0x2028, 0x2029] ++
+        Enum.to_list(0x202A..0x202E) ++
         Enum.to_list(0x2066..0x2069)
 
     for codepoint <- controls do

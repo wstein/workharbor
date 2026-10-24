@@ -163,6 +163,13 @@ native formatter pass: CI may still stop at `mix format --check-formatted` befor
 semantic tests. The review's acceptance verdict is separate from future W1 runtime
 acceptance.
 
+Actual CI at `7516a5e9d994fc426de3d62970b4ed2fcffd8523` stopped at
+[`mix format --check-formatted`](https://github.com/wstein/workharbor/actions/runs/40137093087/job/121001704694).
+It emitted two source formatting changes: split the control corpus concatenation
+and insert a blank line before the denial-count return. Both exact changes were
+applied; a native formatter pass on the correction remains pending CI. Application
+compilation and ExUnit semantic RED were not reached by that run.
+
 Actual local results: `python3 scripts/check_repo.py`, changed-test `typos` and
 `git diff --check` passed. The initial scoped `MIX_ENV=test mix test` invocation for
 `owner_shell_test.exs`, `owner_auth_test.exs`, `authentication_test.exs` and
