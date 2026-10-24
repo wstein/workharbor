@@ -230,8 +230,18 @@ func initNetworkNativeUnavailable(text string) bool {
 	return strings.HasPrefix(lower, "unshare:") && (strings.Contains(lower, "operation not permitted") || strings.Contains(lower, "permission denied") || strings.Contains(lower, "function not implemented") || strings.Contains(lower, "invalid argument") || strings.Contains(lower, "no space left on device"))
 }
 
+var errInitNetworkBound = errors.New("namespace child exceeded time/output bound")
+
+func initNetworkCandidateUnavailable(text string, err error) bool {
+	return err != nil && !errors.Is(err, errInitNetworkBound) && initNetworkNativeUnavailable(text)
+}
+
 func runInitNetworkCandidate(argv, env []string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	return runInitNetworkCandidateBudget(argv, env, 25*time.Second)
+}
+
+func runInitNetworkCandidateBudget(argv, env []string, timeout time.Duration) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Env = env
@@ -251,8 +261,8 @@ func runInitNetworkCandidate(argv, env []string) (string, error) {
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	}
 	text := log.data.String()
-	if ctx.Err() != nil || log.overflow {
-		return text, fmt.Errorf("namespace child exceeded time/output bound: %v, overflow=%t", ctx.Err(), log.overflow)
+	if ctx.Err() != nil || log.overflow || errors.Is(err, exec.ErrWaitDelay) {
+		return text, fmt.Errorf("%w: context=%v, overflow=%t, process=%v", errInitNetworkBound, ctx.Err(), log.overflow, err)
 	}
 	return text, err
 }
@@ -295,7 +305,7 @@ func TestInitNoGitNoNetwork(t *testing.T) {
 	for _, argv := range candidates {
 		text, err := runInitNetworkCandidate(argv, childEnv)
 		if err != nil {
-			if initNetworkNativeUnavailable(text) {
+			if initNetworkCandidateUnavailable(text, err) {
 				reasons = append(reasons, filepath.Base(argv[0])+": "+strings.TrimSpace(text))
 				continue
 			}
@@ -361,6 +371,27 @@ func TestInitNetworkNamespaceFallbackContract(t *testing.T) {
 			}
 			if len(got) != want {
 				t.Fatalf("unavailable tool candidate count=%d, want %d: %v", len(got), want, got)
+			}
+		})
+	}
+}
+
+func TestInitNetworkCandidateBoundsDoNotFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		script string
+		budget time.Duration
+	}{
+		{"overflow", "printf '%s\\n' 'unshare: Operation not permitted'; printf '%040960d' 0; exit 1", 3 * time.Second},
+		{"timeout", "printf '%s\\n' 'unshare: Operation not permitted'; exec /bin/sleep 60", 500 * time.Millisecond},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			text, err := runInitNetworkCandidateBudget([]string{"/bin/sh", "-c", tc.script}, []string{"PATH=/nonexistent", "LANG=C"}, tc.budget)
+			if !errors.Is(err, errInitNetworkBound) || !initNetworkNativeUnavailable(text) {
+				t.Fatalf("fixture did not produce native-looking bound failure: error=%v, prefix=%q", err, text[:min(len(text), 80)])
+			}
+			if initNetworkCandidateUnavailable(text, err) {
+				t.Fatalf("%s bound failure was treated as native unavailability: %v", tc.name, err)
 			}
 		})
 	}
