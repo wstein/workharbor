@@ -142,3 +142,22 @@ Raw logs, exact argv/overlay records and mutated source bytes remain in
 `/tmp/whr-b-home-fixes-evidence-20261024/` as `root-endpoint-*`,
 `primary-home-length-*` and `primary-home-mount-*`. These probes establish source
 admission coverage only; the unit's allocation and native-host limits still apply.
+
+## Retained QA correction: read-only primary-home exposure
+
+The F2 matrix also covers `ReadOnly=true` and `ReadOnly=false` for all four
+supplied mount types and both destinations: 16 cases. Both `Bind` and the retained
+binding's `Check` assertions run independently, so an admission failure cannot
+hide drift-check evidence. These are test/evidence changes; the production
+primary-home guard remains unchanged.
+
+A compiled source-overlay mutant narrowed that guard to
+`!mount.ReadOnly && mount.Name == i.plan.PrimaryHome`. The same focused
+`^TestCandidateHomeBindingRefusesDrift$/^mount_primary_elsewhere` selection failed
+all eight read-only cases at both assertions (16 assertion failures, exit 1):
+`error=<nil>` from `Bind` and `drift accepted: <nil>` from `Check`. The intact guard
+passes all 16 cases. This closes the valid test gap identified by retained QA,
+without treating read-only primary-home exposure as isolation.
+Raw evidence is `readonly-matrix-green.log` and
+`primary-home-readonly-mutant.log` under the existing author evidence directory;
+the overlay and exact argv are retained there as well.
