@@ -168,6 +168,20 @@ axe/Playwright, require separate owner approval.
 
 ## Verification
 
+Reuse core components and light/dark CSS variables for backgrounds, text, focus
+and statuses, including system theme preference. Record the **Owner read pages
+accessibility checklist** in `docs/quality.md`: semantic landmarks/headings and
+labelled navigation/theme controls; keyboard order, visible focus and operability;
+status text beyond color; reflow at 320/768/1280 CSS px with long hostile text and
+no clipping; measured targets at least 24 × 24 CSS px. For each theme and
+error/focus/status state, record foreground/background CSS variable pairs,
+computed sRGB values and numeric WCAG contrast ratios using relative luminance
+`(Llighter + 0.05) / (Ldarker + 0.05)`: at least 4.5:1 normal text, 3:1 large text
+and 3:1 applicable non-text controls/focus. Record measurement method and actual
+keyboard/theme/responsive walkthrough evidence against WCAG 2.2 AA; unmeasured
+items stay unverified. These real-browser checks require the owner-authorized
+host/setup, with no browser assumed in CI or new accessibility tooling implied.
+
 Every page needs failing `Phoenix.LiveViewTest` cases before behavior, including
 wrong/foreign/expired/revoked credentials, common states and navigation. W1 tests
 both preserved controller POST forms, alias behavior and denial-loop bounds.
