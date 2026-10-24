@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -330,6 +331,49 @@ func TestBundleDriftNoncanonicalTargetCannotReportInSync(t *testing.T) {
 			got, err := driftFixture(t, driftRecord(source, []mount{syncedMount()})).Drift(context.Background(), socketPorts(), source, "primary")
 			if exitcode.FromError(err) != 68 || got.Status != "cannot_determine" || got.Reason != "pins_unavailable" {
 				t.Fatalf("noncanonical target incorrectly aligned: target=%q report=%+v err=%v", target, got, err)
+			}
+		})
+	}
+}
+
+func TestBundleDriftValidDockerAliasesPreserveInSyncReport(t *testing.T) {
+	source := driftSource(t)
+	p := driftPins()[0]
+	canonical := "type=volume,source=" + p.Volume + ",target=" + p.Target + ",readonly,volume-nocopy"
+	c := driftFixture(t, driftRecord(source, []mount{syncedMount()}))
+	baseline, err := c.Drift(context.Background(), socketPorts(), source, "primary")
+	if err != nil || baseline.Status != "in_sync" {
+		t.Fatalf("invalid baseline report: %+v %v", baseline, err)
+	}
+	configPath := filepath.Join(source, ".devcontainer/devcontainer.json")
+	raw, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases := map[string]string{
+		"src":                strings.Replace(canonical, "source=", "src=", 1),
+		"dst":                strings.Replace(canonical, "target=", "dst=", 1),
+		"destination":        strings.Replace(canonical, "target=", "destination=", 1),
+		"ro":                 strings.Replace(canonical, ",readonly", ",ro", 1),
+		"combined_reordered": "ro,destination=" + p.Target + ",src=" + p.Volume + ",volume-nocopy,type=volume",
+	}
+	for name, mount := range cases {
+		t.Run(name, func(t *testing.T) {
+			var config map[string]any
+			if err := json.Unmarshal(raw, &config); err != nil {
+				t.Fatal(err)
+			}
+			config["mounts"] = []any{mount}
+			data, err := json.Marshal(config)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(configPath, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			got, err := c.Drift(context.Background(), socketPorts(), source, "primary")
+			if err != nil || !reflect.DeepEqual(got, baseline) {
+				t.Fatalf("valid alias changed in_sync report: alias=%s report=%+v err=%v", name, got, err)
 			}
 		})
 	}
