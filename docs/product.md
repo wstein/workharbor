@@ -75,3 +75,9 @@ The console mode defaults to `plain` for new sessions when an old or new manifes
 omits `console_mode`; explicit `herdr` remains supported and optional. Existing
 consoles retain their backend and state. Configuration generation and validation
 implement this default; remote console session creation remains pending.
+
+For an existing manifest that is preserved unchanged, init/wizard JSON reports an
+omitted console preference as `settings.console_mode = {"value":"plain","origin":"default"}`.
+Other omitted settings retain their previous reporting behavior. This console-only
+entry exposes the effective OQ-7 default without pretending it is stored in the
+manifest; resolving it does not rewrite the file or migrate a live console.

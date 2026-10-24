@@ -102,5 +102,7 @@ unchanged. This revision is ready for human spec review, not implementation.
 
 - [x] FR-006, FR-007, FR-007a, FR-019, FR-022a, FR-048, FR-058, FR-066, US0 scenarios 1 and 7, SC-015 and the assumptions are worded for
   `shell --local`, the plain console default and the console without a local mode (Feature 010, ADR 0015).
-- [ ] Independent review CLEAR and explicit owner approval for the exact head. The schema, vectors, command contract and code
-  still say `herdr` until their separate work items land (Feature 010 FR-020).
+- [ ] Independent review CLEAR and explicit owner approval for the exact head. Implementation evidence for the schema, vectors, command
+  contract and code is recorded in merged PRs [#220](https://github.com/wstein/workharbor/pull/220),
+  [#221](https://github.com/wstein/workharbor/pull/221) and [#222](https://github.com/wstein/workharbor/pull/222)
+  (Feature 010 FR-020); reviewer-owned approval markers remain unchanged.

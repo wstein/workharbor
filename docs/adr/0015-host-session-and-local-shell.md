@@ -55,7 +55,9 @@ lifetime rules are untouched.
 - Feature 006 FR-006, FR-007, FR-007a, FR-019, FR-022a, FR-048, FR-058, FR-066, US0 scenarios 1 and 7, SC-015 and the assumptions are
   amended in the same change; the manifest default `console_mode` moves from `herdr` to `plain`. `contracts/workspace/` (schema and
   vectors), `contracts/cli/` (command table), the `whr` code and the wizard default follow through their owner-gated procedures;
-  until they land, those artifacts still say `herdr`. That is a recorded inconsistency, not an approval.
+  those artifact reconciliations landed through owner merges of PRs [#220](https://github.com/wstein/workharbor/pull/220),
+  [#221](https://github.com/wstein/workharbor/pull/221) and [#222](https://github.com/wstein/workharbor/pull/222).
+  Configuration now defaults to `plain`; the absent remote session-creation consumer and SC-009 remain separate gates.
 - ADR 0014 is unchanged except that `shell` gains the `--local` flag through the table procedure of FR-052.
 - Constitution principle IV is respected: no Docker socket is exposed to the browser, the control plane or a container; `whr` is a
   client of the socket its caller already can use.

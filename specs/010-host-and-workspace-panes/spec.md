@@ -412,6 +412,10 @@ This feature amends Feature 006 as follows. The same sentences are applied to
   `apps/whr/internal/scaffold/proposal.go` and `apps/whr/internal/wizard/wizard.go` (default `plain`), `contracts/cli/output.schema.json`
   (the `console_mode` default text) and `docs/product.md`/`docs/architecture.md` if they describe the console. Until then those
   artifacts and this text disagree, and the disagreement is recorded here.
+  Implementation evidence for FR-020: the separate work items landed in owner-merged PRs
+  [#220](https://github.com/wstein/workharbor/pull/220), [#221](https://github.com/wstein/workharbor/pull/221) and
+  [#222](https://github.com/wstein/workharbor/pull/222). The recorded configuration/command disagreement is resolved;
+  remote console runtime acceptance remains pending its consumer. This note changes no requirement or settled decision.
 - **FR-021**: Default identity marker of the plugin. The plugin MUST prefix a fixed glyph on both the pane title (`herdr pane rename` or
   `report-metadata --title`) and the tab label (`herdr tab rename`): host `🟥 HOST`; workspace `<glyph> ws:<name>`. The glyph is chosen from the
   fixed set `🔷` (blue diamond), `🟠` (orange circle), `🟣` (purple circle), `🟡` (yellow circle), `⬜` (white square) by index = FNV-1a 32-bit hash

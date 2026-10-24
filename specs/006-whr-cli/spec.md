@@ -21,8 +21,10 @@ Owner request: work from one persistent herdr session on the host with host pane
 ([Feature 010](../010-host-and-workspace-panes/spec.md), [ADR 0015](../../docs/adr/0015-host-session-and-local-shell.md)).
 This amendment adds `shell --local`, makes `plain` the default console mode (FR-048) and states what does not apply to a local
 pty. It is proposed text: it needs an independent review CLEAR for its exact head and explicit owner approval of that head, evidenced
-by a tracker or PR link. The manifest schema, vectors, command contract and code still say `herdr` until their separate work
-items land (Feature 010 FR-020).
+by a tracker or PR link. Implementation record: the separate owner-gated work items have landed in PRs
+[#220](https://github.com/wstein/workharbor/pull/220), [#221](https://github.com/wstein/workharbor/pull/221) and
+[#222](https://github.com/wstein/workharbor/pull/222), reconciling the local command contracts and the `plain` configuration default
+(Feature 010 FR-020). Remote console session creation and real-host acceptance remain separate.
 
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
