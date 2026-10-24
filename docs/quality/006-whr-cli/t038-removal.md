@@ -84,3 +84,22 @@ user. Labels remain usability guards. A concurrent volume attachment can cause
 a partial failure after container removal; that case is tested and reported,
 not hidden by force or rollback that would recreate data. Real-host lifecycle
 acceptance and FR-068 require their own accepted scope and evidence.
+
+## Independent QA corrections
+
+The production review at `3dd2bfcac07b93c019944b483ac97956a968b37e` found
+no source defect; executed test-quality review identified three missing opposing
+cases. The correction changes only tests and this evidence:
+
+- Empty/wrong exit-0 acknowledgements for both container and volume steps now
+  require 73, exact attempted/applied inventory and no unauthorized next action.
+- The backend default-preservation test includes --force without --volumes.
+- Staging/temp primary-home refusal is tested both with and without --volumes,
+  using the protected prefix and an actual primary-home reference.
+
+Each corresponding guard-removal mutant now fails a direct assertion; restoring
+production makes all TestLocalRm cases green. Production files are byte-identical
+to the full-suite-verified candidate. Pristine make check at that candidate was
+explicitly bounded to five seconds and interrupted with124, not passed; required
+CI remains authoritative. The final exact-head delta review and CI belong to the
+PR, with no real-Docker or host evidence inferred.

@@ -16,7 +16,7 @@ import (
 
 // Each snapshot is supplied independently of the production inspector/planner.
 // The strict fake logs only mutations; reads use prewritten controlled metadata.
-func removalDocker(t *testing.T, frames [][]inspection, volumeFailure bool) (Client, string) {
+func removalDocker(t *testing.T, frames [][]inspection, volumeFailure bool, replies ...string) (Client, string) {
 	t.Helper()
 	dir := t.TempDir()
 	log := filepath.Join(dir, "mutations")
@@ -37,14 +37,19 @@ func removalDocker(t *testing.T, frames [][]inspection, volumeFailure bool) (Cli
 	if err := os.WriteFile(counter, []byte("0\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	containerReply, volumeReply := `printf '%s\n' "$5"`, `printf '%s\n' "$5"`
+	if len(replies) == 2 {
+		containerReply = "printf '%s\\n' '" + strings.ReplaceAll(replies[0], "'", "'\"'\"'") + "'"
+		volumeReply = "printf '%s\\n' '" + strings.ReplaceAll(replies[1], "'", "'\"'\"'") + "'"
+	}
 	script := fmt.Sprintf(`test "$1" = '--host=unix:///var/run/docker.sock' || exit 98
 case "$2 $3" in
  'container ls') n=$(cat %q); n=$((n+1)); printf '%%s\n' "$n" > %q; cat %q/"$n-list";;
  'container inspect') n=$(cat %q); test "$4" = --format && test "$5" = '%s' || exit 97; cat %q/"$n-inspect";;
- 'rm -f') test "$#" -eq 5 && test "$4" = -- || exit 96; printf 'container:%%s\n' "$5" >> %q; printf '%%s\n' "$5";;
- 'volume rm') test "$#" -eq 5 && test "$4" = -- || exit 95; printf 'volume:%%s\n' "$5" >> %q; %s printf '%%s\n' "$5";;
+ 'rm -f') test "$#" -eq 5 && test "$4" = -- || exit 96; printf 'container:%%s\n' "$5" >> %q; %s;;
+ 'volume rm') test "$#" -eq 5 && test "$4" = -- || exit 95; printf 'volume:%%s\n' "$5" >> %q; %s %s;;
  *) exit 94;;
-esac`, counter, counter, dir, counter, expectedInspectFormat, dir, log, log, map[bool]string{false: "", true: "exit 1;"}[volumeFailure])
+esac`, counter, counter, dir, counter, expectedInspectFormat, dir, log, containerReply, log, map[bool]string{false: "", true: "exit 1;"}[volumeFailure], volumeReply)
 	return Client{Executable: fakeDocker(t, script)}, log
 }
 func mutationText(t *testing.T, log string) string {
@@ -223,5 +228,35 @@ func TestLocalRmBatchRechecksBeforeEachContainer(t *testing.T) {
 	result, err := tx.Apply(context.Background())
 	if exitcode.FromError(err) != exitcode.PartialFailure || !result.Actions[0].Applied || result.Actions[1].Attempted || mutationText(t, log) != "container:"+first.ID+"\n" {
 		t.Fatalf("result=%+v error=%v mutations=%s", result, err, mutationText(t, log))
+	}
+}
+
+func TestLocalRmZeroExitWithoutExactAcknowledgementIsUncertain(t *testing.T) {
+	id := strings.Repeat("a", 64)
+	for _, tc := range []struct {
+		name, container, volume string
+		removedContainer        bool
+	}{
+		{"container-empty", "", "sample-home", false}, {"container-wrong", "wrong", "sample-home", false},
+		{"volume-empty", id, "", true}, {"volume-wrong", id, "wrong", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, log := removalDocker(t, [][]inspection{removalFixture(), removalFixture(), {}}, false, tc.container, tc.volume)
+			tx, err := c.PrepareRemoval(context.Background(), socketPorts(), RemovalOptions{Target: "sample", Volumes: true, Force: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := tx.Apply(context.Background())
+			if exitcode.FromError(err) != exitcode.PartialFailure || !result.Actions[0].Attempted || result.Actions[0].Applied != tc.removedContainer || result.Actions[1].Applied || result.Actions[1].Attempted != tc.removedContainer {
+				t.Fatalf("result=%+v error=%v", result, err)
+			}
+			want := "container:" + id + "\n"
+			if tc.removedContainer {
+				want += "volume:sample-home\n"
+			}
+			if got := mutationText(t, log); got != want {
+				t.Fatalf("mutations=%q want%q", got, want)
+			}
+		})
 	}
 }
