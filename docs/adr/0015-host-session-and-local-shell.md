@@ -57,6 +57,7 @@ lifetime rules are untouched.
   vectors), `contracts/cli/` (command table), the `whr` code and the wizard default follow through their owner-gated procedures;
   those artifact reconciliations landed through owner merges of PRs [#220](https://github.com/wstein/workharbor/pull/220),
   [#221](https://github.com/wstein/workharbor/pull/221) and [#222](https://github.com/wstein/workharbor/pull/222).
+  These merges are implementation evidence, not approval of this ADR.
   Configuration now defaults to `plain`; the absent remote session-creation consumer and SC-009 remain separate gates.
 - ADR 0014 is unchanged except that `shell` gains the `--local` flag through the table procedure of FR-052.
 - Constitution principle IV is respected: no Docker socket is exposed to the browser, the control plane or a container; `whr` is a
