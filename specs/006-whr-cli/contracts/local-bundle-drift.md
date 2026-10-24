@@ -22,7 +22,11 @@ Docker configuration; never consult credential helpers or remote contexts.
 The selector must identify exactly one running recognized **primary** container.
 A missing, ambiguous, foreign, staging, temporary or stopped target is
 `cannot_determine`. The explicit source directory must resolve to the same physical
-path as that primary's `devcontainer.local_folder` label. A missing label, unreadable
+directory identity as that primary's `devcontainer.local_folder` label. Open the
+explicit source once, compare its held root identity with the opened label root,
+and retain that same source handle for every pin read. Path comparison followed
+by reopening the source is insufficient: an ancestor or directory can be replaced
+between those operations. A missing label, unreadable
 path or different directory is `cannot_determine`; do not infer source from cwd or
 read a Docker-provided path as the chosen source. The source root and its config
 files use `workspacecfg`'s existing bounded no-follow filesystem reader.

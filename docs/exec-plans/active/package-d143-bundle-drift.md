@@ -92,3 +92,32 @@ This correction changes tests and this evidence only. The running full
 suite was started for this test-only change, and no predecessor qualification
 is carried over as exact-head evidence. Exact-head independent code review and
 test-quality recheck remain required before publication.
+
+## Source identity race correction
+
+Independent code review reproduced a material check-then-open race: switching a
+source ancestor symlink after path comparison could read different valid pins
+and incorrectly report alignment. The correction opens the explicit source once,
+compares native identities of held source and label directory handles, and reads
+all pins through that same source descriptor. The label handle supplies identity
+only. Existing no-follow directory/file reads and label alias support remain.
+
+A deterministic package-private regression first exercised the extracted old
+check-then-reopen behavior: hold source A, atomically switch its ancestor alias
+to valid B, then read. It failed an actual assertion with B's digest instead of
+A's (`/tmp/whr-d143-held-root-red.log`). Replacing the reopen with reads through
+the held source made the regression pass. A second regression replaces the label
+root at the same path and requires a source-identity refusal. The targeted
+`TestBundle` suites pass in workspacecfg, localdocker and commands; evidence:
+`/tmp/whr-d143-held-root-green.log`. The bound reader returns a fixed source
+mismatch sentinel, preserving report status/reason without exposing paths.
+
+Full `make check` remains predecessor-bound to 869fe1bc; this material correction
+requires affected package tests/vet and a fresh exact-head independent review.
+It does not receive a prior CLEAR or qualified-check result by inheritance.
+
+Affected complete package tests (workspacecfg, localdocker, commands) and their
+`go vet` checks passed after the source identity correction; local evidence:
+`/tmp/whr-d143-held-root-package-tests.log`. Bootstrap link/JSON validation and
+format/diff checks also passed. No standalone build or new full repository run
+was invoked for the correction.

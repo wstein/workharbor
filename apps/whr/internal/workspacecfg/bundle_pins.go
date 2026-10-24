@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -20,15 +21,37 @@ var bundleRef = regexp.MustCompile(`^quay\.io/bundledock/([a-z][a-z0-9-]{0,31})(
 // bounded no-follow reader and strict JSONC scanner; no hook is evaluated.
 // Other pin formats, ambiguous declarations and unsafe files are undetermined.
 func ReadBundlePins(ctx context.Context, directory string) ([]BundlePin, error) {
-	fail := func() ([]BundlePin, error) { return nil, errors.New("bundle pins unavailable or unsupported") }
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	d, err := openDir(directory)
 	if err != nil {
-		return fail()
+		return nil, errors.New("bundle pins unavailable or unsupported")
 	}
 	defer d.Close()
+	return readBundlePins(ctx, d)
+}
+
+// ReadBundlePinsForSource compares the identities of opened source and label
+// roots, then reads only through the same held source descriptor. A path may
+// change after observation without redirecting reads to another directory.
+func ReadBundlePinsForSource(ctx context.Context, directory, expectedDirectory string) ([]BundlePin, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d, err := openDir(directory)
+	if err != nil {
+		return nil, ErrBundleSourceMismatch
+	}
+	defer d.Close()
+	return readBoundBundlePins(ctx, d, expectedDirectory)
+}
+
+func readBundlePins(ctx context.Context, d *dir) ([]BundlePin, error) {
+	fail := func() ([]BundlePin, error) { return nil, errors.New("bundle pins unavailable or unsupported") }
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	// Do not choose devcontainer pins over a second, undefined pin authority.
 	if _, aerr := d.readFile(".devcontainer/bundle-pins.json", 64<<10); aerr == nil || aerr.kind != accMissing {
 		return fail()
@@ -136,3 +159,35 @@ func ReadBundlePins(ctx context.Context, directory string) ([]BundlePin, error) 
 	}
 	return pins, nil
 }
+
+// readBoundBundlePins keeps both identity handles alive through the pin reads.
+// The label root supplies identity only; configuration is read from d.
+func readBoundBundlePins(ctx context.Context, d *dir, expectedDirectory string) ([]BundlePin, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if expectedDirectory == "" || !filepath.IsAbs(expectedDirectory) {
+		return nil, ErrBundleSourceMismatch
+	}
+	resolved, err := filepath.EvalSymlinks(expectedDirectory)
+	if err != nil {
+		return nil, ErrBundleSourceMismatch
+	}
+	expected, err := openDir(resolved)
+	if err != nil {
+		return nil, ErrBundleSourceMismatch
+	}
+	defer expected.Close()
+	actualInfo, err := d.root.stat()
+	if err != nil {
+		return nil, ErrBundleSourceMismatch
+	}
+	expectedInfo, err := expected.root.stat()
+	if err != nil || !sameNativeFile(actualInfo, expectedInfo) {
+		return nil, ErrBundleSourceMismatch
+	}
+	return readBundlePins(ctx, d)
+}
+
+// ErrBundleSourceMismatch reports unavailable or different physical source roots.
+var ErrBundleSourceMismatch = errors.New("bundle source does not match selected workspace")
