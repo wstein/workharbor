@@ -3,7 +3,8 @@
 Status: acceptance procedure, **not an execution record**. P1 discovery is merged in
 [PR #220](https://github.com/wstein/workharbor/pull/220); P2 shell implementation and offline evidence are
 [recorded separately](../../docs/quality/010-host-and-workspace-panes/p2.md). P3 configuration defaults are [implemented separately](../../docs/quality/010-host-and-workspace-panes/p3.md);
-remote console session creation and the P4 plugin remain pending.
+remote console session creation remains pending. The optional P4 plugin and its standalone
+checks are [documented separately](../../integrations/herdr/README.md); SC-009 remains UNVERIFIED.
 Requirements and settled answers are in [spec](spec.md); package order is in [plan](plan.md).
 The [checkpoint A result template](../../docs/quality/010-host-and-workspace-panes/sc009-base.md) remains UNVERIFIED.
 
@@ -35,8 +36,8 @@ Standalone builds and real-host operation require their own owner authorization;
 | P3 | Omitted field on old/new manifest defaults plain; explicit herdr retained; wizard/scaffold/schema vectors agree; live console untouched; no local console enabled. |
 | P4 | Separate fake-whr/herdr script tests; invalid names/cancel open nothing; deterministic marker/title/tab label; background-off zero OSC 11 and enabled exactly one before exec; SC-010 numeric constraints verified. |
 
-P4 proposes a standalone entrypoint `python3 integrations/herdr/check.py` for script/manifest/hash/palette tests, implemented only in
-that package. Do not add it to required repository CI or `make check`, and do not report it passing before it exists and runs.
+P4 provides the standalone entrypoint `python3 -B integrations/herdr/check.py` for script/manifest/hash/palette tests.
+It is separate from required repository CI and `make check`; actual results are recorded in the P4 evidence.
 
 ## SC-009 real-host owner gate
 
