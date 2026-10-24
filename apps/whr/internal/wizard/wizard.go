@@ -41,7 +41,7 @@ func Run(ctx context.Context, snapshot scaffold.Snapshot, options scaffold.Optio
 		{"start-dir", "Starting directory", ".", &options.StartDir, false},
 		{"devcontainer", "Reuse existing devcontainer", ".devcontainer/devcontainer.json", &options.Devcontainer, false},
 		{"human-shell", "Human shell (fish/bash/zsh/nu)", "fish", &options.HumanShell, false},
-		{"console-mode", "Console mode (herdr/plain)", "plain", &options.ConsoleMode, false},
+		{"console-mode", "Console mode (herdr/plain)", workspacecfg.DefaultConsoleMode, &options.ConsoleMode, false},
 		{"shortcuts", "Shared shortcuts (on/off)", "on", &options.Shortcuts, false},
 	}
 	if e, ok := snapshot.Entries["workharbor.json"]; ok {

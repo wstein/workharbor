@@ -106,7 +106,7 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 		root.Mode = s.RootInfo.Mode()
 		p.inputs["."] = root
 	}
-	doc := manifest{SchemaVersion: 2, DevcontainerPath: defaultDevcontainer, ProjectsPath: "projects", Bundles: []string{}, StartDir: ".", HumanShell: "fish", ConsoleMode: "plain", Shortcuts: "on"}
+	doc := manifest{SchemaVersion: 2, DevcontainerPath: defaultDevcontainer, ProjectsPath: "projects", Bundles: []string{}, StartDir: ".", HumanShell: "fish", ConsoleMode: workspacecfg.DefaultConsoleMode, Shortcuts: "on"}
 	p.preview.Settings["console_mode"] = Setting{doc.ConsoleMode, "default"}
 	old, exists := s.Entries["workharbor.json"]
 	if exists {
