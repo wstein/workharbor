@@ -138,31 +138,45 @@ and frozen history are unchanged; only Feature006 T008 is newly checked.
 The owner accepted the exact frontend plan at `7c64789c` in
 [PR #242](https://github.com/wstein/workharbor/pull/242), merged at
 `f2d96805383410f401826877b634d2c03780e977`, and authorized W1 after merge.
-The implementation checkout starts from fresh main
-`95ce4621fdde505654eb8fb8a468ec128b65d0a1`; its control-plane tree matches that
-plan-merge base. Option A is settled: future pages and HTTP controllers share one
-authorized read service. W1 has a links-only overview and no domain reads.
+This checkpoint is based on main `54c4b271745fe78800a523607dd00a9124d22f01`;
+[PR #251](https://github.com/wstein/workharbor/pull/251) records its current exact
+head and CI evidence. Option A is settled: future pages and HTTP controllers share
+one authorized read service. W1 has a links-only overview and no domain reads.
 
-Test-first source **15f70122** adds 17 required ExUnit identities covering hostile
-FR-022/HTML flash text, owner-only shell admission, rejected owner-ID injection,
-credential expiry/revocation, first-denial stopping, preserved controller forms,
-root redirect, inactive future links, forged events, unchanged database/audit,
-guarded socket selection, strict CSP/assets and actual generated CSS icon policy.
-Existing authentication coverage follows the forms to `/owner/auth` and accepts
-CSRF tokens from either controller forms or the LiveView meta element. Tests use
-existing modules/routes before connection assertions; no absent product module is
-a compile-time dependency. Product code is unchanged at this checkpoint.
+The test-first checkpoint binds 18 required ExUnit identities covering hostile
+FR-022/HTML flash text, wrong-kind credentials inside the owner cookie, rejected
+owner-ID injection, mounted expiry/revocation, first-denial stopping, preserved
+controller forms, root redirect, exact route verbs, inactive future links, forged
+events, unchanged database/audit, debug-level payload logs, strict headers/CSP,
+narrow assets and actual generated CSS icon policy. Existing authentication
+coverage follows the forms to `/owner/auth` and accepts CSRF from controller forms
+or the LiveView meta element. Tests assert existing route/component behavior before
+connection, without absent product modules as compile-time dependencies. No product
+code has changed.
+
+[The initial test review](https://github.com/wstein/workharbor/pull/251#pullrequestreview-5640119134)
+identified assertion/coverage defects, including the LF check against structural
+HEEx whitespace. Corrections inspect only unique payload spans, preserve visible
+placeholder checks, and strengthen route/header/asset/logging/escaping coverage.
+Source was restructured by hand to conventional formatter style. That is not a
+native formatter pass: CI may still stop at `mix format --check-formatted` before
+semantic tests. The review's acceptance verdict is separate from future W1 runtime
+acceptance.
 
 Actual local results: `python3 scripts/check_repo.py`, changed-test `typos` and
-`git diff --check` passed. The scoped `MIX_ENV=test mix test` invocation for
+`git diff --check` passed. The initial scoped `MIX_ENV=test mix test` invocation for
 `owner_shell_test.exs`, `owner_auth_test.exs`, `authentication_test.exs` and
 `transport_security_test.exs` with `--warnings-as-errors --seed 0` exited **127**:
 `mix: command not found`. Mix/Elixir/Erlang were absent from PATH and inspected
-known installed-tool locations; no installation/download was attempted. Therefore
-semantic RED outcomes, compilation and formatter results remain **unverified**,
-with associated PR CI as the next evidence source. Predicted assertion failures
-include the missing LiveView marker, current root response, unescaped controls,
-scaffold socket path, CSP and data-image icon CSS; these are predictions, not a
-passing RED gate. No standalone build, browser, host/runtime operation or full
-`make check` was run for this checkpoint. Implementation waits for the separate
-TDD/RED-head instruction; no W1 or T012 completion is claimed.
+known installed-tool locations; no installation/download was attempted. Semantic
+RED outcomes, compilation and formatter results remain **unverified**, with
+associated PR CI as the next evidence source. Predicted assertion failures include
+the missing LiveView marker, root response, unescaped payload controls, scaffold
+socket path, CSP and data-image icon CSS. Existing revoked/expired admission and
+foreign-query cases are regression guards expected to pass on main, not RED proof.
+The database snapshot detects writes; only the static source boundary guards domain
+reads. Process termination and stable audit counts check observable revocation
+stopping without claiming inspection of queued state in an already-dead process.
+No standalone build, browser, host/runtime operation or full `make check` was run.
+Implementation waits for the separate TDD/RED-head instruction; no W1 or T012
+completion is claimed.
