@@ -129,7 +129,8 @@ with the receipt and refuse stale verification before primary stop.
 not registered. It selects only the existing exact receipt-bound candidate (never
 name-based adoption), previews its current clone input digest and requires fresh
 explicit trust/consent. It reruns requested verification against that version only
-if config/build/image/host-initializer inputs still equal the staged environment;
+if config/build/image/host-initializer **and container-hook argv/script/dependency
+bytes** still equal the manifest that actually executed during stage;
 otherwise it requires a fresh stage after guarded cleanup, not implicit rebuild.
 It runs no host hook and does not replace resources or change homes. Without
 --refresh default stage collisions still refuse. Original source drift still
@@ -140,7 +141,10 @@ Refresh accepts only `staged_verified`, or `staged_unverified` with reason
 missing_smoke, failed_smoke, failed_health or stale_candidate_inputs, after known
 completion of resource/container-hook phases. Require the current exact candidate
 ID, daemon, role/labels, immutable image, mounts/users/home and clone binding;
-environment/build/initializer inputs and original-source binding must still match.
+environment/build/initializer/container-hook command and byte inputs, their
+executed-stage manifest and original-source binding must still match. Refresh
+reruns verification only, never container hooks; an edited setup.sh therefore
+requires guarded cleanup and a fresh stage, not a new verified receipt by refresh.
 Unknown/allocating/incomplete-hook/promoting/cleanup/uncertain receipts, lost
 receipts or drifted resources refuse 68; never adopt or retry uncertain effects.
 Apply records verifying before executing a freshly trusted verification version.
@@ -388,7 +392,9 @@ migration guarantee. No host hook, rebuild or mutable-image resolution occurs.
 The existing requirement binds every executed container hook to trusted inputs.
 Under the proposed cooperative phase-binding amendment above, promote hashes the
 actual original workspace dependency paths before/after official hooks against
-the trusted execution manifest. setup.sh therefore executes at its normal path,
+the immutable **container-hook manifest actually executed at stage**, including
+argv, script/dependency bytes and origin order. Refresh cannot replace that record
+with unexecuted hooks. setup.sh therefore executes at its normal path,
 reads matching sibling assets/config and records original WORKSPACE while updating
 the original home. No candidate-home transplant, alternate source mount,
 intermediate primary or hook rewrite is needed. Drift before replacement refuses
