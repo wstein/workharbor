@@ -2,7 +2,7 @@
 
 The dedicated literal `TestInitNoGitNoNetwork` lives in the new Linux-only
 `apps/whr/internal/commands/init_network_linux_test.go`. Current corrected
-lineage is based on `95ce4621fdde505654eb8fb8a468ec128b65d0a1` (F1 below).
+lineage is based on `54c4b271745fe78800a523607dd00a9124d22f01` (review updates below).
 The initial measurement used base `f2d96805383410f401826877b634d2c03780e977`,
 verified by fetch, and original test commit
 `202fa64d7af4ba1785281340859715d101819557`.
@@ -94,10 +94,16 @@ replacement and the focused command below. Do not retain a product mutation.
 
 ## PR 249 F1: required CI proof and restricted-userns fallback
 
-The initial PR head `3dbc159b17d181d7856601011bfefc6ddef17768` skipped on a
-restricted-userns runner even when CI was set. The independent
+At initial PR head `3dbc159b17d181d7856601011bfefc6ddef17768`, standalone
+`go test` skipped on a restricted-userns runner even when CI was set. The independent
 [review](https://github.com/wstein/workharbor/pull/249#pullrequestreview-5640068987)
-identified this as F1. The existing workspacecfg netnsCandidates/skipForbidden
+identified this as F1. The later
+[PR 250 review](https://github.com/wstein/workharbor/pull/250#pullrequestreview-5640097663)
+corrected the interpretation: scripts/application_checks.py validate_go_events
+already rejects skipped Go test events. A green full application acceptance gate
+could not silently accept this skip. The fallback is still needed to execute
+the required proof on restricted-userns CI; the explicit failure guard also
+makes standalone required runs fail correctly. The existing workspacecfg netnsCandidates/skipForbidden
 strategy is now mirrored in this test file without a product dependency or
 change to unrelated tests. Absolute tool paths are used; sudo is noninteractive.
 A native refusal is respected, not bypassed. Child assertions never trigger a
@@ -106,7 +112,7 @@ and unconditional final process-group kill remain in place.
 
 Before the fix, `TestInitNetworkNamespaceRestrictionFailsRequired` executed
 this owned test binary with a restricted-unshare stub and separately CI=true
-and WHR_REQUIRE_NETNS=1. Both produced the old silent-success/skip behavior and
+and WHR_REQUIRE_NETNS=1. Both made standalone go test return 0 with a skip and
 failed the new assertion (compiled semantic RED). The fixed test requires a
 nonzero child exit with FAILED, NOT SKIPPED. The stub PATH contains no sudo,
 so this specifically covers exhaustion of available candidates.
@@ -142,12 +148,40 @@ local/CI skip policy only. The PATH/startup-canary and uncounted-network-attempt
 limits above remain unchanged (review F2); final group cleanup remains intact
 (review F3).
 
+## Review delta: bound failures cannot become native refusals
+
+At reviewed head `3450c6b2767430d189cec3bbbfec7057ac3a44d6`, the runner's
+untyped timeout/output error could be masked when its captured output started
+with a native-looking unshare refusal. Classification could try another
+candidate or skip locally despite the bound failure. This is corrected in
+`54252353e0591bec83cd56dd30c4e42992f48e22` by a distinct wrapped bound sentinel,
+rejected before native-output classification. Deadline expiry, the writer's
+explicit overflow flag and a surfaced exec.ErrWaitDelay produce this error.
+The writer retains its overflow flag while returning complete write counts, so
+an ExitError taking precedence over a copy result cannot hide output overflow.
+Candidate budgets, 32 KiB output bounds and final group cleanup are unchanged.
+
+`TestInitNetworkCandidateBoundsDoNotFallback` uses owned /bin/sh fixtures with
+the native-looking prefix `unshare: Operation not permitted`: one emits 40 KiB;
+one executes an owned sleep under a 500 ms injected runner budget. Both
+produced compiled semantic RED before the sentinel/classification fix and pass
+now. Removing only the bound exclusion reproduces both assertion failures.
+This does not wait for the default 25 s budget or alter the actual candidate's
+25 s limit. Complete RED, mutant and green logs are under
+`/tmp/whr-t030-network-bounds-dy_h3nao/`.
+
+The required focused run on the current base passed all four network test IDs
+with CI=true and WHR_REQUIRE_NETNS=1, using the local unprivileged -rn path.
+GitHub execution/path is not inferred from that local result. Prior observed
+sudo fallback refusal remains a native limitation of this container, not proof
+of runtime fallback success.
+
 ## Checks and remaining acceptance
 
 From apps/whr, with `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off`:
 
 ```sh
-CI=true WHR_REQUIRE_NETNS=1 go test -count=1 -v ./internal/commands -run '^TestInit(NoGitNoNetwork|NetworkNamespaceRestrictionFailsRequired|NetworkNamespaceFallbackContract)$'
+CI=true WHR_REQUIRE_NETNS=1 go test -count=1 -v ./internal/commands -run '^TestInit(NoGitNoNetwork|NetworkNamespaceRestrictionFailsRequired|NetworkNamespaceFallbackContract|NetworkCandidateBoundsDoNotFallback)$'
 go vet ./internal/commands
 ```
 
