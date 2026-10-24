@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://workharbor.invalid/contracts/cli/output.schema.json",
   "title": "whr --json envelope, schema_version 1 (first-increment subset)",
-  "description": "Planned by ADR 0010 and FR-015. This revision defines the envelope and the results of the first-increment commands (version, workspace.validate, workspace.init, host.doctor, workspace.ls --local, workspace.rm --local). Results of later commands and the typed event stream of shell, console and agent attach are added by their own work items through coherent reviewed current-contract/source/test changes. Before first usable release no historical result reader or new schema_version is required solely for compatibility; current schema_version validation remains. The command field is always the canonical id from commands.json, whichever alias was typed.",
+  "description": "Planned by ADR 0010 and FR-015. This revision defines the envelope and the results of the first-increment commands (version, workspace.validate, workspace.init, host.doctor, workspace.ls --local, workspace.rm --local, workspace.drift --local). Results of later commands and the typed event stream of shell, console and agent attach are added by their own work items through coherent reviewed current-contract/source/test changes. Before first usable release no historical result reader or new schema_version is required solely for compatibility; current schema_version validation remains. The command field is always the canonical id from commands.json, whichever alias was typed.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -621,6 +621,96 @@
             "$ref": "#/$defs/localRemovalResult"
           }
         }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "workspace.drift"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/bundleDriftResult"
+          }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "exit_code": {
+                  "enum": [
+                    0,
+                    68
+                  ]
+                }
+              },
+              "required": [
+                "exit_code"
+              ]
+            },
+            "then": {
+              "required": [
+                "result"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "exit_code": {
+                  "const": 0
+                }
+              },
+              "required": [
+                "exit_code"
+              ]
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "const": "in_sync"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "exit_code": {
+                  "const": 68
+                }
+              },
+              "required": [
+                "exit_code"
+              ]
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "drift",
+                        "cannot_determine"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
       }
     }
   ],
@@ -1474,6 +1564,94 @@
           }
         }
       ]
+    },
+    "bundleDriftResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "container_id",
+        "status",
+        "reason",
+        "bundles"
+      ],
+      "properties": {
+        "container_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "status": {
+          "enum": [
+            "in_sync",
+            "drift",
+            "cannot_determine"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "reference_match",
+            "reference_mismatch",
+            "mount_unavailable",
+            "undeclared_bundle",
+            "incomplete_evidence",
+            "runtime_unavailable",
+            "selection_undetermined",
+            "source_mismatch",
+            "pins_unavailable"
+          ]
+        },
+        "bundles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "bundle",
+              "pinned_reference",
+              "mounted_identity",
+              "status",
+              "reason"
+            ],
+            "properties": {
+              "bundle": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{0,31}$"
+              },
+              "pinned_reference": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^quay\\.io/bundledock/[a-z][a-z0-9-]{0,31}(:[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$"
+              },
+              "mounted_identity": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^bundledock-[a-z][a-z0-9-]{0,31}-[0-9a-f]{64}$"
+              },
+              "status": {
+                "enum": [
+                  "in_sync",
+                  "drift",
+                  "cannot_determine"
+                ]
+              },
+              "reason": {
+                "enum": [
+                  "reference_match",
+                  "reference_mismatch",
+                  "mount_unavailable",
+                  "undeclared_bundle"
+                ]
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

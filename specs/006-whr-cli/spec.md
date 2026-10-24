@@ -1343,6 +1343,11 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   redacted (no credentials), and available as `--json` (`bundleDriftResult`). It NEVER pulls images, recreates containers, or mutates
   any resource. Exit status is 0 when all bundles are in sync, a distinct exit code (exit 1 or 68) when drift is detected, and exit 68
   when configuration or runtime mounts cannot be determined.
+  The initial bounded Package D delivery selects `workspace drift --local --source <dir> <exact-name|full-id>`,
+  running primary selection and the Anchorage JSONC pin protocol in
+  [the local bundle drift contract](contracts/local-bundle-drift.md). Both drift and unknown use exit 68,
+  distinguished by report status; unknown dominates mixed evidence. Canonical volume names establish only
+  declared reference alignment, never content attestation. Other pin protocols remain unsupported.
 - **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
   credential or provider account (FR-028). No secret is accepted, read, stored or printed by them: a
   `--project-url` with `https` userinfo or any password or token (`ssh://git@host/...` is admitted) and a `.gitmodules`

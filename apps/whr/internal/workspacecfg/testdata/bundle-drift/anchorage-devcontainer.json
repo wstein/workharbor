@@ -1,0 +1,107 @@
+{
+	"name": "Anchorage",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+	"remoteUser": "vscode",
+	"initializeCommand": {
+		"toolbox": [
+			"sh",
+			"${localWorkspaceFolder}/.devcontainer/initialize.sh",
+			"quay.io/bundledock/toolbox:2026.10.20-b2@sha256:c84e2e79315393b62a156cc3529a29229da71d9c44b1341be0a3e6dfc1d1afb6",
+			"bundledock-toolbox-c84e2e79315393b62a156cc3529a29229da71d9c44b1341be0a3e6dfc1d1afb6",
+			"toolbox"
+		],
+		"claude": [
+			"sh",
+			"${localWorkspaceFolder}/.devcontainer/initialize.sh",
+			"quay.io/bundledock/claude:2.1.302-b1@sha256:54b0ccca4a82aec31ffc6fd52ed00a3ce4aa8fb91dbcc0f437a7cb91d5102a4d",
+			"bundledock-claude-54b0ccca4a82aec31ffc6fd52ed00a3ce4aa8fb91dbcc0f437a7cb91d5102a4d",
+			"claude"
+		],
+		"codex": [
+			"sh",
+			"${localWorkspaceFolder}/.devcontainer/initialize.sh",
+			"quay.io/bundledock/codex:0.163.0-b1@sha256:84b898b20dd1fd006bd0681bb5237bd7bbe7db9e0829f7ccedbd10fdd1372cfa",
+			"bundledock-codex-84b898b20dd1fd006bd0681bb5237bd7bbe7db9e0829f7ccedbd10fdd1372cfa",
+			"codex"
+		],
+		"agy": [
+			"sh",
+			"${localWorkspaceFolder}/.devcontainer/initialize.sh",
+			"quay.io/bundledock/agy:1.4.3-b1@sha256:bb3a9e59c2dc97e2f3336d2f33c00f3e225da2a2bb66edeebc6e7eb1ff53e764",
+			"bundledock-agy-bb3a9e59c2dc97e2f3336d2f33c00f3e225da2a2bb66edeebc6e7eb1ff53e764",
+			"agy"
+		],
+		"node": [
+			"sh",
+			"${localWorkspaceFolder}/.devcontainer/initialize.sh",
+			"quay.io/bundledock/node:24.22.0-b1@sha256:f595f1139e97300d755a9f78b39df5337a02496cbd9c74d7c5d3ae23f6f90ac9",
+			"bundledock-node-f595f1139e97300d755a9f78b39df5337a02496cbd9c74d7c5d3ae23f6f90ac9",
+			"node"
+		],
+		"opentofu": [
+			"sh",
+			"${localWorkspaceFolder}/.devcontainer/initialize.sh",
+			"quay.io/bundledock/opentofu:1.13.1-b1@sha256:67bd27de607af0d950789a3a0308262141860a331bae31b3f2a9d170c0cb3414",
+			"bundledock-opentofu-67bd27de607af0d950789a3a0308262141860a331bae31b3f2a9d170c0cb3414",
+			"opentofu"
+		],
+		"host": [
+			"sh",
+			"${localWorkspaceFolder}/.devcontainer/host-info.sh"
+		]
+	},
+	"mounts": [
+		"type=volume,source=bundledock-toolbox-c84e2e79315393b62a156cc3529a29229da71d9c44b1341be0a3e6dfc1d1afb6,target=/opt/bdock/toolbox,readonly,volume-nocopy",
+		"type=volume,source=bundledock-claude-54b0ccca4a82aec31ffc6fd52ed00a3ce4aa8fb91dbcc0f437a7cb91d5102a4d,target=/opt/bdock/claude,readonly,volume-nocopy",
+		"type=volume,source=bundledock-codex-84b898b20dd1fd006bd0681bb5237bd7bbe7db9e0829f7ccedbd10fdd1372cfa,target=/opt/bdock/codex,readonly,volume-nocopy",
+		"type=volume,source=bundledock-agy-bb3a9e59c2dc97e2f3336d2f33c00f3e225da2a2bb66edeebc6e7eb1ff53e764,target=/opt/bdock/agy,readonly,volume-nocopy",
+		"type=volume,source=bundledock-node-f595f1139e97300d755a9f78b39df5337a02496cbd9c74d7c5d3ae23f6f90ac9,target=/opt/bdock/node,readonly,volume-nocopy",
+		"type=volume,source=bundledock-opentofu-67bd27de607af0d950789a3a0308262141860a331bae31b3f2a9d170c0cb3414,target=/opt/bdock/opentofu,readonly,volume-nocopy",
+		"type=volume,source=anchorage-home-${devcontainerId},target=/home/vscode"
+	],
+	"runArgs": [
+		"--name",
+		"${localEnv:ANCHORAGE_CONTAINER_NAME:whr-anchorage}",
+		"--hostname",
+		"${localEnv:ANCHORAGE_CONTAINER_HOSTNAME:anchorage}"
+	],
+	"containerEnv": {
+		"GOFLAGS": "-trimpath",
+		"DISABLE_UPDATES": "1",
+		"DISABLE_AUTOUPDATER": "1",
+		"SHELL": "/bin/bash",
+		"BDOCK_FASTFETCH": "0",
+		"LANG": "en_US.UTF-8",
+		"ANCHORAGE_ROLE": "${localEnv:ANCHORAGE_ROLE}",
+		"npm_config_prefix": "/home/vscode/.local/share/npm"
+	},
+	"remoteEnv": {
+		"PATH": "/home/vscode/bin:/home/vscode/.local/bin:/home/vscode/.local/share/npm/bin:/opt/bdock/toolbox/bin:/opt/bdock/claude/bin:/opt/bdock/codex/bin:/opt/bdock/agy/bin:/opt/bdock/node/bin:/opt/bdock/opentofu/bin:${containerEnv:PATH}",
+		"XDG_DATA_DIRS": "/opt/bdock/toolbox/share:/usr/local/share:/usr/share"
+	},
+	"postCreateCommand": "sh .devcontainer/setup.sh",
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"terminal.integrated.profiles.linux": {
+					"Fish": {
+						"path": "/opt/bdock/toolbox/bin/fish"
+					},
+					"Herdr": {
+						"path": "/opt/bdock/toolbox/bin/herdr"
+					},
+					"Bash": {
+						"path": "/bin/bash"
+					}
+				},
+				"terminal.integrated.defaultProfile.linux": "Fish",
+				"terminal.integrated.automationProfile.linux": {
+					"path": "/bin/bash"
+				}
+			}
+		}
+	}
+}

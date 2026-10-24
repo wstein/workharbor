@@ -50,6 +50,9 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 	if !a.available(e.ID) {
 		fmt.Fprintf(b, "Status: not available yet; it waits for %s and exits 64\n", WaitsFor(e.ID))
 	}
+	if e.ID == "workspace.drift" {
+		b.WriteString("Local: --local --source <dir> <exact-name|full-id> compares a running primary against its source pins (5 s total).\nExit 0 means reference alignment; exit 68 means drift or cannot_determine. Volume contents are not attested.\n")
+	}
 	if e.ID == "workspace.ls" {
 		b.WriteString("Local: --local lists running and stopped labelled containers (5 s total); no runtime is started.\nWithout --local: waits for owner_api and exits 64.\n")
 	}
@@ -69,7 +72,7 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 	if e.JSON == "rejected" {
 		b.WriteString("JSON: not supported (--json is a usage error)\n")
 	}
-	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.rm" || e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console") {
+	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.drift" || e.ID == "workspace.rm" || e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console") {
 		fmt.Fprintf(b, "\nFlags:\n%s", usages)
 	}
 	b.WriteString("\n" + globalFlagsHelp)
