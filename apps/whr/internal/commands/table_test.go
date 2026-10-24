@@ -322,7 +322,7 @@ func TestCompletionKnowsBothForms(t *testing.T) {
 	}
 	// Production handlers: unavailable commands are not offered.
 	prod := complete(nil, "")
-	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws", "init", "ls", "shell"} {
+	for _, want := range []string{"version", "completion", "help", "doctor", "host", "validate", "workspace", "ws", "init", "ls", "rm", "shell"} {
 		if !contains(prod, want) {
 			t.Errorf("production completion lacks %q: %v", want, prod)
 		}
@@ -375,6 +375,9 @@ func TestLaterCommandsRefuseWithoutBackend(t *testing.T) {
 			// 64 via Cobra; known flags without --local retain owner_api refusal.
 			if e.ID == "workspace.shell" {
 				extras = [][]string{nil, {"some-name"}, {"--local=false"}}
+			}
+			if e.ID == "workspace.rm" {
+				extras = [][]string{nil, {"some-name"}, {"--role", "temp"}}
 			}
 			if e.ID == "workspace.ls" {
 				extras = [][]string{nil, {"some-name"}, {"--role", "primary"}}
