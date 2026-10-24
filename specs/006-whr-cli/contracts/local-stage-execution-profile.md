@@ -327,6 +327,20 @@ execution version still invalidates runtime verification. Include every populate
 submodule repository and map its export separately; this does not update original
 gitlinks. Retain clone data for uncommitted/untracked work not transferable by Git.
 
+Candidate export treats the writable clone as an **untrusted repository**, using
+the same generated-empty-Git-directory reader as original capture, not Git run in
+the candidate's own administration directory. Require the receipt-bound physical
+admin/object/index paths; reject symlinks in administration paths, changed Git-dir
+pointers, objects/info/alternates and replacement refs. Read candidate config only
+as inert data when needed for an admitted value; never load it into the reader.
+No candidate includes, alternateRefsCommand, SSH/filter/fsmonitor/maintenance/
+packObjectsHook or credential helper executes; no candidate upload-pack runs.
+Resolve textual HEAD only to a validated in-repository ref, rejecting cycles and
+other symbolic export refs; never follow a ref-file symlink. Verify every exported
+object ID/content, bound expanded object bytes/count and reject inconsistent reads
+before destination imports. Only the verified self-contained export may serve as
+the subsequent local fetch source; it retains no candidate alternates or hardlinks.
+
 Generate fixed explicit refspecs per exported ref, targeting fresh
 refs/workharbor/stage/OP/REPO/{head,heads/NAME,tags/NAME,notes/NAME}. OP is 128-bit
 random; REPO is a path digest. Preview exact original/export/ref/OID mappings and
@@ -548,6 +562,9 @@ Read-only Anchorage graph at observed umbrella HEAD 28a9662f61ab6b8b2853bdc7453b
 [setup](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/setup.sh),
 [smoke](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/smoke-container.sh).
 No runtime proof follows. Tests must cover real clone/history/index/dirty submodules,
+candidate export with malicious config/includes/alternateRefsCommand/packObjectsHook,
+external alternates, symlinked admin paths and symbolic/replace refs (zero host
+commands or foreign-object reads; bounded verified export only),
 normal Git operations, changed-input refresh, detected drift/conditional reporting, exact official
 phases, hook origin/order/path semantics, create-only multi-repo result refs,
 FETCH_HEAD/index/worktree preservation, transfer cancellation and all FR-067 cases.
