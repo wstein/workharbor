@@ -144,3 +144,9 @@ pass, without executing an alias. This proof covers mutable lookup aliases;
 it does not claim protection against a privileged administrator replacing
 trusted system binaries. Package vet, format, source, spelling and whitespace
 checks also passed for the correction.
+
+The canonical-alias regression uses the same capability policy when an optional
+system-tool positive control is missing or untrusted: explicit local skip,
+but hard failure under CI or required-proof flags. Its affected regression and
+the required-policy test passed after this portability correction; no privileged
+alias execution or complete-suite rerun was used.
