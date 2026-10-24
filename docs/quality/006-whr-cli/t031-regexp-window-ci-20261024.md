@@ -3,9 +3,11 @@
 This is narrow CI baseline maintenance during T030 acceptance, not a start or
 completion of wave1b/T031 feature acceptance. Only
 `TestExpectRegexpWorkIsBounded` in
-`apps/whr/internal/ptytest/ptytest_test.go` changes. Base:
-`54c4b271745fe78800a523607dd00a9124d22f01`; test commit:
-`5a420b8167fe8d3d32d0ea24c49324e36e68b079`. Measured on 2026-10-24 with Go
+`apps/whr/internal/ptytest/ptytest_test.go` changes. Current review base:
+`86008fab4b0131187c3d3b244fef94a48063b48b`. Initial source base was
+`54c4b271745fe78800a523607dd00a9124d22f01`, with original test commit
+`5a420b8167fe8d3d32d0ea24c49324e36e68b079`; the exact-window correction is
+`1e3fe636d88271149cb676626609b86bc6a1f837`. Measured on 2026-10-24 with Go
 `go1.27.2 linux/arm64`.
 
 ## Observed CI failure and source trace
@@ -35,17 +37,18 @@ The revised test retains the real 4 MiB flood fixture and PTY integration.
 ExpectExit waits for both process exit and reader drain; the test checks that
 at least 4 MiB were captured. Screen advances projection/drawing over that
 complete transcript before recording Work. The subsequent ExpectRegexp must
-return END and add positive matcher-only work no greater than 64 KiB. This
+return END and add matcher-only work of exactly 64 KiB. This
 measures one search on a stable backlog, independent of read wake-up timing.
 No threshold, sleep or timeout was increased, and no test hook was added.
 
 Before the final green run, a temporary Go source overlay replaced only
 `base := max(0, len(p)-regexpWindow)` in session.go with `base := 0`.
 The revised real-PTY test compiled and failed:
-`regexp matcher work 4194351: want 1..65536 bytes for one search`.
+`regexp matcher work 4194351: want exactly 65536 bytes for one search`
+(rechecked after the exact-window review correction below).
 This demonstrates sensitivity to loss of the window. Merely waiting for exit
 while retaining the old 40-times multiplier would not reject that one full
-backlog search. The positive lower bound also prevents an uncounted search
+backlog search. The exact count also rejects reduced windows and prevents an uncounted search
 from satisfying the assertion.
 
 Complete CI failure output, mutant source/overlay, compiled RED and focused
@@ -54,6 +57,32 @@ mutant, copy session.go to a temporary file, make the single replacement, map
 its absolute source path through Go's JSON Replace overlay, and run the
 focused ID with `go test -count=1 -overlay=<overlay.json> ./internal/ptytest
 -run '^TestExpectRegexpWorkIsBounded$'`. No product mutation is retained.
+
+## PR 252 F1: pin the documented window exactly
+
+The [independent review](https://github.com/wstein/workharbor/pull/252#pullrequestreview-5640157788)
+of head `2cadc76ef0c019664fdf81a54f3406648a6bc023` found that the initial
+positive upper bound accepted a smaller window. The local reproduction changed
+only session.go's `const regexpWindow = 64 << 10` to `32 << 10` in a temporary
+source overlay: the initial assertion passed. Requiring the measured work to
+equal 64 KiB then produced compiled semantic RED:
+`regexp matcher work 32768: want exactly 65536 bytes for one search`.
+The unchanged production implementation passes. The no-window mutant was also
+rechecked and fails with work 4194351. No production source or timeout changes
+are included.
+
+The fixture has more than 4 MiB of stable unconsumed visible text after reader
+drain and projection, so one matcher invocation searches exactly the documented
+64 KiB window. Equality therefore detects shrinking as well as enlarging or
+removing that window without reintroducing scheduling dependence.
+
+Before the correction, the two agent-owned commits were rebased onto
+`86008fab4b0131187c3d3b244fef94a48063b48b`. Both range-diff entries were equal
+at intermediate head `1586a4ae05591aa680e0df46323a7bee8a2e7800`.
+Complete surviving-before, shrink/no-window RED, focused green and check logs
+are local under `/tmp/whr-pty-regexp-exact-fzz9vkh4/`. Reproduce the shrink probe
+with the same overlay command above, replacing the window constant instead of
+the base expression.
 
 ## Checks and remaining gates
 
