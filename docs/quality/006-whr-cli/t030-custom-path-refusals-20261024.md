@@ -6,6 +6,8 @@ Measured on 2026-10-24 from base `86008fab4b0131187c3d3b244fef94a48063b48b`
 with Go `go1.27.2 linux/arm64`, umask 022 and the existing production guards.
 No production change or whole-T030 acceptance is claimed.
 
+At this record's audited base `86008fab4b0131187c3d3b244fef94a48063b48b`, 29 of T030's 31 literal test names are declared and two are absent: `TestInitNoGitNoNetwork` (pending [PR #249](https://github.com/wstein/workharbor/pull/249)) and `TestInitDevcontainerFlagNotInRelease` (superseded by accepted T033 selection support); the older core record's 17-name gap is historical.
+
 ## Bounded assertions
 
 [TestInitSymlinkTarget](../../../apps/whr/internal/scaffold/init_acceptance_paths_test.go)
