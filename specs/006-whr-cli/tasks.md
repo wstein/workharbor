@@ -172,14 +172,16 @@ the repository's ordinary `go build`/application checks; no archive, image, rele
 T038 stage/promote amendment (2026-10-24, proposed): follow
 [the selected local interaction](contracts/local-stage-promote.md) and
 [plan packages S0–S4](plan.md#t038-stagepromote-amendment-2026-10-24). D1/D2 direction
-is selected in owner chat; exact-head artifact approval remains pending. Before
+follows [LS-1 and its verbatim answer](spec.md#ls-1-owner-direction-2026-10-24);
+artifact approval is the owner approval/merge record of [PR #229](https://github.com/wstein/workharbor/pull/229),
+covering interaction only, with S0 still gated afterwards. Before
 stage/promote product code, complete S0's capability/capture/argv/image/receipt/
 cleanup and output contract with independent review and owner approval. Additional
 red-first IDs and SC-024 stage/promote coverage are enumerated there. Preserve the
 existing FR-067 guard and all removal regressions. Current protected Anchorage
 staging/temp cleanup remains excluded; a FR-067(e) change is a separate decision
-and task. Proposed newly allocated whr candidate homes and explicit promote
-`--volumes --force` consent require this amendment's approval. This note neither
+and task. New candidate-home naming and promote deletion flags likewise need
+that separately approved task; this amendment does not add or approve them. This note neither
 checks T038 nor changes T025/T038/T039 dependencies, other tasks or prior evidence.
 
 - [ ] T039 [US1, US4] Bundle mount drift reporting (FR-069, SC-025; #143) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, and `contracts/cli/output.schema.json`: read-only comparison of pinned bundle references in `.devcontainer/bundle-pins.json` or devcontainer configuration against mounted image/volume references on running container; per-bundle reporting of pinned, mounted, and status (`in_sync`, `drift`, `cannot_determine`); exit code 0 when all in sync, distinct exit code when drift detected, and exit 68 when unreadable/undetermined; `--json` output conforming to `bundleDriftResult`; zero mutations verified. Failing tests first: `TestBundleDriftAllInSync`, `TestBundleDriftDetected`, `TestBundleDriftMissingMount`, `TestBundleDriftUnreadablePins`, `TestBundleDriftJSONMatchesSchema`, `TestBundleDriftZeroMutations`. Acceptance: all SC-025 cases pass offline with fake Docker fixtures; independent review is CLEAR. Prerequisites: T025, T038.

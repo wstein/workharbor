@@ -28,20 +28,39 @@ by a tracker or PR link. Implementation record: the separate owner-gated work it
 
 ## Amendment (2026-10-24): selected local stage/promote interaction
 
-Owner chat direction selects a primary by container name/full ID plus an explicit
-source directory, fingerprint trust, and Docker healthcheck or the existing
-workspace smoke script over stdin. This proposed amendment records that direction
+Owner direction [LS-1](#ls-1-owner-direction-2026-10-24) selects a primary by
+container name/full ID plus an explicit source directory, fingerprint trust, and
+Docker healthcheck or the existing workspace smoke script over stdin. This proposed amendment records that direction
 in FR-068, FR-063 and SC-024 with [the local contract](contracts/local-stage-promote.md).
-It requires exact-head independent review and owner approval before execution;
-chat direction is not approval of this text. The plan explicitly retains an
+The approval record is an owner-authored approval or owner merge of
+[PR #229](https://github.com/wstein/workharbor/pull/229), covering this interaction
+amendment only. Before that record it is proposed; afterwards S0 still gates code
+and live operations. The quoted chat direction is not approval of precise text. The plan explicitly retains an
 execution-profile gate before product implementation. No command is activated,
 T038 stays open, and the dependency of T039 on full T038 is unchanged.
 
 The owner decision on #226 keeps the whole-prefix home protection and excludes
 existing Anchorage staging/temp cleanup from that task. This amendment neither
 changes FR-067(e) nor claims a cleanup path for those protected containers.
-The proposed new whr-only staging home and explicit promote deletion flags are
-reviewed here, not inferred as approved by the D1/D2 chat answer.
+New candidate-home naming and a compatible promote deletion-consent surface are
+reserved for a separate owner decision and task, not folded into T038 by this
+amendment or inferred as approved by LS-1.
+
+### LS-1: owner direction (2026-10-24)
+
+Source: owner Werner's answer in Codex session
+`01a1689d-f986-7fc2-8275-1a3f465d0df3`, recorded verbatim:
+
+> ja zu Container-Auswahl per Name/ID plus explizitem Quellverzeichnis; Fingerprint-Vertrauen; Docker-Healthcheck bzw. vorhandener Workspace-Smoke über stdin.
+
+This selects historical D1 alternative B with fingerprint trust and D2 with the
+workspace smoke input on stdin. It does not select new home names or cleanup
+flags, approve an execution profile, or authorize provider operations. The owner's
+subsequent request to proceed asks for this amendment. Its exact-text approval
+record is the owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229),
+which approves only the interaction scope when recorded; S0 remains a separate
+engineering and approval gate. Do not reopen the selected direction as if no
+answer existed, or infer approval beyond its words.
 
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`
@@ -1266,14 +1285,19 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `.devcontainer/smoke-container.sh` over stdin to fixed `bash -s -- <workspace-path>`
   in the exact candidate. Displayed output is escaped per FR-022; do not execute
   Anchorage's host smoke orchestrator or retain raw output/environment in receipts.
-  Promote revalidates the candidate and recreates the primary from the exact
+  Promote runs no host hook. Any container lifecycle hook it runs must be bound
+  to the receipt-trusted fingerprint after a byte recheck. A missing binding
+  refuses 68 before effects, or 73 after partial effects; never run the unverified
+  hook. S0 must prove this. Promote revalidates the candidate and
+  recreates the primary from the exact
   immutable verified image, preserving its original home. Preview warns that
   primary exec/shell panes end; require confirmation (`--yes` unattended/JSON).
   After verifying the resulting primary, remove the candidate/container home per
-  unchanged FR-067. Proposed new whr candidates use a distinct newly reserved
-  `whr-stage-home-<opaque-id>` volume; never rename/adopt existing homes. Mutating
-  promote requires explicit `--volumes --force` for its exact previewed staging
-  home, plus confirmation; absence refuses 70 before primary replacement.
+  unchanged FR-067. New candidate-home naming and the promote deletion-consent
+  surface are a separate owner decision/task; this interaction amendment does not
+  assign a new volume prefix or add promote deletion flags. The complete source
+  execution profile must reference that approved separate scope before claiming
+  a compatible cleanup path; no private force/volume bypass is allowed.
   Protected/shared/foreign homes refuse 68 before effects. Current Anchorage
   candidates with `anchorage-home-*` homes remain refused even container-only;
   no recovery cleanup path for those excluded candidates is defined here.
@@ -1313,7 +1337,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   precedence over 68/71/72. Stage/promote uses 64 for bad arguments/ambiguity, 65
   for no labelled primary match, 68 for wrong role/state or invalid/unresolved
   source/label/receipt bindings, and 70 for missing required trust/confirmation or
-  explicit candidate-home deletion flags; FR-067 removal's mapping is unchanged.
+  explicit candidate-home deletion consent once defined by its separate owner
+  decision/task; FR-067 removal's mapping is unchanged.
   The macOS `setup` wizard and `doctor --fix` of [Feature 009](../009-host-setup-wizard/spec.md) use the same table without a new code: 0 success or an answer `no`; 64 usage; 68 refusal
   (unsupported platform, root start, run lock, blocked or failed with nothing applied, failed doctor check); 70 needs-human (unattended without
   confirmation, privileged step without terminal); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial
@@ -1551,7 +1576,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   primary running with a distinct admissible new candidate home; (15) health/smoke
   success/failure, exact stdin bytes and FR-022 output; (16) immutable verified-image
   promotion, original primary home retained and pane-loss confirmation;
-  (17) explicit candidate-home deletion consent and protected/shared-home refusal;
+  (17) candidate-home cleanup under its separately approved consent contract and
+  protected/shared-home refusal;
   (18) collision, stale receipt, interrupted/uncertain effects and honest recovery,
   with dry-run zero effects, exact exit codes and JSON conformance throughout.
   Existing protected Anchorage staging/temp cleanup is excluded by the recorded

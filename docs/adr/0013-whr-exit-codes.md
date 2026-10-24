@@ -100,7 +100,7 @@ Release documentation publishes this table (FR-018). Only the scaffold's usage e
 exists (`apps/whr/cmd/whr/main.go`); the table and the tests above are not
 implemented.
 
-## Proposed local stage/promote clarification (2026-10-24)
+## Local stage/promote clarification (2026-10-24; approval record #229)
 
 The [FR-068 amendment](../../specs/006-whr-cli/contracts/local-stage-promote.md)
 proposes local deadline 71 only when nothing has been applied, identifying the
@@ -110,3 +110,7 @@ operation-ID wording and requires the same exact-head owner approval as FR-063's
 first-increment amendment; it changes neither the numeric table nor remote wait
 semantics. Partial/uncertain effects are 73 and take precedence over 68/71/72.
 No code or execution approval is claimed by this clarification.
+
+The owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229)
+is the approval record for this interaction clarification only; before that record
+it is proposed, and S0 execution-profile approval remains separate afterwards.

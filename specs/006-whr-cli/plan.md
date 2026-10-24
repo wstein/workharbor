@@ -388,10 +388,11 @@ serialised in graph order. Dependent branches start from the merged `main` that 
 ## T038 stage/promote amendment (2026-10-24)
 
 Status: proposed direction/interaction reconciliation, **not a ready execution
-plan**. Owner chat selected container name/full ID plus explicit source directory,
+plan**. Owner direction [LS-1](spec.md#ls-1-owner-direction-2026-10-24), with its
+verbatim answer, selects container name/full ID plus explicit source directory,
 fingerprint trust, and Docker healthcheck or existing workspace smoke over stdin.
-Exact-head independent review and owner approval of this spec/plan/tasks amendment
-remain required. Use [the local contract](contracts/local-stage-promote.md);
+The approval record is the owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229),
+covering only this interaction; S0 remains gated after that merge. Use [the local contract](contracts/local-stage-promote.md);
 [the earlier brief](contracts/local-stage-promote-proposal.md) retains historical
 alternatives, not outstanding D1/D2 questions. No source behavior is implemented.
 
@@ -427,13 +428,13 @@ all staging/temp `anchorage-home-*` targets refuse 68 even container-only. Curre
 Anchorage cleanup remains excluded, with no recovery path promised. No existing
 home is renamed, adopted or exempted and no protected-prefix test is weakened.
 
-For new whr candidates, propose a separately reserved `whr-stage-home-<opaque-id>`
-volume, verified through the complete effective mount plan. This is a new allocation,
-not a change to existing Anchorage names or FR-067(e). To satisfy FR-067(d), propose
-mutating promote require `--volumes --force` plus confirmation (and --yes unattended)
-for the exact candidate home. Absence is 70 before replacing the primary. Private
-removal APIs must not manufacture that consent. This explicit surface addition
-needs owner approval with this amendment; D1/D2 chat direction alone did not approve it.
+New candidate-home naming/allocation and promote deletion flags require a
+separate owner decision and task, as the #226 decision requires. They are outside
+this interaction amendment and are not silently folded into T038. FR-067(d)'s
+explicit --volumes plus --force and confirmation still apply; --yes is no substitute.
+S0 must reference the separately approved cleanup scope before claiming a complete
+execution/cleanup API. No internal force bypass or primary replacement with an
+invalid cleanup plan is permitted.
 
 ### Work packages and execution gate
 
@@ -442,7 +443,7 @@ subpackages of T038, not additional task IDs or independent feature completion:
 
 | Package | Verifiable output / red-first coverage | Gate |
 |---|---|---|
-| S0: complete execution profile | Capability matrix, bounded capture/fingerprint and byte-binding algorithm, exact argv/environment/budgets, immutable-image promotion design, new-home/cleanup consent proof, durable receipt/lock/recovery and closed output/schema contract. Cover the actual Anchorage config/hook shape and explicit unsupported cases. | Independently reviewed exact technical contract and owner-approved spec/plan/tasks before S1 product code. This amendment leaves S0 open. |
+| S0: complete execution profile | Capability matrix, bounded capture/fingerprint and byte-binding algorithm, exact argv/environment/budgets, immutable-image promotion design, separately approved home/cleanup consent proof, durable receipt/lock/recovery and closed output/schema contract. Cover the actual Anchorage config/hook shape and explicit unsupported cases. | Independently reviewed exact technical contract and owner-approved spec/plan/tasks before S1 product code. This amendment leaves S0 open. |
 | S1: source/preview/trust | Pure local planning and refusal first: `TestLocalStageSelectsExactPrimaryAndSource`, `TestLocalStageRejectsUnresolvedLabel`, `TestLocalStageTrustMatchesCapturedInputs`, `TestLocalStageDryRunExecutesNoEffects`, `TestLocalStageRequiresTrustAndConsent`. Reuse current readers/discovery. | S0 complete; fake tools only; no real build/hook/Docker. |
 | S2: candidate/verification | `TestLocalStageLeavesPrimaryRunning`, `TestLocalStageReservesDistinctHome`, `TestLocalStageRefusesCollision`, `TestLocalStageRejectsChangedInputs`, `TestLocalStageHealthAndSmoke`, `TestLocalStageSmokeUsesTrustedStdin`, `TestLocalStageEscapesSmokeOutput`. | S1 accepted; prove official CLI/candidate binding, do not claim actual host acceptance. |
 | S3: promotion/cleanup | `TestLocalPromoteUsesVerifiedImage`, `TestLocalPromotePreservesPrimaryHome`, `TestLocalPromoteConfirmsPaneInterruption`, `TestLocalPromoteRequiresExplicitHomeDeletionConsent`, `TestLocalPromoteNeverBypassesProtectedHome`, `TestLocalPromoteStaleReceiptRefuses`, `TestLocalPromotePartialFailureInventory`. | S2 accepted; preflight full cleanup plan before primary replacement, verify new primary before candidate cleanup. |
@@ -451,7 +452,9 @@ subpackages of T038, not additional task IDs or independent feature completion:
 S0 must resolve engineering details rather than silently introducing requirements
 in source. In particular: source coverage must include executed build/hook/smoke
 bytes and relevant submodules; a live pathname recheck alone is not byte binding.
-The official CLI can transform/extend images, so final-image identity during
+Promotion must run no host hook; any container lifecycle hook requires the
+receipt-trusted fingerprint and byte recheck; a missing binding is 68 before
+effects or 73 after partial effects. S0 must prove that resource/hook split. The official CLI can transform/extend images, so final-image identity during
 promotion must be demonstrated, not assumed from an image string. Existing
 Anchorage configuration has host initialization, named users, substitutions,
 mounts and runArgs beyond the remote provider's subset; the local capability
