@@ -117,8 +117,12 @@ func TestWizardD2CancelAtEveryStepPreservesSnapshot(t *testing.T) {
 			if p != nil || int(exitcode.FromError(err)) != 72 {
 				t.Fatalf("stage %d: proposal=%v error=%v; %s", stage, p, err, diag.String())
 			}
-			if stage < len(d2Prompts) && !strings.Contains(diag.String(), d2Prompts[stage]) {
-				t.Fatal("did not reach cancellation step")
+			cancelPrompt := "Review:"
+			if stage < len(d2Prompts) {
+				cancelPrompt = d2Prompts[stage]
+			}
+			if got := strings.Count(diag.String(), cancelPrompt); got != 1 {
+				t.Fatalf("cancelled prompt count = %d, want 1", got)
 			}
 			if stage < len(d2Prompts) {
 				nextPrompt := "Review:"
