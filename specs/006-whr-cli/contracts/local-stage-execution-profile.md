@@ -215,10 +215,21 @@ nonsecret ANCHORAGE name/hostname/role/host-label/IP substitutions, with unset/e
 preserved. ContainerEnv/remoteEnv come from image plus trusted config, not host PATH.
 Ordinary owner Git processes in the candidate are outside this managed env policy.
 
-W=phase workspace, C=captured config, O=full override, D=private fixed-endpoint driver,
-U=private user data, L=explicit ordered identity/role labels. Promote omits host
-initialize from O; keeps receipt-bound source lifecycle contribution once, image
-metadata contribution once and official origin order/object parallelism.
+W=phase workspace, C=config, O=full replacement override, D=fixed-endpoint driver,
+U=private user data, L=explicit ordered identity/role labels. Stage C/O derive from
+the captured admitted config. For **every promote invocation** set C=O=P, where P
+is a complete private receipt-derived `promote/devcontainer.json`: image is the
+verified immutable sha256 image ID, workspaceMount binds the original source,
+home/mounts/users/env/overrideCommand are the admitted primary values. P contains
+no build/dockerFile/dockerComposeFile/service, Features/additional Features,
+initializeCommand or UID-extension request; updateRemoteUserUID=false and the
+fixed CLI UID default never apply. Never pass the original build config as C.
+Hash/store P in the receipt; recheck its bytes before each phase. No omission in
+a delta override is treated as deletion of a source property. P retains each
+trusted source lifecycle contribution once, accounting for contributions already
+present in inspected image metadata, with official origin/order/object parallelism;
+never flatten merged hooks back into source fields or deduplicate distinct origins
+merely because command strings match.
 
 ```text
 devcontainer read-configuration --workspace-folder W --config C --override-config O
