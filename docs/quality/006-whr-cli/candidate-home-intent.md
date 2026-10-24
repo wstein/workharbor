@@ -109,3 +109,35 @@ home-destination success cases now include the actual `devcontainer.local_folder
 `devcontainer.config_file` and `workharbor.workspace` labels to demonstrate that
 ordinary workspace metadata legitimately remains present on staging candidates.
 No new label, producer contract or specification rule is introduced.
+
+## PR 240 correction: scope-boundary test gaps
+
+[Review F3](https://github.com/wstein/workharbor/pull/240#discussion_r4368239608)
+adds `root endpoint` (`unix:///`) and `primary home too long` (1025 ASCII
+characters) to `TestCandidateHomeScopeAdmission`. Both require conflict 68 before
+entropy access. The production bounds already existed and remain unchanged.
+
+Author mutation probes used Go source overlays against the candidate-home source
+at commit `a004ba10` without changing the checked-out production file. Each
+following edit compiled and failed the named assertion; no compiler failure was
+counted as a killed mutant:
+
+| Removed guard | Focused test selection | Observed result |
+|---|---|---|
+| `u.Path != "/" &&` | `^TestCandidateHomeScopeAdmission$/^root_endpoint$` | Exit 1: entropy unavailable (74), `want zero value and conflict` (68). |
+| `\|\| len(scope.PrimaryHome) > 1024` | `^TestCandidateHomeScopeAdmission$/^primary_home_too_long$` | Exit 1: entropy unavailable (74), `want zero value and conflict` (68). |
+| Entire `mount.Name == i.plan.PrimaryHome` refusal | `^TestCandidateHomeBindingRefusesDrift$/^mount_primary_elsewhere` | Exit 1: all eight primary-home cases returned a binding and nil error. |
+
+For reproduction, save the single edited source outside the checkout and a JSON
+Go overlay mapping the absolute `candidate_home.go` path to it, then run from
+`apps/whr`:
+
+```sh
+go test -overlay /absolute/overlay.json ./internal/localdocker -run '<focused test selection>' -count=1 -v
+```
+
+The two new scope cases and all primary-home cases pass with the guards intact.
+Raw logs, exact argv/overlay records and mutated source bytes remain in
+`/tmp/whr-b-home-fixes-evidence-20261024/` as `root-endpoint-*`,
+`primary-home-length-*` and `primary-home-mount-*`. These probes establish source
+admission coverage only; the unit's allocation and native-host limits still apply.
