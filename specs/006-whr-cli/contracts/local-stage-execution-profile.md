@@ -14,7 +14,7 @@ The [interaction contract](local-stage-promote.md), [FR-068/LS-1](../spec.md),
 [home decision](candidate-home-cleanup-decision.md) and
 [cleanup task proposal](candidate-home-cleanup-task-proposal.md) remain the
 foundation. D1/D2, no-host-hook promotion, FR-067 and deletion consent do not change.
-Clone/result-transfer, receipt-bound refresh and conditional phase binding are **proposed
+Clone/result-transfer and conditional phase binding are **proposed
 focused amendments**, not behavior already authorized by the old interaction text.
 
 ## Writable candidate and full-history Git capture
@@ -155,39 +155,17 @@ bind: fetched candidate commits are available for later owner integration, **not
 automatically active working-tree code**. Preview states this distinction. Before promotion compare the current version
 with the receipt and refuse stale verification before primary stop.
 
-**Proposed refresh amendment:** `workspace stage --local --refresh --source ORIGINAL
-[--smoke] [--dry-run] [--yes] [--trust DIGEST] PRIMARY` is reserved here for review,
-not registered. It selects only the existing exact receipt-bound candidate (never
-name-based adoption), previews its current clone input digest and requires fresh
-explicit trust/consent. It reruns requested verification against that version only
-if config/build/image/host-initializer **and container-hook argv/script/dependency
-bytes** still equal the manifest that actually executed during stage;
-otherwise it requires a fresh stage after guarded cleanup, not implicit rebuild.
-It runs no host hook and does not replace resources or change homes. Without
---refresh default stage collisions still refuse. Original source drift still
-requires a new stage/trust. This is the concrete proposed exception to the current
-“Changed source requires a new stage”/no-adoption interaction, not a quiet relaxation.
+**Existing-candidate recovery:** this contract defines no rerun-verification,
+re-entry or re-attestation interface for an existing candidate. Missing/failed
+verification, changed trusted inputs or stale receipt bindings prevent promotion.
+Retain candidate project data; known-safe recovery is guarded candidate/container-
+home cleanup under unchanged FR-067, followed by a fresh stage with fresh capture,
+trust and required smoke. Cleanup never deletes the retained writable clone or
+uncommitted work. Lost receipts, uncertain phases and resource drift require owner
+reconciliation; never adopt resources or retry uncertain effects.
 
-Refresh accepts only `staged_verified`, or `staged_unverified` with reason
-missing_smoke, failed_smoke, failed_health or stale_candidate_inputs, after known
-completion of resource/container-hook phases. Require the current exact candidate
-ID, daemon, role/labels, immutable image, mounts/users/home and clone binding;
-environment/build/initializer/container-hook command and byte inputs, their
-executed-stage manifest and original-source binding must still match. Refresh
-reruns verification only, never container hooks; an edited setup.sh therefore
-requires guarded cleanup and a fresh stage, not a new verified receipt by refresh.
-Unknown/allocating/incomplete-hook/promoting/cleanup/uncertain receipts, lost
-receipts or drifted resources refuse 68; never adopt or retry uncertain effects.
-Apply records verifying before executing a freshly trusted verification version.
-Passing requested D2 verification replaces the receipt with staged_verified/exit 0.
-Known missing/failed verification retains staged_unverified/exit 73 with its reason;
-uncertain execution records uncertainty and requires owner reconciliation instead
-of refresh. No healthcheck plus no --smoke remains missing_smoke; never run smoke
-implicitly. Preview names --refresh --smoke as recovery where admissible, otherwise
-guarded cleanup/fresh stage. Default stage does not consume this recovery path.
-Refresh eligibility reads the explicit closed receipt unverified_reason, never an
-inference from verification policy/status. Missing/null/unknown reason in a
-staged_unverified receipt refuses 68; no health_and_smoke ambiguity is inferred.
+A refresh interface is only a possible future owner proposal requiring separate
+approval; no such flag, workflow or recovery promise is part of this contract.
 
 **Proposed bounded phase-binding amendment — cooperative quiescence:** retain
 fingerprint trust and exact-candidate verification, and make the execution claim
@@ -222,9 +200,9 @@ Literal phase rules for owner review:
    same-UID/Docker-owner or ordinary concurrent-writer guarantee is claimed.
 
 Receipt separates original source binding, candidate Git/worktree version and the
-execution-byte manifest; the previewed trust digest binds all three. Refresh may
-update candidate identities/results with fresh trust without pretending the original
-HEAD moved. Promote requires original binding unchanged and actual original hook
+execution-byte manifest; the previewed trust digest binds all three. Existing
+verification is not updated to attest a later candidate version. Promote requires
+original binding unchanged and actual original hook
 bytes equal to that trusted execution manifest. Candidate hook/config changes not
 present in the original cannot become active merely through fetched refs; refuse
 before replacement and retain the clone/results for owner integration/restaging.
@@ -330,7 +308,7 @@ then remove the temporary name and reparse/hash W's file. No overwrite of candid
 work is implied. Journal producer operation/input digest, E output digest, W path/
 digest and publication observation; this output becomes an explicit later-phase
 input, separate from the pre-initialization fingerprint. Recheck before use.
-Refresh requires the same receipt-bound W output; missing/changed output refuses
+Later use requires the same receipt-bound W output; missing/changed output refuses
 68 before verification and requires a fresh stage, never a host hook or republish.
 
 For promote's original live bind, admit A/.devcontainer/host.env separately during
@@ -453,8 +431,8 @@ The existing requirement binds every executed container hook to trusted inputs.
 Under the proposed cooperative phase-binding amendment above, promote hashes the
 actual original workspace dependency paths before/after official hooks against
 the immutable **container-hook manifest actually executed at stage**, including
-argv, script/dependency bytes and origin order. Refresh cannot replace that record
-with unexecuted hooks. setup.sh therefore executes at its normal path,
+argv, script/dependency bytes and origin order. No later candidate inspection can
+replace that record with unexecuted hooks. setup.sh therefore executes at its normal path,
 reads matching sibling assets/config and records original WORKSPACE while updating
 the original home. No candidate-home transplant, alternate source mount,
 intermediate primary or hook rewrite is needed. Drift before replacement refuses
@@ -561,13 +539,13 @@ Future source PR adds schemas/command table together, not in this docs PR.
 | outputEntry | path string; origin enum(generated_E,published_W,admitted_A); size integer 0..65536; digest sha256 digest; producer_operation_id nullable 32-lowercase-hex string; producer_input_digest nullable sha256 digest; admission_operation_id 32-lowercase-hex string; admission_input_digest sha256 digest |
 | effectTarget | exactly one of resource, gitObjectsTarget, gitRefsTarget or cloneOutputTarget, discriminated by kind; each variant is closed |
 | effect | action enum(create_volume,host_initialize,publish_candidate_output,build,create_container,container_hooks,smoke,import_objects,create_result_refs,stop_primary,remove_primary,create_primary,remove_candidate,remove_home); target effectTarget; state enum(planned,attempted,observed,uncertain,remaining) |
-| step | action enum(inspect_retained,refresh_with_smoke,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable effectTarget; instruction string |
+| step | action enum(inspect_retained,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable effectTarget; instruction string |
 
 OID is exactly 40 lowercase hex for sha1 or 64 for sha256, matching its repository.
 unverified_reason is a required result/receipt key: non-null unverifiedReason
 exactly when result status/receipt state is staged_unverified, null otherwise.
-Known verification failures persist their precise reason; ambiguous/unknown state
-does not become refresh-eligible by inference.
+Known verification failures persist their precise reason for inspection/recovery;
+no reason value authorizes existing-candidate verification or state re-entry.
 Git import effects require gitObjectsTarget; ref publication requires gitRefsTarget;
 candidate output publication requires cloneOutputTarget; Docker effects require
 resource. The object manifest is a private sorted OID/size inventory bound by its
@@ -590,13 +568,13 @@ Recovery ID is daemon-key/operation-id, never a fabricated remote operation ID.
 Success 0 requires operation completion or valid preview. If no healthcheck and
 stage omits --smoke, retain the candidate as **staged_unverified**, return 73
 partial_failure with explicit missing verification and recovery. This is not a
-successful stage or a promotion ticket. Explicit recovery is receipt-bound
-stage --refresh --smoke with fresh preview/trust/consent when the allowed state
-and exact resource/output checks above pass; otherwise guarded local rm followed
-by fresh stage --smoke. A default rerun never adopts it or silently runs smoke.
-Refresh is the proposed interface amendment above, not a general resume/orphan
-deletion API. Lost receipts/partial allocation retain and report resources for
-owner reconciliation.
+successful stage or a promotion ticket. Explicit recovery is guarded local
+candidate/container-home removal followed by fresh stage --smoke and fresh trust/
+consent. Preserve the retained clone and all uncommitted/untracked work; the owner
+can inspect/integrate it with their own Git tools. A rerun never adopts an existing
+candidate or silently runs smoke. No resume/reverification/orphan-deletion API is
+defined. Lost receipts/partial allocation retain and report resources for owner
+reconciliation.
 
 Before effects: missing trust/consent 70 needs_human; binding/capability/collision/
 verification refusal 68 conflict; deadline 71 timeout; interrupt 72 interrupted.
@@ -620,8 +598,8 @@ No receipt is evidence of success; no receipt is also not evidence of no effects
 | Existing generated host.env/smoke.env as executable input | Unvalidated shell syntax/stale provenance | Sourcing unbound generated bytes | Keep explicit validation/publication/admission rules. |
 | Candidate admin symlinks/alternates/executable config on export | Container-to-host command/path redirection | Host commands and foreign object-store reads | Keep config-free bounded reader; normal user Git remains possible. |
 | whr checkout/reset/merge/existing-ref/FETCH_HEAD writes | Owner work overwritten by transfer | Activating candidate code or moving owner refs | Keep create-only result refs; trusted hook effects are separate. |
-| Fresh digest trust on changed executed inputs | Stale source approval | Untrusted replacement hook/test bytes | Settled D1; proposed refresh does not waive it. |
-| Refresh with changed container hooks/environment | Verification of setup that never ran | Rebinding a completed stage to new hooks | Keep; fresh stage must execute changed hook inputs. |
+| Fresh digest trust on changed executed inputs | Stale source approval | Untrusted replacement hook/test bytes | Settled D1; fresh stage is required for changed trusted inputs. |
+| Reusing verification after changed hooks/environment | Verification of setup that never ran | Rebinding a completed stage to new hooks | Keep; guarded cleanup and fresh stage must execute changed hook inputs. |
 | Original source binding must match | Wrong workspace or stale execution version | Promotion against unrelated/changed original | Settled interaction; results do not change original checkout. |
 | Zero promote container hooks | None justifying the owner-rejected ban | Normal project lifecycle | Drop; preview/run trusted project hooks. |
 | Promote host hooks | Unexpected additional host execution | Reinitializing host resources during promote | Settled no-host-hook direction. |
@@ -662,7 +640,8 @@ No runtime proof follows. Tests must cover real clone/history/index/dirty submod
 candidate export with malicious config/includes/alternateRefsCommand/packObjectsHook,
 external alternates, symlinked admin paths and symbolic/replace refs (zero host
 commands or foreign-object reads; bounded verified export only),
-normal Git operations, changed-input refresh, detected drift/conditional reporting, exact official
+normal Git operations, changed-input refusal, retained dirty clone/fresh-stage recovery,
+detected drift/conditional reporting, exact official
 phases, hook origin/order/path semantics, create-only multi-repo result refs,
 FETCH_HEAD/index/worktree preservation, transfer cancellation and all FR-067 cases.
 Owner approval concerns this concrete revised profile/amendments, not reapproval
