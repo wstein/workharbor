@@ -2,18 +2,21 @@
 
 This test-only unit measures real kernel ENOSPC in a bounded private filesystem,
 separate from the existing injected-error matrices and the remaining
-[T030 core acceptance](t030-init-core-20261024.md). Base:
-`f2d96805383410f401826877b634d2c03780e977`, measured 2026-10-24 with
+[T030 core acceptance](t030-init-core-20261024.md). Current base: `d18ccc87926084ca3f51d08774f7a627606b255e`; the initial
+measurement base was `f2d96805383410f401826877b634d2c03780e977`. Measured
+2026-10-24 with
 Go `go1.27.2 linux/arm64`, umask 022. Production is unchanged.
 
 ## Isolation and actual failures
 
 [TestInitPhysicalENOSPC](../../../apps/whr/internal/scaffold/enospc_linux_test.go)
 prefers an owned test-executable helper through `unshare -rnm`, with the
-original-owner mapping fallback below when native setup is refused. Before mounting,
-the helper verifies its user, network and mount namespace identities differ
-from the parent's, the owned mountpoint is a real empty directory, and mount
-propagation is not shared. It mounts only that directory with a 1 MiB tmpfs.
+portable premounted fallback below when native setup is refused. The direct
+helper requires changed user/network/mount namespaces, an exact single-entry
+mapping of inner UID/GID 0 to the original owner, a real empty mountpoint and
+private propagation. It mounts only that directory with a 1 MiB tmpfs. The
+fallback mounts before dropping privilege and runs Go as the original non-root
+owner; its distinct namespace and filesystem guards are detailed below.
 Before filling, both the mount and the open filler descriptor must identify the
 new device, tmpfs type and capacity at most 1 MiB. Filling is explicitly bounded.
 No host filesystem is filled or mounted, and the underlying directory remains
@@ -50,7 +53,7 @@ all native candidates fail. Repository application acceptance also rejects any
 test skip; a local package exit 0 with skips is not CI acceptance. This Linux-only test made no network
 connection and introduced no product hook, dependency or configuration flag.
 
-## Executed checks
+## Initial executed checks (historical)
 
 Commands ran from `apps/whr` with
 `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off`. The first new-test executions were
@@ -90,57 +93,88 @@ The own topic was rebased from `f2d96805` onto
 `54c4b271745fe78800a523607dd00a9124d22f01`; range-diff showed both original
 commits equal before this correction. No foreign or accepted commit was rewritten.
 
-The privileged chain accepts only canonical `/usr/bin` tools with root-owned,
-files and ancestors that are not group/other writable; an owner-writable PATH wrapper is refused.
-The fallback uses fixed absolute native-tool paths:
-`sudo -n -- unshare --user --mount --net --map-users=0:<owner-uid>:1 --map-groups=0:<owner-gid>:1 --setgroups=allow --setuid=0 --setgid=0 -- setpriv --clear-groups -- env -i <four-field environment> <owned test executable>`.
-Local util-linux 2.41.5 help and `unshare(1)` confirm the
-`inner:outer:count` mapping syntax and group-mapping behavior. A non-root original host owner is mandatory. The helper
-requires exact single-entry UID/GID maps from inner 0 to the original outer
-owner, inner real/effective UID/GID 0, and no supplementary groups on the
-fallback. The Go writer never runs as root in the initial namespace or as host
-UID 0: its host UID/GID are the original owner's. Capabilities exist only in
-the new user namespace, the same boundary already used by `unshare -rnm`.
-All three changed-namespace, private-propagation, owned-mountpoint, new-device,
-tmpfs type/capacity and bounded-fill guards remain mandatory.
+An initial correction used an exact original-owner user-namespace mapping.
+Local util-linux 2.41.5 ran that mapped fallback successfully: the historical
+focused run had 21 test/subtest passes and no skips. The topic subsequently
+rebased through `86008fab4b0131187c3d3b244fef94a48063b48b` and
+`79d2f4eb336514c27b93d220edf7f5c6efe49b0d` with equal own patches. Those are
+historical bases; the current base is named above.
 
-Both `unshare failed` and `write failed /proc/self/uid_map` native refusals
-permit trying the mapped candidate. A helper-start marker makes child
-assertions hard failures. Output overflow, context deadlines and pipe wait
-deadlines are typed hard failures checked before any native-looking prefix;
-they cannot trigger fallback or be hidden as unavailable capability.
+The [next hosted run failed](https://github.com/wstein/workharbor/actions/runs/40136570703/job/121003086084):
+Ubuntu 24's util-linux 2.39 invokes `newuidmap`, which refuses the runner's
+single-owner mapping without a permitted subordinate-ID range. The local 2.41
+success did not establish 2.39 portability. [The follow-up review](https://github.com/wstein/workharbor/pull/250#pullrequestreview-5640361847)
+therefore replaces that fallback; the old mapped command is no longer used.
+
+## Portable private-mount fallback
+
+The fallback is a fixed literal prelude, invoked as
+`sudo -n -- <canonical-env> -i <four-field-environment> <canonical-unshare> --mount --net --propagation private -- <canonical-sh> -eu -c <literal-prelude> <arg0> <quoted-positional-arguments>`.
+It does not request a user namespace or invoke mapping helpers. The root stage
+receives only the exact four-field HOME/TMPDIR/PATH/TERM launch environment,
+verified canonical system tools, numeric original-owner UID/GID, owned fixture
+paths, parent namespace identities and the fixed helper arguments. No caller
+shell initialization, proxy or secret environment is inherited by the launcher.
+The literal is never read from an owner-writable script; fixture paths remain
+positional arguments and are never interpolated into root shell source.
+
+Before mounting, the prelude rejects UID 0, malformed IDs, a non-absolute or
+unexpected mountpoint name, symlinks, nonempty directories, a changed user
+namespace, or unchanged network/mount namespaces. Canonical `mount` uses
+`--no-mtab --internal-only` and a tmpfs limited to 1 MiB with mode 0700,
+original-owner UID/GID, nosuid/nodev/noexec. It then execs canonical `setpriv`
+with the original UID/GID and `--clear-groups`, followed by canonical `env -i`
+and the owned test executable. Go and product Apply run only after the drop;
+no owner script or Go program runs as initial-namespace root.
+
+Only the `premounted` helper path permits the unchanged user namespace. It
+requires changed network/mount namespaces, original non-root real/effective
+UID/GID and zero supplementary groups. Before any fixture write/fill, it checks
+an empty real directory, private propagation, owner/mode, tmpfs type, capacity
+at most 1 MiB and a device different from the parent's original directory.
+It cannot mount as the dropped owner; namespace exit removes the private mount.
+The direct path retains all three changed namespaces and exact UID/GID maps.
+
+Both ordinary `unshare failed` and `write failed /proc/self/uid_map` refusals
+may try the portable candidate. `newuidmap:`/`newgidmap:` diagnostics remain
+hard failures, not unavailable-capability classifications. The helper-start
+marker prevents assertions becoming native refusals. Typed overflow, context
+and pipe-wait deadline failures take precedence over native-looking prefixes.
+Required execution still fails explicitly when all launchers are unavailable.
 
 | New focused evidence | Actual result |
 | --- | --- |
-| Fallback argv/exact environment and required-refusal tests before correction | Semantic RED: argv lacked the mapped candidate; ordinary EPERM was skipped despite required proof, and uid_map EPERM lacked the required explicit failure result. |
-| Host-UID-zero launcher negative control before its guard | Semantic RED: the candidate builder still emitted a launcher for host UID 0; the new guard now refuses that case before launching any Go helper. |
-| Native-prefix-first classifier compiler mutation | Expected RED: five output/deadline boundary subcases and the helper-assertion guard fail (seven failed test/subtest outcomes). |
-| `go test -count=1 -run '^TestInitPhysicalENOSPC' -json ./internal/scaffold` after correction | Exit 0: 21 test/subtest outcomes, zero failures/skips. All four normal physical cases ran via the direct launcher; `TestInitPhysicalENOSPCMappedFallback` separately ran a real overwrite/restoration case via the mapped sudo launcher. |
+| Portable-candidate regression against the previous mapping implementation | Semantic RED, exit 1: fallback still requested `--user` and mapping helpers. |
+| Owner-only prelude protocol probes | Pass: exact privilege-drop/group-clearing/env-i order and literal positional arguments, including spaces and shell metacharacters; seven invalid-input probes fail before reaching an inert mount recorder. These probes perform no privileged mount or identity change. |
+| Widen canonical prefix from `/usr/bin/` to `/usr/` using a Go compiler overlay | Expected RED, exit 1: the root-owned, nonwritable `/usr/sbin/nologin` negative control is incorrectly accepted. Neither that tool nor its temporary alias is executed. |
+| Replace the exact direct map predicate with `true` using a compiler overlay | Expected RED, exit 1: another owner's mapping is accepted. Negative assertions also cover wrong inner ID, range size and extra entries. |
+| Replace the prelude's `--reuid=$fixture_uid` with `--reuid=0` using a compiler overlay | Expected RED, exit 1: the owner-only recorder observes UID 0 instead of the original owner; no privileged execution occurs. |
+| `go test -count=1 -run '^TestInitPhysicalENOSPC(Fallback\|DirectMap\|MappingHelper\|Prelude\|Privileged\|Required\|Native\|Child)' -json ./internal/scaffold` | 27 test/subtest passes, zero failures/skips. Includes closed argv/environment, restricted-native required failures, hard bounds and mutable-alias controls. |
+| `go test -count=1 -run '^TestInitPhysicalENOSPC(PremountedFallback)?$' -v ./internal/scaffold` | All four actual physical cases pass via `direct` with zero native refusals (five passing outcomes including parent). Forced premounted fallback explicitly SKIPs locally: sudo/unshare returns EPERM before the prelude. Package exit 0 with this skip is not CI acceptance or staged-runtime proof. |
 
-The restricted-native regression executes the owned test binary with controlled
-native refusal scripts and `WHR_REQUIRE_NETNS=1`; both refusal forms must exit 1 with
-`FAILED, NOT SKIPPED`, never a skipped or passing proof. The argv test pins
-original-owner maps, supplementary-group clearing and `env -i`. The helper
-validates those identity/environment properties during the actual mapped run.
-Each successful physical case logs `direct` or `mapped` and the native-refusal
-count, so the published CI log can identify which path ran. Corrected-head
-GitHub CI has not run in this authoring record; no green hosted run is claimed.
+The new staged fallback has not executed successfully on this local host, whose
+initial user namespace lacks the required mount/network capability. Authentic
+hosted execution remains pending publication and a green required CI run; no
+hosted success is claimed. Each successful case logs the actual launcher and
+refusal count. Package vet, gofmt, source, spelling and whitespace checks passed;
+full-suite/build/race checks were not run for this bounded correction.
 
 ### Canonical privileged arguments
 
 Independent review of `5d9e0594` found that checking a resolved path's ownership
 while retaining the original lookup string still allowed an owner-writable
 symlink to enter sudo's argv. No privileged alias execution was used to probe it.
-The new `TestInitPhysicalENOSPCMappedArgvSurvivesMutableAliases` first reproduced
+The original alias regression first reproduced
 four semantic failures by building the candidate through temporary aliases,
 replacing them with owned scripts, and inspecting argv only.
 
 The resolver now returns each verified canonical path. The privileged candidate
-is constructed exclusively from those canonical sudo/unshare/setpriv/env paths
+is constructed exclusively from canonical sudo/unshare/setpriv/env/sh/mount/readlink paths
 and their verified root-owned, non-group/other-writable ancestors; owner-writable aliases
 are absent from that chain. The ordinary owner launcher is built separately.
-The alias-replacement regression and canonical system-path positive controls now
-pass, without executing an alias. This proof covers mutable lookup aliases;
+`TestInitPhysicalENOSPCPrivilegedArgvSurvivesMutableAliases` now covers all seven
+canonical paths after replacing every owner-writable alias. Canonical positive
+controls pass without executing any alias. This proof covers mutable lookup aliases;
 it does not claim protection against a privileged administrator replacing
 trusted system binaries. Package vet, format, source, spelling and whitespace
 checks also passed for the correction.
