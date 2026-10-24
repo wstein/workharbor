@@ -276,7 +276,7 @@ gitlinks. Retain clone data for uncommitted/untracked work not transferable by G
 Generate fixed explicit refspecs per exported ref, targeting fresh
 refs/workharbor/stage/OP/REPO/{head,heads/NAME,tags/NAME,notes/NAME}. OP is 128-bit
 random; REPO is a path digest. Preview exact original/export/ref/OID mappings and
-objects to transfer. Reject any preexisting target ref68, never force/update it.
+objects to transfer. Reject any preexisting target ref 68, never force/update it.
 Fetch uses an isolated generated Git directory/config and the original object
 directory explicitly resolved, no source configuration/includes/rewrites/hooks/
 helpers. Transport is the private local export only, no credential/network access:
@@ -288,7 +288,7 @@ git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c maintenance.auto=fals
 ```
 
 Use no `+` refspec. Import objects first, then create each target ref with an
-atomic create-only `update-ref --stdin` transaction requiring old value zero;
+atomic create-only `update-ref --no-deref --stdin` transaction requiring absence;
 **do not rely on fetch's absence precheck for exclusive ref creation**. Implement
 fetch into an isolated private ref directory sharing only the admitted destination
 object store, then publish original operation refs via that create-only transaction.
@@ -296,6 +296,12 @@ Publication's update-ref targets the physically resolved original Git directory;
 its config may be parsed as data, but command overrides disable core.hooksPath,
 core.fsmonitor, gc.auto and maintenance.auto. This command runs no transport,
 credential helper, upload-pack or packObjectsHook; never invoke a source hook.
+Its exact input is `start`, then `create REF OID` per operation ref, then `prepare`
+and `commit`, LF-delimited; create requires the old ref absent. Reject symbolic
+operation refs, including dangling ones, and keep --no-deref on the real publication
+command so a concurrent symref cannot redirect creation into another owner ref.
+No update/delete command or dereferencing fallback is admitted. A pre-import
+collision is 68; a late transaction refusal after object import is partial 73.
 Thus clone/push races cannot overwrite a just-created foreign ref. Multi-repository
 publication is not globally atomic: journal each object's import/ref transaction,
 report observed/remaining repositories on failure. Cancellation/uncertainty after
