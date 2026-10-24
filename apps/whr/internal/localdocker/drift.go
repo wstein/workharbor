@@ -147,10 +147,6 @@ func compareBundlePins(id string, pins []workspacecfg.BundlePin, mounts []mount)
 	for name := range extra {
 		result.Bundles = append(result.Bundles, BundleDrift{Bundle: name, Status: "cannot_determine", Reason: "undeclared_bundle"})
 	}
-	if mounts == nil {
-		result.Status = "cannot_determine"
-		result.Reason = "mount_unavailable"
-	}
 	for _, row := range result.Bundles {
 		if row.Status == "cannot_determine" {
 			result.Status = "cannot_determine"
