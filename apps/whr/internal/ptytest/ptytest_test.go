@@ -703,11 +703,19 @@ func TestExpectFindsNeedleCompletedByLaterOutput(t *testing.T) {
 
 func TestExpectRegexpWorkIsBounded(t *testing.T) {
 	s := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(4 << 20)}, Timeout: 120 * time.Second})
-	s.ExpectRegexp(`END`)
-	s.ExpectExit(0)
-	// Each wake-up searches at most the 64 KiB window, never the whole backlog.
-	if w, out := s.Work(), len(s.Transcript()); w > uint64(40*out) {
-		t.Fatalf("regexp work %d for %d bytes of output: window not applied", w, out)
+	s.ExpectExit(0) // Drain the actual PTY before measuring a single search.
+	if out := len(s.Transcript()); out < 4<<20 {
+		t.Fatalf("transcript has %d bytes, want at least 4 MiB", out)
+	}
+	s.Screen() // Account for projection/drawing before measuring matcher work.
+	before := s.Work()
+	got := s.ExpectRegexp(`END`)
+	if len(got) != 1 || got[0] != "END" {
+		t.Fatalf("regexp match = %q, want END", got)
+	}
+	// The 64 KiB per-search contract does not depend on PTY read wake-ups.
+	if work := s.Work() - before; work == 0 || work > 64<<10 {
+		t.Fatalf("regexp matcher work %d: want 1..65536 bytes for one search", work)
 	}
 }
 
