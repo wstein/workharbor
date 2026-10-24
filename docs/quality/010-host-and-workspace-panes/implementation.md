@@ -76,3 +76,14 @@ P3 starts from the exact merge tip in the stw-created workspace for task
 It covers T019–T022 only. [P3 evidence](p3.md) distinguishes configuration
 acceptance from the absent remote session-creation consumer. P4 starts after P3's
 owner merge; SC-009 T018/T030 stays UNVERIFIED and owner-operated.
+
+## P4 approval and prerequisite binding
+
+Owner merged P3 PR #222 at `efc0715046196f360674dba3f7789ca09b546fab`,
+byte-identical to its reviewed head `e511b55d541a8e6acaf1f9a85f8c431f68930f65`.
+This closes T022. [P4 evidence](p4.md) records the already-merged OQ-12 amendment,
+authorized scope, independent optional checks and the prepared
+[SC-009 plugin result template](sc009-plugin.md). All actual host observations
+remain UNVERIFIED. P3's nonblocking review notes remain visible in its review;
+F1's stale derived/default notes and spec reconciliation belong to T031, without
+reopening any settled decision or blocking accepted P3 configuration scope.
