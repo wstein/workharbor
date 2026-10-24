@@ -406,3 +406,40 @@ func TestRunReportsForbiddenActivationAndRetries(t *testing.T) {
 		t.Fatal("403 was not reported")
 	}
 }
+
+func TestSessionWakesWhenUTCJumpPassesPendingRetryDeadline(t *testing.T) {
+	oldWall := retryWallNow
+	defer func() { retryWallNow = oldWall }()
+	var wallOffset atomic.Int64
+	retryWallNow = func() time.Time { return time.Now().Add(time.Duration(wallOffset.Load())).Round(0) }
+	srv, _ := loopbackAgent(t, nil, handshake(nil))
+	dir, state, _ := loopbackDir(t, srv)
+	expires, err := identity.Expires(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The active credential remains valid in real time. Only the scheduling wall
+	// observation moves into its six-hour window after authenticated heartbeat.
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	connected := false
+	start := time.Now()
+	err = session(ctx, state, start.Add(30*time.Minute), func(event Event) {
+		if event.Kind == "connected" {
+			connected = true
+			wallOffset.Store(int64(expires.Add(-5 * time.Hour).Sub(time.Now())))
+		}
+	})
+	if !connected || ctx.Err() != nil || time.Since(start) >= 3*time.Second {
+		t.Fatalf("UTC deadline did not wake connected session: connected=%v context=%v elapsed=%v", connected, ctx.Err(), time.Since(start))
+	}
+	if err != ErrTransport {
+		t.Fatalf("session = %v, want transport close", err)
+	}
+	if _, err := identity.Expires(state); err != nil {
+		t.Fatalf("fixture credential unexpectedly expired: %v", err)
+	}
+	if _, err := identity.Load(dir); err != nil {
+		t.Fatal(err)
+	}
+}
