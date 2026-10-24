@@ -146,6 +146,7 @@ defmodule WorkHarbor.HostConnectionsTest do
     end
 
     assert authenticated_audits(c) == expected
+
     Hosts.sql("UPDATE host_connection_slots SET state='unknown' WHERE host_id=?", [c.peer.host_id])
 
     for i <- 1..5 do
@@ -248,7 +249,8 @@ defmodule WorkHarbor.HostConnectionsTest do
       [c.peer.host_id]
     )
 
-    before = Hosts.one("SELECT last_seen,lease_expires_at FROM hosts WHERE id=?", [c.peer.host_id])
+    before =
+      Hosts.one("SELECT last_seen,lease_expires_at FROM hosts WHERE id=?", [c.peer.host_id])
 
     Hosts.sql(
       "CREATE TRIGGER reject_authentication_audit BEFORE INSERT ON audit_events WHEN NEW.event='host_connection_authenticated' BEGIN SELECT RAISE(ABORT,'SECRET_SENTINEL'); END"
