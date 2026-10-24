@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -25,11 +26,18 @@ import (
 
 const physicalENOSPCBytes = 1 << 20
 
-type physicalENOSPCOutput struct{ bytes.Buffer }
+var errPhysicalENOSPCOutputBound = errors.New("physical ENOSPC child output exceeded bound")
+var errPhysicalENOSPCDeadline = errors.New("owned physical ENOSPC child exceeded deadline")
+
+type physicalENOSPCOutput struct {
+	bytes.Buffer
+	overflow bool
+}
 
 func (b *physicalENOSPCOutput) Write(p []byte) (int, error) {
 	if b.Len()+len(p) > 8192 {
-		return 0, fmt.Errorf("physical ENOSPC child output exceeded bound")
+		b.overflow = true
+		return 0, errPhysicalENOSPCOutputBound
 	}
 	return b.Buffer.Write(p)
 }
@@ -45,15 +53,43 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 	if len(args) == 0 {
 		return
 	}
-	if len(args) != 5 {
+	fmt.Println("physical-enospc-child-started")
+	if len(args) != 8 {
 		t.Fatal("invalid private ENOSPC helper arguments")
 	}
 	caseName, mountpoint := args[0], args[1]
+	if args[5] == "0" {
+		t.Fatal("Go fixture requires a non-root original host owner")
+	}
+	wantEnv := []string{"HOME=" + filepath.Dir(mountpoint), "TMPDIR=" + filepath.Dir(mountpoint), "PATH=" + filepath.Dir(mountpoint), "TERM=dumb"}
+	actualEnv := os.Environ()
+	sort.Strings(wantEnv)
+	sort.Strings(actualEnv)
+	if !reflect.DeepEqual(actualEnv, wantEnv) {
+		t.Fatal("physical fixture child environment is not closed")
+	}
 	for i, name := range []string{"user", "net", "mnt"} {
 		current, err := os.Readlink("/proc/self/ns/" + name)
 		if err != nil || current == args[i+2] {
 			t.Fatalf("refuse mount/fill without a private %s namespace: %v", name, err)
 		}
+	}
+	for i, name := range []string{"uid", "gid"} {
+		mapping, err := os.ReadFile("/proc/self/" + name + "_map")
+		if err != nil || !reflect.DeepEqual(strings.Fields(string(mapping)), []string{"0", args[i+5], "1"}) {
+			t.Fatalf("refuse fixture without exact original-owner %s mapping: %v", name, err)
+		}
+	}
+	if os.Getuid() != 0 || os.Geteuid() != 0 || os.Getgid() != 0 || os.Getegid() != 0 {
+		t.Fatal("fixture must be inner root mapped exclusively to the original owner")
+	}
+	if args[7] == "mapped" {
+		groups, err := os.Getgroups()
+		if err != nil || len(groups) != 0 {
+			t.Fatalf("mapped fallback retained supplementary host groups: %v", err)
+		}
+	} else if args[7] != "direct" {
+		t.Fatal("unknown private fixture launcher")
 	}
 	info, err := os.Lstat(mountpoint)
 	if err != nil || !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
@@ -269,11 +305,81 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 	fmt.Printf("physical-enospc:%s:%d\n", caseName, want)
 }
 
-func TestInitPhysicalENOSPC(t *testing.T) {
-	unshare, err := exec.LookPath("unshare")
-	if err != nil {
-		t.Skipf("physical ENOSPC not executed: unshare unavailable: %v", err)
+func physicalENOSPCProofRequired(ci, netns, physical string) bool {
+	return ci != "" || netns == "1" || physical == "1"
+}
+
+func physicalENOSPCCapabilityUnavailable(t *testing.T, reason string) {
+	t.Helper()
+	if physicalENOSPCProofRequired(os.Getenv("CI"), os.Getenv("WHR_REQUIRE_NETNS"), os.Getenv("WHR_REQUIRE_PHYSICAL_ENOSPC")) {
+		t.Fatalf("physical ENOSPC FAILED, NOT SKIPPED: %s", reason)
 	}
+	t.Skipf("physical ENOSPC not executed: %s", reason)
+}
+
+func physicalENOSPCNativeRefusal(runErr error, timedOut bool, stdout, stderr *physicalENOSPCOutput) (bool, error) {
+	if timedOut || errors.Is(runErr, exec.ErrWaitDelay) {
+		return false, errPhysicalENOSPCDeadline
+	}
+	// Wait can prefer a process ExitError over a pipe-copy error, so retain
+	// the writers' explicit overflow flags as well as the sentinel.
+	if stdout.overflow || stderr.overflow || errors.Is(runErr, errPhysicalENOSPCOutputBound) {
+		return false, errPhysicalENOSPCOutputBound
+	}
+	if strings.Contains(stdout.String(), "physical-enospc-child-started\n") {
+		var exit *exec.ExitError
+		return errors.As(runErr, &exit) && exit.ExitCode() == 77 && strings.HasPrefix(stderr.String(), "UNSUPPORTED:"), nil
+	}
+	for _, prefix := range []string{"unshare:", "sudo:", "setpriv:"} {
+		if runErr != nil && strings.HasPrefix(stderr.String(), prefix) {
+			return true, nil
+		}
+	}
+	var missing *os.PathError
+	return errors.As(runErr, &missing), nil
+}
+
+func physicalENOSPCCandidates(unshare, sudo, setpriv, env string, uid, gid int, childEnv, childArgs []string) [][]string {
+	if unshare == "" || env == "" || uid <= 0 {
+		return nil
+	}
+	program := append([]string{env, "-i"}, childEnv...)
+	program = append(program, childArgs...)
+	direct := append([]string{unshare, "-rnm", "--"}, program...)
+	direct = append(direct, "direct")
+	candidates := [][]string{direct}
+	if sudo != "" && setpriv != "" {
+		mapped := []string{sudo, "-n", "--", unshare, "--user", "--mount", "--net",
+			"--map-users=0:" + strconv.Itoa(uid) + ":1", "--map-groups=0:" + strconv.Itoa(gid) + ":1",
+			"--setgroups=allow", "--setuid=0", "--setgid=0", "--", setpriv, "--clear-groups", "--"}
+		mapped = append(mapped, program...)
+		candidates = append(candidates, append(mapped, "mapped"))
+	}
+	return candidates
+}
+
+func physicalENOSPCTrustedSystemTool(path string) bool {
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil || !strings.HasPrefix(resolved, "/usr/bin/") {
+		return false
+	}
+	for current := resolved; ; current = filepath.Dir(current) {
+		info, err := os.Stat(current)
+		if err != nil || info.Sys().(*syscall.Stat_t).Uid != 0 || info.Mode().Perm()&0022 != 0 {
+			return false
+		}
+		if current == "/" {
+			return true
+		}
+	}
+}
+
+func physicalENOSPCRunCase(t *testing.T, caseName string, mappedOnly bool) {
+	t.Helper()
+	if os.Getuid() == 0 {
+		physicalENOSPCCapabilityUnavailable(t, "Go fixture requires a non-root original host owner")
+	}
+	lookup := func(name string) string { path, _ := exec.LookPath(name); return path }
 	executable, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
@@ -282,52 +388,199 @@ func TestInitPhysicalENOSPC(t *testing.T) {
 	for _, name := range []string{"user", "net", "mnt"} {
 		value, err := os.Readlink("/proc/self/ns/" + name)
 		if err != nil {
-			t.Skipf("physical ENOSPC not executed: cannot inspect %s namespace: %v", name, err)
+			physicalENOSPCCapabilityUnavailable(t, "cannot inspect "+name+" namespace: "+err.Error())
 		}
 		namespaces = append(namespaces, value)
 	}
+	private := t.TempDir()
+	mountpoint := filepath.Join(private, "bounded-filesystem")
+	if err := os.Mkdir(mountpoint, 0700); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(mountpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	childEnv := []string{"HOME=" + private, "TMPDIR=" + private, "PATH=" + private, "TERM=dumb"}
+	args := []string{executable, "-test.run=^TestInitPhysicalENOSPCProcess$", "--", caseName, mountpoint}
+	args = append(args, namespaces...)
+	args = append(args, strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()))
+	unshare, sudo, setpriv, env := lookup("unshare"), lookup("sudo"), lookup("setpriv"), lookup("env")
+	// Never elevate an owner-writable PATH wrapper. Only canonical native
+	// system tools and root-owned, non-writable ancestors enter sudo's chain.
+	if !physicalENOSPCTrustedSystemTool(unshare) || !physicalENOSPCTrustedSystemTool(sudo) || !physicalENOSPCTrustedSystemTool(setpriv) || !physicalENOSPCTrustedSystemTool(env) {
+		sudo, setpriv = "", ""
+	}
+	candidates := physicalENOSPCCandidates(unshare, sudo, setpriv, env, os.Getuid(), os.Getgid(), childEnv, args)
+	if mappedOnly {
+		if len(candidates) < 2 {
+			physicalENOSPCCapabilityUnavailable(t, "mapped fallback utilities unavailable")
+		}
+		candidates = candidates[1:]
+	}
+	var refusals []string
+	succeeded := false
+	for _, argv := range candidates {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+		cmd.Dir, cmd.Env = private, childEnv
+		cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+		cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+		cmd.WaitDelay = 2 * time.Second
+		var stdout, stderr physicalENOSPCOutput
+		cmd.Stdout, cmd.Stderr = &stdout, &stderr
+		err = cmd.Run()
+		timedOut := ctx.Err() != nil
+		cancel()
+		refused, boundaryErr := physicalENOSPCNativeRefusal(err, timedOut, &stdout, &stderr)
+		if boundaryErr != nil {
+			t.Fatal(boundaryErr)
+		}
+		if refused {
+			refusals = append(refusals, fmt.Sprintf("native launcher %s: %v %s", filepath.Base(argv[0]), err, strings.TrimSpace(stderr.String())))
+			continue
+		}
+		if err != nil || !strings.Contains(stdout.String(), "physical-enospc:"+caseName+":") || stderr.Len() != 0 {
+			t.Fatalf("physical ENOSPC fixture failed: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+		}
+		succeeded = true
+		t.Logf("physical ENOSPC verified via %s launcher after %d native refusals", argv[len(argv)-1], len(refusals))
+		break
+	}
+	if !succeeded {
+		physicalENOSPCCapabilityUnavailable(t, "all native candidates unavailable: "+strings.Join(refusals, "; "))
+	}
+	after, err := os.Stat(mountpoint)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatalf("child changed the owner's mountpoint identity: %v", err)
+	}
+	entries, err := os.ReadDir(mountpoint)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("child touched the underlying host directory: %v entries=%v", err, entries)
+	}
+}
+
+func TestInitPhysicalENOSPC(t *testing.T) {
 	for _, caseName := range []string{"create-write", "overwrite-temp", "overwrite-restore", "overwrite-partial"} {
-		t.Run(caseName, func(t *testing.T) {
+		t.Run(caseName, func(t *testing.T) { physicalENOSPCRunCase(t, caseName, false) })
+	}
+}
+
+func TestInitPhysicalENOSPCMappedFallback(t *testing.T) {
+	physicalENOSPCRunCase(t, "overwrite-restore", true)
+}
+
+func TestInitPhysicalENOSPCFallbackArgvAndClosedEnvironment(t *testing.T) {
+	childEnv := []string{"HOME=/private", "TMPDIR=/private", "PATH=/private", "TERM=dumb"}
+	childArgs := []string{"/own/test", "-test.run=^TestInitPhysicalENOSPCProcess$", "--", "create-write", "/private/mount", "user-ns", "net-ns", "mount-ns", "1001", "1002"}
+	got := physicalENOSPCCandidates("/native/unshare", "/native/sudo", "/native/setpriv", "/native/env", 1001, 1002, childEnv, childArgs)
+	direct := []string{"/native/unshare", "-rnm", "--", "/native/env", "-i"}
+	direct = append(direct, childEnv...)
+	direct = append(direct, childArgs...)
+	direct = append(direct, "direct")
+	mapped := []string{"/native/sudo", "-n", "--", "/native/unshare", "--user", "--mount", "--net", "--map-users=0:1001:1", "--map-groups=0:1002:1", "--setgroups=allow", "--setuid=0", "--setgid=0", "--", "/native/setpriv", "--clear-groups", "--", "/native/env", "-i"}
+	mapped = append(mapped, childEnv...)
+	mapped = append(mapped, childArgs...)
+	mapped = append(mapped, "mapped")
+	if !reflect.DeepEqual(got, [][]string{direct, mapped}) {
+		t.Fatalf("namespace candidates must preserve owner mappings, clear groups and close the child environment: %#v", got)
+	}
+	if got := physicalENOSPCCandidates("/native/unshare", "/native/sudo", "/native/setpriv", "/native/env", 0, 1002, childEnv, childArgs); len(got) != 0 {
+		t.Fatal("fixture must never launch the Go writer with host UID 0")
+	}
+}
+
+func TestInitPhysicalENOSPCRequiredRestrictedNamespace(t *testing.T) {
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, refusal := range []string{"unshare: unshare failed: Operation not permitted", "unshare: write failed /proc/self/uid_map: Operation not permitted"} {
+		t.Run(refusal, func(t *testing.T) {
 			private := t.TempDir()
-			mountpoint := filepath.Join(private, "bounded-filesystem")
-			if err := os.Mkdir(mountpoint, 0700); err != nil {
+			if err := os.WriteFile(filepath.Join(private, "unshare"), []byte("#!/bin/sh\nprintf '%s\\n' '"+refusal+"' >&2\nexit 1\n"), 0700); err != nil {
 				t.Fatal(err)
 			}
-			before, err := os.Stat(mountpoint)
+			env, err := exec.LookPath("env")
 			if err != nil {
 				t.Fatal(err)
 			}
-			args := []string{"-rnm", "--", executable, "-test.run=^TestInitPhysicalENOSPCProcess$", "--", caseName, mountpoint}
-			args = append(args, namespaces...)
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			if err := os.Symlink(env, filepath.Join(private, "env")); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			cmd := exec.CommandContext(ctx, unshare, args...)
-			cmd.Dir = private
-			cmd.Env = []string{"HOME=" + private, "TMPDIR=" + private, "PATH=" + private, "TERM=dumb"}
+			cmd := exec.CommandContext(ctx, executable, "-test.run=^TestInitPhysicalENOSPC$", "-test.v")
+			cmd.Env = []string{"HOME=" + private, "TMPDIR=" + private, "PATH=" + private, "WHR_REQUIRE_NETNS=1", "TERM=dumb"}
 			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 			cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
 			cmd.WaitDelay = 2 * time.Second
-			var stdout, stderr physicalENOSPCOutput
-			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			var output physicalENOSPCOutput
+			cmd.Stdout, cmd.Stderr = &output, &output
 			err = cmd.Run()
-			if ctx.Err() != nil {
-				t.Fatalf("owned physical ENOSPC child exceeded deadline: %v", ctx.Err())
-			}
 			var exit *exec.ExitError
-			if errors.As(err, &exit) && ((exit.ExitCode() == 77 && strings.HasPrefix(stderr.String(), "UNSUPPORTED:")) || strings.Contains(stderr.String(), "unshare failed: Operation not permitted")) {
-				t.Skipf("physical ENOSPC not executed: namespace/mount permission unavailable: %s", stderr.String())
-			}
-			if err != nil || !strings.Contains(stdout.String(), "physical-enospc:"+caseName+":") || stderr.Len() != 0 {
-				t.Fatalf("physical ENOSPC fixture failed: %v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
-			}
-			after, err := os.Stat(mountpoint)
-			if err != nil || !os.SameFile(before, after) {
-				t.Fatalf("child changed the owner's mountpoint identity: %v", err)
-			}
-			entries, err := os.ReadDir(mountpoint)
-			if err != nil || len(entries) != 0 {
-				t.Fatalf("child touched the underlying host directory: %v entries=%v", err, entries)
+			if ctx.Err() != nil || !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(output.String(), "FAILED, NOT SKIPPED") || !strings.Contains(output.String(), refusal) || strings.Contains(output.String(), "--- SKIP:") {
+				t.Fatalf("required namespace refusal must fail explicitly, never skip: %v output=%q", err, output.String())
 			}
 		})
+	}
+}
+
+func TestInitPhysicalENOSPCRequiredPolicy(t *testing.T) {
+	for _, tc := range []struct {
+		ci, netns, physical string
+		want                bool
+	}{{"", "", "", false}, {"false", "", "", true}, {"true", "", "", true}, {"", "1", "", true}, {"", "", "1", true}, {"", "0", "0", false}} {
+		if got := physicalENOSPCProofRequired(tc.ci, tc.netns, tc.physical); got != tc.want {
+			t.Fatalf("required policy (%q,%q,%q)=%t, want %t", tc.ci, tc.netns, tc.physical, got, tc.want)
+		}
+	}
+}
+
+func TestInitPhysicalENOSPCNativePrefixCannotMaskBounds(t *testing.T) {
+	for _, boundary := range []string{"stdout-overflow", "stderr-overflow", "copy-error", "deadline", "wait-delay"} {
+		t.Run(boundary, func(t *testing.T) {
+			var stdout, stderr physicalENOSPCOutput
+			_, _ = stderr.Write([]byte("unshare: write failed /proc/self/uid_map: Operation not permitted\n"))
+			runErr := errors.New("native exit 1")
+			timedOut := false
+			want := errPhysicalENOSPCOutputBound
+			switch boundary {
+			case "stdout-overflow":
+				_, _ = stdout.Write(make([]byte, 8193))
+			case "stderr-overflow":
+				_, _ = stderr.Write(make([]byte, 8193))
+			case "copy-error":
+				runErr = errPhysicalENOSPCOutputBound
+			case "deadline":
+				timedOut, want = true, errPhysicalENOSPCDeadline
+			case "wait-delay":
+				runErr, want = exec.ErrWaitDelay, errPhysicalENOSPCDeadline
+			}
+			refused, err := physicalENOSPCNativeRefusal(runErr, timedOut, &stdout, &stderr)
+			if refused || !errors.Is(err, want) {
+				t.Fatalf("native-looking output masked a hard boundary: refused=%t err=%v", refused, err)
+			}
+		})
+	}
+}
+
+func TestInitPhysicalENOSPCChildAssertionCannotTriggerFallback(t *testing.T) {
+	var stdout, stderr physicalENOSPCOutput
+	_, _ = stdout.Write([]byte("physical-enospc-child-started\nassertion failed\n"))
+	_, _ = stderr.Write([]byte("unshare: write failed /proc/self/uid_map: Operation not permitted\n"))
+	refused, err := physicalENOSPCNativeRefusal(errors.New("child assertion exit 1"), false, &stdout, &stderr)
+	if refused || err != nil {
+		t.Fatalf("started helper assertion must not become a native refusal: %t, %v", refused, err)
+	}
+}
+
+func TestInitPhysicalENOSPCFallbackRejectsOwnerWritableTool(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "unshare")
+	if err := os.WriteFile(path, []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if physicalENOSPCTrustedSystemTool(path) || physicalENOSPCTrustedSystemTool("") {
+		t.Fatal("an owner-writable PATH wrapper must not enter the privileged chain")
 	}
 }
