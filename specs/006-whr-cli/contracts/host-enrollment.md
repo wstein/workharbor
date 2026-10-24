@@ -237,8 +237,20 @@ replacement transaction; the superseded close writes none), `host_connection_unk
 limit), `host_connection_reset` (control-plane restart). Accepted heartbeats update
 hosts last_seen/lease, set the slot to connected and write no audit row.
 Without authenticated heartbeat for>=30s mark unknown and close stale socket.
-Only transport reconnect uses bounded1/2/4/8/16/30s backoff then30s maximum; no blind
-provider resends or command-history resets. Health requires authenticated hello
+Transport reconnect uses bounded1/2/4/8/16/30s backoff then30s maximum.
+Issued pending activation is attempted immediately on startup. After failures while
+the active identity remains valid with more than6h remaining, retry after30s,60s,
+120s,240s,480s,960s, then30min maximum. Clamp the next attempt to the6h renewal
+boundary; at/inside that window retain30s retries, bounded by active expiry.
+Track this retry state separately for each issued pending identity in the running
+agent: heartbeat acknowledgements and early transport reconnects neither reset the
+interval nor bypass the next attempt time. Successful promotion or a changed/removed
+pending identity resets it; process restart attempts saved pending activation once
+immediately. Original staging still begins only at/inside6h. After active expiry,
+retain pending replay and final-refusal/recovery/security distinctions above; the
+long pending-activation delay applies only while active is valid. Session deadlines
+and the expiry watchdog remain authoritative. No blind provider resends or
+command-history resets. Health requires authenticated hello
 and heartbeat acknowledgement. UTC last_seen/lease are display only.
 
 ## Fenced conservative liveness overlay

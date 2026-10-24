@@ -238,8 +238,8 @@ func TestRunRetriesFailedRenewalWhileConnected(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	oldRenew, oldSession := renewFn, sessionFn
-	defer func() { renewFn, sessionFn = oldRenew, oldSession }()
+	oldRenew, oldSession, oldNow := renewFn, sessionFn, runNow
+	defer func() { renewFn, sessionFn, runNow = oldRenew, oldSession, oldNow }()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	var renews atomic.Int32
@@ -250,10 +250,13 @@ func TestRunRetriesFailedRenewalWhileConnected(t *testing.T) {
 		cancel()
 		return nil
 	}
+	now := time.Now()
+	runNow = func() time.Time { return now }
 	var limit time.Time
 	sessionFn = func(_ context.Context, _ *identity.State, l time.Time, _ func(Event)) error {
 		if limit.IsZero() {
 			limit = l
+			now = l
 		}
 		return ErrTransport
 	}
@@ -351,6 +354,10 @@ func TestExpiredCountsAnExpiredIssuerWithValidLeaf(t *testing.T) {
 	if !identity.Expired(state) {
 		t.Fatal("expired issuer with valid leaf not reported expired")
 	}
+	state.Pending = &identity.Pending{Certificate: state.Active.Certificate, IssuerCertificate: state.Active.IssuerCertificate}
+	if !identity.PendingExpired(state) {
+		t.Fatal("expired pending issuer with valid leaf not reported expired")
+	}
 }
 
 // An early socket close must not turn each reconnect into another activation POST.
@@ -378,5 +385,193 @@ func TestRunEarlyReconnectHonorsPendingActivationDue(t *testing.T) {
 	}
 	if sessions != 2 {
 		t.Fatalf("sessions = %d, want 2", sessions)
+	}
+}
+
+func TestActivationRetryGrowthSaturatesAndResets(t *testing.T) {
+	_, state, _ := savedPendingDir(t)
+	var retry activationRetry
+	retry.sync(state)
+	now := time.Now()
+	expires := now.Add(48 * time.Hour)
+	for i, want := range []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute, 30 * time.Minute} {
+		got := retry.failed(now, expires, true).Sub(now)
+		if got != want {
+			t.Fatalf("failure %d: delay = %v, want %v", i+1, got, want)
+		}
+	}
+	for i := 0; i < 10000; i++ {
+		if got := retry.failed(now, expires, true).Sub(now); got != 30*time.Minute {
+			t.Fatalf("saturated delay = %v", got)
+		}
+	}
+	state.Pending.IdentityID = "55555555-5555-4555-8555-555555555555"
+	retry.sync(state)
+	if !retry.next.IsZero() || retry.delay != 0 {
+		t.Fatal("changed pending identity retained backoff")
+	}
+	if got := retry.failed(now, expires, true).Sub(now); got != 30*time.Second {
+		t.Fatalf("new identity delay = %v", got)
+	}
+	state.Pending = nil
+	retry.sync(state)
+	if !retry.next.IsZero() || retry.delay != 0 {
+		t.Fatal("removed/promoted pending retained backoff")
+	}
+}
+
+func TestActivationRetryRenewalBoundaryAndExpiry(t *testing.T) {
+	_, state, _ := savedPendingDir(t)
+	now := time.Now()
+	for _, remaining := range []time.Duration{6*time.Hour + 10*time.Second, 6 * time.Hour, time.Hour, time.Second, 0, -time.Hour} {
+		var retry activationRetry
+		retry.sync(state)
+		retry.delay = 30 * time.Minute
+		expires := now.Add(remaining)
+		got := retry.failed(now, expires, remaining > 0)
+		want := now.Add(30 * time.Second)
+		if remaining > 6*time.Hour {
+			want = expires.Add(-6 * time.Hour)
+		}
+		if remaining > 0 && remaining < 30*time.Second {
+			want = expires
+		}
+		if !got.Equal(want) {
+			t.Errorf("remaining %v: due = %v, want %v", remaining, got, want)
+		}
+	}
+	// Once a clamped retry reaches the renewal boundary, use the fast cadence.
+	var retry activationRetry
+	retry.sync(state)
+	retry.delay = 30 * time.Minute
+	expires := now.Add(6*time.Hour + time.Minute)
+	boundary := retry.failed(now, expires, true)
+	if got := retry.failed(boundary, expires, true).Sub(boundary); got != 30*time.Second {
+		t.Fatalf("boundary delay = %v", got)
+	}
+}
+
+func TestRunHeartbeatsPreservePendingActivationGrowth(t *testing.T) {
+	dir, _, _ := savedPendingDir(t)
+	oldRenew, oldSession, oldNow := renewFn, sessionFn, runNow
+	defer func() { renewFn, sessionFn, runNow = oldRenew, oldSession, oldNow }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	now := time.Now()
+	runNow = func() time.Time { return now }
+	renews, sessions := 0, 0
+	renewFn = func(context.Context, string) error { renews++; return ErrTransport }
+	var first time.Time
+	sessionFn = func(_ context.Context, _ *identity.State, limit time.Time, event func(Event)) error {
+		sessions++
+		event(Event{Kind: "connected", HostID: host})
+		switch sessions {
+		case 1:
+			if renews != 1 || limit.Sub(now) != 30*time.Second {
+				t.Fatalf("first retry: renews=%d delay=%v", renews, limit.Sub(now))
+			}
+			first = limit
+			now = now.Add(time.Second)
+		case 2:
+			if renews != 1 || !limit.Equal(first) {
+				t.Fatalf("heartbeat/early reconnect bypassed due: renews=%d limit=%v", renews, limit)
+			}
+			now = limit
+		case 3:
+			if renews != 2 || limit.Sub(now) != time.Minute {
+				t.Fatalf("second retry: renews=%d delay=%v", renews, limit.Sub(now))
+			}
+			now = limit
+		case 4:
+			if renews != 3 || limit.Sub(now) != 2*time.Minute {
+				t.Fatalf("third retry: renews=%d delay=%v", renews, limit.Sub(now))
+			}
+			cancel()
+		default:
+			t.Fatal("unexpected session")
+		}
+		return ErrTransport
+	}
+	if err := Run(ctx, dir, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRunPromotionClearsPendingActivationDeadline(t *testing.T) {
+	dir, _, _ := savedPendingDir(t)
+	oldRenew, oldSession, oldNow := renewFn, sessionFn, runNow
+	defer func() { renewFn, sessionFn, runNow = oldRenew, oldSession, oldNow }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	now := time.Now()
+	runNow = func() time.Time { return now }
+	renews := 0
+	renewFn = func(context.Context, string) error {
+		renews++
+		if renews == 1 {
+			return ErrTransport
+		}
+		state, err := identity.Load(dir)
+		if err != nil {
+			return err
+		}
+		return identity.Promote(dir, state)
+	}
+	sessionFn = func(_ context.Context, state *identity.State, limit time.Time, event func(Event)) error {
+		event(Event{Kind: "connected", HostID: host})
+		if renews == 1 {
+			now = limit
+		} else {
+			if state.Pending != nil || !limit.IsZero() {
+				t.Fatal("promotion retained pending retry deadline")
+			}
+			cancel()
+		}
+		return ErrTransport
+	}
+	if err := Run(ctx, dir, nil); err != nil {
+		t.Fatal(err)
+	}
+	if renews != 2 {
+		t.Fatalf("renewals = %d", renews)
+	}
+}
+
+func TestRunCancellationDuringPendingRetry(t *testing.T) {
+	dir, _, _ := savedPendingDir(t)
+	oldRenew, oldSession := renewFn, sessionFn
+	defer func() { renewFn, sessionFn = oldRenew, oldSession }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	renews := 0
+	renewFn = func(context.Context, string) error { renews++; return ErrTransport }
+	sessionFn = func(context.Context, *identity.State, time.Time, func(Event)) error { return ErrTransport }
+	start := time.Now()
+	err := Run(ctx, dir, func(event Event) {
+		if event.Kind == "disconnected" {
+			time.AfterFunc(10*time.Millisecond, cancel)
+		}
+	})
+	if err != nil || renews != 1 || time.Since(start) > time.Second {
+		t.Fatalf("cancel: err=%v renews=%d elapsed=%v", err, renews, time.Since(start))
+	}
+}
+
+func TestRunDoesNotStageOutsideRenewalWindow(t *testing.T) {
+	dir, _, _ := savedDir(t, false, false)
+	oldRenew, oldSession := renewFn, sessionFn
+	defer func() { renewFn, sessionFn = oldRenew, oldSession }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	renewFn = func(context.Context, string) error { t.Fatal("staging outside six-hour window"); return ErrTransport }
+	sessionFn = func(_ context.Context, _ *identity.State, limit time.Time, _ func(Event)) error {
+		if !limit.IsZero() {
+			t.Fatal("unexpected activation deadline without pending identity")
+		}
+		cancel()
+		return ErrTransport
+	}
+	if err := Run(ctx, dir, nil); err != nil {
+		t.Fatal(err)
 	}
 }

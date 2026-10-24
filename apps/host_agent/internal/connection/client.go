@@ -322,9 +322,46 @@ func ack(ctx context.Context, in <-chan incomingMessage, kind string) error {
 var (
 	renewFn   = Renew
 	sessionFn = session
+	runNow    = time.Now
 	// renewRetry bounds a session on a credential whose renewal is due but failed.
 	renewRetry = 30 * time.Second
 )
+
+// activationRetry is local to one Run: restarting still replays pending immediately.
+// The key contains only issued public identity material, never private keys.
+type activationRetry struct {
+	key   [3]string
+	delay time.Duration
+	next  time.Time
+}
+
+func (r *activationRetry) sync(state *identity.State) {
+	var key [3]string
+	if state.Pending != nil && state.Pending.Certificate != "" {
+		key = [3]string{state.Pending.IdentityID, state.Pending.Certificate, state.Pending.IssuerCertificate}
+	}
+	if key != r.key || key == [3]string{} {
+		*r = activationRetry{key: key}
+	}
+}
+
+func (r *activationRetry) failed(now, expires time.Time, activeValid bool) time.Time {
+	if r.key == [3]string{} || !activeValid || !expires.After(now.Add(6*time.Hour)) {
+		r.delay = renewRetry
+	} else if r.delay == 0 {
+		r.delay = renewRetry
+	} else {
+		r.delay *= 2
+		if r.delay > 30*time.Minute {
+			r.delay = 30 * time.Minute
+		}
+	}
+	r.next = now.Add(r.delay)
+	if activeValid {
+		r.next = sessionDeadline(now, expires, r.next)
+	}
+	return r.next
+}
 
 // sessionDeadline ends an idle socket at renewal time (six hours before expiry),
 // or at actual expiry when renewal is already due, and never later than limit.
@@ -415,6 +452,7 @@ func watchValidity(ctx context.Context, valid func() bool, expire func()) {
 // Run reconnects transport only. Lifecycle command admission and replay belong to T010.
 func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 	attempt := 0
+	var activation activationRetry
 	for {
 		if ctx.Err() != nil {
 			return nil
@@ -428,31 +466,41 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 			// credential, so retrying is futile.
 			return ErrRecoveryRequired
 		}
+		activation.sync(state)
+		now := runNow()
 		var limit time.Time
 		expires, e := identity.Expires(state)
-		if (state.Pending != nil && state.Pending.Certificate != "") || (e == nil && time.Until(expires) <= 6*time.Hour) {
-			// A failed renewal keeps the active credential in use while session
-			// still accepts it; the next attempt retries renewal.
+		pending := state.Pending != nil && state.Pending.Certificate != ""
+		needsRenewal := pending || (e == nil && !expires.After(now.Add(6*time.Hour)))
+		if needsRenewal && (e != nil || activation.next.IsZero() || !now.Before(activation.next)) {
 			renewErr := renewFn(ctx, dir)
 			if renewErr == nil {
 				if state, e = identity.Load(dir); e != nil || state.Active == nil {
 					return ErrTransport
 				}
-			} else if errors.Is(renewErr, errForbidden) {
-				// Not a newcode matter: report the deployment fault and keep retrying.
-				emit(onEvent, "activation_forbidden", state.HostID)
-				limit = time.Now().Add(renewRetry)
-			} else if identity.Expired(state) && errors.Is(renewErr, errRefused) {
-				// The server definitively refused activation after the predecessor
-				// expired: only an owner newcode can restore the host.
-				return ErrRecoveryRequired
+				activation = activationRetry{}
 			} else {
-				// Stay connected on the still-valid credential, but end the
-				// session in time to retry renewal long before expiry.
-				limit = time.Now().Add(renewRetry)
+				if errors.Is(renewErr, errForbidden) {
+					// Security/scheme faults are retryable deployment faults, not recovery.
+					emit(onEvent, "activation_forbidden", state.HostID)
+				} else if identity.Expired(state) && errors.Is(renewErr, errRefused) {
+					return ErrRecoveryRequired
+				}
+				// Staging can have saved an issued pending credential before activation
+				// failed; bind the retry to that newly persisted identity too.
+				state, e = identity.Load(dir)
+				if e != nil || state.Active == nil {
+					return ErrTransport
+				}
+				activation.sync(state)
+				expires, e = identity.Expires(state)
+				limit = activation.failed(runNow(), expires, e == nil)
 			}
 			e = nil
+		} else if needsRenewal {
+			limit = sessionDeadline(now, expires, activation.next)
 		}
+
 		if e == nil {
 			e = sessionFn(ctx, state, limit, func(event Event) { attempt = 0; emit(onEvent, event.Kind, event.HostID) })
 		}
