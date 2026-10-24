@@ -138,7 +138,7 @@ and frozen history are unchanged; only Feature006 T008 is newly checked.
 The owner accepted the exact frontend plan at `7c64789c` in
 [PR #242](https://github.com/wstein/workharbor/pull/242), merged at
 `f2d96805383410f401826877b634d2c03780e977`, and authorized W1 after merge.
-This checkpoint is based on main `54c4b271745fe78800a523607dd00a9124d22f01`;
+The initial test checkpoint used main `54c4b271745fe78800a523607dd00a9124d22f01`;
 [PR #251](https://github.com/wstein/workharbor/pull/251) records its current exact
 head and CI evidence. Option A is settled: future pages and HTTP controllers share
 one authorized read service. W1 has a links-only overview and no domain reads.
