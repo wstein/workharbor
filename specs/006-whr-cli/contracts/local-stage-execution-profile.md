@@ -339,8 +339,11 @@ not a guarantee that owner-trusted project container hooks leave the worktree
 untouched; their ordinary read-write/runtime effects are previewed separately.
 
 Before primary stop, freeze the candidate **ref/object export**, not its editable
-worktree: capture HEAD plus all admitted heads/tags/notes results into a private
-self-contained bare export, bounded and verified. Candidate writers can continue
+worktree: compare candidate HEAD/heads/tags/notes with the exact captured original
+ref baseline recorded at clone construction. Export **only new or moved refs**
+(including HEAD only when its OID changed), with their required object closure,
+into a private self-contained bare export, bounded and verified. Unchanged refs
+and deletions create no operation refs or owner-ref changes. Candidate writers can continue
 on later versions; only captured results are transferred. Any change to the bound
 execution version still invalidates runtime verification. Include every populated
 submodule repository and map its export separately; this does not update original
@@ -364,6 +367,10 @@ Generate fixed explicit refspecs per exported ref, targeting fresh
 refs/workharbor/stage/OP/REPO/{head,heads/NAME,tags/NAME,notes/NAME}. OP is 128-bit
 random; REPO is a path digest. Preview exact original/export/ref/OID mappings and
 objects to transfer. Reject any preexisting target ref 68, never force/update it.
+Count the complete planned result refs across root/submodules before any Git
+import or other promote effect: more than 1024 refuses 68, never truncate or start
+a partial transfer. Zero changed refs is a valid empty transfer. Persist the
+baseline comparison and exact planned mappings so retries cannot export later work.
 Fetch uses an isolated generated Git directory/config and the original object
 directory explicitly resolved, no source configuration/includes/rewrites/hooks/
 helpers. Transport is the private local export only, no credential/network access:
@@ -395,6 +402,12 @@ report observed/remaining repositories on failure. Cancellation/uncertainty afte
 imports or any ref creation is 73, even if current branches/worktrees stayed intact.
 Unreferenced imported objects may remain; do not GC/rollback or retry automatically.
 All result refs are added before primary replacement; failure leaves primary running.
+Operation refs are retained without automatic expiry/GC. After inspecting and
+integrating results, the owner may remove only the explicitly listed operation
+refs using their own Git tooling, e.g. `git update-ref --no-deref -d REF EXPECTED_OID`
+per receipt mapping. Changed OIDs refuse deletion; never delete owner branches/tags,
+prune a namespace blindly or treat volume cleanup as Git-ref cleanup. No automatic
+ref cleanup or new whr command is implied.
 
 ## Promote container hooks under the proposed phase contract
 
