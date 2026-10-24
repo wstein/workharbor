@@ -132,3 +132,37 @@ the S001 HTTP1-only mitigation. Full canonical Python is deferred to the combine
 head; provider, browser stale-display, five-workspace/eight-attachment load, installer,
 release and complete installable-pilot acceptance remain pending. Feature001 markers
 and frozen history are unchanged; only Feature006 T008 is newly checked.
+
+## W1 owner shell test-first checkpoint (2026-10-24)
+
+The owner accepted the exact frontend plan at `7c64789c` in
+[PR #242](https://github.com/wstein/workharbor/pull/242), merged at
+`f2d96805383410f401826877b634d2c03780e977`, and authorized W1 after merge.
+The implementation checkout starts from fresh main
+`95ce4621fdde505654eb8fb8a468ec128b65d0a1`; its control-plane tree matches that
+plan-merge base. Option A is settled: future pages and HTTP controllers share one
+authorized read service. W1 has a links-only overview and no domain reads.
+
+Test-first source **15f70122** adds 17 required ExUnit identities covering hostile
+FR-022/HTML flash text, owner-only shell admission, rejected owner-ID injection,
+credential expiry/revocation, first-denial stopping, preserved controller forms,
+root redirect, inactive future links, forged events, unchanged database/audit,
+guarded socket selection, strict CSP/assets and actual generated CSS icon policy.
+Existing authentication coverage follows the forms to `/owner/auth` and accepts
+CSRF tokens from either controller forms or the LiveView meta element. Tests use
+existing modules/routes before connection assertions; no absent product module is
+a compile-time dependency. Product code is unchanged at this checkpoint.
+
+Actual local results: `python3 scripts/check_repo.py`, changed-test `typos` and
+`git diff --check` passed. The scoped `MIX_ENV=test mix test` invocation for
+`owner_shell_test.exs`, `owner_auth_test.exs`, `authentication_test.exs` and
+`transport_security_test.exs` with `--warnings-as-errors --seed 0` exited **127**:
+`mix: command not found`. Mix/Elixir/Erlang were absent from PATH and inspected
+known installed-tool locations; no installation/download was attempted. Therefore
+semantic RED outcomes, compilation and formatter results remain **unverified**,
+with associated PR CI as the next evidence source. Predicted assertion failures
+include the missing LiveView marker, current root response, unescaped controls,
+scaffold socket path, CSP and data-image icon CSS; these are predictions, not a
+passing RED gate. No standalone build, browser, host/runtime operation or full
+`make check` was run for this checkpoint. Implementation waits for the separate
+TDD/RED-head instruction; no W1 or T012 completion is claimed.
