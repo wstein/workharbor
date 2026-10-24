@@ -68,65 +68,17 @@ func (c Client) Discover(parent context.Context, p doctor.Ports) ([]Workspace, e
 	return snapshot.Workspaces, err
 }
 func (c Client) discoverAt(ctx context.Context, endpoint string) ([]Workspace, error) {
-	fail := func(message string) ([]Workspace, error) {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, exitcode.Errorf(exitcode.PathConflict, "%s", message).WithRemediation("Check whr doctor and the local Docker CLI; no container was changed.")
-	}
-	raw, err := c.read(ctx, endpoint, "container", "ls", "--all", "--no-trunc", "--format", "{{json .}}")
+	all, statuses, err := c.inspectAllAt(ctx, endpoint)
 	if err != nil {
-		return fail("local Docker container listing failed")
-	}
-	statuses := map[string]string{}
-	var ids []string
-	dec := json.NewDecoder(bytes.NewReader(raw))
-	for {
-		var item struct{ ID, Status string }
-		err := dec.Decode(&item)
-		if err == io.EOF {
-			break
-		}
-		if err != nil || !fullID(item.ID) {
-			return fail("invalid local Docker container list")
-		}
-		if _, ok := statuses[item.ID]; ok {
-			return fail("duplicate local Docker container ID")
-		}
-		statuses[item.ID] = item.Status
-		ids = append(ids, item.ID)
+		return nil, err
 	}
 	out := []Workspace{}
-	if len(ids) == 0 {
-		return out, nil
-	}
-	sort.Strings(ids)
-	args := append([]string{"container", "inspect", "--format", inspectFormat}, ids...)
-	raw, err = c.read(ctx, endpoint, args...)
-	if err != nil {
-		return fail("local Docker container inspection failed")
-	}
-	dec = json.NewDecoder(bytes.NewReader(raw))
-	seen := map[string]bool{}
-	for {
-		var item inspection
-		err := dec.Decode(&item)
-		if err == io.EOF {
-			break
-		}
-		if err != nil || !fullID(item.ID) || item.Name == "" {
-			return fail("invalid local Docker container metadata")
-		}
-		status, ok := statuses[item.ID]
-		if !ok || seen[item.ID] {
-			return fail("unexpected local Docker container ID")
-		}
-		seen[item.ID] = true
+	for _, item := range all {
 		role, recognized := workspaceRole(item.Labels)
 		if !recognized {
 			continue
 		}
-		w := Workspace{ID: item.ID, Name: strings.TrimPrefix(item.Name, "/"), Role: role, Image: item.Image, State: item.State, Status: status, Labels: item.Labels, WorkspaceFolder: item.Labels["devcontainer.local_folder"], ProtectedVolumes: []string{}}
+		w := Workspace{ID: item.ID, Name: strings.TrimPrefix(item.Name, "/"), Role: role, Image: item.Image, State: item.State, Status: statuses[item.ID], Labels: item.Labels, WorkspaceFolder: item.Labels["devcontainer.local_folder"], ProtectedVolumes: []string{}}
 		protected := map[string]bool{}
 		binds := map[string]bool{}
 		for _, m := range item.Mounts {
@@ -158,9 +110,6 @@ func (c Client) discoverAt(ctx context.Context, endpoint string) ([]Workspace, e
 		sort.Strings(w.ProtectedVolumes)
 		out = append(out, w)
 	}
-	if len(seen) != len(ids) {
-		return fail("incomplete local Docker container inspection")
-	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].Name == out[j].Name {
 			return out[i].ID < out[j].ID
@@ -168,6 +117,69 @@ func (c Client) discoverAt(ctx context.Context, endpoint string) ([]Workspace, e
 		return out[i].Name < out[j].Name
 	})
 	return out, nil
+}
+
+func (c Client) inspectAllAt(ctx context.Context, endpoint string) ([]inspection, map[string]string, error) {
+	fail := func(message string) ([]inspection, map[string]string, error) {
+		if ctx.Err() != nil {
+			return nil, nil, ctx.Err()
+		}
+		return nil, nil, exitcode.Errorf(exitcode.PathConflict, "%s", message).WithRemediation("Check whr doctor and the local Docker CLI; inspection changed no container.")
+	}
+	raw, err := c.read(ctx, endpoint, "container", "ls", "--all", "--no-trunc", "--format", "{{json .}}")
+	if err != nil {
+		return fail("local Docker container listing failed")
+	}
+	statuses := map[string]string{}
+	var ids []string
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	for {
+		var item struct{ ID, Status string }
+		err := decodeDockerRecord(dec, &item)
+		if err == io.EOF {
+			break
+		}
+		if err != nil || !fullID(item.ID) {
+			return fail("invalid local Docker container list")
+		}
+		if _, ok := statuses[item.ID]; ok {
+			return fail("duplicate local Docker container ID")
+		}
+		statuses[item.ID] = item.Status
+		ids = append(ids, item.ID)
+	}
+	all := []inspection{}
+	if len(ids) == 0 {
+		return all, statuses, nil
+	}
+	sort.Strings(ids)
+	args := append([]string{"container", "inspect", "--format", inspectFormat}, ids...)
+	raw, err = c.read(ctx, endpoint, args...)
+	if err != nil {
+		return fail("local Docker container inspection failed")
+	}
+	dec = json.NewDecoder(bytes.NewReader(raw))
+	seen := map[string]bool{}
+	for {
+		var item inspection
+		err := decodeDockerRecord(dec, &item)
+		if err == io.EOF {
+			break
+		}
+		if err != nil || !fullID(item.ID) || item.Name == "" {
+			return fail("invalid local Docker container metadata")
+		}
+		if _, ok := statuses[item.ID]; !ok || seen[item.ID] {
+			return fail("unexpected local Docker container ID")
+		}
+		seen[item.ID] = true
+		all = append(all, item)
+	}
+	if len(seen) != len(ids) {
+		return fail("incomplete local Docker container inspection")
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].ID < all[j].ID })
+	return all, statuses, nil
 }
 
 func workspaceRole(labels map[string]string) (string, bool) {
