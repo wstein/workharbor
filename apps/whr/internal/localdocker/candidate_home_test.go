@@ -190,6 +190,17 @@ func TestCandidateHomeBindingRefusesDrift(t *testing.T) {
 			o.Mounts = append(o.Mounts, m)
 		},
 	}
+	// The original primary home must not be exposed anywhere in the candidate,
+	// even if supplied metadata assigns it a different mount type or destination.
+	for _, mountType := range []string{"volume", "bind", "tmpfs", ""} {
+		for _, destination := range []string{"/mnt/primary", "/opt/bdock/primary"} {
+			cases["mount primary elsewhere "+mountType+destination] = func(o *CandidateHomeObservation) {
+				o.Mounts = append(o.Mounts, CandidateHomeMount{
+					Type: mountType, Name: intent.Plan().PrimaryHome, Destination: destination,
+				})
+			}
+		}
+	}
 	for name, mutate := range cases {
 		t.Run(name, func(t *testing.T) {
 			observed := candidateHomeObservation(intent.Plan())
