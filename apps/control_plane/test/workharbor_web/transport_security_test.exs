@@ -56,9 +56,7 @@ defmodule WorkHarborWeb.TransportSecurityTest do
         "frame-ancestors 'none'; base-uri 'none'"
 
     for path <- ["/assets/js/app.js", "/assets/css/app.css"] do
-      conn =
-        Plug.Test.conn(:get, "https://localhost" <> path)
-        |> Plug.Conn.put_req_header("host", "localhost")
+      conn = owner_asset_conn(path)
 
       response = Endpoint.call(conn, Endpoint.init([]))
       assert response.status == 200
@@ -80,22 +78,23 @@ defmodule WorkHarborWeb.TransportSecurityTest do
           {"/assets/", [400, 403, 404]},
           {"/assets/js/", [400, 403, 404]}
         ] do
-      conn =
-        Plug.Test.conn(:get, "https://localhost" <> path)
-        |> Plug.Conn.put_req_header("host", "localhost")
+      conn = owner_asset_conn(path)
 
       response = Endpoint.call(conn, Endpoint.init([]))
       assert response.status in statuses, "unexpected asset admission for #{path}"
     end
 
     for path <- ["/login/owner", "/api/v1/auth/status", "/owner/auth"] do
-      conn =
-        Plug.Test.conn(:get, "https://localhost" <> path)
-        |> Plug.Conn.put_req_header("host", "localhost")
+      conn = owner_asset_conn(path)
 
       response = WorkHarborWeb.Security.call(conn, [])
       assert_owner_asset_headers(response, csp)
     end
+  end
+
+  defp owner_asset_conn(path) do
+    conn = Plug.Test.conn(:get, "https://localhost" <> path)
+    %{conn | req_headers: [{"host", "localhost"} | conn.req_headers]}
   end
 
   defp assert_owner_asset_headers(conn, csp) do

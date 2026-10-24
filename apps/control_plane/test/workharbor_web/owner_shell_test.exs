@@ -222,10 +222,17 @@ defmodule WorkHarborWeb.OwnerShellTest do
 
     cookie = response.resp_cookies["__Host-workharbor_owner"].value
 
-    build_conn()
-    |> Map.merge(%{scheme: :https, host: "localhost", port: 443})
-    |> put_req_header("host", "localhost")
-    |> put_req_header("cookie", "__Host-workharbor_owner=" <> cookie)
+    conn = build_conn()
+
+    conn = %{
+      conn
+      | scheme: :https,
+        host: "localhost",
+        port: 443,
+        req_headers: [{"host", "localhost"} | conn.req_headers]
+    }
+
+    put_req_header(conn, "cookie", "__Host-workharbor_owner=" <> cookie)
   end
 
   defp assert_security_headers(conn, csp) do
