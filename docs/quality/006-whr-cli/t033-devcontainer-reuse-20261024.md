@@ -2,7 +2,7 @@
 
 Measured on 2026-10-24 against base
 `86008fab4b0131187c3d3b244fef94a48063b48b`, with test commit
-`b3b272460851a23b6b4ce57d2be0391573958fab`. Product sources are unchanged.
+`d6766bfe5dd9daf1a52a09579fa99b990e7c7bea`. Product sources are unchanged.
 This record adds applied preservation evidence for T033, FR-049 and FR-046a;
 it does not close the feature, T030 or its remaining SC-018 safety evidence.
 
@@ -95,3 +95,14 @@ T030 remains open under its separate evidence record. No task checkbox changes,
 standalone builds, installs, runtime activation, pushes or merges accompany these
 author measurements. The coordinator owns `make check`, independent review and
 PR readiness gates; their results are not claimed here.
+
+## Integration refresh
+
+The two owned commits were rebased onto
+`79d2f4eb336514c27b93d220edf7f5c6efe49b0d` after the owner merged PRs #248
+and #252. Before this citation refresh, `git range-diff` showed both commits
+unchanged (`=`). The original measured base above remains historical evidence;
+the reachable test-commit citation reflects the rebase. Source checks, spelling
+and whitespace checks passed on the refreshed tree. Tests were not repeated:
+the newly merged commits change tests and documentation, not product sources.
+Independent review must cover the final exact head before publication.
