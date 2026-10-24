@@ -26,6 +26,35 @@ import (
 
 const physicalENOSPCBytes = 1 << 20
 
+// This literal is executed by a canonical system shell, never an owned script.
+// Every variable comes from one quoted positional argument; Go runs only after
+// setpriv drops the initial-user-namespace root identity and supplementary groups.
+const physicalENOSPCPrelude = `fixture_mount=$1
+fixture_setpriv=$2
+fixture_env=$3
+fixture_readlink=$4
+fixture_uid=$5
+fixture_gid=$6
+fixture_target=$7
+fixture_net=$8
+fixture_mnt=$9
+shift 9
+fixture_user=$1
+shift
+case "$fixture_uid:$fixture_gid" in *[!0-9:]*|:*|*:) exit 64;; esac
+[ "$fixture_uid" -gt 0 ]
+case "$fixture_target" in /*/bounded-filesystem) ;; *) exit 64;; esac
+[ -d "$fixture_target" ] && [ ! -L "$fixture_target" ]
+for fixture_entry in "$fixture_target"/* "$fixture_target"/.[!.]* "$fixture_target"/..?*; do
+  [ ! -e "$fixture_entry" ] && [ ! -L "$fixture_entry" ] || exit 64
+done
+[ "$("$fixture_readlink" /proc/self/ns/user)" = "$fixture_user" ]
+[ "$("$fixture_readlink" /proc/self/ns/net)" != "$fixture_net" ]
+[ "$("$fixture_readlink" /proc/self/ns/mnt)" != "$fixture_mnt" ]
+"$fixture_mount" --no-mtab --internal-only -t tmpfs -o "size=1048576,mode=0700,uid=$fixture_uid,gid=$fixture_gid,nosuid,nodev,noexec" tmpfs "$fixture_target"
+exec "$fixture_setpriv" "--reuid=$fixture_uid" "--regid=$fixture_gid" --clear-groups -- "$fixture_env" -i "$@"
+`
+
 var errPhysicalENOSPCOutputBound = errors.New("physical ENOSPC child output exceeded bound")
 var errPhysicalENOSPCDeadline = errors.New("owned physical ENOSPC child exceeded deadline")
 
@@ -54,7 +83,7 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 		return
 	}
 	fmt.Println("physical-enospc-child-started")
-	if len(args) != 8 {
+	if len(args) != 9 {
 		t.Fatal("invalid private ENOSPC helper arguments")
 	}
 	caseName, mountpoint := args[0], args[1]
@@ -68,28 +97,34 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 	if !reflect.DeepEqual(actualEnv, wantEnv) {
 		t.Fatal("physical fixture child environment is not closed")
 	}
+	premounted := args[8] == "premounted"
+	if !premounted && args[8] != "direct" {
+		t.Fatal("unknown private fixture launcher")
+	}
 	for i, name := range []string{"user", "net", "mnt"} {
 		current, err := os.Readlink("/proc/self/ns/" + name)
-		if err != nil || current == args[i+2] {
-			t.Fatalf("refuse mount/fill without a private %s namespace: %v", name, err)
+		wantSame := premounted && name == "user"
+		if err != nil || (current == args[i+2]) != wantSame {
+			t.Fatalf("refuse mount/fill with unexpected %s namespace: %v", name, err)
 		}
 	}
-	for i, name := range []string{"uid", "gid"} {
-		mapping, err := os.ReadFile("/proc/self/" + name + "_map")
-		if err != nil || !reflect.DeepEqual(strings.Fields(string(mapping)), []string{"0", args[i+5], "1"}) {
-			t.Fatalf("refuse fixture without exact original-owner %s mapping: %v", name, err)
+	if premounted {
+		uid, uidErr := strconv.Atoi(args[5])
+		gid, gidErr := strconv.Atoi(args[6])
+		groups, groupErr := os.Getgroups()
+		if uidErr != nil || gidErr != nil || uid <= 0 || os.Getuid() != uid || os.Geteuid() != uid || os.Getgid() != gid || os.Getegid() != gid || groupErr != nil || len(groups) != 0 {
+			t.Fatal("premounted Go fixture must run only as the original non-root owner with cleared groups")
 		}
-	}
-	if os.Getuid() != 0 || os.Geteuid() != 0 || os.Getgid() != 0 || os.Getegid() != 0 {
-		t.Fatal("fixture must be inner root mapped exclusively to the original owner")
-	}
-	if args[7] == "mapped" {
-		groups, err := os.Getgroups()
-		if err != nil || len(groups) != 0 {
-			t.Fatalf("mapped fallback retained supplementary host groups: %v", err)
+	} else {
+		for i, name := range []string{"uid", "gid"} {
+			mapping, err := os.ReadFile("/proc/self/" + name + "_map")
+			if err != nil || !physicalENOSPCDirectMapMatches(string(mapping), args[i+5]) {
+				t.Fatalf("refuse fixture without exact original-owner %s mapping: %v", name, err)
+			}
 		}
-	} else if args[7] != "direct" {
-		t.Fatal("unknown private fixture launcher")
+		if os.Getuid() != 0 || os.Geteuid() != 0 || os.Getgid() != 0 || os.Getegid() != 0 {
+			t.Fatal("direct fixture must be inner root mapped exclusively to the original owner")
+		}
 	}
 	info, err := os.Lstat(mountpoint)
 	if err != nil || !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
@@ -103,24 +138,33 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 	if err != nil || strings.Contains(string(propagation), " shared:") {
 		t.Fatalf("refuse mount with shared propagation: %v", err)
 	}
-	if err := unix.Mount("tmpfs", mountpoint, "tmpfs", 0, "size=1048576,mode=0700"); err != nil {
-		if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
-			fmt.Fprintln(os.Stderr, "UNSUPPORTED: private tmpfs mount:", err)
-			os.Exit(77)
+	if !premounted {
+		if err := unix.Mount("tmpfs", mountpoint, "tmpfs", 0, "size=1048576,mode=0700"); err != nil {
+			if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
+				fmt.Fprintln(os.Stderr, "UNSUPPORTED: private tmpfs mount:", err)
+				os.Exit(77)
+			}
+			t.Fatal(err)
 		}
-		t.Fatal(err)
+		defer func() {
+			if err := unix.Unmount(mountpoint, 0); err != nil {
+				t.Errorf("private fixture unmount: %v", err)
+			}
+		}()
 	}
-	defer func() {
-		if err := unix.Unmount(mountpoint, 0); err != nil {
-			t.Errorf("private fixture unmount: %v", err)
-		}
-	}()
 	var mounted unix.Stat_t
 	var capacity unix.Statfs_t
 	if err := unix.Stat(mountpoint, &mounted); err != nil {
 		t.Fatal(err)
 	}
-	if err := unix.Statfs(mountpoint, &capacity); err != nil || capacity.Type != unix.TMPFS_MAGIC || capacity.Blocks == 0 || capacity.Blocks*uint64(capacity.Bsize) > physicalENOSPCBytes || uint64(info.Sys().(*syscall.Stat_t).Dev) == mounted.Dev {
+	originalDevice, err := strconv.ParseUint(args[7], 10, 64)
+	if err != nil {
+		t.Fatal("invalid original mountpoint device")
+	}
+	if premounted && (mounted.Uid != uint32(os.Getuid()) || mounted.Gid != uint32(os.Getgid()) || info.Mode().Perm() != 0700) {
+		t.Fatal("premounted filesystem must belong exclusively to the original owner")
+	}
+	if err := unix.Statfs(mountpoint, &capacity); err != nil || capacity.Type != unix.TMPFS_MAGIC || capacity.Blocks == 0 || capacity.Blocks*uint64(capacity.Bsize) > physicalENOSPCBytes || originalDevice == mounted.Dev {
 		t.Fatalf("refuse fill outside a new tmpfs of at most 1 MiB: %v", err)
 	}
 	dir := filepath.Join(mountpoint, "target")
@@ -339,7 +383,11 @@ func physicalENOSPCNativeRefusal(runErr error, timedOut bool, stdout, stderr *ph
 	return errors.As(runErr, &missing), nil
 }
 
-func physicalENOSPCCandidates(unshare, sudo, setpriv, env string, uid, gid int, childEnv, childArgs []string) [][]string {
+func physicalENOSPCDirectMapMatches(mapping, owner string) bool {
+	return reflect.DeepEqual(strings.Fields(mapping), []string{"0", owner, "1"})
+}
+
+func physicalENOSPCCandidates(unshare, sudo, setpriv, env, shell, mount, readlink string, uid, gid int, childEnv, childArgs []string) [][]string {
 	if unshare == "" || env == "" || uid <= 0 {
 		return nil
 	}
@@ -348,12 +396,16 @@ func physicalENOSPCCandidates(unshare, sudo, setpriv, env string, uid, gid int, 
 	direct := append([]string{unshare, "-rnm", "--"}, program...)
 	direct = append(direct, "direct")
 	candidates := [][]string{direct}
-	if sudo != "" && setpriv != "" {
-		mapped := []string{sudo, "-n", "--", unshare, "--user", "--mount", "--net",
-			"--map-users=0:" + strconv.Itoa(uid) + ":1", "--map-groups=0:" + strconv.Itoa(gid) + ":1",
-			"--setgroups=allow", "--setuid=0", "--setgid=0", "--", setpriv, "--clear-groups", "--"}
-		mapped = append(mapped, program...)
-		candidates = append(candidates, append(mapped, "mapped"))
+	if sudo != "" && setpriv != "" && shell != "" && mount != "" && readlink != "" && len(childArgs) == 11 {
+		// childArgs are constructed locally: executable, test flag, --, case,
+		// mountpoint, parent user/net/mount namespaces, owner UID/GID, device.
+		staged := []string{sudo, "-n", "--", env, "-i"}
+		staged = append(staged, childEnv...)
+		staged = append(staged, []string{unshare, "--mount", "--net", "--propagation", "private", "--", shell, "-eu", "-c", physicalENOSPCPrelude, "whr-enospc-root-prelude",
+			mount, setpriv, env, readlink, strconv.Itoa(uid), strconv.Itoa(gid), childArgs[4], childArgs[6], childArgs[7], childArgs[5]}...)
+		staged = append(staged, childEnv...)
+		staged = append(staged, childArgs...)
+		candidates = append(candidates, append(staged, "premounted"))
 	}
 	return candidates
 }
@@ -374,25 +426,25 @@ func physicalENOSPCTrustedSystemTool(path string) string {
 	}
 }
 
-func physicalENOSPCResolvedCandidates(unshare, sudo, setpriv, env string, uid, gid int, childEnv, childArgs []string) [][]string {
-	// The ordinary owner candidate may use PATH. The privileged candidate must
-	// retain only verified canonical paths, never the mutable lookup aliases.
-	candidates := physicalENOSPCCandidates(unshare, "", "", env, uid, gid, childEnv, childArgs)
-	canonicalUnshare := physicalENOSPCTrustedSystemTool(unshare)
-	canonicalSudo := physicalENOSPCTrustedSystemTool(sudo)
-	canonicalSetpriv := physicalENOSPCTrustedSystemTool(setpriv)
-	canonicalEnv := physicalENOSPCTrustedSystemTool(env)
-	if canonicalUnshare == "" || canonicalSudo == "" || canonicalSetpriv == "" || canonicalEnv == "" {
-		return candidates
+func physicalENOSPCResolvedCandidates(unshare, sudo, setpriv, env, shell, mount, readlink string, uid, gid int, childEnv, childArgs []string) [][]string {
+	// Only the ordinary owner candidate may retain PATH aliases. Every tool in
+	// the root stage is a canonical path with root-owned nonwritable ancestors.
+	candidates := physicalENOSPCCandidates(unshare, "", "", env, "", "", "", uid, gid, childEnv, childArgs)
+	canonical := []string{unshare, sudo, setpriv, env, shell, mount, readlink}
+	for i, path := range canonical {
+		canonical[i] = physicalENOSPCTrustedSystemTool(path)
+		if canonical[i] == "" {
+			return candidates
+		}
 	}
-	verified := physicalENOSPCCandidates(canonicalUnshare, canonicalSudo, canonicalSetpriv, canonicalEnv, uid, gid, childEnv, childArgs)
+	verified := physicalENOSPCCandidates(canonical[0], canonical[1], canonical[2], canonical[3], canonical[4], canonical[5], canonical[6], uid, gid, childEnv, childArgs)
 	if len(verified) == 2 {
 		candidates = append(candidates, verified[1])
 	}
 	return candidates
 }
 
-func physicalENOSPCRunCase(t *testing.T, caseName string, mappedOnly bool) {
+func physicalENOSPCRunCase(t *testing.T, caseName string, premountedOnly bool) {
 	t.Helper()
 	if os.Getuid() == 0 {
 		physicalENOSPCCapabilityUnavailable(t, "Go fixture requires a non-root original host owner")
@@ -422,12 +474,12 @@ func physicalENOSPCRunCase(t *testing.T, caseName string, mappedOnly bool) {
 	childEnv := []string{"HOME=" + private, "TMPDIR=" + private, "PATH=" + private, "TERM=dumb"}
 	args := []string{executable, "-test.run=^TestInitPhysicalENOSPCProcess$", "--", caseName, mountpoint}
 	args = append(args, namespaces...)
-	args = append(args, strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()))
+	args = append(args, strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()), strconv.FormatUint(uint64(before.Sys().(*syscall.Stat_t).Dev), 10))
 	unshare, sudo, setpriv, env := lookup("unshare"), lookup("sudo"), lookup("setpriv"), lookup("env")
-	candidates := physicalENOSPCResolvedCandidates(unshare, sudo, setpriv, env, os.Getuid(), os.Getgid(), childEnv, args)
-	if mappedOnly {
+	candidates := physicalENOSPCResolvedCandidates(unshare, sudo, setpriv, env, lookup("sh"), lookup("mount"), lookup("readlink"), os.Getuid(), os.Getgid(), childEnv, args)
+	if premountedOnly {
 		if len(candidates) < 2 {
-			physicalENOSPCCapabilityUnavailable(t, "mapped fallback utilities unavailable")
+			physicalENOSPCCapabilityUnavailable(t, "premounted fallback utilities unavailable")
 		}
 		candidates = candidates[1:]
 	}
@@ -479,27 +531,180 @@ func TestInitPhysicalENOSPC(t *testing.T) {
 	}
 }
 
-func TestInitPhysicalENOSPCMappedFallback(t *testing.T) {
+func TestInitPhysicalENOSPCPremountedFallback(t *testing.T) {
 	physicalENOSPCRunCase(t, "overwrite-restore", true)
 }
 
 func TestInitPhysicalENOSPCFallbackArgvAndClosedEnvironment(t *testing.T) {
 	childEnv := []string{"HOME=/private", "TMPDIR=/private", "PATH=/private", "TERM=dumb"}
-	childArgs := []string{"/own/test", "-test.run=^TestInitPhysicalENOSPCProcess$", "--", "create-write", "/private/mount", "user-ns", "net-ns", "mount-ns", "1001", "1002"}
-	got := physicalENOSPCCandidates("/native/unshare", "/native/sudo", "/native/setpriv", "/native/env", 1001, 1002, childEnv, childArgs)
+	childArgs := []string{"/own/test", "-test.run=^TestInitPhysicalENOSPCProcess$", "--", "create-write", "/private/mount", "user-ns", "net-ns", "mount-ns", "1001", "1002", "123"}
+	got := physicalENOSPCCandidates("/native/unshare", "/native/sudo", "/native/setpriv", "/native/env", "/native/sh", "/native/mount", "/native/readlink", 1001, 1002, childEnv, childArgs)
 	direct := []string{"/native/unshare", "-rnm", "--", "/native/env", "-i"}
 	direct = append(direct, childEnv...)
 	direct = append(direct, childArgs...)
 	direct = append(direct, "direct")
-	mapped := []string{"/native/sudo", "-n", "--", "/native/unshare", "--user", "--mount", "--net", "--map-users=0:1001:1", "--map-groups=0:1002:1", "--setgroups=allow", "--setuid=0", "--setgid=0", "--", "/native/setpriv", "--clear-groups", "--", "/native/env", "-i"}
-	mapped = append(mapped, childEnv...)
-	mapped = append(mapped, childArgs...)
-	mapped = append(mapped, "mapped")
-	if !reflect.DeepEqual(got, [][]string{direct, mapped}) {
-		t.Fatalf("namespace candidates must preserve owner mappings, clear groups and close the child environment: %#v", got)
+	staged := []string{"/native/sudo", "-n", "--", "/native/env", "-i"}
+	staged = append(staged, childEnv...)
+	staged = append(staged, []string{"/native/unshare", "--mount", "--net", "--propagation", "private", "--", "/native/sh", "-eu", "-c", physicalENOSPCPrelude, "whr-enospc-root-prelude", "/native/mount", "/native/setpriv", "/native/env", "/native/readlink", "1001", "1002", "/private/mount", "net-ns", "mount-ns", "user-ns"}...)
+	staged = append(staged, childEnv...)
+	staged = append(staged, childArgs...)
+	staged = append(staged, "premounted")
+	if !reflect.DeepEqual(got, [][]string{direct, staged}) {
+		t.Fatalf("namespace candidates must isolate mounts, drop root and close both stage environments: %#v", got)
 	}
-	if got := physicalENOSPCCandidates("/native/unshare", "/native/sudo", "/native/setpriv", "/native/env", 0, 1002, childEnv, childArgs); len(got) != 0 {
+	if got := physicalENOSPCCandidates("/native/unshare", "/native/sudo", "/native/setpriv", "/native/env", "/native/sh", "/native/mount", "/native/readlink", 0, 1002, childEnv, childArgs); len(got) != 0 {
 		t.Fatal("fixture must never launch the Go writer with host UID 0")
+	}
+}
+
+func TestInitPhysicalENOSPCFallbackAvoidsUIDMappingHelpers(t *testing.T) {
+	args := []string{"/own/test", "-test.run=helper", "--", "create-write", "/private/owned $(literal); path/bounded-filesystem", "user-ns", "net-ns", "mount-ns", "1001", "1002", "123"}
+	candidates := physicalENOSPCCandidates("/native/unshare", "/native/sudo", "/native/setpriv", "/native/env", "/native/sh", "/native/mount", "/native/readlink", 1001, 1002,
+		[]string{"HOME=/private", "TMPDIR=/private", "PATH=/private", "TERM=dumb"}, args)
+	if len(candidates) != 2 {
+		t.Fatal("fixture must offer a portable privileged candidate")
+	}
+	if candidates[1][26] != args[4] || strings.Contains(physicalENOSPCPrelude, args[4]) {
+		t.Fatal("owned paths must remain quoted positional arguments, never root shell source")
+	}
+	for _, arg := range candidates[1] {
+		if arg == "--user" || strings.HasPrefix(arg, "--map-users") || strings.HasPrefix(arg, "--map-groups") {
+			t.Fatalf("portable fallback must not invoke restricted UID/GID mapping helpers: %s", arg)
+		}
+	}
+}
+
+func TestInitPhysicalENOSPCDirectMapGuardRejectsOtherOwners(t *testing.T) {
+	for _, mapping := range []string{"0 1002 1", "1 1001 1", "0 1001 2", "0 1001 1\n1 1002 1", ""} {
+		if physicalENOSPCDirectMapMatches(mapping, "1001") {
+			t.Fatalf("unsafe direct namespace map accepted: %q", mapping)
+		}
+	}
+	if !physicalENOSPCDirectMapMatches("         0       1001          1\n", "1001") {
+		t.Fatal("exact original-owner mapping must be accepted")
+	}
+}
+
+func TestInitPhysicalENOSPCMappingHelperFailureIsHard(t *testing.T) {
+	for _, prefix := range []string{"newuidmap:", "newgidmap:"} {
+		var stdout, stderr physicalENOSPCOutput
+		_, _ = stderr.Write([]byte(prefix + " range not allowed\n"))
+		refused, err := physicalENOSPCNativeRefusal(errors.New("mapping helper exit 1"), false, &stdout, &stderr)
+		if refused || err != nil {
+			t.Fatalf("mapping helper failure must remain a hard failure: refused=%t err=%v", refused, err)
+		}
+	}
+}
+
+func TestInitPhysicalENOSPCPreludeDropsIdentityBeforeGoArgv(t *testing.T) {
+	if os.Getuid() == 0 {
+		physicalENOSPCCapabilityUnavailable(t, "prelude argv probe executes only as an ordinary owner")
+	}
+	shell := physicalENOSPCTrustedSystemTool("/usr/bin/sh")
+	if shell == "" {
+		physicalENOSPCCapabilityUnavailable(t, "trusted shell unavailable for owner-only prelude probe")
+	}
+	private := t.TempDir()
+	mountpoint := filepath.Join(private, "owned $(literal); path", "bounded-filesystem")
+	if err := os.MkdirAll(mountpoint, 0700); err != nil {
+		t.Fatal(err)
+	}
+	// Owner-only stubs observe the fixed prelude protocol. There is no sudo,
+	// mount syscall, identity change or execution of the supplied Go argument.
+	makeProbe := func(name, script string) string {
+		path := filepath.Join(private, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"+script), 0700); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	mount := makeProbe("mount-probe", "exit 0\n")
+	setpriv := makeProbe("setpriv-probe", "printf '%s\\n' \"$@\"\n")
+	readlink := makeProbe("readlink-probe", "case $1 in */user) printf user-ns;; */net) printf child-net;; */mnt) printf child-mount;; *) exit 1;; esac\n")
+	env := "/canonical/env"
+	childEnv := []string{"HOME=" + private, "TMPDIR=" + private, "PATH=" + private, "TERM=dumb"}
+	program := append(append([]string{}, childEnv...), "/owned/go-test", "literal argument $(never-execute); value")
+	uid, gid := strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid())
+	args := []string{"-eu", "-c", physicalENOSPCPrelude, "owner-only-prelude-probe", mount, setpriv, env, readlink, uid, gid, mountpoint, "parent-net", "parent-mount", "user-ns"}
+	args = append(args, program...)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, shell, args...)
+	cmd.Env = childEnv
+	output, err := cmd.CombinedOutput()
+	want := append([]string{"--reuid=" + uid, "--regid=" + gid, "--clear-groups", "--", env, "-i"}, program...)
+	if err != nil || ctx.Err() != nil || string(output) != strings.Join(want, "\n")+"\n" {
+		t.Fatalf("fixed prelude must drop owner identity/groups before env-i and the Go executable: %v output=%q", err, output)
+	}
+}
+
+func TestInitPhysicalENOSPCPreludeRejectsUnsafeFixturesBeforeMount(t *testing.T) {
+	if os.Getuid() == 0 {
+		physicalENOSPCCapabilityUnavailable(t, "prelude guard probe executes only as an ordinary owner")
+	}
+	shell := physicalENOSPCTrustedSystemTool("/usr/bin/sh")
+	readlink := physicalENOSPCTrustedSystemTool("/usr/bin/readlink")
+	if shell == "" || readlink == "" {
+		physicalENOSPCCapabilityUnavailable(t, "trusted shell/readlink unavailable for owner-only prelude probe")
+	}
+	var namespaces []string
+	for _, name := range []string{"user", "net", "mnt"} {
+		value, err := os.Readlink("/proc/self/ns/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		namespaces = append(namespaces, value)
+	}
+	for _, failure := range []string{"zero-uid", "invalid-gid", "nonempty", "symlink", "user-namespace", "same-net", "same-mount"} {
+		t.Run(failure, func(t *testing.T) {
+			private := t.TempDir()
+			mountpoint := filepath.Join(private, "bounded-filesystem")
+			if err := os.Mkdir(mountpoint, 0700); err != nil {
+				t.Fatal(err)
+			}
+			// This probe runs WITHOUT sudo as the owner. The recording utility
+			// is never supplied to a privileged candidate or root shell.
+			marker := filepath.Join(private, "mount-reached")
+			probe := filepath.Join(private, "owner-only-mount-probe")
+			if err := os.WriteFile(probe, []byte("#!/bin/sh\n: > \""+marker+"\"\nexit 99\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			uid, gid := strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid())
+			userNS, netNS, mountNS := namespaces[0], "different-net", "different-mount"
+			switch failure {
+			case "zero-uid":
+				uid = "0"
+			case "invalid-gid":
+				gid = "not-numeric"
+			case "nonempty":
+				if err := os.WriteFile(filepath.Join(mountpoint, ".owner"), []byte("retained"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink":
+				if err := os.Remove(mountpoint); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(private, mountpoint); err != nil {
+					t.Fatal(err)
+				}
+			case "user-namespace":
+				userNS = "different-user"
+			case "same-net":
+				netNS = namespaces[1]
+			case "same-mount":
+				mountNS = namespaces[2]
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, shell, "-eu", "-c", physicalENOSPCPrelude, "owner-only-prelude-probe", probe, probe, probe, readlink, uid, gid, mountpoint, netNS, mountNS, userNS)
+			cmd.Env = []string{"PATH=" + private, "TERM=dumb"}
+			if output, err := cmd.CombinedOutput(); err == nil || ctx.Err() != nil || len(output) != 0 {
+				t.Fatalf("unsafe prelude input must fail quietly before mount: %v output=%q", err, output)
+			}
+			if _, err := os.Lstat(marker); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("unsafe fixture reached mount: %v", err)
+			}
+		})
 	}
 }
 
@@ -598,10 +803,27 @@ func TestInitPhysicalENOSPCFallbackRejectsOwnerWritableTool(t *testing.T) {
 	}
 }
 
-func TestInitPhysicalENOSPCMappedArgvSurvivesMutableAliases(t *testing.T) {
+func TestInitPhysicalENOSPCFallbackRejectsTrustedToolOutsideUsrBin(t *testing.T) {
+	outside := "/usr/sbin/nologin"
+	info, err := os.Stat(outside)
+	if err != nil || info.Sys().(*syscall.Stat_t).Uid != 0 || info.Mode().Perm()&0022 != 0 {
+		physicalENOSPCCapabilityUnavailable(t, "root-owned nonwritable /usr/sbin/nologin control unavailable")
+	}
+	alias := filepath.Join(t.TempDir(), "outside-tool")
+	if err := os.Symlink(outside, alias); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{outside, alias} {
+		if got := physicalENOSPCTrustedSystemTool(path); got != "" {
+			t.Fatalf("privileged tools must resolve strictly inside /usr/bin: %q resolved %q", path, got)
+		}
+	}
+}
+
+func TestInitPhysicalENOSPCPrivilegedArgvSurvivesMutableAliases(t *testing.T) {
 	private := t.TempDir()
 	var aliases, canonical []string
-	for _, name := range []string{"unshare", "sudo", "setpriv", "env"} {
+	for _, name := range []string{"unshare", "sudo", "setpriv", "env", "sh", "mount", "readlink"} {
 		system, err := filepath.EvalSymlinks(filepath.Join("/usr/bin", name))
 		if err != nil || physicalENOSPCTrustedSystemTool(system) != system {
 			physicalENOSPCCapabilityUnavailable(t, fmt.Sprintf("canonical native positive control missing or untrusted for %s: %v", name, err))
@@ -612,10 +834,10 @@ func TestInitPhysicalENOSPCMappedArgvSurvivesMutableAliases(t *testing.T) {
 		}
 		aliases, canonical = append(aliases, alias), append(canonical, system)
 	}
-	candidates := physicalENOSPCResolvedCandidates(aliases[0], aliases[1], aliases[2], aliases[3], 1001, 1002,
-		[]string{"HOME=/private", "TMPDIR=/private", "PATH=/private", "TERM=dumb"}, []string{"/own/test"})
+	candidates := physicalENOSPCResolvedCandidates(aliases[0], aliases[1], aliases[2], aliases[3], aliases[4], aliases[5], aliases[6], 1001, 1002,
+		[]string{"HOME=/private", "TMPDIR=/private", "PATH=/private", "TERM=dumb"}, []string{"/own/test", "-test.run=helper", "--", "create-write", "/private/bounded-filesystem", "user-ns", "net-ns", "mount-ns", "1001", "1002", "123"})
 	if len(candidates) != 2 {
-		t.Fatalf("canonical aliases must resolve to a mapped candidate: %#v", candidates)
+		t.Fatalf("canonical aliases must resolve to a premounted candidate: %#v", candidates)
 	}
 	for _, alias := range aliases {
 		if err := os.Remove(alias); err != nil {
@@ -625,9 +847,12 @@ func TestInitPhysicalENOSPCMappedArgvSurvivesMutableAliases(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if candidates[1][3] != canonical[3] {
+		t.Fatal("root stage must begin with canonical env-i, never sudo metadata or a mutable alias")
+	}
 	// No candidate is executed. Replacing writable aliases after construction
 	// must not change any utility selected for the privileged command chain.
-	for i, position := range []int{3, 0, 13, 16} {
+	for i, position := range []int{9, 0, 21, 22, 15, 20, 23} {
 		if candidates[1][position] != canonical[i] {
 			t.Errorf("privileged argv retained mutable %s alias: %q, want canonical %q", filepath.Base(aliases[i]), candidates[1][position], canonical[i])
 		}
