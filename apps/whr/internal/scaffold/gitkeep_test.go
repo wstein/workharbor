@@ -96,7 +96,7 @@ func TestInitGitkeepUnderProjectsPath(t *testing.T) {
 				}
 			}
 			after, err := os.Stat(placeholderPath)
-			if err != nil || !os.SameFile(before, after) || before.ModTime() != after.ModTime() {
+			if err != nil || !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
 				t.Fatalf("no-op rerun changed the custom placeholder: %v", err)
 			}
 		})
