@@ -91,7 +91,7 @@ The own topic was rebased from `f2d96805` onto
 commits equal before this correction. No foreign or accepted commit was rewritten.
 
 The privileged chain accepts only canonical `/usr/bin` tools with root-owned,
-non-writable files and ancestors; an owner-writable PATH wrapper is refused.
+files and ancestors that are not group/other writable; an owner-writable PATH wrapper is refused.
 The fallback uses fixed absolute native-tool paths:
 `sudo -n -- unshare --user --mount --net --map-users=0:<owner-uid>:1 --map-groups=0:<owner-gid>:1 --setgroups=allow --setuid=0 --setgid=0 -- setpriv --clear-groups -- env -i <four-field environment> <owned test executable>`.
 Local util-linux 2.41.5 help and `unshare(1)` confirm the
@@ -115,7 +115,7 @@ they cannot trigger fallback or be hidden as unavailable capability.
 | Fallback argv/exact environment and required-refusal tests before correction | Semantic RED: argv lacked the mapped candidate; ordinary EPERM was skipped despite required proof, and uid_map EPERM lacked the required explicit failure result. |
 | Host-UID-zero launcher negative control before its guard | Semantic RED: the candidate builder still emitted a launcher for host UID 0; the new guard now refuses that case before launching any Go helper. |
 | Native-prefix-first classifier compiler mutation | Expected RED: five output/deadline boundary subcases and the helper-assertion guard fail (seven failed test/subtest outcomes). |
-| `go test -count=1 -run '^TestInitPhysicalENOSPC' -json ./internal/scaffold` after correction | Exit 0: 20 test/subtest outcomes, zero failures/skips. All four normal physical cases ran via the direct launcher; `TestInitPhysicalENOSPCMappedFallback` separately ran a real overwrite/restoration case via the mapped sudo launcher. |
+| `go test -count=1 -run '^TestInitPhysicalENOSPC' -json ./internal/scaffold` after correction | Exit 0: 21 test/subtest outcomes, zero failures/skips. All four normal physical cases ran via the direct launcher; `TestInitPhysicalENOSPCMappedFallback` separately ran a real overwrite/restoration case via the mapped sudo launcher. |
 
 The restricted-native regression executes the owned test binary with controlled
 native refusal scripts and `WHR_REQUIRE_NETNS=1`; both refusal forms must exit 1 with
@@ -125,3 +125,22 @@ validates those identity/environment properties during the actual mapped run.
 Each successful physical case logs `direct` or `mapped` and the native-refusal
 count, so the published CI log can identify which path ran. Corrected-head
 GitHub CI has not run in this authoring record; no green hosted run is claimed.
+
+### Canonical privileged arguments
+
+Independent review of `5d9e0594` found that checking a resolved path's ownership
+while retaining the original lookup string still allowed an owner-writable
+symlink to enter sudo's argv. No privileged alias execution was used to probe it.
+The new `TestInitPhysicalENOSPCMappedArgvSurvivesMutableAliases` first reproduced
+four semantic failures by building the candidate through temporary aliases,
+replacing them with owned scripts, and inspecting argv only.
+
+The resolver now returns each verified canonical path. The privileged candidate
+is constructed exclusively from those canonical sudo/unshare/setpriv/env paths
+and their verified root-owned, non-group/other-writable ancestors; owner-writable aliases
+are absent from that chain. The ordinary owner launcher is built separately.
+The alias-replacement regression and canonical system-path positive controls now
+pass, without executing an alias. This proof covers mutable lookup aliases;
+it does not claim protection against a privileged administrator replacing
+trusted system binaries. Package vet, format, source, spelling and whitespace
+checks also passed for the correction.
