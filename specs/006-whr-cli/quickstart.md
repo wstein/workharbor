@@ -78,3 +78,20 @@ control plane (router: only `/api/v1/hosts` and `/api/v1/auth` today).
 
 Wave 1b adds the interactive wizard (`whr init` on a terminal, with PTY transcripts as evidence) and `--devcontainer`
 selection. The wizard's fish and herdr choices are recorded as configuration only; launching them is not exercised.
+
+## Local removal (T038 / FR-067)
+
+Inspect a local workspace before removal with
+`whr rm --local <full-container-id-or-name> --dry-run --json`. Select a scoped
+group instead with `--role temp`, `--role staging`, or `--label key[=value]`;
+selectors cannot be combined. Without --local, the remote command still refuses.
+
+Removal preserves named home volumes by default, even with --force. An
+interactive run previews then asks for confirmation; scripts and --json require
+--yes. Home deletion additionally requires --volumes and --force; its preview
+names the volumes and mount targets. Protected/shared/primary homes cannot be
+removed through staging/temp cleanup. Inspect a 73 partial-failure inventory
+before retrying: attempted but unacknowledged actions may already have happened.
+
+Stage/promote and bundle drift are separate remaining T038/T039 work, not
+available commands in this increment. See the [removal evidence and limits](../../docs/quality/006-whr-cli/t038-removal.md).
