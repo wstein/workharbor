@@ -16,6 +16,9 @@ const (
 	MaxGitmodulesBytes = 64 << 10
 )
 
+// DefaultConsoleMode is used for omitted preferences when creating a new session.
+const DefaultConsoleMode = "plain"
+
 // Project is the optional project declaration of a version 2 manifest.
 type Project struct{ URL, Path string }
 
@@ -38,7 +41,7 @@ type Manifest struct {
 // Callers must first reject manifest validation findings.
 func (m Manifest) EffectiveConsoleMode() string {
 	if m.ConsoleMode == "" {
-		return "plain"
+		return DefaultConsoleMode
 	}
 	return m.ConsoleMode
 }
