@@ -12,7 +12,8 @@ The owner requested this planning exception after the current T029/T030 PR:
 read-only owner pages for host health, workspace status and enrollment/trust state,
 using Phoenix LiveView in `apps/control_plane`, without a SPA. Automatic independent
 **Opus** CLEAR for the exact plan and explicit owner approval of that reviewed
-revision, including the API question below, are prerequisites to W1. Record both
+revision are prerequisites to W1. The API boundary is decided below; that decision
+is not approval of the complete plan. Record review and plan approval
 in the PR/tracker. W1–W4 are proposed packages, not authorized implementation.
 Task dependencies, specification semantics and completion gates remain unchanged.
 
@@ -28,12 +29,12 @@ These owner-credential pages are distinct from the FR-032 Spec Kit dashboard
 [H8/H24:a and FR-032/033/036](../spec.md) require one owner API for CLI/dashboard;
 this increment claims neither their completion nor a second data API.
 
-**Proposed reconciliation, requiring owner resolution:** LiveViews and later HTTP
-API controllers call the **same authorized read-context functions**, with identical
-scope, bounds and redaction; no LiveView-only read path. No new HTTP endpoints are
-delivered here. This common server boundary is an engineering proposal, not an
-existing owner decision that redefines “API.” The HTTP-only interpretation remains
-an open question below; W1 waits for its resolution.
+**DECIDED — owner, 2026-10-24, option A:** LiveViews and later HTTP API
+controllers use the **same authorized read service in the control plane code**,
+with identical scope, bounds and redaction; no LiveView-only read path. No new HTTP
+endpoints are delivered here. This records the owner's decision in the #242
+session; the exact reviewed plan still requires explicit owner acceptance before W1.
+Option B (LiveViews consume HTTP owner API endpoints) was considered and rejected.
 
 ## Routes and authentication
 
@@ -218,14 +219,11 @@ correlation on the named TLS setup. Unrun journeys remain unverified.
 
 ## Owner questions and task relationship
 
-- API interpretation: **A (recommended)** common authorized read service consumed
-  by LiveView and later API controllers, or **B** LiveView consumes HTTP owner API
-  endpoints. The owner must resolve this as part of exact-plan approval before W1;
-  B requires a revised plan for its endpoint/deferred-backend prerequisites.
 - Which disposable host, TLS origin and browser setup may supply live evidence,
   and which operations are authorized there?
 
-Routes, refresh/bounds and component choices are engineering proposals for approval,
+The API boundary above is decided; routes, refresh/bounds and component choices
+remain engineering proposals for approval,
 not settled owner decisions. [006/T012](../tasks.md) lifecycle/retry/progress journeys
 remain open. [001 tasks](../../001-workspace-lifecycle/tasks.md): T015 receives only
 a read-only precursor; enrollment actions/full acceptance remain. T017 creation/
