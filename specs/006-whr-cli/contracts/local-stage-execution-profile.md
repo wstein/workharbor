@@ -316,7 +316,8 @@ changed or invalid data refuses 68 before effects (73 after effects). Its admitt
 facts are not a claim of fresh host probing. Never copy E/W output into A, run
 host-info at promote or source unvalidated/stale-unbound shell bytes. Thus the
 normal greeting path reads validated W data in candidate and validated A data in
-primary without altering the original worktree. The stage trust manifest includes
+primary without whr's host-facts publication writing the original worktree. Trusted
+container hooks retain their separately previewed read-write access. The stage trust manifest includes
 the admitted A output digest. Its earlier producer is unknown: record null producer
 fields and this operation's explicit admission instead of inventing a host-hook
 receipt. Generated E/published W entries retain their known producer binding.
@@ -331,9 +332,11 @@ is not proof daemon effects stopped. Uncertain/partial effects are 73, no auto r
 
 **Proposed authority amendment:** promotion may write Git objects and exclusively
 new operation refs in the original repositories. Therefore it cannot promise all
-original Git bytes remain unchanged. It never checkout/reset/merge/rebase, move an
-existing branch/tag/ref, overwrite the original index/worktree, update FETCH_HEAD,
-run a source hook or autonomously push. Original data changes are previewed exactly.
+original Git bytes remain unchanged. **whr's own Git transfer operations** never
+checkout/reset/merge/rebase, move an existing branch/tag/ref, overwrite the original
+index/worktree, update FETCH_HEAD, run a source hook or autonomously push. This is
+not a guarantee that owner-trusted project container hooks leave the worktree
+untouched; their ordinary read-write/runtime effects are previewed separately.
 
 Before primary stop, freeze the candidate **ref/object export**, not its editable
 worktree: capture HEAD plus all admitted heads/tags/notes results into a private
@@ -400,6 +403,12 @@ transplants candidate home. Fresh preview lists lifecycle hooks, trusted digest,
 home effects, result-ref additions, original live workspace bind, pane loss and
 cleanup consent. Hook-generated home files are normal project behavior, not a
 migration guarantee. No host hook, rebuild or mutable-image resolution occurs.
+Preview explicitly states that trusted container hooks have read-write access to
+the original workspace and their admitted mounts, plus the container network, as
+at normal primary creation. They may write ordinary files outside the admitted
+execution-input set; input rechecks do not inventory or prevent all such writes.
+Their source trust and disclosed effects remain separate from whr's non-overwriting
+Git transfer guarantee. No unexpected write is silently described as zero effects.
 
 The existing requirement binds every executed container hook to trusted inputs.
 Under the proposed cooperative phase-binding amendment above, promote hashes the
