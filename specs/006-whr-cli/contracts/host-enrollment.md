@@ -231,11 +231,19 @@ Rate limit: token bucket, capacity3, one token per5s, measured on monotonic rece
 is refused without a heartbeat write and closes the connection (audited once as
 `host_heartbeat_refused`).
 Connection audit rows, each exactly once per transition: `host_connected` (authenticated socket open),
+`host_connection_authenticated` (the connection's first accepted heartbeat after hello;
+fixed action `host_authenticate`, outcome `connected`, channel `internal`),
 `host_connection_replaced` (new connection supersedes a live one, written in the
 replacement transaction; the superseded close writes none), `host_connection_unknown`
 (stale, disconnect, identity invalid or other close), `host_heartbeat_refused` (rate
 limit), `host_connection_reset` (control-plane restart). Accepted heartbeats update
-hosts last_seen/lease, set the slot to connected and write no audit row.
+hosts last_seen/lease and set the slot to connected. The first accepted heartbeat
+writes its authentication audit in that same transaction; later accepted heartbeats
+write no audit row, including when restoring an unknown slot on the same connection.
+Open and hello alone, rejected heartbeats and superseded connections cannot write
+an authentication event. Audit persistence failure rolls back last_seen/lease and
+the connected transition, returns no heartbeat acknowledgement and closes the
+connection conservatively as unknown. First-seen state advances only after commit.
 Without authenticated heartbeat for>=30s mark unknown and close stale socket.
 Transport reconnect uses bounded1/2/4/8/16/30s backoff then30s maximum.
 Issued pending activation is attempted immediately on startup. After failures while
