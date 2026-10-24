@@ -110,3 +110,17 @@ unchanged; no individual key, detach, resize, label, tint or SSH-reconnect resul
 is inferred from merge, CI or the owner's earlier “done”. T031 stays open until
 the applicable owner observations are accepted; the absent remote SC-007 consumer
 also remains a distinct limitation. No whole-feature completion is claimed.
+
+## Status reconciliation (Package A, 2026-10-24)
+
+Audit baseline: `c71890d27c3d415e50fe15610a6f8f044b313142` on main. The accepted
+package/decision records above remain authoritative; no OQ answer or requirement
+changes. P1 #220, P2 #221, P3 #222/#224 and P4 #223 are all merged. The stale
+spec/plan/research status text is reconciled to those existing deliveries.
+
+The documentation portion of T031 is reconciled, but its checkbox remains open:
+its acceptance requires the applicable owner observations, which are not recorded.
+T018/G-A and T030/G-B remain UNVERIFIED in the unchanged owner templates. The
+absent remote SC-007 runtime consumer is separately out of this package's scope.
+See [the cross-feature audit](../package-a-status-20261024.md) for source/test
+references, observed checks and the remaining Feature 008/009 tasks.

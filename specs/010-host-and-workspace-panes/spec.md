@@ -3,9 +3,12 @@
 **Feature identifier**: `010-host-and-workspace-panes`
 **Feature Branch**: `docs/spec-010-host-and-workspace-panes`
 **Created**: 2026-10-23
-**Status**: Draft specification for independent review and owner decision. Not approved, not planned, not implemented. It needs an
-independent review CLEAR for its exact head and then explicit owner approval of that head, evidenced by a tracker or PR link
-(WORKFLOW.md). The owner decided the open questions on 2026-10-23 (see Decisions).
+**Status**: P1–P4 implementation packages are merged; see the
+[implementation and acceptance evidence](../../docs/quality/010-host-and-workspace-panes/implementation.md).
+The settled decisions below are unchanged. Whole-feature acceptance remains open:
+SC-009 owner gates G-A/T018 and G-B/T030 are UNVERIFIED, T031 is incomplete, and
+SC-007's remote session-creation consumer is absent. Package merges do not establish
+real-host acceptance or approve Proposed ADR 0015.
 **Related**: [Feature 006](../006-whr-cli/spec.md) (FR-006, FR-007, FR-007a, FR-019, FR-022, FR-022a, FR-029, FR-030, FR-047, FR-048,
 FR-052, FR-058, FR-066, FR-067, FR-063), [ADR 0012](../../docs/adr/0012-persistent-workspace-console.md),
 [ADR 0013](../../docs/adr/0013-whr-exit-codes.md), [ADR 0014](../../docs/adr/0014-whr-command-structure.md),

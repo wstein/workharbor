@@ -2,7 +2,9 @@
 
 **Input**: [spec.md](spec.md), then [plan.md](plan.md), [contracts/local-cli.md](contracts/local-cli.md),
 [data-model.md](data-model.md), [research.md](research.md), [quickstart.md](quickstart.md), ADR 0015 and reconciled Feature 006.
-**Status**: Execution started; checked units link to recorded evidence. Runtime and owner-host acceptance remain separate gates.
+**Status**: P1–P4 packages are merged; checked units link to recorded evidence.
+T018/G-A, T030/G-B and T031 remain open. [The status reconciliation](../../docs/quality/package-a-status-20261024.md)
+records the delivered and remaining scope without changing task acceptance criteria.
 **Baseline**: `82136e51c82ccf62ceaf7491667e23f59035847a`; OQ-11/FR-010/SC-011 merged by
 [PR #216](https://github.com/wstein/workharbor/pull/216). The prior plan was merged by [PR #215](https://github.com/wstein/workharbor/pull/215).
 FR-018/US3 is owner-approved and merged in [PR #217](https://github.com/wstein/workharbor/pull/217), recording OQ-12; that amendment gate is fulfilled.
