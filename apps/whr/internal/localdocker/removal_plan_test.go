@@ -13,12 +13,14 @@ func removalFixture() []inspection {
 }
 
 func TestLocalRmContainerOnlyPreservesHomeVolume(t *testing.T) {
-	plan, err := planRemoval(removalFixture(), RemovalOptions{Target: "sample"})
-	if err != nil || len(plan.Containers) != 1 || !plan.PreserveHomeVolume || len(plan.Volumes) != 0 {
-		t.Fatalf("plan=%+v error=%v", plan, err)
-	}
-	if plan.Containers[0].ID != strings.Repeat("a", 64) {
-		t.Fatal("plan must retain full container ID")
+	for _, force := range []bool{false, true} {
+		plan, err := planRemoval(removalFixture(), RemovalOptions{Target: "sample", Force: force})
+		if err != nil || len(plan.Containers) != 1 || !plan.PreserveHomeVolume || len(plan.Volumes) != 0 {
+			t.Fatalf("force=%t plan=%+v error=%v", force, plan, err)
+		}
+		if plan.Containers[0].ID != strings.Repeat("a", 64) {
+			t.Fatal("plan must retain full container ID")
+		}
 	}
 }
 
@@ -83,9 +85,11 @@ func TestLocalRmRefusesDeletingPrimaryHomeVolumeFromStagingOrTemp(t *testing.T) 
 				} else {
 					all[0].Mounts[0].Name = "anchorage-home-primary"
 				}
-				plan, err := planRemoval(all, RemovalOptions{Role: role, Volumes: true, Force: true})
-				if exitcode.FromError(err) != exitcode.Conflict || len(plan.Containers) != 0 {
-					t.Fatalf("plan=%+v error=%v", plan, err)
+				for _, volumes := range []bool{false, true} {
+					plan, err := planRemoval(all, RemovalOptions{Role: role, Volumes: volumes, Force: volumes})
+					if exitcode.FromError(err) != exitcode.Conflict || len(plan.Containers) != 0 {
+						t.Fatalf("volumes=%t plan=%+v error=%v", volumes, plan, err)
+					}
 				}
 			})
 		}
