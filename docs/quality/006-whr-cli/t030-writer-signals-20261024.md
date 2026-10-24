@@ -25,10 +25,13 @@ identities, and retained devcontainer/project-file identities and timestamps.
 No journal, temporary or generated file/directory may remain. Atomic manifest
 restoration may replace its inode.
 
-Child HOME/TMPDIR/PATH are private, with only TERM additionally supplied.
+Child HOME/TMPDIR/PATH are private, with TERM additionally supplied. Coverage
+instrumentation adds only `GOCOVERDIR` pointing to that same private directory;
+it is never inherited from the parent environment.
 Each output stream is capped at 8 KiB. A five-second child deadline shares a
-90-second suite budget; unfinished owned process groups receive SIGKILL and
-are reaped with a separate two-second cleanup bound. Cases run sequentially.
+90-second suite budget; unfinished children are killed through their owned
+process handles and reaped with a separate two-second cleanup bound. The helper
+spawns no grandchildren. Cases run sequentially.
 The test is built for Linux and macOS; only Linux was measured here.
 
 This is writer-level signal proof through a test helper, separate from the
@@ -68,3 +71,27 @@ handoff. Physical ENOSPC, process-wide network denial, other applicable T030
 assertions and original historical evidence remain separate. No task/progress
 ticks, standalone build, full suite, race run, installation or runtime activation
 was performed.
+
+## Coverage compatibility and owned-process cleanup correction
+
+[Review F1](https://github.com/wstein/workharbor/pull/248#pullrequestreview-5640083386)
+identified a deterministic coverage defect at the original head: an instrumented
+child warned on stderr because the closed environment omitted `GOCOVERDIR`.
+The topic's two own commits were pure-rebased onto
+`86008fab4b0131187c3d3b244fef94a48063b48b`, with both range-diff entries equal.
+
+Before the correction, the single existing
+`overwrite/after:workharbor.json/interrupt` case under `go test -cover` failed
+with that warning and exit 1. After supplying `GOCOVERDIR=<private directory>`
+only when `testing.CoverMode()` is nonempty, the same case passed both plain and
+with `-cover`. The test selection was
+`^TestInitWriterSignalsEveryStep$/^overwrite$/^after:workharbor[.]json$/^interrupt$`.
+This is coverage-mode compatibility evidence, not a complete coverage result.
+
+Review F2 also led to replacing raw process-group signalling with
+`cmd.Process.Kill()`. The owned handle avoids targeting a reused PID if the
+wait goroutine has already reaped the child. There are no grandchildren to
+collect. Package vet, formatting, repository source, spelling and whitespace
+checks passed. The source checker evaluates bootstrap rules, not product
+runtime. No full signal matrix, race run or standalone build was repeated for
+this bounded correction; the original unattributed failure remains recorded.
