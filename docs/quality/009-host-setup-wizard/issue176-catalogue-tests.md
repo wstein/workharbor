@@ -1,8 +1,8 @@
 # Issue 176: isolated catalogue loader tests
 
 Measured 2026-10-24 against main `c71890d27c3d415e50fe15610a6f8f044b313142`.
-Test commit: `3f61976e034093f44aa0e6e3bd0236114112f077`.
-Scope is the remaining loader-test gaps from [issue 176](https://github.com/wstein/workharbor-nxt/issues/176).
+Test commit: `8f45fd58ee9cdf952172f478e4433ef5e32fbf6e`.
+Scope is the remaining loader-test gaps from [issue 176](https://github.com/wstein/workharbor/issues/176).
 The baseline `TestInitialCatalogueEntries` already checks the exact production
 13 IDs, defaults, four config entries, source types and measured minima. Those
 assertions and production assets are unchanged; no duplicate version list added.
@@ -54,8 +54,10 @@ providing the measured red evidence.
 - PASS: `go vet ./internal/hostsetup/catalogue`.
 - PASS: `gofmt` applied; `git diff --check`.
 - PASS: `python3 -I -B scripts/check_repo.py` (bootstrap only; runtime not evaluated).
-- `make check` is delegated to the coordinator at the committed pristine head;
-  no result is claimed here.
+- NOT PASS: coordinator attempted `make check` at pristine head
+  `f91036ed49f506b40ec717321f1789e278821dd0`, bounded to five seconds; it
+  timed out with exit 124 (`/tmp/whr-d176-make-check.log`). No complete
+  `make check` result is claimed.
 
 No race run, standalone build, install, Docker/runtime operation, real-host
 measurement or task/feature acceptance is claimed. Independent exact-head review
