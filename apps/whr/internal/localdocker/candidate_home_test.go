@@ -200,10 +200,12 @@ func TestCandidateHomeBindingRefusesDrift(t *testing.T) {
 	// even if supplied metadata assigns it a different mount type or destination.
 	for _, mountType := range []string{"volume", "bind", "tmpfs", ""} {
 		for _, destination := range []string{"/mnt/primary", "/opt/bdock/primary"} {
-			cases["mount primary elsewhere "+mountType+destination] = func(o *CandidateHomeObservation) {
-				o.Mounts = append(o.Mounts, CandidateHomeMount{
-					Type: mountType, Name: intent.Plan().PrimaryHome, Destination: destination,
-				})
+			for mode, readOnly := range map[string]bool{"writable": false, "readonly": true} {
+				cases["mount primary elsewhere "+mountType+destination+" "+mode] = func(o *CandidateHomeObservation) {
+					o.Mounts = append(o.Mounts, CandidateHomeMount{
+						Type: mountType, Name: intent.Plan().PrimaryHome, Destination: destination, ReadOnly: readOnly,
+					})
+				}
 			}
 		}
 	}
@@ -217,10 +219,10 @@ func TestCandidateHomeBindingRefusesDrift(t *testing.T) {
 			mutate(&observed)
 			refused, err := intent.Bind(observed)
 			if exitcode.FromError(err) != 68 || refused != (CandidateHomeBinding{}) {
-				t.Fatalf("binding=%+v error=%v", refused, err)
+				t.Errorf("binding=%+v error=%v", refused, err)
 			}
 			if err := bound.Check(observed); exitcode.FromError(err) != 68 {
-				t.Fatalf("drift accepted: %v", err)
+				t.Errorf("drift accepted: %v", err)
 			}
 		})
 	}
