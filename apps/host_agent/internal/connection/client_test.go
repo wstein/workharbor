@@ -352,3 +352,31 @@ func TestExpiredCountsAnExpiredIssuerWithValidLeaf(t *testing.T) {
 		t.Fatal("expired issuer with valid leaf not reported expired")
 	}
 }
+
+// An early socket close must not turn each reconnect into another activation POST.
+func TestRunEarlyReconnectHonorsPendingActivationDue(t *testing.T) {
+	dir, _, _ := savedPendingDir(t)
+	oldRenew, oldSession := renewFn, sessionFn
+	defer func() { renewFn, sessionFn = oldRenew, oldSession }()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	renews, sessions := 0, 0
+	renewFn = func(context.Context, string) error { renews++; return ErrTransport }
+	sessionFn = func(_ context.Context, _ *identity.State, limit time.Time, event func(Event)) error {
+		sessions++
+		event(Event{Kind: "connected", HostID: host})
+		if sessions == 2 {
+			cancel()
+			if renews != 1 {
+				t.Errorf("early reconnect attempted activation %d times, want 1 before retry due", renews)
+			}
+		}
+		return ErrTransport
+	}
+	if err := Run(ctx, dir, nil); err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 2 {
+		t.Fatalf("sessions = %d, want 2", sessions)
+	}
+}
