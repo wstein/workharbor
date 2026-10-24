@@ -17,8 +17,9 @@ Each either duplicates policy or exceeds the requested local-shell dependency.
 
 **Decision:** Share/extract existing doctor socket rules into an internal reusable boundary in P1, preserving regression tests;
 use a pinned explicit Unix endpoint for all Docker subprocesses. Keep read-only discovery behind a port and fake daemon/client.
-**Rationale:** `internal/doctor/socket.go` already implements `DOCKER_HOST`, candidate order and a 500 ms per-dial cap;
-`CandidateOrder` is exported but the resolver itself is private. A stable shared resolver must be created before reuse is claimed.
+**Implementation status:** P1 added `internal/localdocker/endpoint.go` over the existing doctor socket rules;
+[the P1 record](../../docs/quality/010-host-and-workspace-panes/p1.md) links its regression evidence.
+`internal/doctor/socket.go` retains `DOCKER_HOST`, candidate order and a 500 ms per-dial cap.
 The FR-066 total budget is 5 seconds; socket selection, listing and preflight spend that one deadline.
 **Alternatives considered:** Duplicated socket search, Docker contexts, or an Engine SDK. Context discovery is excluded by FR-002;
 OQ-1 fixes the CLI choice. No new SDK dependency is justified.
@@ -26,7 +27,7 @@ OQ-1 fixes the CLI choice. No new SDK dependency is justified.
 ## Terminal, lifetime and liveness
 
 **Decision:** Give one Docker child direct terminal descriptors and wait for its exit. A nonzero status triggers exactly one bounded
-liveness inspect. Keep local policy in planned `internal/localshell/`, with PTY tests in the existing test harness.
+liveness inspect. Keep local policy in implemented `internal/localshell/`, with PTY tests in the existing test harness.
 **Rationale:** A process replacement cannot run FR-008's post-exit check. Existing `internal/ptytest/` and
 `cmd/whr/wizard_pty_test.go` supply the repository's test subprocess/PTY conventions. 010 FR-007 explicitly accepts orphan limits;
 SC-009 separately tests host herdr persistence over SSH. There is no new process reaper or managed session.
@@ -56,7 +57,8 @@ existing policy or add unrelated startup work. Symlink, size-limit and invalid-s
 **Decision:** P3 changes omitted-field default application and existing schema/vectors/scaffold/wizard text together, while preserving
 explicit values and live console state. Remote session creation stays a separate runtime dependency.
 **Rationale:** `internal/scaffold/proposal.go`, `internal/wizard/wizard.go`, `contracts/workspace/workharbor.schema.json`,
-`contracts/workspace/vectors.json` and `tests/test_workspace_manifest_vectors.py` contain existing herdr defaults/expectations.
+`contracts/workspace/vectors.json` and `tests/test_workspace_manifest_vectors.py` now apply the plain default while retaining
+explicit herdr; [P3 and its follow-up](../../docs/quality/010-host-and-workspace-panes/p3.md) record the merged changes.
 010 FR-020 names additional contract/default text to reconcile. The owner API remains unavailable.
 **Alternatives considered:** Rewrite existing manifests, mutate live consoles, remove explicit herdr, or implement a remote console here.
 None is requested; the first two conflict with OQ-7 and accepted console lifetime rules.

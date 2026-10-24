@@ -2,7 +2,9 @@
 
 **Branch**: `docs/010-oq11-tasks-20261023` | **Date**: 2026-10-23 | **Spec**: [spec.md](spec.md)
 **Baseline**: `82136e51c82ccf62ceaf7491667e23f59035847a` (`main`, including merged OQ-11 and OQ-12).
-**Status**: Proposed implementation plan; no product implementation or real-host verification.
+**Status**: P1–P4 implementation packages are merged; [recorded evidence](../../docs/quality/010-host-and-workspace-panes/implementation.md)
+binds their accepted scopes. G-A/G-B real-host acceptance and T031 closure remain open;
+SC-007 runtime session creation remains outside the delivered configuration scope.
 The owner requested this plan. [PR #212](https://github.com/wstein/workharbor/pull/212) merged the specification and
 [PR #214](https://github.com/wstein/workharbor/pull/214) records seven owner decisions; [PR #216](https://github.com/wstein/workharbor/pull/216) adds the eighth, OQ-11, and SC-011. [PR #217](https://github.com/wstein/workharbor/pull/217) adds the ninth, OQ-12, and resolves picker eligibility. The spec still labels its overall status
 Draft; this plan does not invent revision-bound spec/plan approval, task approval, build authority or runtime activation.
@@ -86,8 +88,8 @@ specs/010-host-and-workspace-panes/
 
 apps/whr/internal/
 ├── doctor/                 # existing socket rules; share rather than copy
-├── localdocker/            # planned P1 discovery and Docker adapter
-├── localshell/             # planned P2 policy, exec plan and child supervision
+├── localdocker/            # implemented P1 discovery and Docker adapter
+├── localshell/             # implemented P2 policy, exec plan and child supervision
 ├── commands/               # existing routing, command mirror and freeze tests
 ├── ptytest/                # existing test-only terminal harness
 ├── workspacecfg/           # existing safe manifest reads, bounds and shell validation
@@ -95,7 +97,7 @@ apps/whr/internal/
 └── wizard/                 # existing P3 prompt defaults
 contracts/cli/              # gated P1/P2 table/result amendments; P3 default text
 contracts/workspace/        # gated P3 schema and shared vectors
-integrations/herdr/         # planned optional P4 manifest, entrypoints, verifier, tests
+integrations/herdr/         # implemented optional P4 manifest, entrypoints, verifier, tests
 ```
 
 Package names are implementation proposals within the existing module (ADR 0010). P1 owns Docker subprocess/socket details behind

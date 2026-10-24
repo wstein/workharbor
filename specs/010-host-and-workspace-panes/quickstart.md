@@ -12,7 +12,7 @@ The [checkpoint A result template](../../docs/quality/010-host-and-workspace-pan
 
 On the implementation branch, use `.tool-versions`, a clean isolated checkout and the existing Go test/PTY harness. Write failing
 behavior cases first, implement the package, and retain actual command/output and exact source revision in its PR evidence.
-The following commands become applicable only when their planned packages exist:
+The P1–P4 packages are merged; the following commands validate their offline scope:
 
 ```sh
 python3 scripts/select_feature.py 010-host-and-workspace-panes
