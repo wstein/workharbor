@@ -35,7 +35,7 @@ in FR-068, FR-063 and SC-024 with [the local contract](contracts/local-stage-pro
 The approval record is an owner-authored approval or owner merge of
 [PR #229](https://github.com/wstein/workharbor/pull/229), covering this interaction
 amendment only. Before that record it is proposed; afterwards S0 still gates code
-and live operations. The quoted chat direction is not approval of precise text. The plan explicitly retains an
+and live operations. The D1/D2 decision record does not approve the full execution profile. The plan explicitly retains an
 execution-profile gate before product implementation. No command is activated,
 T038 stays open, and the dependency of T039 on full T038 is unchanged.
 
@@ -48,19 +48,30 @@ amendment or inferred as approved by LS-1.
 
 ### LS-1: owner direction (2026-10-24)
 
-Source: owner Werner's answer in Codex session
-`01a1689d-f986-7fc2-8275-1a3f465d0df3`, recorded verbatim:
+Source: the foreman's [Owner decision record for D1 and D2 on PR #229](https://github.com/wstein/workharbor/pull/229#issuecomment-6385032899),
+dated 2026-10-24, records the owner's choices after discussing both options.
+D1/D2 were decided by the owner on 2026-10-24; that comment is the decision record.
 
-> ja zu Container-Auswahl per Name/ID plus explizitem Quellverzeichnis; Fingerprint-Vertrauen; Docker-Healthcheck bzw. vorhandener Workspace-Smoke über stdin.
+- **D1 selection B:** exact primary container name or full container ID
+  (`<id|name>`) with explicit `--source <dir>`; no directory selector.
+- **D1 trust:** the previewed source fingerprint requires explicit trust separately
+  from general confirmation. Unattended application supplies the exact
+  `--trust <digest>` plus `--yes`; changed inputs invalidate trust. This is not
+  the committed-revisions-only alternative.
+- **D2 verification:** promotion requires a running candidate with matching verified
+  image and mount/user configuration, and a passing Docker healthcheck when one
+  is declared. Otherwise require an explicit successful smoke result using
+  Anchorage's existing `.devcontainer/smoke-container.sh`: fingerprint-bound host
+  bytes over stdin to fixed argv `bash -s -- <container-workspace-path>`, with
+  displayed output escaped per FR-022. Neither the built-in-only nor file-entrypoint
+  alternative is selected. No host `smoke.sh` orchestrator or Anchorage file changes
+  are authorized.
 
-This selects historical D1 alternative B with fingerprint trust and D2 with the
-workspace smoke input on stdin. It does not select new home names or cleanup
-flags, approve an execution profile, or authorize provider operations. The owner's
-subsequent request to proceed asks for this amendment. Its exact-text approval
-record is the owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229),
-which approves only the interaction scope when recorded; S0 remains a separate
-engineering and approval gate. Do not reopen the selected direction as if no
-answer existed, or infer approval beyond its words.
+This decision does not select new home names or promote deletion flags; those
+remain a separate owner decision and task. It does not approve the execution
+profile or authorize provider operations. The interaction amendment's exact-text
+approval record remains the owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229);
+S0 remains a separate engineering and approval gate.
 
 **Feature identifier**: `006-whr-cli`
 **Feature Branch**: `docs/006-whr-cli`

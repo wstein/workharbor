@@ -1,8 +1,8 @@
 # T038 / FR-068: local stage/promote decision proposal
 
 Status: **Historical decision brief; not an execution contract.**
-[LS-1 records the owner's verbatim answer](../spec.md#ls-1-owner-direction-2026-10-24):
-D1 alternative B with fingerprint trust and D2 health/workspace-smoke via stdin. Alternatives below are retained as history, not questions to reopen.
+[LS-1 cites the owner's decision record](../spec.md#ls-1-owner-direction-2026-10-24):
+D1 alternative B with fingerprint trust and D2 health/workspace-smoke via stdin. The alternatives below are historical; D1/D2 were decided by the owner on 2026-10-24, see [the decision record](https://github.com/wstein/workharbor/pull/229#issuecomment-6385032899).
 The [local stage/promote amendment](local-stage-promote.md) now records the selected
 direction and its remaining engineering gates. The owner approval/merge of
 [PR #229](https://github.com/wstein/workharbor/pull/229) is the interaction approval
@@ -288,8 +288,8 @@ its test and code rather than treating this proposal as an implemented schema.
 ## Verification and decision record
 
 This proposal itself needs repository/whitespace checks and independent exact-head
-review, not a synthetic behavioral test. D1/D2 source is the quoted
-[LS-1 decision input](../spec.md#ls-1-owner-direction-2026-10-24). The owner
+review, not a synthetic behavioral test. D1/D2 were decided by the owner on 2026-10-24, as linked in
+[LS-1](../spec.md#ls-1-owner-direction-2026-10-24). The owner
 approval/merge record of [PR #229](https://github.com/wstein/workharbor/pull/229)
 approves only the interaction amendment; S0 remains gated. Local make-check
 limitations and required CI belong to that PR.
