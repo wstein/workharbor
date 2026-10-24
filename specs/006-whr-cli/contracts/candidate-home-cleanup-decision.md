@@ -25,7 +25,7 @@ cleanup surface and primary replacement remains gated.
 ## New allocation, without adoption
 
 Allocate a fresh named volume `whr-stage-home-<opaque-id>` for each new candidate
-attempt. Recommend a cryptographically random 128-bit ID encoded as 32 lowercase
+attempt, mounted only at existing `/home/captain` or `/home/vscode` home destinations. Recommend a cryptographically random 128-bit ID encoded as 32 lowercase
 hex characters, unrelated to source paths, user names or secrets. The fixed
 candidate name remains `whr-anchorage-staging`, label `anchorage-staging=1`:
 **one candidate per admitted Docker daemon**, not one per source or primary.
@@ -44,9 +44,10 @@ Allocation is **not implemented** by merged removal code. S0 must specify bounde
 volume inspection, safe creation/reservation, durable intent before allocation,
 metadata/receipt correlation, official-CLI mount configuration and interruption
 handling. Docker's create-or-return-existing behavior is not exclusive allocation.
-A local lock cannot exclude an external Docker client. S0 must prove collision
-handling for the admitted execution model or explicitly refuse that capability;
-this proposal does not promise atomic daemon-wide reservation or invent a helper.
+Use fresh absence checks, rechecks and an attempt journal; a local lock cannot
+exclude another client of the same Docker user. That race limitation is explicit:
+no atomic daemon-wide reservation is promised. S0 must prove its admitted
+allocation model or refuse unsupported cases; no helper is invented here.
 
 ## Promotion requires explicit deletion consent
 
@@ -57,7 +58,7 @@ whr workspace promote --local --volumes --force [--yes] <id|name>
 whr workspace promote --local --dry-run [--volumes --force] <id|name>
 ```
 
-The existing `ws` group alias remains; no new bare alias. `--volumes` and `--force`
+`--volumes` and `--force`
 must each be explicitly supplied for apply. Interactive apply also confirms the
 exact preview; unattended/JSON apply also requires `--yes`. Neither `--yes`, source
 trust, automation nor internal defaults may set either deletion option. Force
@@ -80,8 +81,7 @@ home is always preserved, even when the new flags are supplied.
 
 The fresh preview identifies the primary full ID/name and lost exec sessions,
 exact candidate full ID and allocated home, **all mounts** of that home, preserved
-primary home, daemon identity and all replacement/cleanup actions. Source trust
-and fingerprint binding remain separate under the interaction contract. Dry-run
+primary home, daemon identity and all replacement/cleanup actions. Dry-run
 never creates a volume, lock/receipt recording an execution, container or image,
 and never runs a hook, smoke, pull or build; read-only collision checks are allowed.
 
@@ -110,8 +110,7 @@ metadata. Refuse 68 if candidate cleanup is inadmissible; missing consent is 70.
 Reinspect before effects and again before cleanup. Recreate the primary from the
 verified immutable image with its original home; verify the resulting primary
 before removing the candidate container, then its home. Do not delete any other
-volume. Current removal has no provisioning/promotion transaction: S0 must define
-composition, ordering, deadlines and closed output schemas before code.
+volume. S0 must define promotion composition and closed schemas before code.
 
 A concurrent mount or drift appearing after replacement prevents unsafe cleanup;
 report 73 with attempted/applied/remaining resources and honest recovery guidance.
