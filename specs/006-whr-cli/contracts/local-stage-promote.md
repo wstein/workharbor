@@ -201,3 +201,27 @@ and independently reviewed with the same artifact approval rules:
 These are engineering deliverables, not new D1/D2 questions. Registration, product
 code and resource operations remain deferred until that gate is met. No host smoke,
 Docker operation, installation, build or activation is authorized by this document.
+
+## Proposed clone/result revision (owner session direction, 2026-10-24)
+
+The owner explicitly requested a writable independent real Git clone with full
+history and ordinary commits/rebases/pushes, result fetch without overwriting
+existing work, retained project container hooks on promote, and a justified
+restriction table. The prior read-only/synthetic-Git/hook-free profile is not
+accepted. This records session direction; exact revised-profile approval and S0
+remain open. See [the revised execution proposal](local-stage-execution-profile.md).
+
+That proposal explicitly adds original-repository **objects and exclusively new
+operation refs** at promote, without checkout/reset/merge, existing ref moves,
+index/worktree changes, FETCH_HEAD writes or autonomous remote push. Original
+workspace binding remains; fetched code is available for owner integration, not
+automatically active. These Git metadata effects amend prior source-preservation
+claims and must appear in preview/receipt/failure inventory.
+
+It also proposes an unregistered receipt-bound stage --refresh workflow for
+edited candidates. The current default collision/no-adoption and changed-source
+rules are not silently relaxed: fresh trust/verification and unchanged environment
+inputs are required, otherwise guarded cleanup and a fresh stage remain necessary.
+The proposal identifies exact-candidate concurrent-writer and promote hook/path
+byte-binding conflicts; neither hash comparisons nor this paragraph closes S0.
+No D1/D2, host-hook, home guard, naming or deletion-consent decision is reopened.

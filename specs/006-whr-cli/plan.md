@@ -450,11 +450,13 @@ subpackages of T038, not additional task IDs or independent feature completion:
 | S3: promotion/cleanup | `TestLocalPromoteUsesVerifiedImage`, `TestLocalPromotePreservesPrimaryHome`, `TestLocalPromoteConfirmsPaneInterruption`, `TestLocalPromoteRequiresExplicitHomeDeletionConsent`, `TestLocalPromoteNeverBypassesProtectedHome`, `TestLocalPromoteStaleReceiptRefuses`, `TestLocalPromotePartialFailureInventory`. | S2 accepted; preflight full cleanup plan before primary replacement, verify new primary before candidate cleanup. |
 | S4: offline composition/evidence | Default-handler fake Docker/CLI integration, exact argv/minimal-env canaries, canonical JSON, no-local refusal64, deadline71 before effects, interrupt72 and partial/uncertain73 precedence; all SC-024 cases. | Independent exact-head review, required CI and owner merges; task completion only for full T038 scope. |
 
-The [proposed execution profile](contracts/local-stage-execution-profile.md)
-makes the mirror/synthetic-Git capture, hook-free image promotion, bounded host
-initialization, allocation/journal and output choices concrete for independent
-review and explicit owner approval. Its concrete read-only execution and admission choices remain proposed;
-this is not S0 completion. This reference adds no product authorization or task edge.
+The [revised execution proposal](contracts/local-stage-execution-profile.md)
+follows the owner's 2026-10-24 session priorities: independent writable/full-history
+clones, explicit non-overwriting result refs, preserved project container hooks and
+a restriction review. Clone/fetch and an unregistered receipt-bound refresh path
+are visible proposed amendments, not accepted interface changes. Exact-candidate
+concurrent-writer and promote hook/path byte-binding remain precise S0 conflicts;
+this reference supplies no product authorization, task edge or completion claim.
 
 S0 must resolve engineering details rather than silently introducing requirements
 in source. In particular: source coverage must include executed build/hook/smoke
