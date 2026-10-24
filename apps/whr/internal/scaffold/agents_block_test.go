@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 )
 
 func fixtureAgentsBlock(v int, body string) []byte {
@@ -59,13 +61,22 @@ func TestAgentsBlockRejectsMarkerLikeLines(t *testing.T) {
 	good := fixtureAgentsBlock(agentsBlockVersion, "body\n")
 	begin := strings.Split(string(good), "\n")[0] + "\n"
 	cases := []string{"\xef\xbb\xbf  <!-- whr:agents-block unknown -->\n", begin, "<!-- whr:agents-block end -->\n", string(good) + string(good), begin + string(good), strings.ReplaceAll(string(good), "\n", "\r\n"), "  " + string(good), "\xef\xbb\xbf" + string(good), "\xef\xbb\xbf  " + string(good), "```\n\t<!-- whr:agents-block unknown -->\n```\n", strings.TrimSuffix(string(good), "\n")}
+	for _, version := range []string{"", "-1", "+1", "1.0", "v1"} {
+		cases = append(cases, strings.Replace(string(good), fmt.Sprintf("v=%d ", agentsBlockVersion), "v="+version+" ", 1))
+	}
 	for i, data := range cases {
-		t.Run(fmt.Sprint(i), func(t *testing.T) {
-			got, err := planAgentsBlock([]byte(data), false)
-			if err != nil || got.warning != "agents_block.malformed" {
-				t.Fatalf("got %+v %v", got, err)
-			}
-		})
+		for _, edit := range []bool{false, true} {
+			t.Run(fmt.Sprintf("case=%d/edit=%v", i, edit), func(t *testing.T) {
+				got, err := planAgentsBlock([]byte(data), edit)
+				if edit {
+					if exitcode.FromError(err) != exitcode.Conflict {
+						t.Fatalf("malformed edit must be refused with 68: %+v %v", got, err)
+					}
+				} else if err != nil || got.action != "left_unchanged" || got.warning != "agents_block.malformed" {
+					t.Fatalf("unrequested malformed block: %+v %v", got, err)
+				}
+			})
+		}
 	}
 }
 func TestAgentsBlockPreservesOutsideBytesAndBoundsResult(t *testing.T) {
