@@ -21,7 +21,8 @@ canonical Unix endpoint spelling without filesystem or daemon inspection.
 intent: same daemon/endpoint/primary, distinct full lowercase 64-hex candidate ID,
 fixed candidate name/staging label and exact single writable home mount. Explicit
 primary/temp role conflicts, duplicate or substituted home mounts refuse 68.
-`CandidateHomeBinding.Check` also refuses a replacement candidate ID. All returned
+Any candidate mount named as the original primary home refuses 68, regardless of
+its supplied type or destination. `CandidateHomeBinding.Check` also refuses a replacement candidate ID. All returned
 plans/identities are value copies; caller maps/slices are never retained.
 
 | Test | Evidence |
@@ -77,3 +78,23 @@ proposal approval text was superseded by the explicit owner acceptance above;
 missing stage/receipt consumers explain this unit's explicit library boundary.
 Future orchestration remains responsible for the full allocation row and every
 later collision, consent, verification and cleanup unit.
+
+## PR 240 correction: primary-home mount admission
+
+[Review F2](https://github.com/wstein/workharbor/pull/240#discussion_r4368239604)
+identified that an additional primary-home mount at a non-home destination passed
+binding admission. Red checkpoint `8a01ee93f2f1bd6d242bb7c33b13af972df48642`
+adds eight mount-type/destination cases before the guard. From `apps/whr` in an
+isolated checkout of that commit, reproduce with:
+
+```sh
+go test ./internal/localdocker -run '^TestCandidateHomeBindingRefusesDrift$/^mount_primary_elsewhere' -count=1 -v
+```
+
+The command compiled, then all eight cases failed with a nonzero returned binding
+and `error=<nil>` (exit 1). The correction refuses any supplied mount whose name
+matches the bound original primary home before the unrelated-mount skip. The
+same cases now pass, including the retained binding's drift check. This is a
+pure supplied-metadata admission check; complete fresh daemon inspection and all
+allocation/ownership preconditions remain necessary. Raw author evidence is in
+`/tmp/whr-b-home-fixes-evidence-20261024/f2-red.log` and `f2-green.log`.

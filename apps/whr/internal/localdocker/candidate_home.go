@@ -122,6 +122,9 @@ func (i CandidateHomeIntent) Bind(observed CandidateHomeObservation) (CandidateH
 	}
 	matches := 0
 	for _, mount := range observed.Mounts {
+		if mount.Name == i.plan.PrimaryHome {
+			return CandidateHomeBinding{}, candidateHomeConflict()
+		}
 		if mount.Name != i.plan.Mount.Name && mount.Destination != "/home/captain" && mount.Destination != "/home/vscode" {
 			continue
 		}
