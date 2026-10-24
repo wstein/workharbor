@@ -191,6 +191,7 @@ defmodule WorkHarborWeb.OwnerAuthTest do
   defp denied_count do
     [[count]] =
       DB.sql("SELECT count(*) FROM audit_events WHERE event='authorization_denied'").rows
+
     count
   end
 end
