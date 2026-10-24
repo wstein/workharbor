@@ -184,6 +184,8 @@ and task. New candidate-home naming and promote deletion flags likewise need
 that separately approved task; this amendment does not add or approve them. This note neither
 checks T038 nor changes T025/T038/T039 dependencies, other tasks or prior evidence.
 
+Separate discussion only: [candidate-home decision](contracts/candidate-home-cleanup-decision.md) and [proposed cleanup task](contracts/candidate-home-cleanup-task-proposal.md). These proposed artifacts neither add a task nor change approved requirements, dependencies or checkmarks.
+
 - [ ] T039 [US1, US4] Bundle mount drift reporting (FR-069, SC-025; #143) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, and `contracts/cli/output.schema.json`: read-only comparison of pinned bundle references in `.devcontainer/bundle-pins.json` or devcontainer configuration against mounted image/volume references on running container; per-bundle reporting of pinned, mounted, and status (`in_sync`, `drift`, `cannot_determine`); exit code 0 when all in sync, distinct exit code when drift detected, and exit 68 when unreadable/undetermined; `--json` output conforming to `bundleDriftResult`; zero mutations verified. Failing tests first: `TestBundleDriftAllInSync`, `TestBundleDriftDetected`, `TestBundleDriftMissingMount`, `TestBundleDriftUnreadablePins`, `TestBundleDriftJSONMatchesSchema`, `TestBundleDriftZeroMutations`. Acceptance: all SC-025 cases pass offline with fake Docker fixtures; independent review is CLEAR. Prerequisites: T025, T038.
 
 ## Dependencies and execution
