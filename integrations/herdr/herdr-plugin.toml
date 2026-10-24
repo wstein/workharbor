@@ -1,0 +1,60 @@
+id = "workharbor.local"
+name = "WorkHarbor local panes"
+version = "0.1.0"
+min_herdr_version = "0.9.3"
+description = "Optional host and local workspace panes; no lifecycle operations"
+platforms = ["linux", "macos"]
+
+[[panes]]
+id = "picker"
+title = "Local workspaces"
+placement = "overlay"
+command = ["python3", "-B", "picker.py"]
+
+[[panes]]
+id = "workspace"
+title = "Local workspace"
+placement = "tab"
+command = ["python3", "-B", "entrypoints.py", "workspace"]
+
+[[panes]]
+id = "host"
+title = "🟥 HOST"
+placement = "tab"
+command = ["python3", "-B", "entrypoints.py", "host"]
+
+[[actions]]
+id = "pick-tab"
+title = "Workspace in new tab"
+contexts = ["workspace"]
+command = ["python3", "-B", "actions.py", "picker", "--placement", "tab"]
+
+[[actions]]
+id = "pick-split"
+title = "Workspace in split"
+contexts = ["workspace"]
+command = ["python3", "-B", "actions.py", "picker", "--placement", "split"]
+
+[[actions]]
+id = "pick-tab-tinted"
+title = "Workspace in new tab with background"
+contexts = ["workspace"]
+command = ["python3", "-B", "actions.py", "picker", "--placement", "tab", "--background"]
+
+[[actions]]
+id = "pick-split-tinted"
+title = "Workspace in split with background"
+contexts = ["workspace"]
+command = ["python3", "-B", "actions.py", "picker", "--placement", "split", "--background"]
+
+[[actions]]
+id = "host-tab"
+title = "Host in new tab"
+contexts = ["workspace"]
+command = ["python3", "-B", "actions.py", "host"]
+
+[[actions]]
+id = "host-tab-tinted"
+title = "Host in new tab with background"
+contexts = ["workspace"]
+command = ["python3", "-B", "actions.py", "host", "--background"]
