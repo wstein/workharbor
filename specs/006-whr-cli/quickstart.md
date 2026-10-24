@@ -104,3 +104,14 @@ no bypass is provided. See the [recorded decision](../../docs/quality/006-whr-cl
 
 Stage/promote and bundle drift are separate remaining T038/T039 work, not
 available commands in this increment. See the [removal evidence and limits](../../docs/quality/006-whr-cli/t038-removal.md).
+
+## Stage/promote direction (proposed, not available)
+
+The owner-selected name/full-ID plus explicit source, fingerprint trust and
+healthcheck/workspace-smoke direction is recorded in the
+[local stage/promote amendment](contracts/local-stage-promote.md). It is not an
+implemented command: exact-head artifact approval and the plan's execution-profile
+gate still precede source work. The amendment proposes explicit candidate-home
+deletion flags for promote; --yes alone must not bypass FR-067 protections.
+Current Anchorage protected staging/temp cleanup remains excluded, with no recovery
+cleanup path promised. T038 stays open and T039 follows its complete acceptance.

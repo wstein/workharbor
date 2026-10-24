@@ -169,6 +169,19 @@ the repository's ordinary `go build`/application checks; no archive, image, rele
 
 - [ ] T038 [US1, US4] Local devcontainer and temporary container lifecycle with volume protection (FR-066, FR-067, FR-068, SC-024; #142) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, `contracts/cli/commands.json`, and `contracts/cli/output.schema.json`: `--local` and `--label` on `workspace.ls`; `--local`, `--label`, `--role`, `--volumes`, `--force`, `--dry-run`, and `--yes` on `workspace.rm`; bounded 5 s Docker socket inspection; pre-mutation ownership verification (exit 68 on foreign container); default preservation of home volume; deletion of home volume requiring both `--volumes` and `--force` (and `--yes` unattended, exit 70 without it); refusal of staging/temp cleanup resolving to primary home volume (exit 68); refusal of volume deletion if mounted by another container (exit 68); protection of `/opt/bdock/*` and `bundledock-*` tool volumes; side-by-side staging and promotion; `--dry-run` zero mutations; partial failure reporting (exit 73). Failing tests first: `TestLocalLsListsLabelledContainersAndVolumes`, `TestLocalLsLabelFilter`, `TestLocalLsEscapesHostileMetadata`, `TestLocalRmContainerOnlyPreservesHomeVolume`, `TestLocalRmWithVolumesAndForceRemovesHomeVolume`, `TestLocalRmVolumesWithoutForceRefused`, `TestLocalRmNeverRemovesBundleDockOrReadOnlyVolumes`, `TestLocalRmRefusesForeignUnlabelledContainer`, `TestLocalRmRefusesDeletingPrimaryHomeVolumeFromStagingOrTemp`, `TestLocalRmRefusesVolumeMountedByOtherContainer`, `TestLocalRmDryRunExecutesNoMutations`, `TestLocalRmNonInteractiveRequiresYes`, `TestLocalRmPartialVolumeFailureExits73`, `TestLocalCommandsJSONMatchesSchema`, `TestWorkspaceLsAndRmWithoutLocalStillRefuse`. Acceptance: all SC-024 cases pass offline with fake Docker fixtures; `python3 scripts/check_repo.py` and Go tests pass; independent exact-head review is CLEAR. Prerequisite: T025.
 
+T038 stage/promote amendment (2026-10-24, proposed): follow
+[the selected local interaction](contracts/local-stage-promote.md) and
+[plan packages S0–S4](plan.md#t038-stagepromote-amendment-2026-10-24). D1/D2 direction
+is selected in owner chat; exact-head artifact approval remains pending. Before
+stage/promote product code, complete S0's capability/capture/argv/image/receipt/
+cleanup and output contract with independent review and owner approval. Additional
+red-first IDs and SC-024 stage/promote coverage are enumerated there. Preserve the
+existing FR-067 guard and all removal regressions. Current protected Anchorage
+staging/temp cleanup remains excluded; a FR-067(e) change is a separate decision
+and task. Proposed newly allocated whr candidate homes and explicit promote
+`--volumes --force` consent require this amendment's approval. This note neither
+checks T038 nor changes T025/T038/T039 dependencies, other tasks or prior evidence.
+
 - [ ] T039 [US1, US4] Bundle mount drift reporting (FR-069, SC-025; #143) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, and `contracts/cli/output.schema.json`: read-only comparison of pinned bundle references in `.devcontainer/bundle-pins.json` or devcontainer configuration against mounted image/volume references on running container; per-bundle reporting of pinned, mounted, and status (`in_sync`, `drift`, `cannot_determine`); exit code 0 when all in sync, distinct exit code when drift detected, and exit 68 when unreadable/undetermined; `--json` output conforming to `bundleDriftResult`; zero mutations verified. Failing tests first: `TestBundleDriftAllInSync`, `TestBundleDriftDetected`, `TestBundleDriftMissingMount`, `TestBundleDriftUnreadablePins`, `TestBundleDriftJSONMatchesSchema`, `TestBundleDriftZeroMutations`. Acceptance: all SC-025 cases pass offline with fake Docker fixtures; independent review is CLEAR. Prerequisites: T025, T038.
 
 ## Dependencies and execution
