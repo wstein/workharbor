@@ -123,6 +123,13 @@ func readBundlePins(ctx context.Context, d *dir) ([]BundlePin, error) {
 			}
 			values[k] = v
 		}
+		// Refuse aliases and unknown keys before deciding whether a mount is a
+		// bundle declaration. Otherwise src/dst can hide an undeployed bundle.
+		for k, v := range values {
+			if k != "type" && k != "source" && k != "target" && k != "readonly" && !(k == "volume-nocopy" && v == "") {
+				return fail()
+			}
+		}
 		target := values["target"]
 		relevant := strings.HasPrefix(target, "/opt/bdock") || strings.HasPrefix(values["source"], "bundledock-")
 		if !relevant {
@@ -138,11 +145,6 @@ func readBundlePins(ctx context.Context, d *dir) ([]BundlePin, error) {
 			}
 			if v, ok := values["readonly"]; !ok || v != "" {
 				return fail()
-			}
-			for k, v := range values {
-				if k != "type" && k != "source" && k != "target" && k != "readonly" && !(k == "volume-nocopy" && v == "") {
-					return fail()
-				}
 			}
 			matched = true
 			seen[target] = true
