@@ -191,7 +191,6 @@ func TestCatalogueSchemaConformance(t *testing.T) {
 		"no_platform":           func(d map[string]any) { first(d)["platforms"] = []any{} },
 		"duplicate_platform":    func(d map[string]any) { first(d)["platforms"] = []any{"darwin-arm64", "darwin-arm64"} },
 		"unsupported_platform":  func(d map[string]any) { first(d)["platforms"] = []any{"linux-amd64"} },
-		"duplicate_requires":    func(d map[string]any) { first(d)["requires"] = []any{"sample", "sample"} },
 		"bad_requires_id":       func(d map[string]any) { first(d)["requires"] = []any{"X"} },
 		"network_hosts_empty":   func(d map[string]any) { first(d)["network"].(map[string]any)["hosts"] = []any{} },
 		"network_host_syntax":   func(d map[string]any) { first(d)["network"].(map[string]any)["hosts"] = []any{"fixture.invalid:443"} },
@@ -335,5 +334,82 @@ func TestCatalogueDependencyCycleAndVersionedAgentIdentity(t *testing.T) {
 	}
 	if _, err = Load(raw, templates); err == nil {
 		t.Fatal("version-suffixed known agent source accepted")
+	}
+}
+
+// Valid controls isolate each guard from unrelated schema and graph failures.
+func TestCatalogueIsolatedGuards(t *testing.T) {
+	schema := catalogueSchema(t)
+	cases := []struct {
+		name          string
+		prepare       func(map[string]any)
+		invalidate    func(map[string]any)
+		schemaInvalid bool
+	}{
+		{name: "agent_id", invalidate: func(d map[string]any) { first(d)["id"] = "codex" }},
+		{name: "agent_command", invalidate: func(d map[string]any) { tool(d)["command"] = "codex" }},
+		{name: "cask_core_mismatch", prepare: func(d map[string]any) {
+			source(d)["type"] = "cask"
+			source(d)["tap"] = "homebrew/cask"
+		}, invalidate: func(d map[string]any) { source(d)["tap"] = "homebrew/core" }},
+		{name: "privileged_limit", prepare: func(d map[string]any) {
+			steps := []any{}
+			for i := 0; i < 4; i++ {
+				steps = append(steps, map[string]any{"purpose": "Synthetic step " + strconv.Itoa(i), "argv": []any{"/usr/bin/true"}})
+			}
+			first(d)["privileged"] = steps
+		}, invalidate: func(d map[string]any) {
+			first(d)["privileged"] = append(first(d)["privileged"].([]any), map[string]any{"purpose": "Synthetic fifth step", "argv": []any{"/usr/bin/true"}})
+		}, schemaInvalid: true},
+		{name: "network_hosts_limit", prepare: func(d map[string]any) {
+			hosts := []any{"fixture.invalid"}
+			for i := 1; i < 8; i++ {
+				hosts = append(hosts, "fixture-"+strconv.Itoa(i)+".invalid")
+			}
+			first(d)["network"].(map[string]any)["hosts"] = hosts
+		}, invalidate: func(d map[string]any) {
+			network := first(d)["network"].(map[string]any)
+			network["hosts"] = append(network["hosts"].([]any), "fixture-8.invalid")
+		}, schemaInvalid: true},
+		{name: "duplicate_requires", prepare: func(d map[string]any) {
+			other, _ := syntheticCatalogue(t)
+			second := first(other)
+			second["id"] = "second"
+			d["items"] = append(d["items"].([]any), second)
+			first(d)["requires"] = []any{"second"}
+		}, invalidate: func(d map[string]any) { first(d)["requires"] = []any{"second", "second"} }, schemaInvalid: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			document, templates := syntheticCatalogue(t)
+			if tc.prepare != nil {
+				tc.prepare(document)
+			}
+			raw, err := json.Marshal(document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = schema.Validate(document); err != nil {
+				t.Fatalf("valid control fails schema: %v", err)
+			}
+			if got, err := Load(raw, templates); err != nil || got == nil {
+				t.Fatalf("valid control refused: %v", err)
+			}
+			tc.invalidate(document)
+			raw, err = json.Marshal(document)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = schema.Validate(document); (err != nil) != tc.schemaInvalid {
+				t.Fatalf("schema rejection=%v, want %v: %v", err != nil, tc.schemaInvalid, err)
+			}
+			_, err = Load(raw, templates)
+			if err == nil {
+				t.Fatal("isolated invalid catalogue accepted")
+			}
+			if got := exitcode.FromError(err); got != exitcode.Internal {
+				t.Fatalf("invalid catalogue exit=%d, want74", got)
+			}
+		})
 	}
 }
