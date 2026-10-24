@@ -55,7 +55,7 @@ measured by `TestPathNestedOrphanObservation`, a local probe excluded from the
 committed acceptance test file; its source, overlay and log are in the same
 local directory above. Apply scans the root before mutation and does not
 rescan every nested directory for newly introduced orphan names. The spec's
-FR-046 recovery wording requires the next run to refuse leftovers and records
+FR-057(c)/(e) recovery wording requires the next run to refuse leftovers and records
 the filesystem race limitation; this observation does not introduce a new
 post-preview nested-scan requirement or claim broader protection. The permanent
 orphan assertions cover exactly the three boundaries listed above.
