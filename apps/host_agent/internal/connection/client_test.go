@@ -395,13 +395,13 @@ func TestActivationRetryGrowthSaturatesAndResets(t *testing.T) {
 	now := time.Now()
 	expires := now.Add(48 * time.Hour)
 	for i, want := range []time.Duration{30 * time.Second, time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute, 30 * time.Minute} {
-		got := retry.failed(now, expires, true).Sub(now)
+		got := retry.failed(now, now, expires, true).Sub(now)
 		if got != want {
 			t.Fatalf("failure %d: delay = %v, want %v", i+1, got, want)
 		}
 	}
 	for i := 0; i < 10000; i++ {
-		if got := retry.failed(now, expires, true).Sub(now); got != 30*time.Minute {
+		if got := retry.failed(now, now, expires, true).Sub(now); got != 30*time.Minute {
 			t.Fatalf("saturated delay = %v", got)
 		}
 	}
@@ -410,7 +410,7 @@ func TestActivationRetryGrowthSaturatesAndResets(t *testing.T) {
 	if !retry.next.IsZero() || retry.delay != 0 {
 		t.Fatal("changed pending identity retained backoff")
 	}
-	if got := retry.failed(now, expires, true).Sub(now); got != 30*time.Second {
+	if got := retry.failed(now, now, expires, true).Sub(now); got != 30*time.Second {
 		t.Fatalf("new identity delay = %v", got)
 	}
 	state.Pending = nil
@@ -428,7 +428,7 @@ func TestActivationRetryRenewalBoundaryAndExpiry(t *testing.T) {
 		retry.sync(state)
 		retry.delay = 30 * time.Minute
 		expires := now.Add(remaining)
-		got := retry.failed(now, expires, remaining > 0)
+		got := retry.failed(now, now, expires, remaining > 0)
 		want := now.Add(30 * time.Second)
 		if remaining > 6*time.Hour {
 			want = expires.Add(-6 * time.Hour)
@@ -445,8 +445,8 @@ func TestActivationRetryRenewalBoundaryAndExpiry(t *testing.T) {
 	retry.sync(state)
 	retry.delay = 30 * time.Minute
 	expires := now.Add(6*time.Hour + time.Minute)
-	boundary := retry.failed(now, expires, true)
-	if got := retry.failed(boundary, expires, true).Sub(boundary); got != 30*time.Second {
+	boundary := retry.failed(now, now, expires, true)
+	if got := retry.failed(boundary, boundary, expires, true).Sub(boundary); got != 30*time.Second {
 		t.Fatalf("boundary delay = %v", got)
 	}
 }
@@ -616,5 +616,26 @@ func TestRunForwardWallClockJumpRestoresFastPendingRetry(t *testing.T) {
 	}
 	if err := Run(ctx, dir, nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRetryDeadlineReachedUsesEarlierClock(t *testing.T) {
+	now := time.Now()
+	deadline := now.Add(30 * time.Minute)
+	for _, tc := range []struct {
+		name          string
+		elapsed, wall time.Time
+		want          bool
+	}{
+		{"not due", now.Add(time.Second), now.Round(0).Add(time.Second), false},
+		{"UTC forward", now.Add(time.Second), now.Round(0).Add(2 * time.Hour), true},
+		{"UTC backward does not extend elapsed deadline", deadline, now.Round(0).Add(-time.Hour), true},
+		{"UTC exact deadline", now, deadline.Round(0), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := retryDeadlineReached(tc.elapsed, tc.wall, deadline); got != tc.want {
+				t.Fatalf("due = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

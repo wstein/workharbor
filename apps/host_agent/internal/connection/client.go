@@ -320,10 +320,12 @@ func ack(ctx context.Context, in <-chan incomingMessage, kind string) error {
 
 // Seams for tests; production values are Renew and session.
 var (
-	renewFn      = Renew
-	sessionFn    = session
-	runNow       = time.Now
-	retryWallNow = time.Now
+	renewFn   = Renew
+	sessionFn = session
+	runNow    = time.Now
+	// Separate wall observation lets tests model UTC changes without altering
+	// time.Time internals or advancing elapsed time.
+	retryWallNow = func() time.Time { return runNow().Round(0) }
 	// renewRetry bounds a session on a credential whose renewal is due but failed.
 	renewRetry = 30 * time.Second
 )
@@ -346,8 +348,9 @@ func (r *activationRetry) sync(state *identity.State) {
 	}
 }
 
-func (r *activationRetry) failed(now, expires time.Time, activeValid bool) time.Time {
-	if r.key == [3]string{} || !activeValid || !expires.After(now.Add(6*time.Hour)) {
+func (r *activationRetry) failed(now, wallNow, expires time.Time, activeValid bool) time.Time {
+	remaining := expires.Sub(wallNow.Round(0))
+	if r.key == [3]string{} || !activeValid || remaining <= 6*time.Hour {
 		r.delay = renewRetry
 	} else if r.delay == 0 {
 		r.delay = renewRetry
@@ -357,11 +360,24 @@ func (r *activationRetry) failed(now, expires time.Time, activeValid bool) time.
 			r.delay = 30 * time.Minute
 		}
 	}
-	r.next = now.Add(r.delay)
+	delay := r.delay
 	if activeValid {
-		r.next = sessionDeadline(now, expires, r.next)
+		boundary := remaining
+		if boundary > 6*time.Hour {
+			boundary -= 6 * time.Hour
+		}
+		if boundary < delay {
+			delay = boundary
+		}
 	}
+	r.next = now.Add(delay)
 	return r.next
+}
+
+// A forward UTC correction can pass a deadline before its elapsed timer fires.
+// Either clock may make it due; a backward correction cannot extend the timer.
+func retryDeadlineReached(now, wallNow, deadline time.Time) bool {
+	return !now.Before(deadline) || !wallNow.Round(0).Before(deadline.Round(0))
 }
 
 // sessionDeadline ends an idle socket at renewal time (six hours before expiry),
@@ -401,7 +417,10 @@ func session(ctx context.Context, state *identity.State, limit time.Time, onEven
 	ws.SetReadLimit(4096)
 	incoming := make(chan incomingMessage, 1)
 	go readMessages(ctx, ws, state, incoming)
-	go watchValidity(ctx, func() bool { _, err := identity.Expires(state); return err == nil }, func() { cancel(); _ = ws.CloseNow() })
+	go watchValidity(ctx, func() bool {
+		_, err := identity.Expires(state)
+		return err == nil && !retryDeadlineReached(time.Now(), retryWallNow(), deadline)
+	}, func() { cancel(); _ = ws.CloseNow() })
 	if e = send(ctx, ws, state, "hello"); e != nil {
 		return e
 	}
@@ -469,11 +488,12 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 		}
 		activation.sync(state)
 		now := runNow()
+		wallNow := retryWallNow()
 		var limit time.Time
 		expires, e := identity.Expires(state)
 		pending := state.Pending != nil && state.Pending.Certificate != ""
-		needsRenewal := pending || (e == nil && !expires.After(now.Add(6*time.Hour)))
-		if needsRenewal && (e != nil || activation.next.IsZero() || !now.Before(activation.next)) {
+		needsRenewal := pending || (e == nil && !expires.After(wallNow.Round(0).Add(6*time.Hour)))
+		if needsRenewal && (e != nil || activation.next.IsZero() || retryDeadlineReached(now, wallNow, activation.next)) {
 			renewErr := renewFn(ctx, dir)
 			if renewErr == nil {
 				if state, e = identity.Load(dir); e != nil || state.Active == nil {
@@ -495,7 +515,7 @@ func Run(ctx context.Context, dir string, onEvent func(Event)) error {
 				}
 				activation.sync(state)
 				expires, e = identity.Expires(state)
-				limit = activation.failed(runNow(), expires, e == nil)
+				limit = activation.failed(runNow(), retryWallNow(), expires, e == nil)
 			}
 			e = nil
 		} else if needsRenewal {

@@ -248,9 +248,13 @@ interval nor bypass the next attempt time. Successful promotion or a changed/rem
 pending identity resets it; process restart attempts saved pending activation once
 immediately. Original staging still begins only at/inside6h. After active expiry,
 retain pending replay and final-refusal/recovery/security distinctions above; the
-long pending-activation delay applies only while active is valid. Session deadlines
-and the expiry watchdog remain authoritative. No blind provider resends or
-command-history resets. Health requires authenticated hello
+long pending-activation delay applies only while active is valid. A retry becomes
+due when either its elapsed deadline or its UTC deadline is reached; a backwards
+UTC correction cannot extend elapsed retry timing. Reconnect reevaluates remaining
+UTC validity. On an established socket, the existing <=1s watchdog also closes
+when UTC passes its saved renewal/retry deadline, so a forward correction into
+the6h window does not retain a long retry interval. Expiry checks and deadlines
+remain authoritative. No blind provider resends or command-history resets. Health requires authenticated hello
 and heartbeat acknowledgement. UTC last_seen/lease are display only.
 
 ## Fenced conservative liveness overlay

@@ -60,10 +60,11 @@ implementation commit `b2996ba8a570635d429ee9deaa8a8b1200b87439`.
 | Final refusals return recovery66;503/unknown4xx retry;403 reports/retries | Existing loopback recovery/refusal/security tests in full connection suite |
 | Leaf/issuer validity watchdog and blocked socket expiry | Existing connection session/validity tests in full suite |
 
-The scheduling clock seam affects only Run's scheduling decisions. Production
-validity checks, session deadlines and the independent watchdog retain their real
+The scheduling seams model elapsed and UTC observations independently without
+changing Go time internals. Production identity validity checks retain their real
 clock checks. Pure scheduling tests avoid waiting minutes; Run integration tests
-advance only the scheduling clock and retain the normal transport timer.
+retain the normal transport timer. The session watchdog also checks the saved
+renewal/retry deadline against elapsed and UTC observations (correction below).
 
 Restart still makes one immediate saved-pending attempt, so this change does not
 bound churn from an external service manager repeatedly restarting the process.
@@ -73,3 +74,51 @@ race run, install, deployment, dispatch activation or real-host/browser run was
 performed within this bounded authorization. Full `make check`, required CI and
 independent exact-head review remain necessary before readiness; runtime evidence
 remains a separate gate. Nothing was pushed or published by this author.
+
+
+## Review correction: UTC transition into the renewal window
+
+Independent review of `ccb71137caabbd977c7ca3c86845bef8917b6b74` found that a saved
+retry deadline carrying Go monotonic time could remain30min away after UTC jumped
+forward2h into the6h renewal window. Advancing test time with `Add` alone had moved
+both clocks together and missed this case. No expiry-security failure was
+reproduced; this was a retry-cadence contract gap.
+
+Regression commit `38408d9edbd9859d7e4b9752d700dc825793f4b4` adds an independent wall observation seam and
+`TestRunForwardWallClockJumpRestoresFastPendingRetry`. Before the correction,
+`go test ./apps/host_agent/internal/connection -run
+'^TestRunForwardWallClockJumpRestoresFastPendingRetry$' -count=1 -timeout=20s`
+exited1 with `inside six-hour window retained retry=30m0s renews=7; want <=30s and
+immediate attempt 8`. The test advances only UTC2h after seven failures while
+leaving elapsed scheduling time fixed; it uses no unsafe time representation edits.
+
+The correction makes a retry due when either elapsed or UTC time reaches its
+saved deadline, and calculates the6h/expiry clamp from UTC remaining validity.
+Reconnect therefore attempts activation and restores30s cadence in this case.
+The existing session watchdog additionally observes that same saved deadline,
+closing a connected socket when a forward UTC correction has passed it. Expiry
+validation, recovery66 and security403 handling are unchanged. A backward UTC
+correction cannot postpone a due elapsed deadline.
+
+Post-correction commands:
+
+- `go test ./apps/host_agent/internal/connection -run
+  '^(TestRunForwardWallClockJumpRestoresFastPendingRetry|TestActivationRetry|TestRunHeartbeats|TestRunRetriesFailedRenewalWhileConnected|TestRunEarlyReconnect|TestRunPromotion)'
+  -count=1 -timeout=30s` exited0 (14.221s).
+- `go test ./apps/host_agent/internal/connection -run
+  '^(TestRetryDeadlineReachedUsesEarlierClock|TestSessionWakesWhenUTCJumpPassesPendingRetryDeadline)$'
+  -count=1 -timeout=15s` exited0 (1.199s). The loopback test advances the scheduling
+  UTC observation after authenticated heartbeat and verifies session close before
+  its4s cancellation deadline while the credential remains valid in real time.
+- `go vet ./apps/host_agent/internal/connection ./apps/host_agent/internal/identity`
+  and `python3 scripts/check_repo.py` exited0 again.
+
+- `go test ./apps/host_agent/internal/connection -count=1` exited0 (36.212s),
+  rechecking the full connection package because the watchdog predicate changed.
+- `gofmt -l` on all three affected Go files produced no paths; `git diff --check`
+  exited0.
+
+These are injected-clock and local loopback results, not an actual host UTC
+adjustment experiment. The earlier identity suite result remains applicable;
+identity code is unchanged. The bounded `make check`
+limitation above remains unresolved and is not waived by these targeted checks.
