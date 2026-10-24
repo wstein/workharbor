@@ -218,10 +218,10 @@ workspace binding remains; fetched code is available for owner integration, not
 automatically active. These Git metadata effects amend prior source-preservation
 claims and must appear in preview/receipt/failure inventory.
 
-It also proposes an unregistered receipt-bound stage --refresh workflow for
-edited candidates. The current default collision/no-adoption and changed-source
-rules are not silently relaxed: fresh trust/verification and unchanged environment
-inputs are required, otherwise guarded cleanup and a fresh stage remain necessary.
+No existing-candidate rerun-verification interface is added. Current collision,
+no-adoption and changed-input refusal remain: retain project work, then guarded
+cleanup and a fresh stage with explicit trust/verification provide the known-safe
+recovery. Candidate/container-home cleanup never deletes the retained clone.
 The proposal explicitly amends unconditional byte binding to a cooperative phase
 contract: pause ordinary writers, compare actual trusted inputs before/after each
 phase, refuse detected drift 68 before effects or 73 after effects, and report that

@@ -453,8 +453,9 @@ subpackages of T038, not additional task IDs or independent feature completion:
 The [revised execution proposal](contracts/local-stage-execution-profile.md)
 follows the owner's 2026-10-24 session priorities: independent writable/full-history
 clones, explicit non-overwriting result refs, preserved project container hooks and
-a restriction review. Clone/fetch and an unregistered receipt-bound refresh path
-are visible proposed amendments, not accepted interface changes. Cooperative
+a restriction review. Clone/fetch is a visible proposed amendment; no existing-
+candidate rerun-verification interface is added. Changed-input refusal, retained
+project work and guarded cleanup/fresh stage remain the recovery policy. Cooperative
 phase quiescence plus exact pre/post checks is the explicitly proposed
 resolution for writable exact-candidate/original-path execution: conditional
 evidence, never hashes-as-freeze. Exact-profile approval remains the gate;

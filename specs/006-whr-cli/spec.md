@@ -1325,9 +1325,11 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   and [technical proposal](contracts/local-stage-execution-profile.md). Fetch adds
   objects/new operation refs, not checkout/merge/current-branch changes; source
   worktree preservation does not imply all original Git bytes remain unchanged.
-  The proposed refresh path and explicit cooperative phase-binding amendment
-  (pause ordinary input writers, pre/post actual-byte checks, honest race limits)
-  require exact artifact review/approval before code; this note registers no flag
+  The explicit cooperative phase-binding amendment (pause ordinary input writers,
+  pre/post actual-byte checks, honest race limits) requires exact artifact approval
+  before code. No existing-candidate rerun-verification path is added: retain work,
+  refuse stale verification, then guarded cleanup/fresh stage provide recovery.
+  This note registers no flag
   or new task
   and preserves D1/D2, no-host-hook promote and FR-067.
 
