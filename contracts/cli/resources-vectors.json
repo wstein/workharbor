@@ -840,8 +840,8 @@
  "classification_order": [
   "empty: the empty string",
   "sign: first character '+' or '-' (so '-0', '+inf' and '-inf' are sign)",
-  "nonfinite: starts with nan, inf or infinity, any case",
-  "exponent: digits and dots followed by e or E (so '1e3GiB' is exponent)",
+  "nonfinite: the whole string is exactly nan, inf or infinity in any case, optionally followed by exactly MiB or GiB (case-sensitive units)",
+  "exponent: starts with at least one ASCII digit, followed by zero or more ASCII digits or dots, then e or E (so '1e3GiB' is exponent; '.e5' and 'e5' are syntax)",
   "syntax: not matching the relaxed lexical form 1*ASCII-DIGIT [ '.' 1*ASCII-DIGIT ] *ASCII-LETTER, which includes whitespace, non-ASCII digits, zero-width characters, a leading or trailing dot, commas and underscores; additionally a cpu value with letters, or a memory value with a dot, is syntax",
   "missing_unit (memory): digits only",
   "bad_unit (memory): digits followed by letters that are not exactly MiB or GiB (case-sensitive)",
