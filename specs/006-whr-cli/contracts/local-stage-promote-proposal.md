@@ -186,13 +186,13 @@ unchanged; this proposal does not promise one universal shell exit status.
 The fixed candidate name remains FR-068's `whr-anchorage-staging`, with
 `anchorage-staging=1`. A collision or unrelated candidate is refused, never adopted
 or removed by name. A failed/abandoned stage may leave its container, staging home
-or receipt; a rerun reports those resources rather than overwriting them. The
-proposed recovery is to inspect/preview removal, explicitly remove the verified
-staging resources through FR-067, and then stage again. Once #226 is accepted,
-`whr rm --local --role staging --dry-run` previews the selection; cleanup requires
-the normal confirmation, and deleting its home also requires `--volumes --force`.
-The preview must be reviewed because a role selector can match multiple containers.
-No name collision alone authorizes adoption, deletion or automatic retry.
+or receipt; a rerun reports those resources rather than overwriting them.
+For Anchorage candidates with `anchorage-home-*` homes,
+`whr rm --local --role staging` refuses with 68 under the recorded owner decision,
+even without --volumes. This proposal defines **no recovery cleanup path** for
+those candidates. That remains an open item for the separate FR-067(e) decision
+and task, not an operation unlocked by merging #226. No name collision alone
+authorizes adoption, deletion or automatic retry.
 
 There is an existing upstream safety conflict, not a cleanup exception:
 Anchorage's current home template is `anchorage-home-${devcontainerId}` for every
@@ -206,9 +206,10 @@ neither reopens that decision nor weakens the guard or prescribes a bypass.
 Stage/promote planning must not claim that this excluded cleanup path is available.
 
 No automatic cleanup/rollback may remove a primary, protected or shared home.
-Candidate cleanup uses the accepted FR-067 engine only after successful primary
-verification. Failure after primary replacement reports completed and remaining
-effects; recreating data is not a rollback promise. An interrupted promotion must
+FR-068 still requires candidate cleanup after successful primary verification,
+but that unimplemented outcome does not provide a recovery path for the protected
+Anchorage candidates above. Failure after primary replacement reports completed
+and remaining effects; recreating data is not a rollback promise. An interrupted promotion must
 report surviving primary/candidate IDs, homes and receipt validity, and require a
 fresh inspected preview before recovery. Detailed restart/recovery rules belong
 to the subsequent concrete plan, not an implied safe rerun.
