@@ -3,8 +3,8 @@ package localdocker
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -88,16 +88,12 @@ func (c Client) Drift(parent context.Context, ports doctor.Ports, source, select
 		result.Reason = "selection_undetermined"
 		return finish(nil)
 	}
-	sourceAbs, sourceErr := filepath.Abs(source)
-	local, err := filepath.EvalSymlinks(sourceAbs)
-	declared, derr := filepath.EvalSymlinks(selected.Labels["devcontainer.local_folder"])
-	if sourceErr != nil || err != nil || derr != nil || selected.Labels["devcontainer.local_folder"] == "" || local != declared {
-		result.Reason = "source_mismatch"
-		return finish(nil)
-	}
-	pins, err := workspacecfg.ReadBundlePins(ctx, source)
+	pins, err := workspacecfg.ReadBundlePinsForSource(ctx, source, selected.Labels["devcontainer.local_folder"])
 	if err != nil {
 		result.Reason = "pins_unavailable"
+		if errors.Is(err, workspacecfg.ErrBundleSourceMismatch) {
+			result.Reason = "source_mismatch"
+		}
 		return finish(err)
 	}
 	result = compareBundlePins(selected.ID, pins, selected.Mounts)

@@ -119,3 +119,72 @@ func TestBundlePinsCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestBundlePinsRetainsBoundRootAcrossAncestorSwap(t *testing.T) {
+	ctx := context.Background()
+	raw := bundleConfig(t)
+	originalPins, err := ReadBundlePins(ctx, pinDirectory(t, raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, digest, _ := strings.Cut(originalPins[0].Reference, "@sha256:")
+	otherDigest := strings.Repeat("b", 64)
+	if digest == otherDigest {
+		otherDigest = strings.Repeat("c", 64)
+	}
+	parents := []string{t.TempDir(), t.TempDir()}
+	for i, parent := range parents {
+		source := filepath.Join(parent, "source")
+		if err := os.MkdirAll(filepath.Join(source, ".devcontainer"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		data := raw
+		if i == 1 {
+			data = strings.ReplaceAll(raw, digest, otherDigest)
+		}
+		if err := os.WriteFile(filepath.Join(source, ".devcontainer/devcontainer.json"), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alias := filepath.Join(t.TempDir(), "current")
+	if err := os.Symlink(parents[0], alias); err != nil {
+		t.Fatal(err)
+	}
+	d, err := openDir(filepath.Join(alias, "source"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	// The source descriptor is A. Reopening the same spelling now reads B.
+	if err := os.Symlink(parents[1], alias+".next"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(alias+".next", alias); err != nil {
+		t.Fatal(err)
+	}
+	pins, err := readBoundBundlePins(ctx, d, filepath.Join(parents[0], "source"))
+	if err != nil || len(pins) != len(originalPins) || pins[0].Reference != originalPins[0].Reference {
+		t.Fatalf("held source identity lost after ancestor swap: got=%+v err=%v want=%s", pins, err, originalPins[0].Reference)
+	}
+}
+
+func TestBundlePinsRefusesReplacedLabelRootIdentity(t *testing.T) {
+	source := pinDirectory(t, bundleConfig(t))
+	replacement := pinDirectory(t, bundleConfig(t))
+	d, err := openDir(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer d.Close()
+	if err := os.Rename(source, source+".held"); err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(source + ".held")
+	if err := os.Rename(replacement, source); err != nil {
+		t.Fatal(err)
+	}
+	pins, err := readBoundBundlePins(context.Background(), d, source)
+	if err != ErrBundleSourceMismatch || pins != nil {
+		t.Fatalf("replacement root accepted: %+v %v", pins, err)
+	}
+}
