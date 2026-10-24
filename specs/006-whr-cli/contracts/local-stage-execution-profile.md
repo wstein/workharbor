@@ -111,6 +111,16 @@ Refuse unexpected source writes; after any executed hook this is 73, not rollbac
 or new trust. Candidate writes are disposable data and invalidate verification
 when they touch input regions. No stale host.env/smoke.env is silently sourced.
 
+**Unresolved execution-freeze detail:** these comparisons detect input mutation;
+they do not prevent a running candidate from changing bytes between checks. The
+concrete minimal alternative is a read-only mirror workspace mount after host
+initialization, with only home/tmp writable and Python source-cache writes disabled.
+That would prohibit candidate workspace editing in this initial profile, a visible
+restriction requiring owner profile approval and actual Anchorage smoke evidence.
+A writable candidate instead requires a proven separate sealed execution view;
+permission bits alone are insufficient. Do not claim byte-bound execution or S0
+completion until one mechanism and its output paths are selected and specified.
+
 ## Tool boundary, endpoint, environment and budgets
 
 Use the already selected official Dev Container CLI **0.89.0**, trusted installed
@@ -365,7 +375,7 @@ Read-only Anchorage references: [config](https://github.com/wstein/anchorage-wor
 [smoke](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/smoke-container.sh).
 Source inspection establishes feasibility constraints only; no runtime passed.
 
-Exact Git/output/tool admission still needs review before S0 approval; obtain
+Execution freeze and exact Git/output/tool admission still need review before S0 approval; obtain
 explicit approval of mirror/synthetic-Git and hook-free promotion semantics.
 Then red-first fake tools must cover source swaps/dirty submodules/ignored secrets,
 output freshness, exact argv/env, hook origins/order, no promotion host hook,
