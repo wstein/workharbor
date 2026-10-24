@@ -93,6 +93,11 @@ resolution within admitted roots and repeated enumeration/content checks reject
 inconsistent source capture. Private capture is coherent selected input, not a
 single-instant host snapshot. Exclude host credential stores, sockets/devices and
 ignored private files; an excluded required executable input refuses explicitly.
+Ignore status alone is not a secret classification or blanket exclusion: bounded
+noncredential ignored working data (including caches when explicitly inventoried)
+may be admitted in preview and retained in the clone. List all omitted optional
+data; never silently omit a required input. Credential/generated-output rules still
+apply to .env/credential stores and host.env/smoke.env respectively.
 Generated host.env/smoke.env are not blindly imported as ignored executable input.
 
 Canonical digest: `sha256:<64-lowercase-hex>` of UTF-8 canonical JSON, sorted keys
@@ -217,7 +222,8 @@ uses --host unix://SOCKET and empty private DOCKER_CONFIG; no ambient endpoint,
 context auth, credential helper or forged remote provider admission.
 
 CLI/host env from empty: recorded PATH, private HOME/TMPDIR/cache/user-data,
-DOCKER_CONFIG and fixed DOCKER_HOST, LANG=C, LC_ALL=C, TZ=UTC; only explicit
+DOCKER_CONFIG and fixed DOCKER_HOST; admit and record the caller's nonsecret
+LANG/LC_ALL/TZ values (including unset) rather than force a locale/timezone; only explicit
 nonsecret ANCHORAGE name/hostname/role/host-label/IP substitutions, with unset/empty
 preserved. ContainerEnv/remoteEnv come from image plus trusted config, not host PATH.
 Ordinary owner Git processes in the candidate are outside this managed env policy.
@@ -229,8 +235,10 @@ is a complete private receipt-derived `promote/devcontainer.json`: image is the
 verified immutable sha256 image ID, workspaceMount binds the original source,
 home/mounts/users/env/overrideCommand are the admitted primary values. P contains
 no build/dockerFile/dockerComposeFile/service, Features/additional Features,
-initializeCommand or UID-extension request; updateRemoteUserUID=false and the
-fixed CLI UID default never apply. Never pass the original build config as C.
+initializeCommand or UID-extension request; updateRemoteUserUID=false and
+--update-remote-user-uid-default never apply **on promote only**. Stage retains the
+configured/official UID update behavior, including its image extension when needed;
+record the resulting user IDs/image for verification. Never pass the original build config as C.
 Hash/store P in the receipt; recheck its bytes before each phase. No omission in
 a delta override is treated as deletion of a source property. P retains each
 trusted source lifecycle contribution once, accounting for contributions already
@@ -245,23 +253,27 @@ devcontainer read-configuration --workspace-folder W --config C --override-confi
 devcontainer up --workspace-folder W --config C --override-config O --docker-path D
   --mount-workspace-git-root false --mount-git-worktree-common-dir false
   --log-format json --log-level info L --user-data-folder U
-  --skip-post-create true --skip-post-attach true --default-user-env-probe none
-  --update-remote-user-uid-default never --omit-syntax-directive true
-  --gpu-availability none --include-configuration true --include-merged-configuration true
+  --skip-post-create true --skip-post-attach true --omit-syntax-directive true
+  --include-configuration true --include-merged-configuration true
 devcontainer run-user-commands --workspace-folder W --config C --override-config O
   --docker-path D --mount-workspace-git-root false --mount-git-worktree-common-dir false
   --log-format json --log-level info L --user-data-folder U --container-id FULL_ID
-  --skip-post-attach true --default-user-env-probe none
+  --skip-post-attach true
 docker --host unix://SOCKET exec --interactive --user REMOTE_USER
   --workdir CONTAINER_WORKSPACE FULL_ID bash -s -- CONTAINER_WORKSPACE
 ```
+
+Only promote up adds `--update-remote-user-uid-default never`. User-env probing
+follows trusted configuration/official defaults, including login-shell behavior;
+GPU negotiation follows admitted configuration and actual official-CLI capability.
+Record effective results; no blanket none restriction or host-env inheritance.
 
 Container hooks run through the official phase in stage **and promote**; no hook-free
 promotion default. Preserve containerUser/remoteUser, home, env/mount precedence,
 overrideCommand and all supported lifecycle kinds; postAttach remains suppressed
 only because this operation does not attach, and preview says so. Source/image
 metadata must not duplicate commands. UID-changing image extensions, build/pull/tag
-on promote refuse; driver inserts --pull never in validated native run. Final
+refuse only on promote; driver inserts --pull never in validated native run. Final
 primary .Image must equal the verified immutable candidate ID. Candidate project
 editing does not authorize a mutable image substitute.
 
@@ -540,21 +552,44 @@ No receipt is evidence of success; no receipt is also not evidence of no effects
 
 ## Restriction review against the owner's priorities
 
-| Constraint | Relevant issue / keep or drop |
-|---|---|
-| Read-only project / synthetic Git | Drop: defeats requested editing/full-history workflows; not required to protect host credentials. |
-| Normal commits/rebases/owner pushes | Keep enabled: ordinary user activity. whr never autonomously pushes or supplies credentials. |
-| Host config/hooks/credentials copied wholesale | Keep sanitation: avoids executing/relaying ambient host authorization; real Git objects/history are retained. |
-| No overwrite on result fetch | Keep: existing owner work/refs must survive; create-only operation refs, no checkout/FETCH_HEAD writes. |
-| Fresh trust on changed executed bytes | Keep D1: prevents stale-source approval; refresh and cooperative phase binding are explicit proposed amendments, never hashes-as-freeze claims. |
-| Original source unchanged during candidate work | Keep: candidate is independent clone; promotion's explicit object/ref additions are separately previewed. |
-| Zero promote container hooks | Drop: conflicts with owner priority; preserve trusted project hooks on original home. |
-| No promote host hooks / immutable image | Keep settled semantics: no unexpected host execution or rebuilding an unverified image. |
-| Arbitrary privilege/runArgs/features bans | Drop blanket security claims against Docker owner. Admit actual official-CLI semantics with explicit effects; report real unsupported resource/ownership/capability cases. |
-| Version-only Node 26/Docker 27/API gates | Drop invented thresholds; retain pinned companion and actually needed/tested capabilities. |
-| Bounded files/objects/deadlines | Keep resource/latency limits, never silently truncate history or discard dirty work; tune with measured intended-tree evidence. |
-| Unix endpoint/owner/home/deletion guards | Keep existing native boundary and FR-067; labels remain usability, not authorization. |
-| Hostile same-UID/Docker-user isolation | Drop claim: owner already has Docker exec. No new generic sandbox or external-tool hermeticity prerequisite. |
+| Restriction | Threat | Prevents | Keep/Drop/Settled |
+|---|---|---|---|
+| Read-only candidate project | None justifying a permanent ban | Ordinary project editing | Drop; owner requires writable clone. |
+| Synthetic Git IDs/history | No credential threat requires altered history | Normal commits/rebases/history | Drop; preserve real full-history objects. |
+| Ban on owner Git pushes/configuration | None; owner action is outside managed Git | Normal user Git work | Drop; owner may configure/push. |
+| Autonomous whr remote push | Unrequested remote mutation/auth use | Publishing owner code without instruction | Keep; result fetch is local only. |
+| Copy host config/hooks/helpers wholesale | Ambient command execution/credential relay | Host authorization entering candidate/managed export | Keep sanitation; objects/history remain. |
+| Ignored private/credential working files | Secret copying across host/container boundary | Implicit transfer of .env/credential stores | Keep explicit exclusion; required excluded inputs refuse. |
+| Blanket exclusion of nonprivate ignored data | No threat follows from Git ignore status alone | Useful bounded caches/data in clone | Drop blanket ban; inventory admitted/omitted data. |
+| Existing generated host.env/smoke.env as executable input | Unvalidated shell syntax/stale provenance | Sourcing unbound generated bytes | Keep explicit validation/publication/admission rules. |
+| Candidate admin symlinks/alternates/executable config on export | Container-to-host command/path redirection | Host commands and foreign object-store reads | Keep config-free bounded reader; normal user Git remains possible. |
+| whr checkout/reset/merge/existing-ref/FETCH_HEAD writes | Owner work overwritten by transfer | Activating candidate code or moving owner refs | Keep create-only result refs; trusted hook effects are separate. |
+| Fresh digest trust on changed executed inputs | Stale source approval | Untrusted replacement hook/test bytes | Settled D1; proposed refresh does not waive it. |
+| Refresh with changed container hooks/environment | Verification of setup that never ran | Rebinding a completed stage to new hooks | Keep; fresh stage must execute changed hook inputs. |
+| Original source binding must match | Wrong workspace or stale execution version | Promotion against unrelated/changed original | Settled interaction; results do not change original checkout. |
+| Zero promote container hooks | None justifying the owner-rejected ban | Normal project lifecycle | Drop; preview/run trusted project hooks. |
+| Promote host hooks | Unexpected additional host execution | Reinitializing host resources during promote | Settled no-host-hook direction. |
+| Promote image build/pull/tag/UID extension | Replacing verified image with different bytes | Implicit rebuild or UID-derived new image | Settled immutable-image requirement; keep promote-only UID never. |
+| Stage UID-update prohibition | No general threat; different host UID can need it | Official UID mapping/writable clone ownership | Drop; honor config/official default and verify resulting image/user. |
+| Forced user-env-probe none | No general threat in owner-trusted container shell | Configured/login-shell hook environment | Drop; honor configured/official behavior and record it. |
+| Forced GPU availability none | No identified threat | Admitted GPU capability | Drop; use actual CLI/provider capability, no silent approximation. |
+| postAttach suppression | None; this operation has no attach event | Running attach-only lifecycle code at the wrong event | Keep proposed event semantics, not a security or settled decision. |
+| Cooperative no-input-writer phase condition | Unobserved concurrent executable-byte changes | Claiming exact inputs from hashes alone | Keep proposed conditional-binding assumption; not enforced isolation. |
+| Fixed C/UTC host locale/timezone | No identified threat | Caller locale-dependent host facts | Drop forced values; record admitted nonsecret locale/timezone. Container locale stays configured. |
+| Credential-free initial remote URLs | Embedded host authentication leakage | URL credentials copied into clone | Keep initial sanitation; owner may later configure their own auth. |
+| One fixed candidate per daemon | Collision/ambiguous lifecycle ownership | Multiple candidates bypassing fixed selector | Settled FR-068. |
+| Adoption/retry of foreign or uncertain attempts | Wrong-resource mutation/duplicate effects | Name-based ownership inference | Settled no-adoption/retry and durable operation boundaries. |
+| File/object/count/depth bounds | Unbounded storage/resource consumption | Unbounded capture without truncating history | Keep proposed explicit caps; over-limit refuses before effects. |
+| Phase/total deadlines and output caps | Unbounded execution/output resource use | Indefinite operations/raw-output retention | Keep proposed bounds with honest partial outcomes. |
+| Local Unix endpoint and owner scope | Endpoint drift/foreign resource mutation | Implicit remote auth/routing | Settled local admission boundary. |
+| Protected/shared/foreign home refusal | Data loss | Removing primary/tool/shared data | Settled FR-067 in full, including Anchorage prefix. |
+| Explicit --volumes --force and confirmation | Unconsented home deletion | Cleanup inferred from --yes/trust alone | Settled deletion-consent direction. |
+| Private state ownership/modes/no symlinks | State path substitution/accidental disclosure | Misbinding local intent/receipt/resources | Keep local integrity boundary; no hostile same-UID claim. |
+| Retain clone until explicit owner removal | Loss of uncommitted/untransferred work | Cleanup silently deleting project results | Keep data-preservation policy, not an extra operation gate. |
+| CLI 0.89 and existing Git baseline | Unsupported command/contract behavior | Claiming untested tool semantics | Keep actual pinned/baseline contract; no invented Node/Docker thresholds. |
+| Fixed minimal managed host environment | Ambient auth/endpoint/config inheritance | Undisclosed host execution inputs | Keep explicit allowlist; container env follows config. |
+| Blanket privilege/runArgs/Features ban | No general threat against Docker owner | Admitted official Dev Container semantics | Drop; report actual capability/ownership limits. |
+| Hostile same-UID/Docker-user isolation/hermetic tools | No such product boundary | Owner Docker exec or trusted external dependencies | Drop claim; do not invent a new sandbox prerequisite. |
 
 ## Evidence and remaining gate
 
