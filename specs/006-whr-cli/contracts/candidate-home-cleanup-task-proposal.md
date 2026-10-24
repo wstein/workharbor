@@ -1,7 +1,7 @@
 # Proposed task: new candidate allocation and cleanup consent
 
 Status: **proposal only**, 2026-10-24. T040 is unused at proposal base
-`870899a6ec2238d78460aaace313ef2f721442d1`; reserve it here only. This is not an
+`d55cd6b413512cd88c25cfbcabdd403ea1935aba`; reserve it here only. This is not an
 approved task entry, execution order or completion claim. Authoritative
 [tasks and dependencies](../tasks.md) remain unchanged.
 
@@ -29,15 +29,15 @@ Fake tools must record exact actions and prove refusals before primary replaceme
 | Proposed test | Required evidence |
 |---|---|
 | `TestCandidateHomeNewOpaqueName` | Random 128-bit/32-lowercase-hex ID, isolated mount and receipt-bound daemon/name/IDs; no source/user content. |
-| `TestCandidateHomeCollisionAndReservationRace` | Existing volume/candidate/retained intent and create-or-return-existing races refuse68; no adoption, automatic retry or competing-resource deletion; no false exclusivity claim. |
+| `TestCandidateHomeCollisionAndReservationRace` | Existing volume/candidate/retained intent and create-or-return-existing races refuse 68; no adoption, automatic retry or competing-resource deletion; no false exclusivity claim. |
 | `TestCandidateHomeOnePerDaemon` | Different source/primary cannot bypass fixed name/label or interrupted-attempt collision. |
-| `TestCandidateCleanupPreservesWholeAnchorageGuard` | Staging/temp exact-ID/role/label, container-only and deletion flags all retain protected-prefix refusal68/zero effects; no existing resource renamed. |
-| `TestCandidateCleanupPrimarySharedAndProtectedRefused` | New prefix never bypasses primary/shared (running or stopped), read-only, `/opt/bdock` descendants or `bundledock-*` protection; foreign/missing metadata refuses68. |
-| `TestLocalPromoteExplicitDeletionOptionsMatrix` | Missing either flag refuses70 even with yes; both flags still require confirmation/yes; automation never manufactures human consent or deletion options. |
-| `TestLocalPromoteDryRunDeletionConsentMatrix` | No flags preview0 honestly requires apply consent; volumes alone70; both flags preview0; zero Docker/hook/build/receipt effects. |
-| `TestLocalPromoteCleanupPreflightBeforePrimaryReplacement` | Fresh complete cleanup preflight before stopping/recreating primary; drift refuses68, absent consent70; preserve original primary home. |
+| `TestCandidateCleanupPreservesWholeAnchorageGuard` | Staging/temp exact-ID/role/label, container-only and deletion flags all retain protected-prefix refusal 68/zero effects; no existing resource renamed. |
+| `TestCandidateCleanupPrimarySharedAndProtectedRefused` | New prefix never bypasses primary/shared (running or stopped), read-only, `/opt/bdock` descendants or `bundledock-*` protection; foreign/missing metadata refuses 68. |
+| `TestLocalPromoteExplicitDeletionOptionsMatrix` | Missing either flag refuses 70 even with yes; both flags still require confirmation/yes; automation never manufactures human consent or deletion options. |
+| `TestLocalPromoteDryRunDeletionConsentMatrix` | No flags preview 0 honestly requires apply consent; volumes alone 70; both flags preview 0; zero Docker/hook/build/receipt effects. |
+| `TestLocalPromoteCleanupPreflightBeforePrimaryReplacement` | Fresh complete cleanup preflight before stopping/recreating primary; drift refuses 68, absent consent 70; preserve original primary home. |
 | `TestLocalPromoteCleanupAfterVerifiedPrimary` | Verified immutable image; primary verification before candidate-container removal before home deletion; preview exact targets/all mounts and pane loss. |
-| `TestLocalPromoteCleanupLateDriftPartialFailure` | Late sharing/drift, failed verification/removal and uncertain deletion report73 with attempted/applied/remaining inventory; no unsafe deletion/retry/rollback or false success. |
+| `TestLocalPromoteCleanupLateDriftPartialFailure` | Late sharing/drift, failed verification/removal and uncertain deletion report 73 with attempted/applied/remaining inventory; no unsafe deletion/retry/rollback or false success. |
 | `TestCandidateHomeOrphanRecoveryNotClaimed` | Lost receipt, partial allocation and detached residual home retained/reported; restaging blocked, container-selector rm not advertised as orphan recovery. |
 | `TestCandidateCleanupJSONAndEscaping` | Closed schema, canonical IDs, escaped hostile output, no secrets; preview/apply parity and existing exit categories. |
 
