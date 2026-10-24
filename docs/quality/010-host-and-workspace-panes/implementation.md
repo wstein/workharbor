@@ -87,3 +87,26 @@ authorized scope, independent optional checks and the prepared
 remain UNVERIFIED. P3's nonblocking review notes remain visible in its review;
 F1's stale derived/default notes and spec reconciliation belong to T031, without
 reopening any settled decision or blocking accepted P3 configuration scope.
+
+## P4 acceptance and P3 follow-up
+
+Owner merged [P4 PR #223](https://github.com/wstein/workharbor/pull/223)
+on 2026-10-24 at `0409d9f14422b4763cbca7b9d55ecea3ffb19139`. Accepted head
+`950c07ca8ee2c9a61a7ed9e7601d0ae2919c2440` has independent code/QA CLEAR,
+[Opus delta CLEAR](https://github.com/wstein/workharbor/pull/223#pullrequestreview-5636039028)
+and [green CI](https://github.com/wstein/workharbor/actions/runs/40048439416).
+All 37 standalone optional plugin tests passed. This closes T029's publication,
+review, CI and merge scope, independently of installation and host acceptance.
+
+Owner also merged [P3 follow-up #224](https://github.com/wstein/workharbor/pull/224)
+at `628bc4ded0f96ed0ffebc501eae833fe4e2d3e5f`, accepted head
+`7ac1ba2d88aa457fdf727e7f13f7743ec16d207d`. It closes P3's remaining review
+notes, records unchanged approval markers, and explicitly separates implementation
+merges from approval of Proposed ADR 0015. See [P3 evidence](p3.md).
+
+T018/T030 remain UNVERIFIED: the owner requested instructions for SC-009 rather
+than supplying observed A/B results. The prepared base/plugin runbooks remain
+unchanged; no individual key, detach, resize, label, tint or SSH-reconnect result
+is inferred from merge, CI or the owner's earlier “done”. T031 stays open until
+the applicable owner observations are accepted; the absent remote SC-007 consumer
+also remains a distinct limitation. No whole-feature completion is claimed.
