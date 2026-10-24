@@ -88,7 +88,7 @@ and never runs a hook, smoke, pull or build; read-only collision checks are allo
 ## Compatibility with merged removal and failure ordering
 
 Checked against merged #226 foundation `ae9cbb7410df42e62687a476ccdd6f6d1abb25da`,
-present in proposal base `870899a6ec2238d78460aaace313ef2f721442d1`:
+present in proposal base `d55cd6b413512cd88c25cfbcabdd403ea1935aba`:
 
 - [The removal planner](../../../apps/whr/internal/localdocker/removal_plan.go)
   rejects staging/temp home mounts named `anchorage-home-*` or mounted by a
