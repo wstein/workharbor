@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: EUPL-1.2
 
-// Package localdocker provides read-only local workspace discovery (006 FR-066).
+// Package localdocker provides bounded local discovery and guarded removal (006 FR-066/067).
 package localdocker
 
 import (
