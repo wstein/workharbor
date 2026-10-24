@@ -454,9 +454,12 @@ The [revised execution proposal](contracts/local-stage-execution-profile.md)
 follows the owner's 2026-10-24 session priorities: independent writable/full-history
 clones, explicit non-overwriting result refs, preserved project container hooks and
 a restriction review. Clone/fetch and an unregistered receipt-bound refresh path
-are visible proposed amendments, not accepted interface changes. Exact-candidate
-concurrent-writer and promote hook/path byte-binding remain precise S0 conflicts;
-this reference supplies no product authorization, task edge or completion claim.
+are visible proposed amendments, not accepted interface changes. Cooperative
+phase quiescence plus exact pre/post checks is the explicitly proposed
+resolution for writable exact-candidate/original-path execution: conditional
+evidence, never hashes-as-freeze. Exact-profile approval remains the gate;
+implementation fixtures follow approval. No product authorization, task edge or
+completion claim follows this reference.
 
 S0 must resolve engineering details rather than silently introducing requirements
 in source. In particular: source coverage must include executed build/hook/smoke
