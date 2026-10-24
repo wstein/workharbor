@@ -42,6 +42,75 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     if tags[:tls], do: start_tls(ctx), else: ctx
   end
 
+  test "owner client selects guarded socket without longpoll or embedded credentials" do
+    source = File.read!(Path.expand("../../assets/js/app.js", __DIR__))
+    assert source =~ ~r/new LiveSocket\(["']\/owner\/live["']/
+    refute source =~ "longPollFallbackMs"
+    refute source =~ "localStorage.setItem(\"credential"
+    refute source =~ "sessionStorage.setItem(\"credential"
+  end
+
+  test "owner assets are served narrowly without loosening authentication policies" do
+    csp =
+      "default-src 'none'; script-src 'none'; form-action 'self'; " <>
+        "frame-ancestors 'none'; base-uri 'none'"
+
+    for path <- ["/assets/js/app.js", "/assets/css/app.css"] do
+      conn =
+        Plug.Test.conn(:get, "https://localhost" <> path)
+        |> Plug.Conn.put_req_header("host", "localhost")
+
+      response = Endpoint.call(conn, Endpoint.init([]))
+      assert response.status == 200
+      refute response.resp_body == ""
+      refute response.resp_body =~ "data:image"
+      assert_owner_asset_headers(response, csp)
+    end
+
+    # Unknown and static-adjacent paths must return a denial without raising.
+    for {path, statuses} <- [
+          {"/images/logo.svg", [403, 404]},
+          {"/robots.txt", [403, 404]},
+          {"/favicon.ico", [403, 404]},
+          {"/assets/js/app.js.map", [403, 404]},
+          {"/assets/css/app.css.map", [403, 404]},
+          {"/assets/js/app.js/extra", [403, 404]},
+          {"/assets/../robots.txt", [400, 403, 404]},
+          {"/assets/%2e%2e/robots.txt", [400, 403, 404]},
+          {"/assets/", [400, 403, 404]},
+          {"/assets/js/", [400, 403, 404]}
+        ] do
+      conn =
+        Plug.Test.conn(:get, "https://localhost" <> path)
+        |> Plug.Conn.put_req_header("host", "localhost")
+
+      response = Endpoint.call(conn, Endpoint.init([]))
+      assert response.status in statuses, "unexpected asset admission for #{path}"
+    end
+
+    for path <- ["/login/owner", "/api/v1/auth/status", "/owner/auth"] do
+      conn =
+        Plug.Test.conn(:get, "https://localhost" <> path)
+        |> Plug.Conn.put_req_header("host", "localhost")
+
+      response = WorkHarborWeb.Security.call(conn, [])
+      assert_owner_asset_headers(response, csp)
+    end
+  end
+
+  defp assert_owner_asset_headers(conn, csp) do
+    for {name, value} <- [
+          {"cache-control", "no-store"},
+          {"x-content-type-options", "nosniff"},
+          {"x-frame-options", "DENY"},
+          {"referrer-policy", "no-referrer"},
+          {"strict-transport-security", "max-age=31536000"},
+          {"content-security-policy", csp}
+        ] do
+      assert Plug.Conn.get_resp_header(conn, name) == [value]
+    end
+  end
+
   # Each profile is evaluated from the real runtime file; the listener tests use
   # these exact adapter child specs, so changing runtime protocol options is caught.
   defp runtime(ctx, env, port) do

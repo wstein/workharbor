@@ -32,8 +32,13 @@ defmodule WorkHarborWeb.AuthenticationTest do
   defp cookie(conn, name), do: conn.resp_cookies[name].value
   defp jar(pairs), do: Enum.map_join(pairs, "; ", fn {k, v} -> k <> "=" <> v end)
 
-  defp csrf(conn),
-    do: Regex.run(~r/name="_csrf_token" value="([^"]+)"/, conn.resp_body) |> Enum.at(1)
+  defp csrf(conn) do
+    match =
+      Regex.run(~r/name="_csrf_token" value="([^"]+)"/, conn.resp_body) ||
+        Regex.run(~r/name="csrf-token" content="([^"]+)"/, conn.resp_body)
+
+    Enum.at(match, 1)
+  end
 
   defp primary(c, kind) do
     page = req(:get, "/login/" <> kind)
@@ -886,11 +891,14 @@ defmodule WorkHarborWeb.AuthenticationTest do
   test "owner root and no script controls install read context and logout independently", c do
     owner = primary(c, "owner")
 
-    page =
-      req(:get, "/", "", [
-        {"cookie", jar([{"__Host-workharbor_owner", cookie(owner, "__Host-workharbor_owner")}])}
-      ])
+    headers = [
+      {"cookie", jar([{"__Host-workharbor_owner", cookie(owner, "__Host-workharbor_owner")}])}
+    ]
 
+    root = req(:get, "/", "", headers)
+    assert root.status == 303
+    assert get_resp_header(root, "location") == ["/owner"]
+    page = req(:get, "/owner/auth", "", headers)
     assert page.status == 200
     assert page.resp_body =~ "Sign out of owner management"
     assert page.resp_body =~ "Open read-only dashboard"

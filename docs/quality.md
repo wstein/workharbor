@@ -132,3 +132,58 @@ the S001 HTTP1-only mitigation. Full canonical Python is deferred to the combine
 head; provider, browser stale-display, five-workspace/eight-attachment load, installer,
 release and complete installable-pilot acceptance remain pending. Feature001 markers
 and frozen history are unchanged; only Feature006 T008 is newly checked.
+
+## W1 owner shell test-first checkpoint (2026-10-24)
+
+The owner accepted the exact frontend plan at `7c64789c` in
+[PR #242](https://github.com/wstein/workharbor/pull/242), merged at
+`f2d96805383410f401826877b634d2c03780e977`, and authorized W1 after merge.
+The initial test checkpoint used main `54c4b271745fe78800a523607dd00a9124d22f01`;
+[PR #251](https://github.com/wstein/workharbor/pull/251) records its current exact
+head and CI evidence. Option A is settled: future pages and HTTP controllers share
+one authorized read service. W1 has a links-only overview and no domain reads.
+
+The test-first checkpoint binds 18 required ExUnit identities covering hostile
+FR-022/HTML flash text, wrong-kind credentials inside the owner cookie, rejected
+owner-ID injection, mounted expiry/revocation, first-denial stopping, preserved
+controller forms, root redirect, exact route verbs, inactive future links, forged
+events, unchanged database/audit, debug-level payload logs, strict headers/CSP,
+narrow assets and actual generated CSS icon policy. Existing authentication
+coverage follows the forms to `/owner/auth` and accepts CSRF from controller forms
+or the LiveView meta element. Tests assert existing route/component behavior before
+connection, without absent product modules as compile-time dependencies. No product
+code has changed.
+
+[The initial test review](https://github.com/wstein/workharbor/pull/251#pullrequestreview-5640119134)
+identified assertion/coverage defects, including the LF check against structural
+HEEx whitespace. Corrections inspect only unique payload spans, preserve visible
+placeholder checks, and strengthen route/header/asset/logging/escaping coverage.
+Source was restructured by hand to conventional formatter style. That is not a
+native formatter pass: CI may still stop at `mix format --check-formatted` before
+semantic tests. The review's acceptance verdict is separate from future W1 runtime
+acceptance.
+
+Actual local results: `python3 scripts/check_repo.py`, changed-test `typos` and
+`git diff --check` passed. The initial scoped `MIX_ENV=test mix test` invocation for
+`owner_shell_test.exs`, `owner_auth_test.exs`, `authentication_test.exs` and
+`transport_security_test.exs` with `--warnings-as-errors --seed 0` exited **127**:
+`mix: command not found`. Mix/Elixir/Erlang were absent from PATH and inspected
+known installed-tool locations; no installation/download was attempted. Semantic
+RED outcomes, compilation and formatter results remain **unverified**, with
+associated PR CI as the next evidence source. Predicted assertion failures include
+the missing LiveView marker, root response, unescaped payload controls, scaffold
+socket path, CSP and data-image icon CSS. Existing revoked/expired admission and
+foreign-query cases are regression guards expected to pass on main, not RED proof.
+The database snapshot detects writes; only the static source boundary guards domain
+reads. Process termination and stable audit counts check observable revocation
+stopping without claiming inspection of queued state in an already-dead process.
+
+The negative asset contract requires unknown/static-adjacent requests to return a
+denial without raising; literal and encoded dot segments both permit 400. During
+W1 implementation, flash dismissal must use client-only `JS.hide`, or the shell
+must omit `flash_group`; its existing `JS.push("lv:clear-flash")` does not qualify
+for an exception to the unchanged no-push assertion.
+
+No standalone build, browser, host/runtime operation or full `make check` was run.
+Implementation waits for the separate TDD/RED-head instruction; no W1 or T012
+completion is claimed.
