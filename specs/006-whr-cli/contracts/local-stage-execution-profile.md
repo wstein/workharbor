@@ -410,8 +410,20 @@ Future source PR adds schemas/command table together, not in this docs PR.
 | repository | source_path string; clone_path string; head_oid string; object_format enum(sha1,sha256); dirty bool; uncommitted_retained bool |
 | resultRef | repository_path string; export_ref string; target_ref string; oid string; state enum(planned,created,uncertain,remaining) |
 | verification | policy enum(health,smoke,health_and_smoke); status enum(not_requested,missing,passed,failed,stale); binding_mode const(cooperative_quiescence); quiescence enum(caller_acknowledged,not_acknowledged); pre_input_digest digest; post_input_digest nullable digest; image_id digest; input_digest digest; observed_at UTC timestamp; output_digest nullable digest |
-| effect | action enum(create_volume,host_initialize,build,create_container,container_hooks,smoke,import_objects,create_result_refs,prepare_primary,remove_preparation_runtime,stop_primary,remove_primary,create_primary,remove_candidate,remove_home); target resource; state enum(planned,attempted,observed,uncertain,remaining) |
-| step | action enum(inspect_retained,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable resource; instruction string |
+| repositoryBinding | source_path string; git_dir string; common_dir string (physically resolved original repository paths); object_format enum(sha1,sha256); original_head_oid oid; binding_digest sha256 digest |
+| gitObjectsTarget | kind const(git_objects); repository repositoryBinding; export_path string; object_manifest_digest sha256 digest; object_count integer 0..1000000 |
+| refCreate | name string (valid full operation ref, no control bytes); oid oid; expected_absent const(true) |
+| gitRefsTarget | kind const(git_refs); repository repositoryBinding; creates array(refCreate), max 1024 |
+| effectTarget | exactly one of resource, gitObjectsTarget or gitRefsTarget, discriminated by kind; each variant is closed |
+| effect | action enum(create_volume,host_initialize,build,create_container,container_hooks,smoke,import_objects,create_result_refs,stop_primary,remove_primary,create_primary,remove_candidate,remove_home); target effectTarget; state enum(planned,attempted,observed,uncertain,remaining) |
+| step | action enum(inspect_retained,restage_after_cleanup,run_stage_with_smoke,remove_candidate_with_guarded_rm,owner_reconcile); target nullable effectTarget; instruction string |
+
+OID is exactly 40 lowercase hex for sha1 or 64 for sha256, matching its repository.
+Git import effects require gitObjectsTarget; ref publication requires gitRefsTarget;
+Docker effects require resource. The object manifest is a private sorted OID/size
+inventory bound by its digest, not an arbitrary payload. Full original repository
+binding and create OIDs remain in the journal/receipt so Git effects have no
+Docker-only target gap.
 
 Private receipt adds exactly version=1, operation_id, sequence, previous_hash,
 state, endpoint_identity, original_source, input_manifest_digest, tool_manifest,
