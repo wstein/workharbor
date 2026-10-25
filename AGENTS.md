@@ -42,3 +42,9 @@ product dependencies. Update the authoritative spec/ADR when decisions change.
 Keep GitHub comments short, precise and focused: lead with the result or action,
 and link durable evidence. Follow the tracker-comment guidance in
 [WORKFLOW.md](WORKFLOW.md).
+
+Write all English text in US spelling: documentation, comments, commit messages, pull
+request text and identifiers (color, behavior, license, canceled, catalog, labeled,
+analyzed, organization). This applies to new and changed text. Do not convert existing
+British spellings inside an unrelated change; a separate sweep does that. Keep exact
+quotations, testdata, goldens and external names unchanged.
