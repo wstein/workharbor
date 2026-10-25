@@ -1362,7 +1362,16 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageResultOriginalBindingRejectsMatchingSymbolicResult",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageResultsRefuseDirectoryFileConflictBeforeEffects",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageResultSuccessfulExportStorageIsTemporary",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageResultsRefuseExistingOperationNamespaceConflict"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageResultsRefuseExistingOperationNamespaceConflict",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteRecoveryRefusesOverlappingForeignMounts",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteRecoveryAllowsNonOverlappingOrReadOnlyBinds",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteRecoveryRechecksBothConfigurationsBetweenActions",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteClientFailureRequiresFreshRunningObservation",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteReapedExitOneWithLiveReplacementIsConditional",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteProjectsNativeRetentionPolicy",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteRefusesUnsafeOriginalNativePolicy",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteRechecksNativePolicyBeforeEffects",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteAllowsDisabledNativePolicy"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
