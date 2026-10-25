@@ -121,16 +121,26 @@ Before these corrections, all three owned commits were purely rebased from
 for all three commits. Final exact-head review and independent QA remain pending
 at this author checkpoint; the historical review is not approval of this tree.
 
-The review's M6 probe identified an open unsafe-path/symlink refusal-reason gap:
+The review's M6 probe identified an open unsafe-path refusal-reason gap:
 the older `TestInitDevcontainerPathTraversalRefused` and
 `TestInitDevcontainerSymlinkRefused` assert exit codes only. In particular, an
-unrelated downstream invalid-configuration refusal can preserve exit 68 while
-a symlink guard is absent, and M6 survived. These older tests therefore do not
-prove the intended refusal reason or complete path-safety acceptance. This
-preservation-only change leaves that gap open, with a follow-up to strengthen
-the old refusal tests using a source-valid hostile fixture and reason-specific
-assertions. It does not edit their file during parallel authoring or claim all
-T033 acceptance is complete.
+unrelated downstream manifest validation can preserve exit 64 while the
+relative-path rule is relaxed, and M6 survived with a message naming unrelated
+flags. Those tests therefore did not prove the intended refusal reason or
+complete path-safety acceptance. The preservation-only change left that gap
+open during parallel authoring and deferred reason-specific assertions to a
+follow-up. It did not claim all T033 acceptance was complete. This corrects
+the historical M6 description per
+[review F7](https://github.com/wstein/workharbor/pull/255#pullrequestreview-5640605892).
+
+On 2026-10-25, the follow-up strengthened both older tests: traversal must
+report `--devcontainer needs a safe relative file path` with exit 64;
+leaf/ancestor symlinks must report the unsafe-target discovery reason with
+exit 68. A compiled overlay admitting only `./custom.json` through
+`relativePath` survives the old traversal test, then fails the new assertion:
+the command still exits 64, but reports downstream manifest validation naming
+the wrong flags. Unchanged production source passes both tests. This closes
+the specific refusal-reason gap without claiming full T033 acceptance.
 
 The portable metadata observations also have a deliberate limit: an in-place
 write of identical bytes that preserves mode and inode and restores mtime is

@@ -73,7 +73,7 @@ func TestInitDevcontainerPathTraversalRefused(t *testing.T) {
 	for _, path := range []string{"../out.json", "a/../out.json", "/tmp/out.json", "./custom.json", "a//b.json", "", "a\\b.json", ".git/config"} {
 		dir, _ := customDevcontainer(t)
 		got := run(t, nil, "init", dir, "--dry-run", "--json", "--devcontainer="+path)
-		if got.code != 64 {
+		if got.code != 64 || !strings.Contains(got.err, "--devcontainer needs a safe relative file path") {
 			t.Fatalf("%q: %+v", path, got)
 		}
 		if _, err := os.Stat(filepath.Join(dir, "workharbor.json")); !os.IsNotExist(err) {
@@ -98,7 +98,7 @@ func TestInitDevcontainerSymlinkRefused(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := run(t, nil, "init", dir, "--dry-run", "--json", "--devcontainer="+selected)
-		if got.code != 68 {
+		if got.code != 68 || !strings.Contains(got.err, "init target is unsafe, unreadable or changed while it was inspected") {
 			t.Fatalf("symlink accepted: %+v", got)
 		}
 	}
