@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const stageContainerProjection = `{"Id":{{json .Id}},"Name":{{json .Name}},"ImageID":{{json .Image}},"ConfigImage":{{json .Config.Image}},"User":{{json .Config.User}},"Hostname":{{json .Config.Hostname}},"State":{{json .State.Status}},"Running":{{json .State.Running}},"Healthcheck":{{json .Config.Healthcheck}},"Health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}null{{end}},"Labels":{{json .Config.Labels}},"Mounts":{{json .Mounts}},"Environment":{{json .Config.Env}},"Entrypoint":{{json .Config.Entrypoint}},"Command":{{json .Config.Cmd}}}`
+const stageContainerProjection = `{"Id":{{json .Id}},"Name":{{json .Name}},"ImageID":{{json .Image}},"ConfigImage":{{json .Config.Image}},"User":{{json .Config.User}},"Hostname":{{json .Config.Hostname}},"State":{{json .State.Status}},"Running":{{json .State.Running}},"AutoRemove":{{json .HostConfig.AutoRemove}},"RestartPolicy":{{json .HostConfig.RestartPolicy}},"Healthcheck":{{json .Config.Healthcheck}},"Health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}null{{end}},"Labels":{{json .Config.Labels}},"Mounts":{{json .Mounts}},"Environment":{{json .Config.Env}},"Entrypoint":{{json .Config.Entrypoint}},"Command":{{json .Config.Cmd}}}`
 const stageImageProjection = `{"Id":{{json .Id}},"Metadata":{{json (index .Config.Labels "devcontainer.metadata")}},"Volumes":{{json .Config.Volumes}}}`
 const stageVolumeProjection = `{"Name":{{json .Name}},"Driver":{{json .Driver}},"CreatedAt":{{json .CreatedAt}},"Labels":{{json .Labels}}}`
 
@@ -30,6 +30,8 @@ func readStageContainer(ctx context.Context, r *stageRunner, id string) (stageCo
 		ID                                                string `json:"Id"`
 		Name, ImageID, ConfigImage, User, Hostname, State string
 		Running                                           bool
+		AutoRemove                                        bool
+		RestartPolicy                                     stageRestartPolicy
 		Healthcheck                                       *struct{ Test []string }
 		Health                                            *string
 		Labels                                            map[string]string
@@ -44,7 +46,10 @@ func readStageContainer(ctx context.Context, r *stageRunner, id string) (stageCo
 	if raw.Health != nil && *raw.Health != "starting" && *raw.Health != "healthy" && *raw.Health != "unhealthy" {
 		return result, stageConflict("container health observation unsupported")
 	}
-	result = stageContainerDetails{ID: raw.ID, Name: raw.Name, ImageID: raw.ImageID, ConfigImage: raw.ConfigImage, User: raw.User, Hostname: raw.Hostname, State: raw.State, Running: raw.Running, Healthcheck: healthcheck, Health: raw.Health, Labels: raw.Labels, Mounts: raw.Mounts, Environment: raw.Environment, Entrypoint: raw.Entrypoint, Command: raw.Command}
+	if raw.RestartPolicy.Name == "" {
+		raw.RestartPolicy.Name = "no"
+	}
+	result = stageContainerDetails{AutoRemove: raw.AutoRemove, RestartPolicy: raw.RestartPolicy, ID: raw.ID, Name: raw.Name, ImageID: raw.ImageID, ConfigImage: raw.ConfigImage, User: raw.User, Hostname: raw.Hostname, State: raw.State, Running: raw.Running, Healthcheck: healthcheck, Health: raw.Health, Labels: raw.Labels, Mounts: raw.Mounts, Environment: raw.Environment, Entrypoint: raw.Entrypoint, Command: raw.Command}
 	if result.Labels == nil {
 		result.Labels = map[string]string{}
 	}

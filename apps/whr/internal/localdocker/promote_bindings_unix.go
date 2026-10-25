@@ -134,6 +134,12 @@ func (p *LocalPromotion) checkArtifactsAndBindings(ctx context.Context, metadata
 		if err != nil {
 			return err
 		}
+		if primary.AutoRemove {
+			return stageConflict("promotion original primary AutoRemove must be disabled")
+		}
+		if primary.RestartPolicy.Name != "no" {
+			return stageConflict("promotion original primary restart policy must be disabled")
+		}
 		if !primary.Running || stageContainerBindingDigest(primary) != stageContainerBindingDigest(p.primaryObservation) {
 			return stageConflict("promotion original primary binding changed")
 		}
