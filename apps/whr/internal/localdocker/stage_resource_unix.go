@@ -458,7 +458,11 @@ func (s *LocalStage) persistStageVerification(ctx context.Context, candidate sta
 		primary.OverrideCommand = override
 	}
 	primary.RunArgs = []any{"--name", primary.Name, "--hostname", primary.Hostname}
-	s.settings = stageSettings{ConfigRelativePath: s.configRelative, PrimaryConfigDigest: stageDigest(primary), GitSnapshotsDigest: stageDigest(s.git.Repositories), HomePlanDigest: stageDigest(s.homeIntent.Plan()), HomeObservationDigest: stageDigest(home), PrimaryObservationDigest: stageDigest(s.primaryObserved), CandidateObservationDigest: stageDigest(candidate), AnchorageFacts: stageAnchorageHostInitializer(s.config), SmokeRequested: s.options.Smoke, ExecutionPaths: paths}
+	persistedSnapshots := append([]stageGitSnapshot{}, s.git.Repositories...)
+	for i := range persistedSnapshots {
+		persistedSnapshots[i].Index = nil
+	}
+	s.settings = stageSettings{ConfigRelativePath: s.configRelative, PrimaryConfigDigest: stageDigest(primary), GitSnapshotsDigest: stageDigest(persistedSnapshots), HomePlanDigest: stageDigest(s.homeIntent.Plan()), HomeObservationDigest: stageDigest(home), PrimaryObservationDigest: stageDigest(s.primaryObserved), CandidateObservationDigest: stageDigest(candidate), AnchorageFacts: stageAnchorageHostInitializer(s.config), SmokeRequested: s.options.Smoke, ExecutionPaths: paths}
 	original, e := stageExecutionDigest(ctx, s.capture.Source, paths)
 	if e != nil {
 		return e
@@ -475,7 +479,10 @@ func (s *LocalStage) persistStageVerification(ctx context.Context, candidate sta
 		s.result.Repositories[i].UncommittedRetained = current.UncommittedRetained
 		s.execution.GitInputs = append(s.execution.GitInputs, stageExecutionGitInput{RepositoryPath: repository.Source, Predicate: "status_success", InputDigest: stageDigest("git status succeeds")})
 	}
-	for name, value := range map[string]any{"source-config.json": s.config, "primary-config.json": primary, "git-snapshots.json": s.git.Repositories, "primary-observation.json": s.primaryObserved, "candidate-observation.json": candidate, "effective-config.json": s.effectiveConfig, "stage-settings.json": s.settings, "execution-binding.json": s.execution} {
+	if e = stageCheckExecutionGit(ctx, s.execution.GitInputs, s.git.Repositories); e != nil {
+		return e
+	}
+	for name, value := range map[string]any{"source-config.json": s.config, "primary-config.json": primary, "git-snapshots.json": persistedSnapshots, "primary-observation.json": s.primaryObserved, "candidate-observation.json": candidate, "effective-config.json": s.effectiveConfig, "stage-settings.json": s.settings, "execution-binding.json": s.execution} {
 		if e = s.writeStageArtifact(name, value); e != nil {
 			return e
 		}
