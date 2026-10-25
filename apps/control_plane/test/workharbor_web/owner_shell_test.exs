@@ -180,17 +180,15 @@ defmodule WorkHarborWeb.OwnerShellTest do
     logs =
       ExUnit.CaptureLog.capture_log([level: :debug], fn ->
         for target <- [topic, "lvu:transport-probe", "unknown:transport-probe", "phoenix"],
-            event <- ["event", "link", "redirect", "phx_reply", "phx_error", "phx_close", "FORGED-EVENT-CANARY"],
+            event <- blocked_events(),
             payload <- forged_payloads() do
-          assert {:ok, ^transport} =
-                   OwnerSocket.handle_in(wire_message(target, event, payload), transport)
+          assert_dropped_wires(transport, target, event, payload)
         end
 
         for {target, event} <- [{topic, "heartbeat"}, {"phoenix", "phx_join"}, {"phoenix", "phx_leave"}, {"lvu:probe", "phx_join"}, {"unknown:probe", "phx_leave"}] do
           assert {:ok, ^transport} = OwnerSocket.handle_in(wire_message(target, event, %{"canary" => "FORGED-PAYLOAD-CANARY"}), transport)
         end
 
-        assert {:ok, ^transport} = OwnerSocket.handle_in(binary_message(topic), transport)
       end)
 
     refute_receive %Phoenix.Socket.Message{}, 50
@@ -255,12 +253,10 @@ defmodule WorkHarborWeb.OwnerShellTest do
 
     logs =
       ExUnit.CaptureLog.capture_log([level: :debug], fn ->
-        for payload <- forged_payloads() do
-          assert {:ok, ^transport} =
-                   OwnerSocket.handle_in(wire_message(topic, "event", payload), transport)
+        for event <- blocked_events(), payload <- forged_payloads() do
+          assert_dropped_wires(transport, topic, event, payload)
         end
 
-        assert {:ok, ^transport} = OwnerSocket.handle_in(binary_message(topic), transport)
         assert :ok = Phoenix.LiveView.Channel.ping(pid)
       end)
 
@@ -448,10 +444,37 @@ defmodule WorkHarborWeb.OwnerShellTest do
     {Jason.encode!([join_ref, ref, topic, event, payload]), [opcode: :text]}
   end
 
-  defp binary_message(topic) do
+  # Explicit negative classes are independent of the production allowlist.
+  defp blocked_events do
+    [
+      "event", "link", "redirect", "phx_reply", "phx_error", "phx_close",
+      "allow_upload", "progress", "live_patch", "cids_will_destroy", "cids_destroyed",
+      "cids_FORGED-EVENT-CANARY", "FORGED-EVENT-CANARY"
+    ]
+  end
+
+  defp assert_dropped_wires(transport, topic, event, payload) do
+    encoded = Jason.encode!(payload)
+
+    for {wire, opts} <- [wire_message(topic, event, payload), binary_message(topic, event, payload)] do
+      decoded = Phoenix.Socket.V2.JSONSerializer.decode!(wire, opts)
+      assert %Phoenix.Socket.Message{topic: ^topic, event: ^event, join_ref: "join-ref", ref: "event-ref"} = decoded
+
+      case opts[:opcode] do
+        :text -> assert decoded.payload == payload
+        :binary -> assert decoded.payload == {:binary, encoded}
+      end
+
+      assert {:ok, ^transport} = OwnerSocket.handle_in({wire, opts}, transport)
+    end
+  end
+
+  defp binary_message(topic, event, payload) do
+    # Client V2 push: kind, four one-byte metadata lengths, metadata, raw body.
+    body = Jason.encode!(payload)
     frame =
-      <<0, 8, 9, byte_size(topic), 5, "join-ref", "event-ref", topic::binary, "event",
-        "FORGED-PAYLOAD-CANARY">>
+      <<0, 8, 9, byte_size(topic), byte_size(event), "join-ref", "event-ref",
+        topic::binary, event::binary, body::binary>>
 
     {frame, [opcode: :binary]}
   end
