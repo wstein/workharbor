@@ -54,21 +54,29 @@ defmodule WorkHarborWeb.CoreComponents do
   slot :inner_block, doc: "the optional inner block that renders the flash message"
 
   def flash(assigns) do
-    assigns = assign_new(assigns, :id, fn -> "flash-#{assigns.kind}" end)
+    assigns =
+      assigns
+      |> assign_new(:id, fn -> "flash-#{assigns.kind}" end)
+      |> assign(:title, display_text(assigns.title))
+      |> assign(
+        :rest,
+        Map.new(assigns.rest, fn {key, value} ->
+          {key, if(is_binary(value), do: display_text(value), else: value)}
+        end)
+      )
 
     ~H"""
     <div
-      :if={msg = render_slot(@inner_block) || Phoenix.Flash.get(@flash, @kind)}
+      :if={msg = render_slot(@inner_block) || display_text(Phoenix.Flash.get(@flash, @kind))}
       id={@id}
-      phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       role="alert"
-      class="toast toast-top toast-end z-50"
+      class="notice"
       {@rest}
     >
       <div class={[
-        "alert w-80 sm:w-96 max-w-80 sm:max-w-96 text-wrap",
-        @kind == :info && "alert-info",
-        @kind == :error && "alert-error"
+        "notice-body",
+        @kind == :info && "notice-info",
+        @kind == :error && "notice-error"
       ]}>
         <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
         <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
@@ -77,7 +85,12 @@ defmodule WorkHarborWeb.CoreComponents do
           <p>{msg}</p>
         </div>
         <div class="flex-1" />
-        <button type="button" class="group self-start cursor-pointer" aria-label="close">
+        <button
+          type="button"
+          class="notice-dismiss"
+          aria-label="Dismiss message"
+          phx-click={JS.hide(to: "##{@id}")}
+        >
           <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
         </button>
       </div>
@@ -424,31 +437,59 @@ defmodule WorkHarborWeb.CoreComponents do
     """
   end
 
-  @doc """
-  Renders a [Heroicon](https://heroicons.com).
-
-  Heroicons come in three styles – outline, solid, and mini.
-  By default, the outline style is used, but solid and mini may
-  be applied by using the `-solid` and `-mini` suffix.
-
-  You can customize the size and colors of the icons by setting
-  width, height, and background color classes.
-
-  Icons are extracted from the `deps/heroicons` directory and bundled within
-  your compiled app.css by the plugin in `assets/vendor/heroicons.js`.
-
-  ## Examples
-
-      <.icon name="hero-x-mark" />
-      <.icon name="hero-arrow-path" class="ml-1 size-3 motion-safe:animate-spin" />
-  """
+  @doc "Renders a decorative icon from fixed inline geometry."
   attr :name, :string, required: true
   attr :class, :any, default: "size-4"
 
-  def icon(%{name: "hero-" <> _} = assigns) do
+  def icon(assigns) do
+    paths = %{
+      "hero-x-mark" => "M6 6l12 12M6 18L18 6",
+      "hero-information-circle" => "M12 8h.01M11 12h1v4h1M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0",
+      "hero-exclamation-circle" => "M12 8v5m0 3h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0",
+      "hero-arrow-path" => "M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-2l2 2M4 16l2 2a8 8 0 0 0 13-2"
+    }
+
+    assigns = assign(assigns, :path, Map.get(paths, assigns.name, paths["hero-information-circle"]))
+
     ~H"""
-    <span class={[@name, @class]} />
+    <svg
+      class={@class}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.75"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d={@path} stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
     """
+  end
+
+  @doc "Makes untrusted display text inert while retaining visible control markers."
+  def display_text(nil), do: nil
+
+  def display_text(text) when is_binary(text) do
+    for codepoint <- String.codepoints(text), into: "" do
+      case codepoint do
+        <<value::utf8>> ->
+          if control?(value) do
+            digits = value |> Integer.to_string(16) |> String.upcase() |> String.pad_leading(4, "0")
+            "<U+" <> digits <> ">"
+          else
+            codepoint
+          end
+
+        _ ->
+          "<invalid UTF-8>"
+      end
+    end
+  end
+
+  defp control?(value) do
+    value in 0..8 or value in 10..31 or value in 127..159 or
+      value in [0x061C, 0x200E, 0x200F, 0x2028, 0x2029] or
+      value in 0x202A..0x202E or value in 0x2066..0x2069
   end
 
   ## JS Commands

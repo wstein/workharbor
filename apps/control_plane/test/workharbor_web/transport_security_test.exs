@@ -473,7 +473,13 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     value |> String.split(";", parts: 2) |> hd()
   end
 
-  defp csrf(r), do: Regex.run(~r/name="_csrf_token" value="([^"]+)"/, r.body) |> Enum.at(1)
+  defp csrf(r) do
+    match =
+      Regex.run(~r/name="_csrf_token" value="([^"]+)"/, r.body) ||
+        Regex.run(~r/name="csrf-token" content="([^"]+)"/, r.body)
+
+    Enum.at(match, 1)
+  end
 
   defp browser(c, kind) do
     login = request(c, "GET", "/login/" <> kind)
