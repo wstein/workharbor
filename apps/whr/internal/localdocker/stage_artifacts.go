@@ -37,22 +37,29 @@ type stageExecutionBinding struct {
 	GitInputs       []stageExecutionGitInput `json:"git_inputs"`
 }
 
+type stageRestartPolicy struct {
+	Name              string `json:"Name"`
+	MaximumRetryCount int    `json:"MaximumRetryCount"`
+}
+
 type stageContainerDetails struct {
-	ID          string            `json:"Id"`
-	Name        string            `json:"Name"`
-	ImageID     string            `json:"ImageID"`
-	ConfigImage string            `json:"ConfigImage"`
-	User        string            `json:"User"`
-	Hostname    string            `json:"Hostname"`
-	State       string            `json:"State"`
-	Running     bool              `json:"Running"`
-	Healthcheck bool              `json:"Healthcheck"`
-	Health      *string           `json:"Health"`
-	Labels      map[string]string `json:"Labels"`
-	Mounts      []mount           `json:"Mounts"`
-	Environment []string          `json:"Environment"`
-	Entrypoint  []string          `json:"Entrypoint"`
-	Command     []string          `json:"Command"`
+	AutoRemove    bool               `json:"AutoRemove"`
+	RestartPolicy stageRestartPolicy `json:"RestartPolicy"`
+	ID            string             `json:"Id"`
+	Name          string             `json:"Name"`
+	ImageID       string             `json:"ImageID"`
+	ConfigImage   string             `json:"ConfigImage"`
+	User          string             `json:"User"`
+	Hostname      string             `json:"Hostname"`
+	State         string             `json:"State"`
+	Running       bool               `json:"Running"`
+	Healthcheck   bool               `json:"Healthcheck"`
+	Health        *string            `json:"Health"`
+	Labels        map[string]string  `json:"Labels"`
+	Mounts        []mount            `json:"Mounts"`
+	Environment   []string           `json:"Environment"`
+	Entrypoint    []string           `json:"Entrypoint"`
+	Command       []string           `json:"Command"`
 }
 type stageImageDetails struct {
 	ID       string                     `json:"Id"`
