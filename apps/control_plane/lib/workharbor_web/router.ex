@@ -152,7 +152,7 @@ defmodule WorkHarborWeb.Router do
     pipe_through [:session, :owner, :owner_live]
 
     live_session :owner, on_mount: WorkHarborWeb.OwnerAuth do
-      live "/owner", OverviewLive, :index, log: false
+      live "/owner", OverviewLive, :index
     end
   end
 
