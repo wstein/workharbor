@@ -254,11 +254,11 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 		return fail("candidate container hooks failed", e)
 	}
 	if e = s.stagePhaseInputs(ctx); e != nil {
-		return s.stageUnverified("stale_candidate_inputs", candidate.ImageID, before, e)
+		return s.stageUnverified(ctx, "stale_candidate_inputs", candidate.ImageID, before, e)
 	}
 	after, e := stageExecutionDigest(ctx, s.clonePath, paths)
 	if e != nil || before != after {
-		return s.stageUnverified("stale_candidate_inputs", candidate.ImageID, before, e)
+		return s.stageUnverified(ctx, "stale_candidate_inputs", candidate.ImageID, before, e)
 	}
 	s.receipt.ActionInventory[len(s.receipt.ActionInventory)-1].State = "observed"
 	if e = s.store.Advance("candidate_hooks", "container_hooks", "observed"); e != nil {
@@ -281,11 +281,11 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 	s.receipt.Verification = s.result.Verification
 	if candidate.Healthcheck {
 		if e = s.awaitStageHealth(ctx, candidate.ID); e != nil {
-			return s.stageUnverified("failed_health", candidate.ImageID, before, e)
+			return s.stageUnverified(ctx, "failed_health", candidate.ImageID, before, e)
 		}
 	}
 	if !candidate.Healthcheck && !s.options.Smoke {
-		return s.stageUnverified("missing_smoke", candidate.ImageID, before, nil)
+		return s.stageUnverified(ctx, "missing_smoke", candidate.ImageID, before, nil)
 	}
 	if s.options.Smoke {
 		s.receipt.ActionInventory = append(s.receipt.ActionInventory, StageEffect{Action: "smoke", Target: StageTarget{Resource: s.result.Candidate}, State: "attempted"})
@@ -297,14 +297,14 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 		}
 		smoke, e := readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10)
 		if e != nil {
-			return s.stageUnverified("failed_smoke", candidate.ImageID, before, e)
+			return s.stageUnverified(ctx, "failed_smoke", candidate.ImageID, before, e)
 		}
 		out, e = s.runner.Run(ctx, "smoke", "docker", []string{"exec", "--interactive", "--user", up.RemoteUser, "--workdir", s.workspace, candidate.ID, "bash", "-s", "--", s.workspace}, bytes.NewReader(smoke), 600*time.Second)
 		if s.options.Diagnostics != nil {
 			fmt.Fprintf(s.options.Diagnostics, "%s%s", terminal.Escape(string(out.Stdout)), terminal.Escape(string(out.Stderr)))
 		}
 		if e != nil {
-			return s.stageUnverified("failed_smoke", candidate.ImageID, before, e)
+			return s.stageUnverified(ctx, "failed_smoke", candidate.ImageID, before, e)
 		}
 		s.result.Verification.OutputDigest = stageString(out.OutputDigest)
 		s.receipt.ActionInventory[len(s.receipt.ActionInventory)-1].State = "observed"
@@ -313,11 +313,11 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 		}
 	}
 	if e = s.stagePhaseInputs(ctx); e != nil {
-		return s.stageUnverified("stale_candidate_inputs", candidate.ImageID, before, e)
+		return s.stageUnverified(ctx, "stale_candidate_inputs", candidate.ImageID, before, e)
 	}
 	after, e = stageExecutionDigest(ctx, s.clonePath, paths)
 	if e != nil || after != before {
-		return s.stageUnverified("stale_candidate_inputs", candidate.ImageID, before, e)
+		return s.stageUnverified(ctx, "stale_candidate_inputs", candidate.ImageID, before, e)
 	}
 	s.result.Verification.Status = "passed"
 	s.result.Verification.PostInputDigest = stageString(after)
@@ -386,7 +386,7 @@ func (s *LocalStage) awaitStageHealth(parent context.Context, id string) error {
 	}
 }
 
-func (s *LocalStage) stageUnverified(reason, image, digest string, cause error) (LifecycleResult, error) {
+func (s *LocalStage) stageUnverified(ctx context.Context, reason, image, digest string, cause error) (LifecycleResult, error) {
 	if s.result.Verification == nil {
 		s.result.Verification = &StageVerification{Policy: "smoke", Status: "stale", BindingMode: "cooperative_quiescence", Quiescence: "caller_acknowledged", PreInputDigest: digest, ImageID: image, InputDigest: digest, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	}
@@ -396,6 +396,13 @@ func (s *LocalStage) stageUnverified(reason, image, digest string, cause error) 
 	}
 	if reason == "stale_candidate_inputs" {
 		s.result.Verification.Status = "stale"
+	}
+	s.receipt.Verification = s.result.Verification
+	if ctx.Err() != nil {
+		cause = ctx.Err()
+	}
+	if cause != nil {
+		return s.stagePartial(reason, cause)
 	}
 	s.result.Status = "staged_unverified"
 	s.result.UnverifiedReason = stageString(reason)
@@ -427,7 +434,6 @@ func (s *LocalStage) stageUnverified(reason, image, digest string, cause error) 
 	}
 	err := exitcode.Errorf(exitcode.PathPartialFailure, "local stage %s", reason)
 	err.Result = s.Preview()
-	_ = cause
 	return s.Preview(), err
 }
 

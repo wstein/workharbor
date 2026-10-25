@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -103,6 +104,12 @@ func admitStageToolVersions(ctx context.Context, r *stageRunner) error {
 	for _, name := range []string{"docker", "node", "devcontainer", "git", "bash"} {
 		out, e := r.Run(ctx, "metadata", name, []string{"--version"}, nil, 5*time.Second)
 		if e != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+				return e
+			}
 			return stageConflict("installed " + name + " version capability unavailable")
 		}
 		version := strings.TrimSpace(string(out.Stdout))
@@ -126,6 +133,12 @@ func admitStageToolVersions(ctx context.Context, r *stageRunner) error {
 	// that absence explicit while binding its exact content and fixed capability.
 	out, e := r.Run(ctx, "metadata", "sh", []string{"-c", "printf '%s' whr-posix-sh-capability"}, nil, 5*time.Second)
 	if e != nil || string(out.Stdout) != "whr-posix-sh-capability" {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+			return e
+		}
 		return stageConflict("installed POSIX sh capability unavailable")
 	}
 	id := r.Tools["sh"]
@@ -138,6 +151,11 @@ func admitStageToolVersions(ctx context.Context, r *stageRunner) error {
 		if line != "" && len(line) <= 4096 && !strings.ContainsAny(line, "\x00\r\x1b") {
 			id.Version = line
 		}
+	} else if errors.Is(e, context.Canceled) || errors.Is(e, context.DeadlineExceeded) {
+		return e
+	}
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 	r.Tools["sh"] = id
 	return nil

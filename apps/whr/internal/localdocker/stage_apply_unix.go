@@ -6,6 +6,7 @@ package localdocker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/terminal"
 	"golang.org/x/sys/unix"
 )
 
@@ -49,6 +51,9 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	for _, identity := range s.runner.Tools {
 		digest, err := stageFileDigest(ctx, identity.Path)
 		if err != nil || digest != identity.Digest {
+			if ctx.Err() != nil {
+				return refuse(ctx.Err())
+			}
 			return refuse(stageConflict("admitted tool changed since preview"))
 		}
 	}
@@ -277,8 +282,23 @@ func (s *LocalStage) stagePartial(reason string, cause error) (LifecycleResult, 
 		}
 	}
 	s.result.Recovery = []StageRecoveryStep{{Action: "owner_reconcile", Instruction: "Inspect retained operation resources and writable clone; do not retry or adopt an uncertain operation."}}
-	e := exitcode.Errorf(exitcode.PathPartialFailure, "local stage %s", reason).WithRemediation("Inspect the retained recovery ID and guarded cleanup plan before a fresh stage.")
+	e := exitcode.Errorf(exitcode.PathPartialFailure, "local stage %s", stageFailureMessage(reason, cause)).WithRemediation("Inspect the retained recovery ID and guarded cleanup plan before a fresh stage.")
 	e.Result = s.Preview()
-	_ = cause
 	return s.Preview(), e
+}
+
+// Partial effects keep exit 73 while retaining the failure category and phase.
+func stageFailureMessage(reason string, cause error) string {
+	message := terminal.Escape(reason)
+	if cause == nil {
+		return message
+	}
+	switch {
+	case errors.Is(cause, context.DeadlineExceeded):
+		return message + ": deadline exceeded"
+	case errors.Is(cause, context.Canceled):
+		return message + ": interrupted"
+	default:
+		return message + ": " + terminal.Escape(cause.Error())
+	}
 }
