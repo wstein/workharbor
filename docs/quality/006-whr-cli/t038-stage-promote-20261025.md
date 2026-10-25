@@ -231,19 +231,19 @@ never removed merely because hook text matches. See upstream
 [metadata serialization](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/imageMetadata.ts)
 and [config resolution](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/configContainer.ts).
 
-Meaningful backend authoring RED/GREEN checkpoints (pre-rebase SHAs identify
-retained authoring objects):
+Meaningful backend RED/GREEN checkpoints (rebased equivalents are reachable in
+this branch; recorded outcomes preceded the patch-identical pure rebase):
 
 | Test / guard | RED | GREEN |
 | --- | --- | --- |
-| Full stage success and missing-smoke retention | `4fcd614f`: compiled allocation-only Apply returned partial | `821de644`: resource/hooks/verification paths passed 10.591 s |
-| Durable home intent before native create | `68c091b8`: fake native create rejected missing retained nonce binding | `9149b32f`: intent, receipt and versioned artifacts bound before create, 9.527 s |
-| Safe actual Git status | `f28dec82`: corrupted native index passed the constant predicate | `e8396c43`: config-free private reader validates status; normal candidate work remains admitted, 1.801 s |
-| Raw metadata origin | `782a15d6`: full-stage artifact absent | `820eb4bc`: raw override projection transitively receipt-bound, 4.906 s |
-| Preeffect tool/substitution drift | `45380e60`: home was allocated before refusal | `946a6e9b`: typed 68 before persistent state/allocation, 3.560 s |
-| Anchorage greeting facts | `443462a4`: fresh initializer facts absent, precise partial 73 | `fb2b646e`: synthetic E producer, create-only W publication before hooks/smoke, unchanged A through promotion, 9.752 s |
-| Unverified cleanup then fresh stage | `70af00bd`: retained clone permanently blocked fresh staging | `e2375ed1`: known unverified receipt/resources absent, journal archived after fresh consent; new OP/home/clone, old clone retained, 6.977 s |
-| Separate initializer deadline | `c010d4a5`: synthetic host phase escaped its deadline | `85e9d37a`: short independent host/resource timing, missing/raw/mismatched progress refusals, 0.168 s |
+| Full stage success and missing-smoke retention | `194d57da`: compiled allocation-only Apply returned partial | `97761b2e`: resource/hooks/verification paths passed 10.591 s |
+| Durable home intent before native create | `a9b722e4`: fake native create rejected missing retained nonce binding | `64be3987`: intent, receipt and versioned artifacts bound before create, 9.527 s |
+| Safe actual Git status | `cc3532b6`: corrupted native index passed the constant predicate | `a206fda4`: config-free private reader validates status; normal candidate work remains admitted, 1.801 s |
+| Raw metadata origin | `b777d761`: full-stage artifact absent | `d3407595`: raw override projection transitively receipt-bound, 4.906 s |
+| Preeffect tool/substitution drift | `3c55f357`: home was allocated before refusal | `1378bc47`: typed 68 before persistent state/allocation, 3.560 s |
+| Anchorage greeting facts | `aa996f8e`: fresh initializer facts absent, precise partial 73 | `8836e9b9`: synthetic E producer, create-only W publication before hooks/smoke, unchanged A through promotion, 9.752 s |
+| Unverified cleanup then fresh stage | `a75184d6`: retained clone permanently blocked fresh staging | `1296937a`: known unverified receipt/resources absent, journal archived after fresh consent; new OP/home/clone, old clone retained, 6.977 s |
+| Separate initializer deadline | `65eb5bdc`: synthetic host phase escaped its deadline | `0ac61584`: short independent host/resource timing, missing/raw/mismatched progress refusals, 0.168 s |
 
 `TestLocalStageAnchorageFactsRemainIndependentThroughPromotion` additionally
 changes admitted A facts before promotion and requires typed 68 with the specific
@@ -282,7 +282,7 @@ recipe; no mutant is retained in source.
 
 Final integrated check results are recorded after execution below. This record
 claims no independent CLEAR verdict, hosted CI result or live operation evidence.
-The CI acceptance manifest appends 101 new critical literal Go test IDs, retaining
+The CI acceptance manifest appends 102 new critical literal Go test IDs, retaining
 all baseline entries; fake re-execution entrypoints are harness helpers, not
 standalone acceptance IDs.
 
@@ -333,3 +333,54 @@ workspacecfg. Formatting and repository bootstrap checks passed; bootstrap check
 explicitly do not evaluate product runtime. Final full-suite/harness measurements
 follow after execution; the first affected run's command-package failure above
 is not hidden or counted as green.
+
+Final affected package measurements on the rebased implementation before the
+subsequent narrow shell fix:
+
+| Complete package | Result | Top-level / leaf / pass events | Skips |
+| --- | --- | --- | --- |
+| localdocker | GREEN, 294.118 s | 154 / 511 / 553 | 0 |
+| workspacecfg | GREEN, 7.306 s | 136 / 743 / 775 | 0 |
+| commands, complete rerun after unavailable-wording fix | GREEN, 38.870 s | 138 / 314 / 340 | 0 |
+
+Executed with `go test -json ./internal/localdocker ./internal/commands
+./internal/workspacecfg -count=1 -timeout=10m`, then the justified full commands
+rerun `go test -json ./internal/commands -count=1 -timeout=5m`. The first combined
+process exited 1 because of the now-fixed command diagnostic failure; individual
+localdocker/workspacecfg packages were green. All 101 then-appended critical IDs
+had genuine passing outcomes; this is affected-package evidence, not whole-app
+harness qualification.
+
+`umask 022; make check` ran on pristine `f04bc1c6`. Repository bootstrap and its
+raw 434 Python tests passed (386.401 s). At the 600-second overall bound (observed
+613 s at interruption), the second qualified Python pass was still running; no
+application build/test qualification had begun. One exact cwd-filtered owned
+checker was interrupted through a PID descriptor; its normal cleanup drained
+owned children. Make exited 2. **Full make check is incomplete, not passing**;
+hosted native CI remains required. No standalone build/install was invoked.
+
+The final read-only audit found a real tool-binding mismatch: official CLI string
+initialize commands execute `/bin/sh`, while discovery could admit an earlier
+`PATH` executable named `sh`. `TestLocalStagePinsOfficialHostShellInsteadOfAmbientSh`
+failed in `8f79f0e6` with the fake ambient shell admitted instead of the physical
+`/usr/bin/dash`. The fix resolves and binds actual `/bin/sh` explicitly; the test
+also verifies its exact digest and a typed 68 when its recorded binding differs,
+without modifying or executing the system shell. The focused shell/progress/
+Anchorage stage→promote group passed (8.734 s). This new guard is the 102nd
+critical inventory ID. The historical full-suite numbers above are not claimed
+as a complete rerun after this final correction.
+
+After the shell correction, actual default-handler dispatch passed again:
+`go -C apps/whr test ./internal/commands -run
+'^TestLocalLifecycleDefaultHandlers' -count=1 -timeout=90s` (12.308 s).
+Affected-package vet and Darwin/arm64 test compilation passed again. The final
+extension of `TestLocalStageAnchorageFactsRemainIndependentThroughPromotion`
+also stages afresh after successful promotion: it proves a new operation, home
+and independent clone, preserves the previous clone, and retains the original
+facts. That genuine full sequence passed in 13.701 s. It uses only test-owned
+synthetic tools and temporary Git; this is not real-host lifecycle evidence.
+
+The final source-only repository/bootstrap, formatting and diff checks passed.
+Full make check remains incomplete as recorded above. Required hosted CI,
+exact-head independent executed review and owner native acceptance are open;
+this record does not claim them as passing or mark task/feature completion.
