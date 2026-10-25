@@ -5,6 +5,7 @@ package localdocker
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -445,4 +446,24 @@ func TestLocalStageGitStartAndIndexIOFailuresAreClassified(t *testing.T) {
 	src := captureRegressionRepo(t)
 	_, _, err := stageReadIndex(context.Background(), filepath.Join(src, ".git"), "index", "sha1", capturePhysicalTemp(t))
 	requireCaptureConflict(t, err, "private Git index publication failed")
+}
+
+func TestLocalStageGitAlternatesBeyondUnapprovedStoreCap(t *testing.T) {
+	root := capturePhysicalTemp(t)
+	previous := ""
+	for i := 0; i < 33; i++ {
+		store := filepath.Join(root, fmt.Sprintf("store-%02d", i))
+		if err := os.MkdirAll(filepath.Join(store, "info"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if previous != "" {
+			if err := os.WriteFile(filepath.Join(previous, "info", "alternates"), []byte(store+"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		previous = store
+	}
+	if _, err := stageObjectStoreBinding(context.Background(), filepath.Join(root, "store-00")); err != nil {
+		t.Fatalf("unapproved object-store ceiling changed admission: %v", err)
+	}
 }
