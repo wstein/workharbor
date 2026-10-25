@@ -88,6 +88,9 @@ func TestLocalStageReviewToolManifestExcludesDriverAfterApply(t *testing.T) {
 	if _, ok := stage.receipt.ToolManifest["docker_driver"]; ok {
 		t.Fatal("runtime driver leaked into trusted receipt tools")
 	}
+	if stage.settings.SmokeDigest != stageBytesDigest([]byte("printf smoke\n")) {
+		t.Fatalf("verified settings lost admitted smoke digest: %q", stage.settings.SmokeDigest)
+	}
 }
 
 func TestLocalStageReviewObservationFailureKillsWithoutTimer(t *testing.T) {

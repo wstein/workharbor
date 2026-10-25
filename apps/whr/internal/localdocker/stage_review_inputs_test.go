@@ -65,7 +65,7 @@ func TestLocalStageReviewImageAndTmpfsMountPreflight(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				script = []byte(strings.Replace(string(script), "#!/bin/sh\n", "#!/bin/sh\nif test \"$3:$4\" = image:inspect; then printf '%s\\n' "+stageShellLiteral(string(image))+"; exit 0; fi\n", 1))
+				script = []byte(strings.Replace(string(script), "#!/bin/sh\n", "#!/bin/sh\nif test \"$3:$4\" = image:inspect; then case \"$6\" in *'.Config.Volumes'*) ;; *) exit 120 ;; esac; printf '%s\\n' "+stageShellLiteral(string(image))+"; exit 0; fi\n", 1))
 				if err = os.WriteFile(ports.Tools["docker"], script, 0700); err != nil {
 					t.Fatal(err)
 				}
