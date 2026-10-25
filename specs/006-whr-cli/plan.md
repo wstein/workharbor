@@ -471,11 +471,12 @@ all staging/temp `anchorage-home-*` targets refuse 68 even container-only. Curre
 Anchorage cleanup remains excluded, with no recovery path promised. No existing
 home is renamed, adopted or exempted and no protected-prefix test is weakened.
 
-New candidate-home naming/allocation and promote deletion flags require a
-separate owner decision and task, as the #226 decision requires. They are outside
-this interaction amendment and are not silently folded into T038. The 2026-10-25 throwaway amendment supersedes that candidate-only deletion
+The 2026-10-24 interaction kept new-home allocation and candidate cleanup
+consent in their separately recorded owner decision. Allocation remains decided.
+The 2026-10-25 throwaway amendment supersedes the candidate-only extra deletion
 consent: normal confirmation covers complete new-candidate disposal. Other homes
-retain FR-067(d)'s explicit --volumes plus --force and confirmation.
+retain FR-067(d)'s explicit --volumes plus --force and confirmation. This does not
+reopen the accepted S0 profile or create a new owner-decision gate.
 S0 must reference the separately approved cleanup scope before claiming a complete
 execution/cleanup API. No internal force bypass or primary replacement with an
 invalid cleanup plan is permitted.

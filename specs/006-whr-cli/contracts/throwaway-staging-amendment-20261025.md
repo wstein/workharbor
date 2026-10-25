@@ -85,7 +85,7 @@ candidate-owned artifact remains to be cleaned separately.
 | Ordinary confirmed candidate removal | Remove all candidate artifacts, including unfetched/uncommitted clone work; leave primary/source data alone. |
 | Successful promotion | Verify result refs and replacement first, then remove all candidate artifacts. Preserve the resulting primary and original home. |
 | Promotion fails after result transfer and primary replacement begins; resource rollback succeeds | Restore the original primary through the existing rollback, then remove the failed replacement and candidate artifacts. Do not retain a stopped failed-primary container as a backup. Preserve original home and already imported result refs. |
-| A required result-transfer, rollback or deletion step fails or is uncertain | Do not claim successful promotion/removal or zero remaining artifacts. Report the existing failure category, exact cleanup attempted/completed/remaining and cause. Keep only resources that could not actually be cleaned or whose required precondition could not be established; no deliberate archive or backup. |
+| A required result-transfer, rollback or deletion step fails or is uncertain | Do not claim successful promotion/removal or zero remaining artifacts. Report the existing failure category, exact cleanup attempted/completed/remaining and cause. Report any actual residual; do not retain a deliberate archive or backup. |
 
 The existing exit table remains: 70 for missing/declined normal confirmation,
 68/71/72 for the applicable pre-effect refusal/deadline/interruption, and 73 for
