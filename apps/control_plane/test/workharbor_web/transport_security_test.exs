@@ -584,13 +584,61 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     end
   end
 
-  defp masked_frame(payload) do
+  @tag :tls
+  test "owner WSS bounds aggregate fragmented messages before decode", c do
+    {selected, csrf} = browser(c, "owner")
+    assert {:ok, sock} = connect(c, ["http/1.1"])
+
+    try do
+      path =
+        "/owner/live/websocket?" <> URI.encode_query(%{"_csrf_token" => csrf, "vsn" => "2.0.0"})
+
+      wire =
+        "GET " <>
+          path <>
+          " HTTP/1.1\r\n" <>
+          "host: localhost:#{c.port}\r\norigin: #{c.origin}\r\ncookie: #{selected}\r\n" <>
+          "connection: upgrade\r\nupgrade: websocket\r\nsec-websocket-version: 13\r\n" <>
+          "sec-websocket-key: " <> Base.encode64(<<0::128>>) <> "\r\n\r\n"
+
+      assert :ok = :ssl.send(sock, wire)
+      assert response(sock).status == 101
+
+      payload =
+        Jason.encode!([
+          nil,
+          "fragmented",
+          "phoenix",
+          "heartbeat",
+          %{"padding" => String.duplicate("x", 65_536), "canary" => "FRAGMENTED-PAYLOAD-CANARY"}
+        ])
+
+      <<first::binary-size(32_768), second::binary-size(32_768), last::binary>> = payload
+      before = WorkHarbor.FoundationDatabase.count("audit_events")
+
+      logs =
+        ExUnit.CaptureLog.capture_log(fn ->
+          # Every frame fits the frame quota, but their aggregate exceeds 65,536.
+          assert :ok = :ssl.send(sock, masked_frame(first, 0x01))
+          assert :ok = :ssl.send(sock, masked_frame(second, 0x00))
+          assert :ok = :ssl.send(sock, masked_frame(last, 0x80))
+          assert {8, <<1009::16, _reason::binary>>} = socket_frame(sock)
+        end)
+
+      refute logs =~ "FRAGMENTED-PAYLOAD-CANARY"
+      assert WorkHarbor.FoundationDatabase.count("audit_events") == before
+    after
+      :ssl.close(sock)
+    end
+  end
+
+  defp masked_frame(payload, header \\ 0x81) do
     size = byte_size(payload)
 
     cond do
-      size < 126 -> <<0x81, 0x80 + size, 0::32, payload::binary>>
-      size <= 65_535 -> <<0x81, 0xFE, size::16, 0::32, payload::binary>>
-      true -> <<0x81, 0xFF, size::64, 0::32, payload::binary>>
+      size < 126 -> <<header, 0x80 + size, 0::32, payload::binary>>
+      size <= 65_535 -> <<header, 0xFE, size::16, 0::32, payload::binary>>
+      true -> <<header, 0xFF, size::64, 0::32, payload::binary>>
     end
   end
 

@@ -119,6 +119,22 @@ defmodule WorkHarborWeb.OwnerShellTest do
     refute html =~ "<script>CANARY"
   end
 
+  test "flash extra attributes visibly escape control characters before HTML escaping" do
+    for codepoint <- [0, 10, 13, 27, 127, 0x85, 0x202E, 0x2066] do
+      marker = codepoint |> Integer.to_string(16) |> String.upcase() |> String.pad_leading(4, "0")
+      payload = "before" <> <<codepoint::utf8>> <> "after\"<&CANARY"
+
+      html =
+        render_component(&CoreComponents.flash/1,
+          kind: :error,
+          flash: %{"error" => "message"},
+          rest: %{"aria-label" => payload}
+        )
+
+      assert html =~ ~s(aria-label="before&lt;U+#{marker}&gt;after&quot;&lt;&amp;CANARY")
+    end
+  end
+
   test "overview is a live read only shell with inactive future pages", c do
     {view, html} = mount_shell(c.conn)
     assert has_element?(view, "main")
@@ -281,6 +297,13 @@ defmodule WorkHarborWeb.OwnerShellTest do
           assert_dropped_wires(transport, topic, event, payload)
         end
 
+        for payload <- malformed_join_payloads() do
+          assert_dropped_wires(transport, topic <> "-FORGED-EVENT-CANARY", "phx_join", payload)
+        end
+
+        # A valid payload isolates the empty-topic guard from join-shape checks.
+        assert_dropped_wires(transport, "lv:", "phx_join", join)
+        assert_dropped_wires(transport, "lv:", "phx_leave", %{})
         assert :ok = Phoenix.LiveView.Channel.ping(pid)
       end)
 
@@ -462,6 +485,30 @@ defmodule WorkHarborWeb.OwnerShellTest do
           "FORGED-PAYLOAD-CANARY"
         ],
         do: payload
+  end
+
+  defp malformed_join_payloads do
+    canary = "FORGED-PAYLOAD-CANARY"
+
+    [
+      canary,
+      nil,
+      false,
+      7,
+      [canary],
+      %{},
+      %{"session" => nil},
+      %{"session" => [canary]},
+      %{"session" => %{"canary" => canary}}
+    ] ++
+      for {key, value} <- [
+            {"static", [canary]},
+            {"url", %{"canary" => canary}},
+            {"redirect", 7},
+            {"params", canary}
+          ] do
+        %{"session" => canary, key => value}
+      end
   end
 
   defp wire_message(topic, event, payload, join_ref \\ "join-ref", ref \\ "event-ref") do
