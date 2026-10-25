@@ -1379,7 +1379,13 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIInteractiveTrustAndConfirmation",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageJSONClosedResultSchema",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIApplyErrorCodesAndReasons",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCommandContractAndAlias"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCommandContractAndAlias",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteRegistryDispatch",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteCLIConsentAndPreview",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteCLIRefusesBadArgumentsBeforePrepare",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteCLIInteractivePaneWarningAndDecline",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteCLIPartialResultAndErrorReason",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteJSONSchemaClosed"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
