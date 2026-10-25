@@ -227,6 +227,10 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 						os.Exit(121)
 					}
 					os.Exit(1)
+				case "hooks_client_binding":
+					state.Primary["Hostname"] = "changed-after-client-failure"
+					save()
+					os.Exit(1)
 				case "hooks_client_live":
 					os.Exit(1)
 				}
