@@ -133,7 +133,12 @@ The source and state fixtures continue to use the ordinary test temporary root.
 Only the socket uses a private 0700 directory under /tmp, resolves that directory
 to its physical path and checks the resulting socket stays within 103 bytes.
 The fixture removes its own short directory at cleanup. The CI acceptance list
-adds the literal regression ID without dropping inherited tests.
+adds the literal regression ID without dropping inherited tests. Independent
+review found the second occurrence in the health-notification listener; the same
+long-root regression now runs that health flow too. This additional subcase was
+assertion-RED before moving that listener to the shared short-path helper. Both
+stage net.Listen Unix-socket allocations use the helper; constant endpoints in
+other tests do not bind sockets.
 
 This round restacks the stage branch from capture 33b090ac onto 1267662b.
 Of the 29 previously published stage patches, 28 are range-diff equal; the CI
@@ -149,3 +154,13 @@ vet and pristine make-check results and the independent exact-SHA rewrite gate.
 Historical counts and native results above are not current-head proof. Native CI,
 the foreman's review, prerequisite acceptance and owner-host lifecycle evidence
 remain separate gates. No task/progress checkboxes or completion claim changes.
+
+The current full affected-package run passed 635 localdocker, 775 workspacecfg
+and 264 commands identities, with no failures or skips (154.700 s / 7.479 s /
+27.183 s). It preceded only the extra health-socket subcase and its fixture fix;
+the final three-test selection, including both sockets under long TMPDIR, passed
+in 6.364 s. No production source changed after the full run. The mandatory Python
+suite completed 450 tests with 8 failures and 7 errors in unchanged task automation
+(139.798 s), matching the previously reported baseline classes; it is not green.
+Local mix format check and warning-free compile passed. No native macOS result
+for this final head is claimed before CI.
