@@ -65,6 +65,9 @@ func TestLocalStageGitObjectAuditRechecksReplacedIdentity(t *testing.T) {
 	if err := os.Mkdir(root, 0700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Mkdir(filepath.Join(root, "info"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	audit := &stageObjectAudit{checked: map[string]bool{}}
 	ctx := context.WithValue(context.Background(), stageObjectAuditKey{}, audit)
 	if _, err := stageObjectStoreBinding(ctx, root); err != nil {
