@@ -151,6 +151,9 @@ func stageOmit(path string) bool {
 	return name == ".git" || name == ".ssh" || name == ".aws" || name == ".gnupg" || name == ".docker" || name == ".netrc" || name == ".npmrc" || name == ".pypirc" || name == ".git-credentials" || name == ".env" || strings.HasPrefix(name, ".env.") || path == ".devcontainer/host.env" || path == ".devcontainer/smoke.env"
 }
 func scanStageFiles(ctx context.Context, source, destination string) ([]map[string]any, []string, error) {
+	return scanStageFilesSelected(ctx, source, destination, nil)
+}
+func scanStageFilesSelected(ctx context.Context, source, destination string, selected []string) ([]map[string]any, []string, error) {
 	root, e := os.OpenRoot(source)
 	if e != nil {
 		return nil, nil, stageConflict("source root unavailable")
@@ -167,6 +170,12 @@ func scanStageFiles(ctx context.Context, source, destination string) ([]map[stri
 		}
 		if walkErr != nil {
 			return fail("enumeration changed or unavailable")
+		}
+		if selected != nil && path != "." && !stageSelectedPath(path, selected) {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
 		}
 		count++
 		if count > stageMaxEntries {
