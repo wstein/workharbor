@@ -261,7 +261,7 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	if err != nil {
 		return nil, err
 	}
-	key := sha256.Sum256([]byte(s.endpoint.DaemonID + "\x00" + endpoint))
+	key := sha256.Sum256([]byte(s.endpoint.DaemonID))
 	s.clonePath = filepath.Join(ports.StateRoot, hex.EncodeToString(key[:]), s.operationID, "workspace", filepath.Base(s.capture.Source))
 	factsPath := filepath.Join(s.capture.Source, ".devcontainer", "host.env")
 	if _, e = os.Lstat(factsPath); e == nil {
