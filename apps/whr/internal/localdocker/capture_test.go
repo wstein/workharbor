@@ -3,6 +3,7 @@ package localdocker
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -93,5 +94,38 @@ func TestLocalStageCaptureCanonicalAndCancellation(t *testing.T) {
 			c.Close()
 		}
 		t.Fatalf("cancel: %v", err)
+	}
+}
+
+func TestLocalStageCaptureCleanupRetainsFailedPath(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(filepath.Join(src, "input"), []byte("source"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cap, err := captureStageFiles(context.Background(), src, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := cap.Path
+	cap.removeTree = func(string) error { return errors.New("injected removal failure") }
+	if err = cap.Close(); err == nil || !strings.Contains(err.Error(), "temporary capture retained") {
+		t.Fatalf("failed cleanup: %v", err)
+	}
+	if cap.Path != path {
+		t.Fatalf("lost retained path %q want %q", cap.Path, path)
+	}
+	if _, err = os.Stat(filepath.Join(path, "input")); err != nil {
+		t.Fatalf("retained capture disappeared: %v", err)
+	}
+	b, _ := os.ReadFile(filepath.Join(src, "input"))
+	if string(b) != "source" {
+		t.Fatal("source touched during cleanup")
+	}
+	cap.removeTree = nil
+	if err = cap.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if cap.Path != "" {
+		t.Fatalf("successful cleanup did not clear private path: %q", cap.Path)
 	}
 }
