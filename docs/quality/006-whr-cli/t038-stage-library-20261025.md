@@ -74,7 +74,7 @@ The committed pristine `umask 022; timeout 180s make check` run ended with exit 
 in Python checks before application checks. It is incomplete, not green. No absent
 Elixir/native-host checks are called passing; the published head needs native CI.
 
-## PR 266 review delta
+## PR 266 review delta (historical 4faa1a01)
 
 The base now names the real capture dependency, codex/006-t038-capture-20261025
 at 33b090ac. The stage branch was restacked from capture 9a4e51e2 onto that
@@ -119,3 +119,33 @@ are recorded in the PR body. Historical counts above do not describe the new hea
 No Docker/official-CLI or owner-host lifecycle test was run; the fake remains a
 fixture, including its anonymous-volume model. No task/progress completion ticks
 are changed and the later promote/composition packages remain separate.
+
+## Native macOS fixture correction and capture restack
+
+Run 40213548607 on historical 4faa1a01 passed bootstrap but failed macos-pty.
+The failing capture-selected stage regression used a Unix socket below the long
+native macOS temporary test path; net.Listen returned bind: invalid argument.
+This was a fixture path-length failure, not lifecycle or mount-admission evidence.
+
+TestLocalStageFixtureSocketIgnoresLongTMPDIR first reproduced the same bind
+failure under an intentionally long temporary root, before the fixture change.
+The source and state fixtures continue to use the ordinary test temporary root.
+Only the socket uses a private 0700 directory under /tmp, resolves that directory
+to its physical path and checks the resulting socket stays within 103 bytes.
+The fixture removes its own short directory at cleanup. The CI acceptance list
+adds the literal regression ID without dropping inherited tests.
+
+This round restacks the stage branch from capture 33b090ac onto 1267662b.
+Of the 29 previously published stage patches, 28 are range-diff equal; the CI
+inventory patch changes only additive parent-ID context and the required comma.
+The socket regression and correction are appended. The parent retains the
+accepted 100,000 working-entry ceiling; additional administration limits are
+explicitly proposed there and still need owner acceptance. No stage-owned
+capture implementation is changed. The complete round includes a fixture fix,
+so it is not described as a pure equal-range-diff rebase.
+
+The PR body records this head's affected-package, script, formatter/compiler,
+vet and pristine make-check results and the independent exact-SHA rewrite gate.
+Historical counts and native results above are not current-head proof. Native CI,
+the foreman's review, prerequisite acceptance and owner-host lifecycle evidence
+remain separate gates. No task/progress checkboxes or completion claim changes.
