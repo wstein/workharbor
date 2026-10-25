@@ -43,6 +43,7 @@ func TestLocalStageRequiresTrustAndConsent(t *testing.T) {
 	}{
 		{"no_trust", LifecycleConsent{Confirmed: true, Quiescence: true}},
 		{"no_consent", LifecycleConsent{TrustDigest: "MATCH", Quiescence: true}},
+		{"no_quiescence", LifecycleConsent{TrustDigest: "MATCH", Confirmed: true}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, opts, p, _ := fixtureStageLifecycle(t, false)
