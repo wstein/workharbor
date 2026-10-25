@@ -144,8 +144,9 @@ This round restacks the stage branch from capture 33b090ac onto 1267662b.
 Of the 29 previously published stage patches, 28 are range-diff equal; the CI
 inventory patch changes only additive parent-ID context and the required comma.
 The socket regression and correction are appended. The parent retains the
-accepted 100,000 working-entry ceiling; additional administration limits are
-explicitly proposed there and still need owner acceptance. No stage-owned
+accepted 100,000 working-entry ceiling. The subsequent N1 completion removes
+the unapproved administration-entry and store-count limits from code and profile;
+this stage branch now rests on that correction. No stage-owned
 capture implementation is changed. The complete round includes a fixture fix,
 so it is not described as a pure equal-range-diff rebase.
 
@@ -164,3 +165,10 @@ suite completed 450 tests with 8 failures and 7 errors in unchanged task automat
 (139.798 s), matching the previously reported baseline classes; it is not green.
 Local mix format check and warning-free compile passed. No native macOS result
 for this final head is claimed before CI.
+
+## Accepted-bounds parent correction
+
+The capture parent is now 8f6efe18. The 36 stage patches from published ed29ea7c
+replay unchanged onto it with equal range-diff. No stage source, fixture or CI ID
+changes in this follow-up; only this record clarifies the withdrawn parent caps.
+The previous native result and current-head acceptance gates remain separate.
