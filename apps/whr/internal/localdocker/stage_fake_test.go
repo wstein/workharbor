@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +32,7 @@ type fakeStageState struct {
 	HooksCompleted           bool
 	SmokeExit                int
 	HealthStatus             string
+	HealthNotify             string
 	StopPrimaryOnUp          bool
 	ForeignOperation         bool
 	UpReturnsPrimary         bool
@@ -284,6 +286,17 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if id == state.Primary["Id"] && state.HooksCompleted && state.MutateCapturedSmokePath != "" {
 				if e = os.WriteFile(state.MutateCapturedSmokePath, []byte("printf tampered-smoke\n"), 0600); e != nil {
 					os.Exit(119)
+				}
+			}
+			if id != state.Primary["Id"] && state.HooksCompleted && state.HealthNotify != "" {
+				conn, err := net.Dial("unix", state.HealthNotify)
+				if err != nil {
+					os.Exit(121)
+				}
+				_, err = conn.Write([]byte("health-wait"))
+				conn.Close()
+				if err != nil {
+					os.Exit(122)
 				}
 			}
 			labels := item["Labels"].(map[string]any)
