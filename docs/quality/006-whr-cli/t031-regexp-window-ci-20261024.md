@@ -84,7 +84,34 @@ are local under `/tmp/whr-pty-regexp-exact-fzz9vkh4/`. Reproduce the shrink prob
 with the same overlay command above, replacing the window constant instead of
 the base expression.
 
-## Checks and remaining gates
+## Follow-up: review F3/F4 (2026-10-25)
+
+[Review F3/F4](https://github.com/wstein/workharbor/pull/252#pullrequestreview-5640157788)
+identified unpinned regexp consumption and scheduling-sensitive aggregate work
+assertions in the existing flood tests. `TestExpectRegexpSubmatches` now drains
+the real PTY, matches the same captures, and checks that exactly `-end\n` remains
+pending. Replacing `return base + loc[1], true` with `base + loc[0]` survives the
+old test and fails the new one with 10 pending bytes instead of 5.
+
+The three flood tests now drain before searching/rendering. Their work bounds
+are tighter (3 times captured bytes for projection, drawing and one search;
+2 times for drawing/projection alone), with no dependency on reader wake-ups.
+Draining alone would hide repeated-prefix rescans, so two internal tests retain
+that independent complexity oracle. `TestIncrementalMatcherWorkIsLinear` uses
+64 fixed 1 KiB chunks with unbuffered notifications to the real expect loop;
+the producer cannot coalesce the flood into one search. Adjacent chunks may
+combine without changing its linear bound. There are no sleeps, retries or
+wall-clock performance thresholds. `TestIncrementalSequenceWorkIsLinear`
+feeds both actual consumers fixed chunks for five terminated/unterminated
+escape prefixes, checking exact visible text and bounded work.
+
+Compiled overlays resetting the literal matcher's remembered offset to zero
+and resetting the projection offset to zero fail these controlled tests with
+work 2359305 (bound 196749) and 2201880 (bound 196620), respectively.
+The original product implementation passes. Product `session.go` is unchanged;
+this closes these maintenance follow-ups without claiming T031 acceptance.
+
+## Historical checks and remaining gates
 
 From apps/whr with `GOTOOLCHAIN=local GOPROXY=off GOSUMDB=off`:
 
