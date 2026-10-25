@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -413,6 +414,10 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			save()
 			fmt.Println(strings.Repeat("e", 64))
 		} else if args[0] == "exec" {
+			if strings.HasPrefix(state.Failure, "smoke_reserved_") {
+				code, _ := strconv.Atoi(strings.TrimPrefix(state.Failure, "smoke_reserved_"))
+				os.Exit(code)
+			}
 			if state.Failure == "smoke" {
 				os.Exit(110)
 			}

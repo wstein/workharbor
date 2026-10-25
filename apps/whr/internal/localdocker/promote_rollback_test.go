@@ -49,6 +49,9 @@ func TestLocalPromoteRollbackRefusesUncertainOrSharedResources(t *testing.T) {
 		{"hooks_start_failure", "phase command failed: restart_original_primary"},
 		{"hooks_signal", "primary container hooks failed"},
 		{"up", "primary resource phase failed"},
+		{"smoke_reserved_125", "primary smoke verification failed"},
+		{"smoke_reserved_126", "primary smoke verification failed"},
+		{"smoke_reserved_127", "primary smoke verification failed"},
 	} {
 		t.Run(tc.failure, func(t *testing.T) {
 			p, path, _ := fixtureVerifiedPromotion(t)
