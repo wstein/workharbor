@@ -25,6 +25,8 @@ type fakeStageState struct {
 	StateRoot                string
 	RequireDurableHomeIntent bool
 	RequireFreshFacts        bool
+	MergedLifecycle          map[string][]any
+	LateMergedLifecycle      map[string][]any
 }
 
 func readFakeStageState(t *testing.T, path string) fakeStageState {
@@ -109,6 +111,24 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 		}
 		return ""
 	}
+	merged := func(config map[string]any, late bool) map[string]any {
+		result := stageCopyConfig(config)
+		for _, hook := range stageLifecycleHooks {
+			delete(result, hook)
+			commands := []any{}
+			if command, ok := config[hook]; ok {
+				commands = append(commands, command)
+			}
+			commands = append(commands, state.MergedLifecycle[hook+"s"]...)
+			if late {
+				commands = append(commands, state.LateMergedLifecycle[hook+"s"]...)
+			}
+			if len(commands) > 0 {
+				result[hook+"s"] = commands
+			}
+		}
+		return result
+	}
 	if kind == "node" {
 		if len(args) == 1 && args[0] == "--version" {
 			fmt.Println("v22.0.0")
@@ -133,7 +153,7 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if json.Unmarshal(data, &cfg) != nil {
 				os.Exit(118)
 			}
-			emit(map[string]any{"configuration": cfg, "mergedConfiguration": cfg})
+			emit(map[string]any{"configuration": cfg, "mergedConfiguration": merged(cfg, false)})
 		case "up":
 			data, e := os.ReadFile(argValue(args, "--override-config"))
 			if e != nil {
@@ -177,7 +197,7 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if e = cmd.Run(); e != nil {
 				os.Exit(97)
 			}
-			emit(map[string]any{"outcome": "success", "containerId": strings.Repeat("c", 64), "remoteUser": "vscode", "remoteWorkspaceFolder": "/workspaces/Anchorage", "configuration": cfg, "mergedConfiguration": cfg})
+			emit(map[string]any{"outcome": "success", "containerId": strings.Repeat("c", 64), "remoteUser": "vscode", "remoteWorkspaceFolder": "/workspaces/Anchorage", "configuration": cfg, "mergedConfiguration": merged(cfg, true)})
 		case "run-user-commands":
 			cmd := exec.Command(argValue(args, "--docker-path"), "exec", "--user", "vscode", "--workdir", "/workspaces/Anchorage", argValue(args, "--container-id"), "/bin/sh", "-c", "fixture hooks")
 			cmd.Env = os.Environ()
