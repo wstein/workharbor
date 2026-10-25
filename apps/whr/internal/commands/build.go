@@ -89,6 +89,9 @@ func (a *app) build() {
 		e := e
 		runE := func(c *cobra.Command, args []string) error {
 			ctx := c.Context()
+			if e.ID == "workspace.stage" {
+				ctx = context.WithValue(ctx, localStageKey{}, a.localStageOptions(c))
+			}
 			if e.ID == "workspace.drift" {
 				local, _ := c.Flags().GetBool("local")
 				source, _ := c.Flags().GetString("source")
@@ -135,6 +138,13 @@ func (a *app) build() {
 			}
 			if e.ID == "workspace.init" {
 				addInitFlags(c, e)
+			} else if e.ID == "workspace.stage" {
+				c.Flags().Bool("local", false, "use the local Docker daemon; no control plane")
+				c.Flags().String("source", "", "explicit source directory matching the selected primary")
+				c.Flags().Bool("smoke", false, "run the trusted workspace smoke through stdin")
+				c.Flags().Bool("dry-run", false, "preview only; no hook, build, receipt or native mutation")
+				c.Flags().String("trust", "", "trust this exact previewed source fingerprint (independent of --yes)")
+				c.Flags().Bool("yes", false, "confirm effects and the disclosed pause-writers condition")
 			} else if e.ID == "workspace.drift" {
 				c.Flags().Bool("local", false, "compare local running primary bundle references")
 				c.Flags().String("source", "", "explicit local source directory matching the primary label")
