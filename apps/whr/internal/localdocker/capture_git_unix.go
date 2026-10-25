@@ -26,6 +26,7 @@ type stageGitSnapshot struct {
 	Source, GitDir, CommonDir, ObjectDir, IndexPath, Head, ObjectFormat             string
 	Refs                                                                            map[string]string
 	Index                                                                           []byte
+	Exclude                                                                         []byte
 	IndexDigest                                                                     string
 	HeadRef, ClonePath, RelativePath, BindingDigest, ConfigDigest, AlternatesDigest string
 	ObjectManifestDigest, GitToolPath, GitToolDigest, GitToolVersion                string
@@ -199,6 +200,17 @@ func readStageGitSnapshotContext(ctx context.Context, source string, strict bool
 		return s, e
 	}
 	s.ConfigDigest = digest
+	if info, err := os.Lstat(filepath.Join(s.CommonDir, "info")); err == nil {
+		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return s, stageConflict("Git exclude administration is symlinked or unavailable")
+		}
+		s.Exclude, err = stageAdminFile(s.CommonDir, filepath.Join("info", "exclude"), 256<<10)
+		if err != nil && !os.IsNotExist(err) {
+			return s, captureIOError(err, "Git exclude data unavailable")
+		}
+	} else if !os.IsNotExist(err) {
+		return s, stageConflict("Git exclude administration unavailable")
+	}
 	if storage := values["extensions.refstorage"]; len(storage) > 0 && storage[len(storage)-1] != "files" {
 		return s, stageConflict("Git reftable reference storage unsupported")
 	}
@@ -601,6 +613,24 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	}
 	if e = writeStageSafeConfig(ctx, private, s, clone, values); e != nil {
 		return result, e
+	}
+	// The reader and clone share admitted inert excludes and platform core facts.
+	for _, gitdir := range []string{reader, filepath.Join(clone, ".git")} {
+		if s.Exclude != nil {
+			if err := os.MkdirAll(filepath.Join(gitdir, "info"), 0700); err != nil {
+				return result, stageConflict("private Git exclude directory publication failed")
+			}
+			if err := os.WriteFile(filepath.Join(gitdir, "info", "exclude"), s.Exclude, 0600); err != nil {
+				return result, stageConflict("private Git exclude publication failed")
+			}
+		}
+	}
+	safeConfig, err := stageAdminFile(filepath.Join(clone, ".git"), "config", 256<<10)
+	if err != nil {
+		return result, captureIOError(err, "private Git clone configuration unavailable")
+	}
+	if err := os.WriteFile(filepath.Join(reader, "config"), safeConfig, 0600); err != nil {
+		return result, stageConflict("private Git reader configuration publication failed")
 	}
 	statusArgs := []string{"status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=all", "--no-renames"}
 	beforeStatus, e := stageGitRead(ctx, private, reader, s.ObjectDir, filepath.Join(reader, "index"), nil, append([]string{"--work-tree=" + captured}, statusArgs...)...)
