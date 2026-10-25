@@ -126,6 +126,11 @@ func TestLocalLifecycleDefaultHandlersStageThenPromote(t *testing.T) {
 	if err = compileSchema(t).Validate(decodeEnvelope(t, preview.stdout)); err != nil {
 		t.Fatal(err)
 	}
+	for _, disclosure := range []string{"read-write access to original workspace", "admitted mounts and container network", "hashes do not freeze paths", "postAttach suppressed"} {
+		if !strings.Contains(preview.err, disclosure) {
+			t.Fatalf("promotion preview omitted %q: %s", disclosure, preview.err)
+		}
+	}
 	refused := invoke("workspace", "promote", "--local", "--yes", "--json", "primary")
 	requireLifecycleFailure(t, refused, 70, "--volumes and --force")
 	promote := invoke("ws", "promote", "--local", "--volumes", "--force", "--yes", "--json", "primary")
