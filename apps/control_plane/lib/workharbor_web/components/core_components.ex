@@ -446,7 +446,8 @@ defmodule WorkHarborWeb.CoreComponents do
       "hero-arrow-path" => "M20 7v5h-5M4 17v-5h5M5 8a8 8 0 0 1 13-2l2 2M4 16l2 2a8 8 0 0 0 13-2"
     }
 
-    assigns = assign(assigns, :path, Map.get(paths, assigns.name, paths["hero-information-circle"]))
+    assigns =
+      assign(assigns, :path, Map.get(paths, assigns.name, paths["hero-information-circle"]))
 
     ~H"""
     <svg
@@ -471,7 +472,9 @@ defmodule WorkHarborWeb.CoreComponents do
       case codepoint do
         <<value::utf8>> ->
           if control?(value) do
-            digits = value |> Integer.to_string(16) |> String.upcase() |> String.pad_leading(4, "0")
+            digits =
+              value |> Integer.to_string(16) |> String.upcase() |> String.pad_leading(4, "0")
+
             "<U+" <> digits <> ">"
           else
             codepoint

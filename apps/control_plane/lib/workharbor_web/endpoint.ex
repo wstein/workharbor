@@ -34,6 +34,7 @@ defmodule WorkHarborWeb.Endpoint do
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
+
   plug Plug.Static,
     at: "/assets",
     from: {:workharbor, "priv/static/assets"},

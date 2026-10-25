@@ -50,7 +50,8 @@ defmodule WorkHarborWeb.Security do
 
         csp =
           "default-src 'none'; script-src 'self'; style-src 'self'; " <>
-            "connect-src 'self' wss://" <> authority <>
+            "connect-src 'self' wss://" <>
+            authority <>
             "; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
 
         conn |> headers() |> put_resp_header("content-security-policy", csp)
@@ -130,8 +131,8 @@ defmodule WorkHarborWeb.Security do
     if String.contains?(path, ["%", "//", "\\"]) or
          Enum.any?(String.split(path, "/"), &(&1 in [".", ".."])) or
          (path != "/" and String.ends_with?(path, "/")),
-      do: {:error, :invalid_request},
-      else: :ok
+       do: {:error, :invalid_request},
+       else: :ok
   end
 
   # Fixed current auth/control routes have no query parameters. Socket transport
