@@ -4,7 +4,7 @@ go 1.27.2
 
 require (
 	github.com/coder/websocket v1.8.15
-	github.com/moby/buildkit v0.34.0
+	github.com/moby/buildkit v0.34.1
 	github.com/moby/docker-image-spec v1.3.1
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240814133006-030d3b2625d0
 	github.com/wstein/workharbor-nxt/apps/api_client v0.0.0-20261018203319-cae38781e839
