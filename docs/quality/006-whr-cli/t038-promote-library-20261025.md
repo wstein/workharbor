@@ -16,7 +16,8 @@ was not separately approved in advance. Recovery preserves container resources,
 not application data. Starting the original runs its normal entrypoint. Shared
 workspace/home writes, imported objects/refs and terminated sessions are not undone.
 
-After a known failed hook/smoke command or observed unhealthy replacement,
+After a reaped failed hook/smoke process plus a fresh live replacement binding,
+or an observed unhealthy replacement,
 recovery checks endpoint, receipt, inputs, exact bindings, occupied names and
 shared primary mounts. It stops and retains the replacement under its operation
 name, restores the exact original name and starts that original ID. Native
@@ -81,3 +82,41 @@ fake-process tests, not native compatibility evidence.
 No new dependency, command, flag or public JSON schema is introduced. Internal
 recovery action names await explicit command/schema integration. This record does
 not claim a review verdict, task completion or owner-host acceptance.
+
+## Six-finding review correction
+
+Review basis: [Opus review of b60e3d99](https://github.com/wstein/workharbor/pull/267#pullrequestreview-5644806836).
+The test-only recovery commit was assertion-RED on lexical alias/parent/child and
+unavailable bind sources, both configuration copies after each recovery action,
+and stopped/unavailable replacement observations after exit 1. Home-only sharing
+and harmless sibling/read-only controls characterize existing behavior; the
+home-only case must kill removal of the home-volume guard.
+
+The native-policy test-only commit separately reproduced missing HostConfig
+projection, unsafe AutoRemove/restart admission and a late AutoRemove change
+that previously promoted. The product now observes/binds both policy fields and
+refuses unsafe originals before effects. Refusal tests check exit and reason.
+
+The promote path sweep found that other comparisons bind generated physical paths
+or immutable configuration fields. The foreign-bind check now resolves both paths
+and checks overlap in both directions. Temporary and persisted configuration are
+checked before each recovery action. A failed hook/smoke result is uncertain until
+a fresh inspection proves the replacement running with its admitted binding.
+Exit 1 can still be a client failure with a running replacement; the amendment
+explicitly limits that observation to conditional resource recovery.
+
+## Open owner proposal: result-transfer budgets (F6)
+
+The existing implementation uses separate 120-second context caps for preparing
+result snapshots and for each standalone recheck. Apply has one shared 120-second
+cap for the complete export/import sequence; nested checks inherit its remaining
+time. These caps are within the calling promotion context, not an extension of
+it. This is a proposed resource bound, not an accepted profile decision. The
+accepted execution-profile body is unchanged by this review correction.
+
+Proposal for the owner: retain those 120-second caps as explicit transfer phase
+budgets. Admitted repositories approaching the existing size/object limits may
+time out within them; no completion guarantee follows from size admission.
+Deriving transfer solely from the enclosing promotion deadline would be a
+separate owner choice. Keep this PR Draft for that decision, exact-head review
+and required CI. No T038/T039 completion or native owner-host proof is claimed.
