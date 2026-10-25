@@ -162,6 +162,8 @@ defmodule WorkHarborWeb.OwnerShellTest do
           assert {:ok, ^transport} =
                    OwnerSocket.handle_in(wire_message(target, "event", payload), transport)
         end
+
+        assert {:ok, ^transport} = OwnerSocket.handle_in(binary_message(topic), transport)
       end)
 
     refute_receive %Phoenix.Socket.Message{}, 50
@@ -229,6 +231,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
                    OwnerSocket.handle_in(wire_message(topic, "event", payload), transport)
         end
 
+        assert {:ok, ^transport} = OwnerSocket.handle_in(binary_message(topic), transport)
         assert :ok = Phoenix.LiveView.Channel.ping(pid)
       end)
 
@@ -407,5 +410,13 @@ defmodule WorkHarborWeb.OwnerShellTest do
 
   defp wire_message(topic, event, payload, join_ref \\ "join-ref", ref \\ "event-ref") do
     {Jason.encode!([join_ref, ref, topic, event, payload]), [opcode: :text]}
+  end
+
+  defp binary_message(topic) do
+    frame =
+      <<0, 8, 9, byte_size(topic), 5, "join-ref", "event-ref", topic::binary, "event",
+        "FORGED-PAYLOAD-CANARY">>
+
+    {frame, [opcode: :binary]}
   end
 end
