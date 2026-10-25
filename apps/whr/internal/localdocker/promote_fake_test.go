@@ -18,11 +18,12 @@ import (
 
 type fakePromotionState struct {
 	fakeStageState
-	Promotion bool
-	Failure   string
-	Phases    [][]string
-	Retained  map[string]any
-	Failed    map[string]any
+	Promotion                   bool
+	Failure                     string
+	MutationPath, MutationAfter string
+	Phases                      [][]string
+	Retained                    map[string]any
+	Failed                      map[string]any
 }
 
 func readFakePromotionState(t *testing.T, path string) fakePromotionState {
@@ -37,15 +38,17 @@ func readFakePromotionState(t *testing.T, path string) fakePromotionState {
 	}
 	if extra, e := os.ReadFile(path + ".extra"); e == nil {
 		var v struct {
-			Failure  string
-			Phases   [][]string
-			Retained map[string]any
-			Failed   map[string]any
+			Failure                     string
+			MutationPath, MutationAfter string
+			Phases                      [][]string
+			Retained                    map[string]any
+			Failed                      map[string]any
 		}
 		if json.Unmarshal(extra, &v) != nil {
 			t.Fatal("fake extras")
 		}
 		s.Failure = v.Failure
+		s.MutationPath, s.MutationAfter = v.MutationPath, v.MutationAfter
 		s.Phases = v.Phases
 		s.Retained = v.Retained
 		s.Failed = v.Failed
@@ -56,11 +59,12 @@ func writeFakePromotionState(t *testing.T, path string, s fakePromotionState) {
 	t.Helper()
 	b, _ := json.Marshal(s)
 	extra, _ := json.Marshal(struct {
-		Failure  string
-		Phases   [][]string
-		Retained map[string]any
-		Failed   map[string]any
-	}{s.Failure, s.Phases, s.Retained, s.Failed})
+		Failure                     string
+		MutationPath, MutationAfter string
+		Phases                      [][]string
+		Retained                    map[string]any
+		Failed                      map[string]any
+	}{s.Failure, s.MutationPath, s.MutationAfter, s.Phases, s.Retained, s.Failed})
 	if err := os.WriteFile(path+".extra", extra, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -112,6 +116,14 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 		delegate()
 	}
 	save := func() { writeFakePromotionState(t, path, state) }
+	mutateConfiguration := func(after string) {
+		if state.MutationAfter == after {
+			if err := os.WriteFile(state.MutationPath, []byte("{}\n"), 0600); err != nil {
+				os.Exit(120)
+			}
+		}
+	}
+
 	emit := func(v any) { b, _ := json.Marshal(v); fmt.Println(string(b)) }
 	value := func(a []string, k string) string {
 		for i, v := range a {
@@ -204,6 +216,20 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			emit(map[string]any{"outcome": "success", "containerId": strings.Repeat("e", 64), "remoteUser": "vscode", "remoteWorkspaceFolder": "/workspaces/Anchorage", "configuration": cfg, "mergedConfiguration": cfg})
 		case "run-user-commands":
 			if strings.HasPrefix(state.Failure, "hooks") {
+
+				switch state.Failure {
+				case "hooks_client_stopped":
+					state.Primary["Running"], state.Primary["State"] = false, "exited"
+					save()
+					os.Exit(1)
+				case "hooks_client_unreachable":
+					if err := os.WriteFile(path+".unavailable", nil, 0600); err != nil {
+						os.Exit(121)
+					}
+					os.Exit(1)
+				case "hooks_client_live":
+					os.Exit(1)
+				}
 				if state.Failure == "hooks_signal" {
 					syscall.Kill(os.Getpid(), syscall.SIGKILL)
 				}
@@ -234,6 +260,10 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 	}
 	state.Calls = append(state.Calls, append([]string{}, args...))
 	save()
+
+	if _, err := os.Stat(path + ".unavailable"); err == nil {
+		os.Exit(1)
+	}
 	if args[0] == "ps" {
 		for _, item := range []map[string]any{state.Primary, state.Candidate, state.Retained, state.Failed} {
 			if item == nil {
@@ -299,6 +329,10 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 		state.Primary["Running"] = false
 		state.Primary["State"] = "exited"
 		save()
+
+		if state.Primary["Id"] == strings.Repeat("e", 64) {
+			mutateConfiguration("stop_failed")
+		}
 	case "container:rename":
 		id, name := args[len(args)-2], args[len(args)-1]
 		if state.Retained != nil && state.Retained["Id"] == id {
@@ -316,6 +350,13 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			os.Exit(115)
 		}
 		save()
+		if strings.HasPrefix(name, "whr-failed-primary-") {
+			mutateConfiguration("retain_failed")
+		}
+		if name == "primary" && id == strings.Repeat("a", 64) {
+			mutateConfiguration("restore_name")
+		}
+
 	case "container:start":
 		if state.Failure == "hooks_start_failure" {
 			os.Exit(119)
@@ -414,6 +455,20 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			save()
 			fmt.Println(strings.Repeat("e", 64))
 		} else if args[0] == "exec" {
+
+			switch state.Failure {
+			case "smoke_client_stopped":
+				state.Primary["Running"], state.Primary["State"] = false, "exited"
+				save()
+				os.Exit(1)
+			case "smoke_client_unreachable":
+				if err := os.WriteFile(path+".unavailable", nil, 0600); err != nil {
+					os.Exit(121)
+				}
+				os.Exit(1)
+			case "smoke_client_live":
+				os.Exit(1)
+			}
 			if strings.HasPrefix(state.Failure, "smoke_reserved_") {
 				code, _ := strconv.Atoi(strings.TrimPrefix(state.Failure, "smoke_reserved_"))
 				os.Exit(code)
