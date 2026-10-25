@@ -74,7 +74,6 @@ The committed pristine `umask 022; timeout 180s make check` run ended with exit 
 in Python checks before application checks. It is incomplete, not green. No absent
 Elixir/native-host checks are called passing; the published head needs native CI.
 
-
 ## PR 266 review delta
 
 The base now names the real capture dependency, codex/006-t038-capture-20261025
