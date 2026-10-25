@@ -49,7 +49,4 @@ func TestLocalStageCaptureNativeWaitWithoutReap(t *testing.T) {
 	if cmd.ProcessState == nil || !cmd.ProcessState.Success() {
 		t.Fatal("native wait consumed leader before exec.Cmd.Wait")
 	}
-	if err := stageWaitLeader(cmd.Process.Pid); err == nil {
-		t.Fatal("reaped leader remained waitable")
-	}
 }

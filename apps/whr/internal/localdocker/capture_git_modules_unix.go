@@ -21,6 +21,12 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	var err error
+	if !filepath.IsAbs(source) || !filepath.IsAbs(captured) || !filepath.IsAbs(clone) {
+		return result, stageConflict("Git capture paths must be physical absolute paths")
+	}
+	if info, err := os.Lstat(captured); err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return result, stageConflict("Git captured tree path is symlinked or unavailable")
+	}
 	for _, path := range []*string{&source, &captured} {
 		*path, err = filepath.EvalSymlinks(*path)
 		if err != nil {
@@ -50,6 +56,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 	}
 	identity, err := os.Lstat(private)
 	if err != nil {
+		result.Clone = private
 		return result, stageConflict("Git clone staging identity unavailable")
 	}
 	cleanup := &capturedStageFiles{Path: private, identity: identity}
@@ -59,7 +66,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 			result.Clone = cleanup.Path
 		}
 	}()
-	stagedClone := filepath.Join(private, "tree")
+	stagedClone := private
 	ctx, _, err = pinStageGit(ctx)
 	if err != nil {
 		return result, err
@@ -114,9 +121,13 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 		}
 	}
 	if err == nil {
+		if current, e := os.Lstat(private); e != nil || !os.SameFile(current, identity) {
+			return result, stageConflict("Git clone staging identity changed")
+		}
 		if err = publishStageClone(stagedClone, clone); err != nil {
 			return result, stageConflict("Git clone publication failed or destination changed")
 		}
+		cleanup.Path = "" // The owned root moved; the old name is no longer ours.
 		for i := range result.Repositories {
 			rel, _ := filepath.Rel(stagedClone, result.Repositories[i].ClonePath)
 			result.Repositories[i].ClonePath = filepath.Join(clone, rel)

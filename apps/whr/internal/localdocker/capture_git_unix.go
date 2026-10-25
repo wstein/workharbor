@@ -391,9 +391,6 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	if pinErr != nil {
 		return result, pinErr
 	}
-	if !filepath.IsAbs(source) || !filepath.IsAbs(captured) || !filepath.IsAbs(clone) {
-		return result, stageConflict("Git capture paths must be physical absolute paths")
-	}
 	s, e := readStageGitSnapshotContext(ctx, source)
 	if e != nil {
 		return result, e
@@ -676,6 +673,9 @@ func copyStageWorkingSkip(ctx context.Context, source, destination string, skip 
 	}
 	var directories []directoryMode
 	err := filepath.WalkDir(source, func(path string, d fs.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return stageConflict("captured working tree unavailable")
 		}
@@ -735,7 +735,7 @@ func copyStageWorkingSkip(ctx context.Context, source, destination string, skip 
 		if err != nil {
 			return stageConflict("captured working output unavailable")
 		}
-		n, copyErr := io.Copy(out, io.LimitReader(in, held.Size()+1))
+		n, copyErr := io.Copy(out, io.LimitReader(stageContextReader{ctx: ctx, Reader: in}, held.Size()+1))
 		err = copyErr
 		if err == nil && n != held.Size() {
 			err = stageConflict("captured working file size changed")
