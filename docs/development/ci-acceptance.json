@@ -1259,6 +1259,7 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageDriverRejectsDeclaredPrimaryAtAnyDestination",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageExecutionManifestSeparatesOrdinaryWorkFromDependencies",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitStatusPredicateRejectsCorruptIndexWithoutExecutingConfig",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageFixtureSocketIgnoresLongTMPDIR",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageFakeToolProcess",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageHomeIntentDurableBeforeNativeCreation",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageRequiresTrustAndConsent",
