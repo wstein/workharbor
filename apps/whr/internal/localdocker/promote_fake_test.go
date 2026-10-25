@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -20,6 +21,7 @@ type fakePromotionState struct {
 	Failure   string
 	Phases    [][]string
 	Retained  map[string]any
+	Failed    map[string]any
 }
 
 func readFakePromotionState(t *testing.T, path string) fakePromotionState {
@@ -37,6 +39,7 @@ func readFakePromotionState(t *testing.T, path string) fakePromotionState {
 			Failure  string
 			Phases   [][]string
 			Retained map[string]any
+			Failed   map[string]any
 		}
 		if json.Unmarshal(extra, &v) != nil {
 			t.Fatal("fake extras")
@@ -44,6 +47,7 @@ func readFakePromotionState(t *testing.T, path string) fakePromotionState {
 		s.Failure = v.Failure
 		s.Phases = v.Phases
 		s.Retained = v.Retained
+		s.Failed = v.Failed
 	}
 	return s
 }
@@ -54,7 +58,8 @@ func writeFakePromotionState(t *testing.T, path string, s fakePromotionState) {
 		Failure  string
 		Phases   [][]string
 		Retained map[string]any
-	}{s.Failure, s.Phases, s.Retained})
+		Failed   map[string]any
+	}{s.Failure, s.Phases, s.Retained, s.Failed})
 	if err := os.WriteFile(path+".extra", extra, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +202,20 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			}
 			emit(map[string]any{"outcome": "success", "containerId": strings.Repeat("e", 64), "remoteUser": "vscode", "remoteWorkspaceFolder": "/workspaces/Anchorage", "configuration": cfg, "mergedConfiguration": cfg})
 		case "run-user-commands":
-			if state.Failure == "hooks" {
+			if strings.HasPrefix(state.Failure, "hooks") {
+				if state.Failure == "hooks_signal" {
+					syscall.Kill(os.Getpid(), syscall.SIGKILL)
+				}
+				if state.Failure == "hooks_shared" || state.Failure == "hooks_occupied" {
+					raw, _ := json.Marshal(state.Primary)
+					json.Unmarshal(raw, &state.Failed)
+					state.Failed["Id"] = strings.Repeat("f", 64)
+					state.Failed["Name"] = "/foreign"
+					if state.Failure == "hooks_occupied" {
+						state.Failed["Name"] = "/whr-failed-primary-" + state.Primary["Labels"].(map[string]any)["workharbor.promote.operation"].(string)
+					}
+					save()
+				}
 				os.Exit(98)
 			}
 			emit(map[string]string{"outcome": "success"})
@@ -216,7 +234,7 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 	state.Calls = append(state.Calls, append([]string{}, args...))
 	save()
 	if args[0] == "ps" {
-		for _, item := range []map[string]any{state.Primary, state.Candidate, state.Retained} {
+		for _, item := range []map[string]any{state.Primary, state.Candidate, state.Retained, state.Failed} {
 			if item == nil {
 				continue
 			}
@@ -239,7 +257,7 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 	}
 	switch args[0] + ":" + args[1] {
 	case "container:ls":
-		for _, item := range []map[string]any{state.Primary, state.Candidate, state.Retained} {
+		for _, item := range []map[string]any{state.Primary, state.Candidate, state.Retained, state.Failed} {
 			if item != nil {
 				emit(map[string]any{"ID": item["Id"], "Status": item["State"]})
 			}
@@ -248,7 +266,7 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 		format := value(args, "--format")
 		for _, id := range args[4:] {
 			var item map[string]any
-			for _, v := range []map[string]any{state.Primary, state.Candidate, state.Retained} {
+			for _, v := range []map[string]any{state.Primary, state.Candidate, state.Retained, state.Failed} {
 				if v != nil && v["Id"] == id {
 					item = v
 				}
@@ -268,6 +286,9 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			}
 		}
 	case "container:stop":
+		if state.Failure == "hooks_stop_failure" && state.Primary != nil && state.Primary["Id"] == strings.Repeat("e", 64) {
+			os.Exit(118)
+		}
 		if state.Primary == nil || state.Primary["Id"] != args[len(args)-1] {
 			os.Exit(103)
 		}
@@ -278,12 +299,30 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 		state.Primary["State"] = "exited"
 		save()
 	case "container:rename":
-		if state.Primary == nil || state.Primary["Id"] != args[len(args)-2] {
+		id, name := args[len(args)-2], args[len(args)-1]
+		if state.Retained != nil && state.Retained["Id"] == id {
+			state.Retained["Name"] = "/" + name
+			state.Primary, state.Retained = state.Retained, nil
+		} else if state.Primary != nil && state.Primary["Id"] == id {
+			state.Primary["Name"] = "/" + name
+			if strings.HasPrefix(name, "whr-failed-primary-") {
+				state.Failed = state.Primary
+			} else {
+				state.Retained = state.Primary
+			}
+			state.Primary = nil
+		} else {
 			os.Exit(115)
 		}
-		state.Primary["Name"] = "/" + args[len(args)-1]
-		state.Retained = state.Primary
-		state.Primary = nil
+		save()
+	case "container:start":
+		if state.Failure == "hooks_start_failure" {
+			os.Exit(119)
+		}
+		if state.Primary == nil || state.Primary["Id"] != args[len(args)-1] {
+			os.Exit(117)
+		}
+		state.Primary["Running"], state.Primary["State"] = true, "running"
 		save()
 	case "container:rm":
 		id := args[len(args)-1]
@@ -300,6 +339,9 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 				os.Exit(116)
 			}
 			state.Retained = nil
+			if state.Failure == "retained_rm_late_shared" {
+				state.Failed = map[string]any{"Id": strings.Repeat("f", 64), "Name": "/late-sharing", "State": "exited", "Labels": map[string]string{}, "Mounts": []map[string]any{{"Type": "volume", "Name": state.Volume.Name, "Source": state.Volume.Name, "Destination": "/foreign", "RW": true}}}
+			}
 		} else if state.Primary != nil && state.Primary["Id"] == id {
 			state.Primary = nil
 		} else {
