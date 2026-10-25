@@ -27,7 +27,7 @@ func stageConfigEntries(ctx context.Context, home string, s stageGitSnapshot) (m
 	hash := sha256.Sum256(data)
 	name := filepath.Join(home, "config-input")
 	if err = os.WriteFile(name, data, 0600); err != nil {
-		return nil, "", err
+		return nil, "", stageConflict("private Git configuration publication failed")
 	}
 	// --no-includes reads the bounded copied bytes as data. No source repository
 	// context, include path, command, helper, template or transport is evaluated.
@@ -92,7 +92,7 @@ func writeStageSafeConfig(ctx context.Context, home string, s stageGitSnapshot, 
 		config = strings.Replace(config, "version = 0", "version = 1", 1) + "[extensions]\n\tobjectformat = sha256\n"
 	}
 	if err := os.WriteFile(filepath.Join(gitdir, "config"), []byte(config), 0600); err != nil {
-		return err
+		return stageConflict("private Git safe configuration publication failed")
 	}
 	remotes := map[string]bool{}
 	keys := make([]string, 0, len(values))

@@ -154,7 +154,7 @@ func runStageGit(cmd *exec.Cmd) error {
 	cmd.Cancel = group.terminate
 	if err := cmd.Start(); err != nil {
 		group.releaseBeforeReap(false)
-		return err
+		return captureIOError(err, "Git process start failed")
 	}
 	observed := stageWaitLeader(cmd.Process.Pid)
 	group.releaseBeforeReap(observed == nil)

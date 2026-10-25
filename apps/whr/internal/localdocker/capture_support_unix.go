@@ -5,6 +5,7 @@ package localdocker
 
 import (
 	"context"
+	"errors"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"io"
 	"path/filepath"
@@ -34,4 +35,15 @@ func stageSelectedPath(path string, selected []string) bool {
 		}
 	}
 	return false
+}
+
+func captureIOError(err error, reason string) error {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	var typed *exitcode.Error
+	if errors.As(err, &typed) {
+		return err
+	}
+	return stageConflict(reason)
 }
