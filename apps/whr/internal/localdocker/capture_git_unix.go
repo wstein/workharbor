@@ -640,11 +640,19 @@ func stageSameRefs(a, b map[string]string) bool {
 func copyStageWorkingSkip(source, destination string, skip map[string]bool) error {
 	var total int64
 	count := 0
-	return filepath.WalkDir(source, func(path string, d fs.DirEntry, e error) error {
-		if e != nil {
+	type directoryMode struct {
+		path string
+		mode fs.FileMode
+	}
+	var directories []directoryMode
+	err := filepath.WalkDir(source, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
 			return stageConflict("captured working tree unavailable")
 		}
-		rel, _ := filepath.Rel(source, path)
+		rel, err := filepath.Rel(source, path)
+		if err != nil {
+			return stageConflict("captured working path unavailable")
+		}
 		if rel == "." {
 			return nil
 		}
@@ -659,29 +667,33 @@ func copyStageWorkingSkip(source, destination string, skip map[string]bool) erro
 			return stageConflict("captured working entry quota exceeded")
 		}
 		target := filepath.Join(destination, rel)
-		st, e := os.Lstat(path)
-		if e != nil {
-			return e
+		st, err := os.Lstat(path)
+		if err != nil {
+			return stageConflict("captured working input unavailable")
 		}
 		if d.IsDir() {
-			if err := os.Mkdir(target, st.Mode().Perm()); err != nil {
-				return err
+			if err := os.Mkdir(target, 0700); err != nil {
+				return stageConflict("captured working directory publication failed")
 			}
-			return os.Chmod(target, st.Mode().Perm())
+			directories = append(directories, directoryMode{target, st.Mode().Perm()})
+			return nil
 		}
 		if st.Mode()&os.ModeSymlink != 0 {
-			v, e := os.Readlink(path)
-			if e != nil {
-				return e
+			value, err := os.Readlink(path)
+			if err != nil {
+				return stageConflict("captured working symlink unavailable")
 			}
-			return os.Symlink(v, target)
+			if err := os.Symlink(value, target); err != nil {
+				return stageConflict("captured working symlink publication failed")
+			}
+			return nil
 		}
 		if !st.Mode().IsRegular() {
 			return stageConflict("captured working file type changed")
 		}
-		in, e := os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW, 0)
-		if e != nil {
-			return e
+		in, err := os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW, 0)
+		if err != nil {
+			return stageConflict("captured working input unavailable")
 		}
 		defer in.Close()
 		held, err := in.Stat()
@@ -689,26 +701,38 @@ func copyStageWorkingSkip(source, destination string, skip map[string]bool) erro
 			return stageConflict("captured working file identity or quota")
 		}
 		total += held.Size()
-		out, e := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL|unix.O_NOFOLLOW, st.Mode().Perm())
-		if e != nil {
-			return e
+		out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL|unix.O_NOFOLLOW, 0600)
+		if err != nil {
+			return stageConflict("captured working output unavailable")
 		}
 		n, copyErr := io.Copy(out, io.LimitReader(in, held.Size()+1))
-		e = copyErr
-		if e == nil && n != held.Size() {
-			e = stageConflict("captured working file size changed")
+		err = copyErr
+		if err == nil && n != held.Size() {
+			err = stageConflict("captured working file size changed")
 		}
-		if e == nil {
-			e = out.Chmod(st.Mode().Perm())
+		if err == nil {
+			err = out.Chmod(st.Mode().Perm())
 		}
 		after, statErr := in.Stat()
-		if e == nil && (statErr != nil || after.Size() != held.Size() || !after.ModTime().Equal(held.ModTime())) {
-			e = stageConflict("captured working file changed")
+		if err == nil && (statErr != nil || after.Size() != held.Size() || !after.ModTime().Equal(held.ModTime())) {
+			err = stageConflict("captured working file changed")
 		}
-		ce := out.Close()
-		if e == nil {
-			e = ce
+		closeErr := out.Close()
+		if err == nil {
+			err = closeErr
 		}
-		return e
+		if err != nil {
+			return captureIOError(err, "captured working file publication failed")
+		}
+		return nil
 	})
+	if err != nil {
+		return err
+	}
+	for i := len(directories) - 1; i >= 0; i-- {
+		if err := os.Chmod(directories[i].path, directories[i].mode); err != nil {
+			return stageConflict("captured working directory mode publication failed")
+		}
+	}
+	return nil
 }
