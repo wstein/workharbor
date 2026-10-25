@@ -22,7 +22,7 @@ func TestLocalStageCaptureObservationFailureKillsOwnedGroup(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			group.releaseBeforeReap(false)
+			group.releaseBeforeReap()
 			if len(signals) == 0 || signals[len(signals)-1] != syscall.SIGKILL {
 				t.Fatalf("owned group released without final kill: %v", signals)
 			}
@@ -30,7 +30,7 @@ func TestLocalStageCaptureObservationFailureKillsOwnedGroup(t *testing.T) {
 			if err := group.terminate(); err != os.ErrProcessDone {
 				t.Fatalf("released PID ownership reused: %v", err)
 			}
-			group.releaseBeforeReap(true)
+			group.releaseBeforeReap()
 			if len(signals) != before {
 				t.Fatal("signaled an already released group")
 			}

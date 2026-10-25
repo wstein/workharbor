@@ -30,11 +30,7 @@ func stageSnapshotDigest(s stageGitSnapshot) string {
 	sum := sha256.Sum256(append(b, '\n'))
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
-func checkStageObjectStores(ctx context.Context, root string, strict bool) error {
-	_, err := stageObjectStoreBinding(ctx, root, strict)
-	return err
-}
-func stageObjectStoreBinding(ctx context.Context, root string, strict bool) (string, error) {
+func stageObjectStoreBinding(ctx context.Context, root string) (string, error) {
 	visited := map[string]bool{}
 	records := []string{}
 	var visit func(string) error
@@ -82,9 +78,6 @@ func stageObjectStoreBinding(ctx context.Context, root string, strict bool) (str
 		}
 		if err != nil {
 			return err
-		}
-		if strict {
-			return stageConflict("candidate Git alternates unsupported")
 		}
 		sum := sha256.Sum256(data)
 		records = append(records, physical+"\x00alternates:"+hex.EncodeToString(sum[:]))

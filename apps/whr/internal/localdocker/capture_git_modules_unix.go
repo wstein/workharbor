@@ -16,6 +16,8 @@ func stageGitRelativePath(value string) bool {
 	return value != "" && value != "." && len(value) <= 4096 && !filepath.IsAbs(value) && filepath.ToSlash(filepath.Clean(value)) == value && value != ".." && !strings.HasPrefix(value, "../") && !strings.Contains("/"+value+"/", "/.git/") && !strings.ContainsAny(value, "\x00\r\n")
 }
 func captureStageGit(ctx context.Context, source, captured, clone string) (result stageGitCapture, failure error) {
+	limits := stageCaptureLimitsFor(ctx)
+	ctx = context.WithValue(ctx, stageObjectAuditKey{}, &stageObjectAudit{checked: map[string]bool{}})
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	var err error
@@ -54,6 +56,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 	defer func() {
 		if err := cleanup.Close(); err != nil {
 			failure = err
+			result.Clone = cleanup.Path
 		}
 	}()
 	stagedClone := filepath.Join(private, "tree")
@@ -66,10 +69,10 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 	var objectBytes int64
 	var capture func(string, string, string, int) error
 	capture = func(src, files, out string, depth int) error {
-		if depth > 8 {
+		if depth > limits.SubmoduleDepth {
 			return stageConflict("populated Git submodule depth quota exceeded")
 		}
-		if count > 32 {
+		if count > limits.SubmoduleCount {
 			return stageConflict("populated Git submodule count quota exceeded")
 		}
 		one, err := captureStageGitOne(ctx, src, files, out)
@@ -85,7 +88,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 		s.ClonePath = out
 		objects += s.ObjectCount
 		objectBytes += s.ObjectBytes
-		if objects > 1000000 || objectBytes > 8<<30 {
+		if objects > limits.Objects || objectBytes > limits.ObjectBytes {
 			return stageConflict("Git operation object graph quota exceeded")
 		}
 		if depth == 0 {
@@ -102,8 +105,9 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 	}
 	err = capture(source, captured, stagedClone, 0)
 	if err == nil {
+		stageCapturePhase(ctx, "repositories-copied", source)
 		for _, s := range result.Repositories {
-			current, e := readStageGitSnapshotContext(ctx, s.Source, false)
+			current, e := readStageGitSnapshotContext(ctx, s.Source)
 			if e != nil || current.BindingDigest != s.BindingDigest {
 				return result, stageConflict("source Git state changed during recursive capture")
 			}
