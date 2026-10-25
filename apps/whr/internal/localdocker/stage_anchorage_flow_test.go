@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,6 +52,20 @@ func TestLocalStageAnchorageFactsRemainIndependentThroughPromotion(t *testing.T)
 		t.Fatal(err)
 	}
 	if err = os.WriteFile(path+".promotion", []byte("1"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	changed := bytes.Replace(original, []byte("HOST_NAME='captain'"), []byte("HOST_NAME='owner-changed'"), 1)
+	if err = os.WriteFile(factsPath, changed, 0600); err != nil {
+		t.Fatal(err)
+	}
+	drift, err := c.preparePromotion(context.Background(), PromoteOptions{Target: strings.Repeat("a", 64)}, ports)
+	if drift != nil {
+		drift.Close()
+	}
+	if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), "promotion receipt-bound host facts changed") {
+		t.Fatalf("facts drift: %v", err)
+	}
+	if err = os.WriteFile(factsPath, original, 0600); err != nil {
 		t.Fatal(err)
 	}
 	p, err := c.preparePromotion(context.Background(), PromoteOptions{Target: strings.Repeat("a", 64)}, ports)
