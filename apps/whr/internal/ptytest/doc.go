@@ -70,9 +70,12 @@
 // Linux and macOS (build tags linux and darwin; /dev/ptmx is allocated with
 // the standard library syscall package, no cgo and no third-party module).
 // On any other platform Start and StartFunc skip the test with a message that
-// contains "SKIPPED, NOT PASSED"; a skipped test is not evidence. Linux is
-// exercised on aarch64 and x86_64 (the latter under emulation here). The macOS
-// code only compiles (GOOS=darwin vet and test compile) and its ioctl numbers
-// are untested: acceptance evidence SC-007 needs a real run on macOS with the
-// exact versions recorded; no CI run on macOS is claimed.
+// contains "SKIPPED, NOT PASSED"; a skipped test is not evidence. Native Linux
+// acceptance runs the package through bootstrap. The macos-pty CI job runs a
+// named selection of harness, wizard and local-shell PTY tests on macos-15
+// with Go 1.27.2, requiring each selected test to pass and rejecting skips.
+// That job exercises the native macOS implementation, including its ioctl
+// paths; it is more than cross-compilation. See .github/workflows/check.yml.
+// This selected CI coverage does not establish owner-host acceptance SC-007
+// or the real macOS/OrbStack doctor run required by SC-019.
 package ptytest
