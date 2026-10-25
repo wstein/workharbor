@@ -199,7 +199,7 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 	if e = checkStageImageMounts(image, s.primaryObserved.Mounts); e != nil {
 		return fail("replacement mount preflight failed", e)
 	}
-	if e = checkStageImageMounts(image, candidate.Mounts); e != nil {
+	if e = checkStageCandidateVolumes(candidate.Mounts, s.runner.Policy); e != nil {
 		return fail("candidate mount preflight failed", e)
 	}
 	if e = s.admitMergedDependencies(ctx, up.MergedConfiguration); e != nil {

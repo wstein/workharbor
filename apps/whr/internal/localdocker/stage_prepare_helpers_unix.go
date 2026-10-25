@@ -68,6 +68,10 @@ func admitStageNativeMount(ctx context.Context, daemon stageDaemonInfo, primary 
 }
 
 func bindStagePrimary(primary inspection, source string) (workspace, home, destination string, err error) {
+	// Mount capability is known before allocating a home or starting official up.
+	if e := checkStageImageMounts(stageImageDetails{}, primary.Mounts); e != nil {
+		return "", "", "", e
+	}
 	label := primary.Labels["devcontainer.local_folder"]
 	physical, e := filepath.EvalSymlinks(label)
 	if e != nil || physical != source {

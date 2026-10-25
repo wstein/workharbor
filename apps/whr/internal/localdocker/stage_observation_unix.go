@@ -158,3 +158,37 @@ func checkStageImageMounts(image stageImageDetails, mounts []mount) error {
 	}
 	return nil
 }
+
+// Docker materializes uncovered image VOLUMEs as anonymous volumes. Inspecting
+// their destinations alone cannot prove that those volumes were declared.
+func checkStageCandidateVolumes(mounts []mount, policy *stageDriverPolicy) error {
+	if policy == nil {
+		return stageConflict("candidate mount plan unavailable")
+	}
+	planned := map[string]string{policy.HomeDestination: policy.Home}
+	for _, raw := range policy.AllowedMounts {
+		m, err := stageNativeMount(raw)
+		if err != nil {
+			return err
+		}
+		if m["type"] == "volume" {
+			planned[m["target"]] = m["source"]
+		}
+	}
+	seen := map[string]bool{}
+	for _, m := range mounts {
+		if m.Type != "volume" {
+			continue
+		}
+		if planned[m.Destination] == "" || planned[m.Destination] != m.Name || seen[m.Destination] {
+			return stageConflict("candidate volume mount not in declared plan")
+		}
+		seen[m.Destination] = true
+	}
+	for target := range planned {
+		if !seen[target] {
+			return stageConflict("candidate declared volume mount missing")
+		}
+	}
+	return nil
+}
