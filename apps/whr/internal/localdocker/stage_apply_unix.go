@@ -39,6 +39,19 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	}
 	ctx, cancel := context.WithTimeout(parent, 3600*time.Second)
 	defer cancel()
+	currentEnvironment, e := stageClosedEnvironment(s.runner.Root, s.endpoint.Endpoint)
+	if e != nil {
+		return refuse(e)
+	}
+	if stageDigest(stageTrustEnvironment(currentEnvironment)) != stageDigest(stageTrustEnvironment(s.runner.Environment)) {
+		return refuse(stageConflict("admitted environment changed since preview"))
+	}
+	for _, identity := range s.runner.Tools {
+		digest, err := stageFileDigest(ctx, identity.Path)
+		if err != nil || digest != identity.Digest {
+			return refuse(stageConflict("admitted tool changed since preview"))
+		}
+	}
 	if e := s.capture.Check(ctx); e != nil {
 		return refuse(e)
 	}

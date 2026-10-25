@@ -96,16 +96,24 @@ func newStageRunner(ctx context.Context, root, endpoint string, paths map[string
 			return nil, stageConflict("phase private directory unavailable")
 		}
 	}
-	r.Environment = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + filepath.Join(root, "home"), "TMPDIR=" + filepath.Join(root, "tmp"), "XDG_CACHE_HOME=" + filepath.Join(root, "cache"), "DOCKER_CONFIG=" + filepath.Join(root, "docker-config"), "DOCKER_HOST=" + endpoint}
+	r.Environment, e = stageClosedEnvironment(root, endpoint)
+	if e != nil {
+		return nil, e
+	}
+	return r, nil
+}
+func stageClosedEnvironment(root, endpoint string) ([]string, error) {
+	var environment []string
+	environment = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + filepath.Join(root, "home"), "TMPDIR=" + filepath.Join(root, "tmp"), "XDG_CACHE_HOME=" + filepath.Join(root, "cache"), "DOCKER_CONFIG=" + filepath.Join(root, "docker-config"), "DOCKER_HOST=" + endpoint}
 	for _, name := range []string{"LANG", "LC_ALL", "TZ", "ANCHORAGE_CONTAINER_NAME", "ANCHORAGE_CONTAINER_HOSTNAME", "ANCHORAGE_ROLE", "ANCHORAGE_HOST_LABEL", "ANCHORAGE_HOST_IP"} {
 		if value, ok := os.LookupEnv(name); ok {
 			if len(value) > 4096 || !utf8.ValidString(value) || strings.ContainsAny(value, "\x00\r\n") {
 				return nil, stageConflict("nonsecret substitution value unsupported")
 			}
-			r.Environment = append(r.Environment, name+"="+value)
+			environment = append(environment, name+"="+value)
 		}
 	}
-	return r, nil
+	return environment, nil
 }
 func (r *stageRunner) Run(parent context.Context, phase, tool string, args []string, stdin io.Reader, budget time.Duration) (stagePhaseOutput, error) {
 	var result stagePhaseOutput
