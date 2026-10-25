@@ -16,12 +16,14 @@ import (
 )
 
 type fakeStageState struct {
-	Primary    map[string]any
-	Candidate  map[string]any
-	Volume     *stageVolumeDetails
-	Calls      [][]string
-	SmokeStdin string
-	Health     bool
+	Primary                  map[string]any
+	Candidate                map[string]any
+	Volume                   *stageVolumeDetails
+	Calls                    [][]string
+	SmokeStdin               string
+	Health                   bool
+	StateRoot                string
+	RequireDurableHomeIntent bool
 }
 
 func readFakeStageState(t *testing.T, path string) fakeStageState {
@@ -213,6 +215,44 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 		}
 		emit(state.Volume)
 	case "volume:create":
+		if state.RequireDurableHomeIntent {
+			entries, _ := os.ReadDir(state.StateRoot)
+			valid := false
+			for _, daemon := range entries {
+				operations, _ := os.ReadDir(filepath.Join(state.StateRoot, daemon.Name()))
+				for _, op := range operations {
+					base := filepath.Join(state.StateRoot, daemon.Name(), op.Name())
+					var receipt stageReceipt
+					raw, e := os.ReadFile(filepath.Join(base, "receipt.json"))
+					if e != nil || json.Unmarshal(raw, &receipt) != nil {
+						continue
+					}
+					var binding stageExecutionBinding
+					raw, e = os.ReadFile(filepath.Join(base, "execution-binding.json"))
+					if e != nil || json.Unmarshal(raw, &binding) != nil || stageDigest(binding) != receipt.ExecutionManifestDigest {
+						continue
+					}
+					var settings stageSettings
+					raw, e = os.ReadFile(filepath.Join(base, "stage-settings.json"))
+					if e != nil || json.Unmarshal(raw, &settings) != nil || stageDigest(settings) != binding.SettingsDigest {
+						continue
+					}
+					var plan CandidateHomePlan
+					raw, e = os.ReadFile(filepath.Join(base, "candidate-home.json"))
+					if e != nil || json.Unmarshal(raw, &plan) != nil || stageDigest(plan) != settings.HomePlanDigest {
+						continue
+					}
+					if plan.Mount.Name == args[len(args)-1] && plan.OperationID == op.Name() {
+						if _, e = os.Stat(filepath.Join(base, "intent.json")); e == nil {
+							valid = true
+						}
+					}
+				}
+			}
+			if !valid {
+				os.Exit(107)
+			}
+		}
 		labels := map[string]string{}
 		for i, v := range args {
 			if v == "--label" && i+1 < len(args) {

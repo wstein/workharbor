@@ -6,12 +6,34 @@ package localdocker
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 )
+
+func TestLocalStageHomeIntentDurableBeforeNativeCreation(t *testing.T) {
+	c, opts, p, statePath := fixtureStageLifecycle(t, false)
+	opts.Smoke = true
+	state := readFakeStageState(t, statePath)
+	state.StateRoot = p.StateRoot
+	state.RequireDurableHomeIntent = true
+	b, _ := json.Marshal(state)
+	if e := os.WriteFile(statePath, b, 0600); e != nil {
+		t.Fatal(e)
+	}
+	s, e := c.prepareStage(context.Background(), opts, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	result, e := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if e != nil || result.Status != "staged_verified" {
+		t.Fatalf("native create lacked bound retained nonce intent: %+v %v", result, e)
+	}
+}
 
 func TestLocalStageRequiresTrustAndConsent(t *testing.T) {
 	for _, tc := range []struct {
