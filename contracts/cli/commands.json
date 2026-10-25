@@ -26,6 +26,7 @@
     "owner_client": "the typed TLS owner client and credential storage work item (T011); the router already serves /api/v1/auth/login|status|logout and /api/v1/hosts/:id"
   },
   "commands": [
+    {"id": "workspace.promote", "path": ["workspace", "promote"], "short": null, "increment": "first", "needs": "none", "writes": "local", "json": "envelope", "flags": ["--local", "--dry-run", "--volumes", "--force", "--yes", "--json"]},
     {"id": "workspace.stage", "path": ["workspace", "stage"], "short": null, "increment": "first", "needs": "none", "writes": "local", "json": "envelope", "flags": ["--local", "--source", "--smoke", "--dry-run", "--trust", "--yes", "--json"]},
     {"id":"workspace.drift","path":["workspace","drift"],"increment":"first","needs":"none","writes":"none","json":"envelope","flags":["--local","--source","--json"]},
     {"id": "workspace.ls", "path": ["workspace", "ls"], "short": ["ls"], "increment": "later", "needs": "control_plane", "writes": "none", "json": "envelope", "blocked_on": "owner_api", "flags": ["--local", "--role", "--label", "--json"], "note": "FR-066 local-only discovery is implemented; without --local owner_api still refuses with exit 64"},

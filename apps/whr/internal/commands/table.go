@@ -82,6 +82,7 @@ func WaitsFor(id string) string {
 }
 
 var descriptions = map[string]string{
+	"workspace.promote":      "Promote the verified local candidate and preserve the original primary home",
 	"workspace.stage":        "Stage a local candidate with its own home using an explicitly trusted source",
 	"workspace.drift":        "Report local bundle reference drift without changing the workspace",
 	"workspace.ls":           "List local workspaces with --local (remote listing waits for owner_api)",
