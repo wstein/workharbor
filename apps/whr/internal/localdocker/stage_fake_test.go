@@ -29,6 +29,12 @@ type fakeStageState struct {
 	LateMergedLifecycle      map[string][]any
 	MutateCapturedSmokePath  string
 	HooksCompleted           bool
+	SmokeExit                int
+	HealthStatus             string
+	StopPrimaryOnUp          bool
+	ForeignOperation         bool
+	UpReturnsPrimary         bool
+	ImageVolumes             []string
 }
 
 func readFakeStageState(t *testing.T, path string) fakeStageState {
@@ -224,7 +230,13 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if e = cmd.Run(); e != nil {
 				os.Exit(97)
 			}
-			emit(map[string]any{"outcome": "success", "containerId": strings.Repeat("c", 64), "remoteUser": "vscode", "remoteWorkspaceFolder": "/workspaces/Anchorage", "configuration": cfg, "mergedConfiguration": merged(cfg, true)})
+			// The fake emits configurable official-CLI identity outcomes.
+			state = readFakeStageState(t, path)
+			returnedID := strings.Repeat("c", 64)
+			if state.UpReturnsPrimary {
+				returnedID = state.Primary["Id"].(string)
+			}
+			emit(map[string]any{"outcome": "success", "containerId": returnedID, "remoteUser": "vscode", "remoteWorkspaceFolder": "/workspaces/Anchorage", "configuration": cfg, "mergedConfiguration": merged(cfg, true)})
 		case "run-user-commands":
 			cmd := exec.Command(argValue(args, "--docker-path"), "exec", "--user", "vscode", "--workdir", "/workspaces/Anchorage", argValue(args, "--container-id"), "/bin/sh", "-c", "fixture hooks")
 			cmd.Env = os.Environ()
@@ -348,7 +360,11 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 		save()
 		fmt.Println(state.Volume.Name)
 	case "image:inspect":
-		emit(map[string]any{"Id": "sha256:" + strings.Repeat("d", 64), "Metadata": nil})
+		volumes := map[string]any{}
+		for _, target := range state.ImageVolumes {
+			volumes[target] = map[string]any{}
+		}
+		emit(map[string]any{"Id": "sha256:" + strings.Repeat("d", 64), "Metadata": nil, "Volumes": volumes})
 	default:
 		if args[0] == "run" {
 			mounts := []map[string]any{}
@@ -373,11 +389,33 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 					labels[key] = value
 				}
 			}
+			// Real Docker creates an anonymous volume for each uncovered image VOLUME.
+			for i, target := range state.ImageVolumes {
+				covered := false
+				for _, m := range mounts {
+					if m["Destination"] == target {
+						covered = true
+					}
+				}
+				if !covered {
+					mounts = append(mounts, map[string]any{"Type": "volume", "Name": fmt.Sprintf("anonymous-%d", i), "Source": "/var/lib/docker/volumes/anonymous/_data", "Destination": target, "RW": true})
+				}
+			}
+			if state.ForeignOperation {
+				labels["workharbor.stage.operation"] = strings.Repeat("f", 32)
+			}
+			if state.StopPrimaryOnUp {
+				state.Primary["Running"] = false
+				state.Primary["State"] = "exited"
+			}
 			var healthcheck any
 			var health any
 			if state.Health {
 				healthcheck = map[string]any{"Test": []string{"CMD", "true"}}
 				health = "healthy"
+				if state.HealthStatus != "" {
+					health = state.HealthStatus
+				}
 			}
 			state.Candidate = map[string]any{"Id": strings.Repeat("c", 64), "Name": "/" + argValue(args, "--name"), "ImageID": "sha256:" + strings.Repeat("d", 64), "ConfigImage": "example:local", "User": "", "Hostname": argValue(args, "--hostname"), "State": "running", "Running": true, "Healthcheck": healthcheck, "Health": health, "Labels": labels, "Mounts": mounts, "Environment": []string{}, "Entrypoint": []string{"/bin/sh"}, "Command": []string{"-c", "fixture native entrypoint"}}
 			save()
@@ -412,6 +450,7 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 					state.SmokeStdin = string(data)
 					save()
 					fmt.Print("\x1b[31msmoke-marker\n")
+					os.Exit(state.SmokeExit)
 				}
 			}
 		} else {
