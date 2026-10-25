@@ -401,3 +401,83 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 		})
 	}
 }
+
+func setStageFixtureInitialize(t *testing.T, source string, command any) {
+	t.Helper()
+	path := filepath.Join(source, ".devcontainer", "devcontainer.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg map[string]any
+	if err = json.Unmarshal(data, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	cfg["initializeCommand"] = command
+	data, err = json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+}
+func TestLocalStageExecutionRootsMatchActualPhase(t *testing.T) {
+	for _, form := range []string{"host_original", "host_nested_original", "host_container", "container_original", "container_nested_original"} {
+		t.Run(form, func(t *testing.T) {
+			c, opts, ports, statePath := fixtureStageLifecycle(t, false)
+			if err := os.Mkdir(filepath.Join(opts.Source, "scripts"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			original := filepath.Join(opts.Source, "scripts", "host.sh")
+			if err := os.WriteFile(original, []byte("true\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			var command any = []any{"sh", original}
+			if strings.Contains(form, "nested") {
+				if err := os.WriteFile(filepath.Join(opts.Source, "scripts", "entry.sh"), []byte("sh "+stageShellLiteral(original)+"\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				command = []any{"sh", "scripts/entry.sh"}
+			}
+			reason := "host initialization execution root capability unsupported"
+			if form == "host_container" {
+				command = []any{"sh", "/workspaces/Anchorage/scripts/host.sh"}
+			}
+			if strings.HasPrefix(form, "container") {
+				setStageFixtureHook(t, opts.Source, command)
+				reason = "container execution root capability unsupported"
+			} else {
+				setStageFixtureInitialize(t, opts.Source, command)
+			}
+			stage, err := c.prepareStage(context.Background(), opts, ports)
+			if stage != nil {
+				stage.Close()
+			}
+			if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), reason) {
+				t.Fatalf("%s phase alias: %v", form, err)
+			}
+			state := readFakeStageState(t, statePath)
+			if state.Candidate != nil || state.Volume != nil {
+				t.Fatal("phase alias caused lifecycle resource effects")
+			}
+			if _, err = os.Lstat(ports.StateRoot); !os.IsNotExist(err) {
+				t.Fatal("phase alias wrote retained state")
+			}
+		})
+	}
+	t.Run("phase_qualified_cache", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "child.sh"), []byte("true\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "entry.sh"), []byte("sh "+stageShellLiteral(filepath.Join(root, "child.sh"))+"\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg := map[string]any{"initializeCommand": []any{"sh", filepath.Join(root, "entry.sh")}, "postCreateCommand": []any{"sh", "entry.sh"}}
+		_, _, err := admitStageDependencies(context.Background(), root, "/original", "/workspaces/test", cfg, false, ".devcontainer/devcontainer.json")
+		if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), "container execution root capability unsupported") {
+			t.Fatalf("host proof reused for container script: %v", err)
+		}
+	})
+}
