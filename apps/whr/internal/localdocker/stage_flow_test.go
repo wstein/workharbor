@@ -167,3 +167,47 @@ func TestLocalStageEscapesSmokeOutput(t *testing.T) {
 		t.Fatalf("escaped diagnostic missing: %q", diagnostics.String())
 	}
 }
+
+func TestLocalStageBindsRawOverrideMetadataOrigin(t *testing.T) {
+	c, opts, p, _ := fixtureStageLifecycle(t, false)
+	opts.Smoke = true
+	s, err := c.prepareStage(context.Background(), opts, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	raw, err := os.ReadFile(s.invocation.Override)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var override map[string]any
+	if err = json.Unmarshal(raw, &override); err != nil {
+		t.Fatal(err)
+	}
+	_, err = s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	artifact, err := s.store.readArtifact(s.operationID, "source-metadata.json", 256<<10)
+	if err != nil {
+		t.Fatalf("missing raw source-origin evidence: %v", err)
+	}
+	var contribution map[string]any
+	if err = json.Unmarshal(artifact, &contribution); err != nil {
+		t.Fatal(err)
+	}
+	if stageDigest(contribution) != stageDigest(stageSourceMetadata(override)) {
+		t.Fatal("metadata origin differs from raw complete stage override")
+	}
+	settingsRaw, err := s.store.readArtifact(s.operationID, "stage-settings.json", 256<<10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var settings map[string]any
+	if err = json.Unmarshal(settingsRaw, &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings["source_metadata_digest"] != stageDigest(contribution) {
+		t.Fatal("source origin is not transitively receipt bound")
+	}
+}
