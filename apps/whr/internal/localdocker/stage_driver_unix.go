@@ -123,11 +123,14 @@ check_bound_container() {
  observed=$("$native" --host "$endpoint" container inspect --format '{{.Name}} {{index .Config.Labels "workharbor.stage.operation"}}' "$target") || refuse container_identity
  [ "$observed" = "/$expected_name $operation" ] || refuse foreign_container_target
 }
+check_literal_env() {
+ case "$1" in =*|'') refuse unbound_env_copy ;; *=*) ;; *) refuse unbound_env_copy ;; esac
+}
 if [ "$command" = exec ]; then
  check_exec() {
   shift
   while [ "$#" -gt 0 ]; do
-   case "$1" in -i|-t|-it|--interactive|--tty|-d|--detach|--privileged) shift ;; --env|-e|--user|-u|--workdir|-w|--detach-keys) [ "$#" -ge 2 ] || refuse exec_option; shift 2 ;; --env=*|--user=*|--workdir=*|--detach-keys=*) shift ;; --) shift; break ;; -*) refuse exec_option ;; *) break ;; esac
+   case "$1" in -i|-t|-it|--interactive|--tty|-d|--detach|--privileged) shift ;; --env|-e) [ "$#" -ge 2 ] || refuse exec_option; check_literal_env "$2"; shift 2 ;; --env=*) check_literal_env "${1#--env=}"; shift ;; -e?*) check_literal_env "${1#-e}"; shift ;; --user|-u|--workdir|-w|--detach-keys) [ "$#" -ge 2 ] || refuse exec_option; shift 2 ;; --user=*|--workdir=*|--detach-keys=*) shift ;; --) shift; break ;; -*) refuse exec_option ;; *) break ;; esac
   done
   [ "$#" -gt 1 ] || refuse exec_vector
   check_bound_container "$1"
@@ -178,9 +181,13 @@ if [ "$command" = run ]; then
     --name=*) [ -z "$name" ] || refuse native_name; name=${1#--name=}; shift ;;
     --mount) [ "$#" -ge 2 ] || refuse native_mount; check_mount "$2"; shift 2 ;;
     --mount=*) mount=${1#--mount=}; check_mount "$mount"; shift ;;
+    --env|-e) [ "$#" -ge 2 ] || refuse native_run_option; check_literal_env "$2"; shift 2 ;;
+    --env=*) check_literal_env "${1#--env=}"; shift ;;
+    -e?*) check_literal_env "${1#-e}"; shift ;;
+    --env-file|--env-file=*) refuse native_env_file ;;
     -d|-i|-t|-it|--detach|--interactive|--tty|--rm|--init|--privileged|--sig-proxy=false|--sig-proxy=true) shift ;;
-    --hostname|-h|--user|-u|--env|-e|--env-file|--workdir|-w|--entrypoint|--label|-l|--network|--security-opt|--cap-add|--cap-drop|--device|--gpus|--publish|-p|--expose|--cpus|--memory|--shm-size|-a) [ "$#" -ge 2 ] || refuse native_run_option; shift 2 ;;
-    --hostname=*|--user=*|--env=*|--env-file=*|--workdir=*|--entrypoint=*|--label=*|--network=*|--security-opt=*|--cap-add=*|--cap-drop=*|--device=*|--gpus=*|--publish=*|--expose=*|--cpus=*|--memory=*|--shm-size=*) shift ;;
+    --hostname|-h|--user|-u|--workdir|-w|--entrypoint|--label|-l|--network|--security-opt|--cap-add|--cap-drop|--device|--gpus|--publish|-p|--expose|--cpus|--memory|--shm-size|-a) [ "$#" -ge 2 ] || refuse native_run_option; shift 2 ;;
+    --hostname=*|--user=*|--workdir=*|--entrypoint=*|--label=*|--network=*|--security-opt=*|--cap-add=*|--cap-drop=*|--device=*|--gpus=*|--publish=*|--expose=*|--cpus=*|--memory=*|--shm-size=*) shift ;;
     -*) refuse unsupported_native_run_option ;;
     *) break ;;
    esac

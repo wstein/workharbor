@@ -51,8 +51,16 @@ func fixtureStageLifecycle(t *testing.T, health bool) (Client, StageOptions, sta
 	if e != nil {
 		t.Fatal(e)
 	}
+	coverage := ""
+	if testing.CoverMode() != "" {
+		dir := filepath.Join(t.TempDir(), "child-cover")
+		if e = os.Mkdir(dir, 0700); e != nil {
+			t.Fatal(e)
+		}
+		coverage = "export GOCOVERDIR=" + stageShellLiteral(dir) + "\n"
+	}
 	for _, name := range []string{"docker", "node"} {
-		script := "#!/bin/sh\nexec " + stageShellLiteral(binary) + " -test.run '^TestLocalStageFakeToolProcess$' -- whr-stage-fake " + name + " " + stageShellLiteral(statePath) + " \"$@\"\n"
+		script := "#!/bin/sh\n" + coverage + "exec " + stageShellLiteral(binary) + " -test.run '^TestLocalStageFakeToolProcess$' -- whr-stage-fake " + name + " " + stageShellLiteral(statePath) + " \"$@\"\n"
 		if e = os.WriteFile(p.Tools[name], []byte(script), 0700); e != nil {
 			t.Fatal(e)
 		}
