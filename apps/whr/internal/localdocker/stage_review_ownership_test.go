@@ -89,3 +89,15 @@ func TestLocalStageReviewToolManifestExcludesDriverAfterApply(t *testing.T) {
 		t.Fatal("runtime driver leaked into trusted receipt tools")
 	}
 }
+
+func TestLocalStageReviewObservationFailureKillsWithoutTimer(t *testing.T) {
+	var signals []syscall.Signal
+	group := &stageProcessGroup{owned: true, signal: func(sig syscall.Signal) error { signals = append(signals, sig); return nil }}
+	group.releaseBeforeReap(false)
+	if len(signals) != 1 || signals[0] != syscall.SIGKILL {
+		t.Fatalf("leader observation failure leaked descendants: %v", signals)
+	}
+	if err := group.terminate(); err != os.ErrProcessDone {
+		t.Fatalf("released group reused: %v", err)
+	}
+}
