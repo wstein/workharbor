@@ -12,7 +12,6 @@ import (
 	"io"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -288,37 +287,11 @@ func stageGitEnv(home, objects, index string, transport bool) []string {
 	}
 	return env
 }
-func stageGitCommand(ctx context.Context, home, gitdir, objects, index string, transport bool, args ...string) *exec.Cmd {
-	prefix := []string{"-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "maintenance.auto=false", "-c", "gc.auto=0"}
-	if gitdir != "" {
-		prefix = append(prefix, "--git-dir="+gitdir)
-	}
-	cmd := exec.CommandContext(ctx, "git", append(prefix, args...)...)
-	cmd.Env = stageGitEnv(home, objects, index, transport)
-	cmd.Dir = home
-	cmd.WaitDelay = 2 * time.Second
-	isolate(cmd)
-	return cmd
-}
-func stageGitRead(ctx context.Context, home, gitdir, objects, index string, input []byte, args ...string) ([]byte, error) {
-	cmd := stageGitCommand(ctx, home, gitdir, objects, index, false, args...)
-	cmd.Stdin = bytes.NewReader(input)
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = io.Discard
-	if e := cmd.Run(); e != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		return nil, stageConflict("Git bounded reader failed: " + args[0])
-	}
-	return out.Bytes(), nil
-}
 func initStageGit(ctx context.Context, home, path, format string) error {
 	cmd := stageGitCommand(ctx, home, "", "", "", false, "init", "--bare", "--template=", "--object-format="+format, "--", path)
 	cmd.Stdout = io.Discard
 	cmd.Stderr = io.Discard
-	if e := cmd.Run(); e != nil {
+	if e := runStageGit(cmd); e != nil {
 		return stageConflict("private Git initialization failed")
 	}
 	return nil
@@ -327,6 +300,11 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	var result stageGitCapture
+	ctx, tool, pinErr := pinStageGit(ctx)
+	if pinErr != nil {
+		return result, pinErr
+	}
+	_ = tool
 	if !filepath.IsAbs(source) || !filepath.IsAbs(captured) || !filepath.IsAbs(clone) {
 		return result, stageConflict("Git capture paths must be physical absolute paths")
 	}
@@ -387,7 +365,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 			roots.WriteString(parts[1] + "\n")
 		}
 	}
-	objects, e := stageGitRead(ctx, private, reader, s.ObjectDir, "", []byte(roots.String()), "rev-list", "--objects", "--no-object-names", "--stdin")
+	objects, e := stageGitReadLimit(ctx, private, reader, s.ObjectDir, "", []byte(roots.String()), 66*1000000, "rev-list", "--objects", "--no-object-names", "--stdin")
 	if e != nil {
 		return result, e
 	}
@@ -400,7 +378,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 			return result, stageConflict("Git object listing malformed")
 		}
 	}
-	sizes, e := stageGitRead(ctx, private, reader, s.ObjectDir, "", objects, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
+	sizes, e := stageGitReadLimit(ctx, private, reader, s.ObjectDir, "", objects, 128*1000000, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
 	if e != nil {
 		return result, e
 	}
@@ -429,7 +407,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 	packCmd.Stdin = strings.NewReader(roots.String())
 	packCmd.Stdout = &stageBoundedWriter{Writer: pack, Remaining: 8 << 30}
 	packCmd.Stderr = io.Discard
-	if e = packCmd.Run(); e != nil {
+	if e = runStageGit(packCmd); e != nil {
 		if ctx.Err() != nil {
 			return result, ctx.Err()
 		}
@@ -442,7 +420,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 	unpack.Stdin = pack
 	unpack.Stdout = io.Discard
 	unpack.Stderr = io.Discard
-	if e = unpack.Run(); e != nil {
+	if e = runStageGit(unpack); e != nil {
 		return result, stageConflict("Git exported object verification failed")
 	}
 	if _, e = stageGitRead(ctx, private, export, "", "", []byte(refs.String()), "update-ref", "--no-deref", "--stdin"); e != nil {
@@ -454,8 +432,18 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 	cloneCmd := stageGitCommand(ctx, private, "", "", "", true, "clone", "--no-local", "--no-hardlinks", "--no-checkout", "--template=", "--", export, clone)
 	cloneCmd.Stdout = io.Discard
 	cloneCmd.Stderr = io.Discard
-	if e = cloneCmd.Run(); e != nil {
+	if e = runStageGit(cloneCmd); e != nil {
 		return result, stageConflict("independent candidate clone failed")
+	}
+	// Clone transports only advertised refs; staged orphan blobs have no ref.
+	// Import the already verified complete pack into the independent clone too.
+	if _, e = pack.Seek(0, 0); e != nil {
+		return result, e
+	}
+	importAll := stageGitCommand(ctx, private, filepath.Join(clone, ".git"), "", "", false, "index-pack", "--strict", "--stdin")
+	importAll.Stdin, importAll.Stdout, importAll.Stderr = pack, io.Discard, io.Discard
+	if e = runStageGit(importAll); e != nil {
+		return result, stageConflict("candidate complete object import failed")
 	}
 	// Rebuild the raw index without copying executable configuration or index
 	// extensions. The clone has no checkout, so captured working bytes remain
