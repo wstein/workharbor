@@ -27,6 +27,7 @@ type stageToolIdentity struct {
 	Digest  string `json:"digest"`
 }
 type stageRunner struct {
+	Policy         *stageDriverPolicy
 	Root, Endpoint string
 	Tools          map[string]stageToolIdentity
 	Environment    []string
@@ -38,7 +39,7 @@ type stagePhaseOutput struct {
 }
 
 func stageFileDigest(ctx context.Context, path string) (string, error) {
-	f, e := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	f, e := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0)
 	if e != nil {
 		return "", stageConflict("tool executable unavailable")
 	}
@@ -49,6 +50,9 @@ func stageFileDigest(ctx context.Context, path string) (string, error) {
 	}
 	hash := sha256.New()
 	if _, e = io.Copy(hash, stageContextReader{ctx: ctx, Reader: f}); e != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		return "", stageConflict("tool executable unreadable")
 	}
 	after, e := f.Stat()
@@ -73,7 +77,7 @@ func newStageRunner(ctx context.Context, root, endpoint string, paths map[string
 	sort.Strings(names)
 	for _, name := range names {
 		switch name {
-		case "docker", "devcontainer", "node", "git", "bash":
+		case "docker", "devcontainer", "node", "git", "bash", "sh":
 		default:
 			return nil, stageConflict("phase tool name unsupported")
 		}
@@ -116,6 +120,9 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 	}
 	digest, e := stageFileDigest(ctx, identity.Path)
 	if e != nil || digest != identity.Digest {
+		if ctx.Err() != nil {
+			return result, ctx.Err()
+		}
 		return result, stageConflict("tool identity changed before " + phase)
 	}
 	if tool == "docker" {
@@ -123,7 +130,30 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 	}
 	child, cancelChild := context.WithCancel(ctx)
 	defer cancelChild()
-	cmd := exec.CommandContext(child, identity.Path, args...)
+	executable := identity.Path
+	if tool == "devcontainer" {
+		node, ok := r.Tools["node"]
+		if !ok {
+			return result, stageConflict("official CLI pinned Node missing")
+		}
+		if e = stageCheckNodeEntry(identity.Path); e != nil {
+			return result, e
+		}
+		for _, name := range []string{"node", "docker", "sh", "docker_driver"} {
+			if dependency, ok := r.Tools[name]; ok {
+				sum, err := stageFileDigest(ctx, dependency.Path)
+				if err != nil || sum != dependency.Digest {
+					if ctx.Err() != nil {
+						return result, ctx.Err()
+					}
+					return result, stageConflict("tool identity changed before " + phase)
+				}
+			}
+		}
+		executable = node.Path
+		args = append([]string{identity.Path}, args...)
+	}
+	cmd := exec.CommandContext(child, executable, args...)
 	cmd.Dir = r.Root
 	cmd.Env = append([]string(nil), r.Environment...)
 	cmd.Stdin = stdin
@@ -139,7 +169,11 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 		return syscall.Kill(-cmd.Process.Pid, sig)
 	}}
 	cmd.Cancel = group.terminate
-	output := &stagePhaseBuffers{cancel: cancelChild}
+	limit := 1 << 20
+	if phase == "metadata" {
+		limit = 4 << 20
+	}
+	output := &stagePhaseBuffers{cancel: cancelChild, limit: limit}
 	cmd.Stdout = stagePhaseWriter{output: output}
 	cmd.Stderr = stagePhaseWriter{output: output, stderr: true}
 	e = cmd.Start()
@@ -170,6 +204,9 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 		var ee *exec.ExitError
 		if errors.As(e, &ee) {
 			result.Exit = ee.ExitCode()
+			if reason := stageDriverRefusal(result.Stderr); reason != "" {
+				return result, stageConflict("Docker driver refused: " + reason)
+			}
 			return result, stageConflict("phase command failed: " + phase)
 		}
 		return result, stageConflict("phase command unavailable: " + phase)
@@ -178,6 +215,7 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 }
 
 type stagePhaseBuffers struct {
+	limit          int
 	mu             sync.Mutex
 	stdout, stderr bytes.Buffer
 	used           int
@@ -193,7 +231,7 @@ func (w stagePhaseWriter) Write(p []byte) (int, error) {
 	b := w.output
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if len(p) > 1<<20-b.used {
+	if len(p) > b.limit-b.used {
 		b.exceeded = true
 		b.cancel()
 		return 0, errors.New("phase output quota")
@@ -215,4 +253,31 @@ func (r stageContextReader) Read(p []byte) (int, error) {
 		return 0, e
 	}
 	return r.Reader.Read(p)
+}
+
+func stageDriverRefusal(data []byte) string {
+	for _, reason := range []string{"empty_vector", "routing_override", "unsupported_native_command", "protected_resource_mutation", "metadata_vector", "image_mutation", "context_mutation", "volume_mutation", "undeclared_initializer_volume", "pull_phase", "undeclared_pull_reference", "promote_build", "builder_mutation", "preview_mutation", "old_primary_target", "container_identity", "foreign_container_target", "exec_option", "exec_vector", "start_vector", "initializer_image_binding", "native_pull_override", "native_name", "native_mount", "native_run_option", "unsupported_native_run_option", "native_mount_binding", "native_image", "promote_image_identity", "undeclared_native_mount"} {
+		if bytes.Contains(data, []byte("whr-driver:"+reason+"\n")) {
+			return reason
+		}
+	}
+	return ""
+}
+
+func stageCheckNodeEntry(path string) error {
+	f, e := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	if e != nil {
+		return stageConflict("official CLI Node entry unavailable")
+	}
+	defer f.Close()
+	b, e := io.ReadAll(io.LimitReader(f, 256))
+	if e != nil {
+		return stageConflict("official CLI Node entry unreadable")
+	}
+	line, _, _ := bytes.Cut(b, []byte{'\n'})
+	text := string(line)
+	if !strings.HasPrefix(text, "#!") || !strings.HasSuffix(strings.TrimSpace(text), "node") {
+		return stageConflict("devcontainer launcher is not an admitted Node entry")
+	}
+	return nil
 }

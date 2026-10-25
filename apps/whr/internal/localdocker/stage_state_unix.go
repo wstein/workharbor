@@ -57,6 +57,10 @@ func openStageStore(root, daemon, endpoint string) (*stageStore, error) {
 		next, err := unix.Openat(fd, p, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 		if errors.Is(err, unix.ENOENT) {
 			if err = unix.Mkdirat(fd, p, 0700); err == nil {
+				if err = unix.Fsync(fd); err != nil {
+					unix.Close(fd)
+					return nil, stageConflict("state directory durability uncertain")
+				}
 				next, err = unix.Openat(fd, p, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 			}
 		}
@@ -78,6 +82,10 @@ func openStageStore(root, daemon, endpoint string) (*stageStore, error) {
 	if e = unix.Mkdirat(fd, key, 0700); e != nil && !errors.Is(e, unix.EEXIST) {
 		unix.Close(fd)
 		return nil, stageConflict("state path unavailable")
+	}
+	if e = unix.Fsync(fd); e != nil {
+		unix.Close(fd)
+		return nil, stageConflict("daemon directory durability uncertain")
 	}
 	child, e := unix.Openat(fd, key, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	unix.Close(fd)
@@ -124,7 +132,7 @@ func recordHash(r stageRecord) string {
 	return "sha256:" + hex.EncodeToString(h[:])
 }
 func (s *stageStore) Records() ([]stageRecord, error) {
-	fd, e := unix.Openat(int(s.dir.Fd()), "journal.json", unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	fd, e := unix.Openat(int(s.dir.Fd()), "journal.json", unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if errors.Is(e, unix.ENOENT) {
 		return nil, nil
 	}
@@ -141,24 +149,8 @@ func (s *stageStore) Records() ([]stageRecord, error) {
 	if e != nil || len(b) > 4<<20 {
 		return nil, stageConflict("journal integrity: read bound")
 	}
-	var rows []stageRecord
-	d := json.NewDecoder(strings.NewReader(string(b)))
-	d.DisallowUnknownFields()
-	if d.Decode(&rows) != nil || len(rows) == 0 || len(rows) > 256 {
-		return nil, stageConflict("journal integrity: malformed")
-	}
-	var extra any
-	if d.Decode(&extra) != io.EOF {
-		return nil, stageConflict("journal integrity: trailing data")
-	}
-	prev := ""
-	for i, r := range rows {
-		if r.Version != 1 || r.Sequence != i+1 || r.PreviousHash != prev || r.Hash != recordHash(r) || !lowerHex32(r.OperationID) || i > 0 && r.OperationID != rows[0].OperationID {
-			return nil, stageConflict("journal integrity: hash chain")
-		}
-		prev = r.Hash
-	}
-	return rows, nil
+	return decodeStageJournal(b)
+
 }
 func (s *stageStore) Begin(op, digest string) error {
 	if !lowerHex32(op) || len(digest) != 71 || !strings.HasPrefix(digest, "sha256:") {
@@ -169,7 +161,38 @@ func (s *stageStore) Begin(op, digest string) error {
 		return e
 	}
 	if len(rows) != 0 {
-		return stageConflict("retained attempt requires owner reconciliation")
+		if rows[len(rows)-1].State != "complete" || rows[len(rows)-1].Observation != "observed" {
+			return stageConflict("retained attempt requires owner reconciliation")
+		}
+		if e = s.archiveComplete(rows); e != nil {
+			return e
+		}
+	}
+	fd, e := unix.Openat(int(s.dir.Fd()), ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	if e != nil {
+		return stageConflict("retained attempt inventory unavailable")
+	}
+	directory := os.NewFile(uintptr(fd), "operation inventory")
+	entries, e := directory.ReadDir(stageMaxEntries + 1)
+	directory.Close()
+	if e != nil && e != io.EOF {
+		return stageConflict("retained attempt inventory unavailable")
+	}
+	if len(entries) > stageMaxEntries {
+		return stageConflict("retained attempt inventory quota")
+	}
+	for _, entry := range entries {
+		if entry.Name() != "lock" {
+			if !lowerHex32(entry.Name()) || !entry.IsDir() || s.checkCompletedArchive(entry.Name()) != nil {
+				return stageConflict("retained attempt requires owner reconciliation")
+			}
+		}
+	}
+	if e = unix.Mkdirat(int(s.dir.Fd()), op, 0700); e != nil {
+		return stageConflict("retained attempt or operation identity collision")
+	}
+	if e = s.dir.Sync(); e != nil {
+		return stageConflict("operation directory durability uncertain")
 	}
 	return s.write([]stageRecord{{Version: 1, OperationID: op, Sequence: 1, State: "planned", Fingerprint: digest, Observation: "observed"}}, true)
 }
@@ -200,7 +223,7 @@ func (s *stageStore) Advance(state, action, observation string) error {
 	if observation != "attempted" && observation != "observed" && observation != "uncertain" {
 		return stageConflict("state transition observation")
 	}
-	if len(rows) >= 256 {
+	if len(rows) >= stageMaxJournalRecords {
 		return stageConflict("journal record quota")
 	}
 	rows = append(rows, stageRecord{Version: 1, OperationID: last.OperationID, Sequence: last.Sequence + 1, PreviousHash: last.Hash, State: state, Fingerprint: last.Fingerprint, Action: action, Observation: observation})

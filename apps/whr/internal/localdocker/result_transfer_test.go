@@ -31,7 +31,11 @@ func fixtureStageResult(t *testing.T) (stageGitCapture, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(files.Close)
+	t.Cleanup(func() {
+		if err := files.Close(); err != nil {
+			t.Error(err)
+		}
+	})
 	clone := filepath.Join(t.TempDir(), "clone")
 	captured, err := captureStageGit(context.Background(), source, files.Path, clone)
 	if err != nil {

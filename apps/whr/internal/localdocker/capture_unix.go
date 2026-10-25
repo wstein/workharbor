@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 	"unicode/utf8"
 
 	"golang.org/x/sys/unix"
@@ -25,16 +26,65 @@ const stageMaxWorkingBytes = int64(2 << 30)
 const stageMaxFileBytes = int64(64 << 20)
 
 type capturedStageFiles struct {
+	identity             os.FileInfo
 	Path, Source, Digest string
 	Omitted              []string
 	Entries              []map[string]any
+	removeTree           func(string) error
 }
 
-func (c *capturedStageFiles) Close() {
-	if c != nil && c.Path != "" {
-		os.RemoveAll(c.Path)
-		c.Path = ""
+func (c *capturedStageFiles) Close() error {
+	if c == nil || c.Path == "" {
+		return nil
 	}
+	retained := func() error { return stageConflict("temporary capture retained after cleanup failure") }
+	info, e := os.Lstat(c.Path)
+	if os.IsNotExist(e) {
+		c.Path = ""
+		return nil
+	}
+	if e != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 || c.identity == nil || !os.SameFile(info, c.identity) {
+		return retained()
+	}
+	root, e := os.OpenRoot(c.Path)
+	if e != nil {
+		return retained()
+	}
+	e = fs.WalkDir(root.FS(), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		dir, err := root.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_DIRECTORY, 0)
+		if err != nil {
+			return err
+		}
+		defer dir.Close()
+		st, err := dir.Stat()
+		if err != nil {
+			return err
+		}
+		owner, ok := st.Sys().(*syscall.Stat_t)
+		if !ok || int(owner.Uid) != os.Getuid() {
+			return retained()
+		}
+		return dir.Chmod(st.Mode().Perm() | 0700)
+	})
+	root.Close()
+	if e != nil {
+		return retained()
+	}
+	remove := c.removeTree
+	if remove == nil {
+		remove = os.RemoveAll
+	}
+	if e = remove(c.Path); e != nil {
+		return retained()
+	}
+	c.Path = ""
+	return nil
 }
 func (c *capturedStageFiles) Check(ctx context.Context) error {
 	entries, omitted, e := scanStageFiles(ctx, c.Source, "")
@@ -66,15 +116,24 @@ func captureStageFiles(ctx context.Context, source, parent string) (*capturedSta
 		os.RemoveAll(out)
 		return nil, stageConflict("capture storage mode")
 	}
-	c := &capturedStageFiles{Path: out, Source: physical}
+	info, e := os.Lstat(out)
+	if e != nil {
+		os.RemoveAll(out)
+		return nil, stageConflict("capture storage identity unavailable")
+	}
+	c := &capturedStageFiles{Path: out, Source: physical, identity: info}
 	c.Entries, c.Omitted, e = scanStageFiles(ctx, physical, out)
 	if e != nil {
-		c.Close()
+		if cleanupErr := c.Close(); cleanupErr != nil {
+			return c, cleanupErr
+		}
 		return nil, e
 	}
 	c.Digest = captureDigest(physical, c.Entries, c.Omitted)
 	if e = c.Check(ctx); e != nil {
-		c.Close()
+		if cleanupErr := c.Close(); cleanupErr != nil {
+			return c, cleanupErr
+		}
 		return nil, e
 	}
 	return c, nil
@@ -164,7 +223,7 @@ func scanStageFiles(ctx context.Context, source, destination string) ([]map[stri
 			if info.Size() > stageMaxFileBytes {
 				return fail("per-file working-byte quota exceeded")
 			}
-			file, err := root.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW, 0)
+			file, err := root.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0)
 			if err != nil {
 				return fail("regular input changed")
 			}
