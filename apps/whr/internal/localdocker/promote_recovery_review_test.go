@@ -39,7 +39,7 @@ func requireRecoveryStopped(t *testing.T, p *LocalPromotion, path string, result
 
 func TestLocalPromoteRecoveryRefusesOverlappingForeignMounts(t *testing.T) {
 	t.Parallel()
-	for _, kind := range []string{"alias", "parent", "child", "missing", "home_volume_only"} {
+	for _, kind := range []string{"alias", "parent", "child", "missing", "home_volume_only", "missing_rw", "null_rw"} {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
 			p, path, _ := fixtureVerifiedPromotion(t)
@@ -69,6 +69,11 @@ func TestLocalPromoteRecoveryRefusesOverlappingForeignMounts(t *testing.T) {
 				reason = "resource recovery bind source unavailable"
 			}
 			mounts := []map[string]any{{"Type": "bind", "Source": source, "Destination": "/foreign", "RW": true}}
+			if kind == "missing_rw" {
+				delete(mounts[0], "RW")
+			} else if kind == "null_rw" {
+				mounts[0]["RW"] = nil
+			}
 			if kind == "home_volume_only" {
 				mounts = []map[string]any{{"Type": "volume", "Name": p.primaryConfig.Home, "Destination": "/home/foreign", "RW": true}}
 			}
