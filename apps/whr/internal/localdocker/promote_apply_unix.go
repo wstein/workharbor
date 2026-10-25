@@ -202,6 +202,7 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	}
 	verification.ObservedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	p.result.Verification = verification
+	p.primaryVerified = true
 	if err = p.checkBeforePhase(ctx, false); err != nil {
 		return p.partial("pre-cleanup binding changed", err)
 	}
@@ -234,8 +235,8 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	if err = p.transition("home_removed"); err != nil {
 		return p.partial("home removal publication failed", err)
 	}
-	if err = p.checkFinalPrimary(ctx); err != nil {
-		return p.partial("final primary binding changed", err)
+	if err = p.checkFinalBindings(ctx); err != nil {
+		return p.partial("final promotion binding changed", err)
 	}
 	p.receipt.Primary = p.result.Primary
 	p.receipt.Verification = verification

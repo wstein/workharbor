@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
@@ -48,6 +49,7 @@ type LocalPromotion struct {
 	stageEffects                             []StageEffect
 	newPrimary                               *stageContainerDetails
 	persistentConfiguration                  bool
+	primaryVerified                          bool
 }
 
 func (c Client) PreparePromotion(ctx context.Context, options PromoteOptions) (LifecycleTransaction, error) {
@@ -230,7 +232,8 @@ func (p *LocalPromotion) loadArtifacts() error {
 			return stageConflict("promotion retained clone path changed")
 		}
 		info, err := os.Lstat(s.ClonePath)
-		if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+		owner, owned := infoOwner(info)
+		if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || !owned || owner != os.Getuid() {
 			return stageConflict("promotion retained clone mode changed")
 		}
 		seen[s.Source] = true
@@ -293,10 +296,10 @@ func (p *LocalPromotion) Close() error {
 	if p.root != "" {
 		info, err := os.Lstat(p.root)
 		if err != nil || p.rootIdentity == nil || !os.SameFile(info, p.rootIdentity) || info.Mode()&os.ModeSymlink != 0 {
-			return stageConflict("promotion temporary preparation identity changed; retained for inspection")
+			return exitcode.Errorf(exitcode.PathConflict, "local promote temporary preparation identity changed; retained for inspection").WithRemediation("Inspect retained temporary preparation %s before owner cleanup.", terminal.Escape(p.root))
 		}
 		if err = removeStageTemporaryRoot(p.root); err != nil {
-			return stageConflict("promotion temporary preparation retained after cleanup failure")
+			return exitcode.Errorf(exitcode.PathConflict, "local promote temporary preparation retained after cleanup failure").WithRemediation("Inspect retained temporary preparation %s before owner cleanup.", terminal.Escape(p.root))
 		}
 	}
 	p.closed = true
@@ -324,4 +327,15 @@ func promotionPhaseError(ctx context.Context, phase string, err error) error {
 		return exitcode.Errorf(exitcode.PathUserInterrupt, "local promote %s interrupted", phase)
 	}
 	return err
+}
+
+func infoOwner(info os.FileInfo) (int, bool) {
+	if info == nil {
+		return 0, false
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return int(stat.Uid), true
 }

@@ -73,6 +73,9 @@ func (p *LocalPromotion) checkFinalPrimary(ctx context.Context) error {
 	if e = p.bindNewPrimary(got); e != nil {
 		return e
 	}
+	if p.primaryVerified && got.Healthcheck && (got.Health == nil || *got.Health != "healthy") {
+		return stageConflict("promotion verified primary health changed")
+	}
 	if stageContainerBindingDigest(got) != stageContainerBindingDigest(*p.newPrimary) {
 		return stageConflict("promotion new primary immutable native configuration changed")
 	}
@@ -115,6 +118,33 @@ func (p *LocalPromotion) checkHomeCleanup(ctx context.Context) error {
 	}
 	if stageDigest(home) != stageDigest(p.homeObservation) {
 		return stageConflict("promotion candidate home creation observation changed before deletion")
+	}
+	return nil
+}
+
+func (p *LocalPromotion) checkFinalBindings(ctx context.Context) error {
+	if err := p.checkConfiguration(); err != nil {
+		return err
+	}
+	if err := p.checkPersistedConfiguration(); err != nil {
+		return err
+	}
+	metadata, err := readStageMetadata(ctx, p.runner)
+	if err != nil {
+		return err
+	}
+	if err = p.checkPromotionInputs(ctx, metadata); err != nil {
+		return err
+	}
+	if err = p.checkFinalPrimary(ctx); err != nil {
+		return err
+	}
+	image, err := readStageImage(ctx, p.runner, p.receipt.Verification.ImageID)
+	if err != nil {
+		return err
+	}
+	if stageDigest(image.Metadata) != p.receipt.ImageMetadataDigest {
+		return stageConflict("promotion verified image metadata changed after cleanup")
 	}
 	return nil
 }

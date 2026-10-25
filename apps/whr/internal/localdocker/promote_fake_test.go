@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -65,7 +66,12 @@ func fixturePromotionLifecycle(t *testing.T) (Client, StageOptions, stagePrepara
 		t.Fatal(e)
 	}
 	for _, name := range []string{"docker", "node"} {
-		script := "#!/bin/sh\nexec " + stageShellLiteral(binary) + " -test.run '^TestLocalPromotionFakeToolProcess$' -- whr-promote-fake " + name + " " + stageShellLiteral(path) + " \"$@\"\n"
+		cover := ""
+		if testing.CoverMode() != "" {
+			private := t.TempDir()
+			cover = "GOCOVERDIR=" + stageShellLiteral(private) + "\nexport GOCOVERDIR\n"
+		}
+		script := "#!/bin/sh\n" + cover + "exec " + stageShellLiteral(binary) + " -test.run '^TestLocalPromotionFakeToolProcess$' -- whr-promote-fake " + name + " " + stageShellLiteral(path) + " \"$@\"\n"
 		if e = os.WriteFile(p.Tools[name], []byte(script), 0700); e != nil {
 			t.Fatal(e)
 		}
@@ -238,6 +244,13 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			os.Exit(107)
 		}
 		state.Volume = nil
+		if state.Failure == "cleanup_input_drift" {
+			labels := state.Primary["Labels"].(map[string]any)
+			source := labels["devcontainer.local_folder"].(string)
+			if err := os.WriteFile(filepath.Join(source, ".devcontainer", "setup.sh"), []byte("changed after cleanup\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		save()
 	default:
 		if args[0] == "run" {
@@ -270,6 +283,10 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 				}
 			}
 			state.Primary = map[string]any{"Id": strings.Repeat("e", 64), "Name": "/" + value(args, "--name"), "ImageID": "sha256:" + strings.Repeat("d", 64), "ConfigImage": "sha256:" + strings.Repeat("d", 64), "User": value(args, "--user"), "Hostname": value(args, "--hostname"), "State": "running", "Running": true, "Healthcheck": nil, "Health": nil, "Labels": labels, "Mounts": mounts, "Environment": env, "Entrypoint": []string{"/bin/sh"}, "Command": []string{"-c", "fixture native entrypoint"}}
+			if state.Failure == "wrong_image" {
+				state.Primary["ImageID"] = "sha256:" + strings.Repeat("f", 64)
+				state.Primary["ConfigImage"] = "sha256:" + strings.Repeat("f", 64)
+			}
 			save()
 			fmt.Println(strings.Repeat("e", 64))
 		} else if args[0] == "exec" {

@@ -41,6 +41,9 @@ func (p *LocalPromotion) checkPromotionInputs(ctx context.Context, metadata stag
 			return err
 		}
 	}
+	if p.execution.OriginalDigest != p.execution.CandidateDigest {
+		return stageConflict("promotion original execution inputs differ from verified candidate; fresh stage required")
+	}
 	sourceDigest, err := stageExecutionDigest(ctx, p.receipt.OriginalSource, p.settings.ExecutionPaths)
 	if err != nil {
 		return err
@@ -60,6 +63,16 @@ func (p *LocalPromotion) checkPromotionInputs(ctx context.Context, metadata stag
 	}
 	if err = p.checkHostFacts(); err != nil {
 		return err
+	}
+	facts := ""
+	for _, entry := range p.receipt.OutputInventory {
+		if entry.Origin == "admitted_A" {
+			facts = entry.Digest
+		}
+	}
+	fingerprint := stageDigest(map[string]any{"source": p.receipt.OriginalSource, "files": p.receipt.InputManifestDigest, "repositories": stageTrustRepositories(p.snapshots), "tools": stageTrustTools(p.runner.Tools), "substitutions": stageTrustEnvironment(p.runner.Environment), "config": p.sourceConfig, "original_host_facts": facts, "workspace": p.primaryConfig.Workspace, "primary_id": p.primaryObservation.ID, "endpoint": p.endpoint})
+	if fingerprint != p.receipt.TrustDigest {
+		return stageConflict("promotion admitted substitution environment or source trust changed")
 	}
 	return nil
 }
