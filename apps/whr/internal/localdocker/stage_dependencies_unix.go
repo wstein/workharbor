@@ -62,6 +62,9 @@ func (d *stageDependencyAdmission) command(value any) error {
 	case nil:
 		return nil
 	case string:
+		if strings.Contains(value, "@workspace@") {
+			return stageConflict("reserved workspace marker dependency capability unsupported")
+		}
 		logical := d.logical(value)
 		if strings.Contains(logical, "${") {
 			return stageDependencyUnsupported()
@@ -77,6 +80,9 @@ func (d *stageDependencyAdmission) command(value any) error {
 			arg, ok := value.(string)
 			if !ok {
 				return stageDependencyUnsupported()
+			}
+			if strings.Contains(arg, "@workspace@") {
+				return stageConflict("reserved workspace marker dependency capability unsupported")
 			}
 			logical := d.logical(arg)
 			if strings.Contains(logical, "${") {
@@ -151,12 +157,12 @@ func (d *stageDependencyAdmission) argv(argv []string) error {
 		return d.file(args[0], true)
 	default:
 		if strings.Contains(argv[0], "/") {
-			return d.file(argv[0], true)
+			return d.file(argv[0], true, true)
 		}
 		return stageDependencyUnsupported()
 	}
 }
-func (d *stageDependencyAdmission) file(name string, executable bool) error {
+func (d *stageDependencyAdmission) file(name string, executable bool, direct ...bool) error {
 	if err := d.ctx.Err(); err != nil {
 		return err
 	}
@@ -207,12 +213,27 @@ func (d *stageDependencyAdmission) file(name string, executable bool) error {
 	if !executable {
 		return nil
 	}
+	if len(direct) != 0 && direct[0] && !strings.HasPrefix(string(data), "#!") {
+		return stageConflict("script interpreter dependency capability unsupported")
+	}
+	if strings.HasPrefix(string(data), "#!") {
+		interpreter, _, _ := strings.Cut(string(data), "\n")
+		switch interpreter {
+		case "#!/bin/sh", "#!/bin/bash", "#!/usr/bin/sh", "#!/usr/bin/bash":
+		default:
+			return stageConflict("script interpreter dependency capability unsupported")
+		}
+	}
 	if !utf8.Valid(data) {
 		return stageDependencyUnsupported()
 	}
 	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
+		// Only ASCII shell indentation may precede a comment. Preserve every
+		// other byte for the lexer; Unicode whitespace and CR are not shell trim.
+		if strings.Contains(line, "@workspace@") {
+			return stageConflict("reserved workspace marker dependency capability unsupported")
+		}
+		if line == "" || strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
 			continue
 		}
 		argv, err := stageLiteralCommand(d.logical(line))
@@ -247,6 +268,9 @@ func stageLiteralCommand(command string) ([]string, error) {
 			return nil, stageDependencyUnsupported()
 		}
 		if escaped {
+			if r == '\n' || r == '\r' {
+				return nil, stageConflict("command continuation dependency capability unsupported")
+			}
 			word.WriteRune(r)
 			active = true
 			escaped = false
@@ -261,6 +285,9 @@ func stageLiteralCommand(command string) ([]string, error) {
 			continue
 		}
 		if r == '\\' {
+			if quote == '"' {
+				return nil, stageConflict("quoted command escape dependency capability unsupported")
+			}
 			escaped = true
 			active = true
 			continue
