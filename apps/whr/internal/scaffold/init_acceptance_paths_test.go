@@ -40,6 +40,52 @@ func pathAcceptanceUnchanged(t *testing.T, name string, before fs.FileInfo, data
 	}
 }
 
+type pathAcceptanceTreeEntry struct {
+	info fs.FileInfo
+	data []byte
+	link string
+}
+
+func pathAcceptanceTree(t *testing.T, root string) map[string]pathAcceptanceTreeEntry {
+	t.Helper()
+	entries := map[string]pathAcceptanceTreeEntry{}
+	err := filepath.WalkDir(root, func(name string, _ fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, name)
+		if err != nil {
+			return err
+		}
+		entry := pathAcceptanceTreeEntry{info: pathAcceptanceStat(t, name)}
+		if entry.info.Mode().IsRegular() {
+			entry.data, err = os.ReadFile(name)
+		} else if entry.info.Mode()&fs.ModeSymlink != 0 {
+			entry.link, err = os.Readlink(name)
+		}
+		entries[relative] = entry
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return entries
+}
+
+func pathAcceptanceTreeUnchanged(t *testing.T, root string, before map[string]pathAcceptanceTreeEntry) {
+	t.Helper()
+	after := pathAcceptanceTree(t, root)
+	if len(before) != len(after) {
+		t.Errorf("refusal changed tree inventory under %s: before=%d after=%d", root, len(before), len(after))
+	}
+	for name, old := range before {
+		current, ok := after[name]
+		if !ok || !os.SameFile(old.info, current.info) || old.info.Mode() != current.info.Mode() || old.info.Size() != current.info.Size() || !old.info.ModTime().Equal(current.info.ModTime()) || !bytes.Equal(old.data, current.data) || old.link != current.link {
+			t.Errorf("refusal changed tree entry %s", filepath.Join(root, name))
+		}
+	}
+}
+
 func pathAcceptanceAction(t *testing.T, preview Preview, name string) Action {
 	t.Helper()
 	var found []Action
@@ -84,6 +130,54 @@ func TestInitSymlinkTarget(t *testing.T) {
 				t.Fatalf("refusal changed link destination: %q, %v", destination, err)
 			}
 			pathAcceptanceUnchanged(t, outside, outsideInfo, original)
+		})
+	}
+
+	for _, kind := range []string{"escaping", "absolute", "symlink-leaf", "symlink-parent"} {
+		t.Run("custom-projects/"+kind, func(t *testing.T) {
+			dir := fixture(t)
+			outside := t.TempDir()
+			if err := os.Mkdir(filepath.Join(outside, "components"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			pathAcceptanceWrite(t, filepath.Join(outside, ".gitkeep"), []byte("owner placeholder\n"))
+			pathAcceptanceWrite(t, filepath.Join(outside, "components", "owner-file"), []byte("nested owner bytes\n"))
+			projects := "source/components"
+			want := "init target is unsafe"
+			switch kind {
+			case "escaping":
+				want = "existing workharbor.json fails current validation"
+				var err error
+				projects, err = filepath.Rel(dir, outside)
+				if err != nil || !strings.HasPrefix(projects, "../") {
+					t.Fatalf("fixture must escape through ../: %q, %v", projects, err)
+				}
+			case "absolute":
+				want = "existing workharbor.json fails current validation"
+				projects = outside
+			case "symlink-leaf":
+				if err := os.Mkdir(filepath.Join(dir, "source"), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(outside, filepath.Join(dir, "source", "components")); err != nil {
+					t.Fatal(err)
+				}
+			case "symlink-parent":
+				if err := os.Symlink(outside, filepath.Join(dir, "source")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			manifest := []byte(fmt.Sprintf("{\"schema_version\":1,\"devcontainer_path\":\".devcontainer/devcontainer.json\",\"projects_path\":%q,\"bundles\":[]}\n", projects))
+			pathAcceptanceWrite(t, filepath.Join(dir, "workharbor.json"), manifest)
+			outsideBefore := pathAcceptanceTree(t, outside)
+			workspaceBefore := pathAcceptanceTree(t, dir)
+			opts := Options{NonInteractive: true, Yes: true, Overwrite: []string{"workharbor.json"}}
+			_, err := DiscoverWithOptions(context.Background(), dir, opts)
+			pathAcceptanceTreeUnchanged(t, outside, outsideBefore)
+			pathAcceptanceTreeUnchanged(t, dir, workspaceBefore)
+			if err == nil || int(exitcode.FromError(err)) != 68 || !strings.Contains(err.Error(), want) {
+				t.Fatalf("custom projects_path %q must refuse before preview with exit 68 and reason %q: %v", projects, want, err)
+			}
 		})
 	}
 }

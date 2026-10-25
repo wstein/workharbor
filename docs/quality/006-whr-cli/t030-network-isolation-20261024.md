@@ -135,9 +135,9 @@ forced the existing sudo candidate: native sudo/unshare --net returned
 Operation not permitted, so that probe correctly failed with FAILED, NOT
 SKIPPED before any namespace child or negative-control dial started. Runtime
 fallback success is therefore **not established locally**. The exact-head
-GitHub CI execution/path remains pending; green CI must include actual
-namespace execution or fail the test. No GitHub path is inferred from the local
-result or the argv contract test.
+GitHub CI execution/path was pending at that checkpoint; the later hosted
+measurement below establishes the successful fallback path. No GitHub path is
+inferred from the local result or the argv contract test.
 
 Four compiled regression overlays against the correction produced assertion
 failures: removing the required-proof guard; removing env -i; removing -rn
@@ -173,8 +173,29 @@ This does not wait for the default 25 s budget or alter the actual candidate's
 The required focused run on the current base passed all four network test IDs
 with CI=true and WHR_REQUIRE_NETNS=1, using the local unprivileged -rn path.
 GitHub execution/path is not inferred from that local result. Prior observed
-sudo fallback refusal remains a native limitation of this container, not proof
-of runtime fallback success.
+sudo fallback refusal remains a historical native limitation of this container.
+
+## Hosted fallback proof and guard follow-up
+
+[PR 249 run 40136687890](https://github.com/wstein/workharbor/actions/runs/40136687890),
+job 121001906000 at `0c0e79e659c788b290117f762dfba360bb8a9e91`, passed
+`TestInitNoGitNoNetwork` without a skip. The bootstrap Go events identify
+`sudo network namespace with setpriv and closed env`, child namespace
+`net:[4026532315]`, and the negative control's `connect: network is unreachable`.
+The [independent review](https://github.com/wstein/workharbor/pull/249#pullrequestreview-5640350485)
+read back that exact run and closed the hosted-proof gap. This supersedes the
+earlier pending hosted result while preserving the failed local fallback history.
+
+On 2026-10-25, review F5 gained two focused subprocess negatives. An owned
+shell exits zero while its owned grandchild holds stdout open; the runner's
+one-second WaitDelay expires before its five-second context budget. The test
+requires the bound sentinel and the actual WaitDelay diagnostic, and prohibits
+fallback. Removing only the ErrWaitDelay arm produces compiled assertion RED.
+The runner's existing final process-group kill cleans up the grandchild.
+A second owned shell emits a native-looking refusal followed by the child-started
+sentinel and exits nonzero. Removing the sentinel guard makes the test fail
+because the started child's failure becomes eligible for fallback. Both pass
+on unchanged helper source, without sudo, namespaces, root or external dials.
 
 ## Checks and remaining acceptance
 
