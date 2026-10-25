@@ -21,6 +21,7 @@ type stageDependencyAdmission struct {
 	catalogue               map[string]stageKnownDependency
 	gitIdentity             bool
 	gitStatus               bool
+	host                    bool
 }
 
 // This admits a deliberately small, non-expanding command language. It is not
@@ -33,11 +34,13 @@ func admitStageDependencies(ctx context.Context, root, source, workspace string,
 		d.paths[path] = true
 	}
 	for _, key := range []string{"initializeCommand", "onCreateCommand", "updateContentCommand", "postCreateCommand", "postStartCommand"} {
+		d.host = key == "initializeCommand"
 		if err := d.command(config[key]); err != nil {
 			return nil, "", err
 		}
 	}
 	if smoke {
+		d.host = false
 		if err := d.file(".devcontainer/smoke-container.sh", true); err != nil {
 			return nil, "", err
 		}
@@ -137,13 +140,18 @@ func (d *stageDependencyAdmission) configCommand(value string, scalar bool) (str
 	}
 	return value, nil
 }
-func (d *stageDependencyAdmission) logical(value string) string {
-	for _, prefix := range []string{d.root, d.source, d.workspace} {
-		if prefix != "" {
-			value = strings.ReplaceAll(value, prefix+"/", d.root+"/")
-		}
+
+// Nested shell payloads have already passed configuration substitution, or
+// originate in raw script bytes. Never apply config variables a second time.
+func (d *stageDependencyAdmission) shellCommand(value string) error {
+	if strings.Contains(value, "@workspace@") {
+		return stageConflict("reserved workspace marker dependency capability unsupported")
 	}
-	return value
+	argv, err := stageLiteralCommand(value)
+	if err != nil {
+		return err
+	}
+	return d.argv(argv)
 }
 func (d *stageDependencyAdmission) argv(argv []string) error {
 	if len(argv) == 0 {
@@ -179,7 +187,7 @@ func (d *stageDependencyAdmission) argv(argv []string) error {
 			args = args[1:]
 		}
 		if len(args) == 2 && args[0] == "-c" {
-			return d.command(args[1])
+			return d.shellCommand(args[1])
 		}
 		if len(args) == 0 || strings.HasPrefix(args[0], "-") {
 			return stageDependencyUnsupported()
@@ -196,16 +204,19 @@ func (d *stageDependencyAdmission) file(name string, executable bool, direct ...
 	if err := d.ctx.Err(); err != nil {
 		return err
 	}
-	name = d.logical(name)
 	// Normalize admitted physical path tokens only; never interpret a user
 	// pathname as a magic workspace alias, even after shell token assembly.
 	if strings.HasPrefix(name, "@workspace@") {
 		return stageConflict("reserved workspace marker dependency capability unsupported")
 	}
 	if filepath.IsAbs(name) {
-		relative, err := filepath.Rel(d.root, name)
-		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return stageDependencyUnsupported()
+		executionRoot, reason := d.workspace, "container execution root capability unsupported"
+		if d.host {
+			executionRoot, reason = d.root, "host initialization execution root capability unsupported"
+		}
+		relative, err := filepath.Rel(executionRoot, name)
+		if err != nil || filepath.Clean(name) != name || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return stageConflict(reason)
 		}
 		name = relative
 	}
@@ -230,12 +241,16 @@ func (d *stageDependencyAdmission) file(name string, executable bool, direct ...
 	}
 	d.paths[relative] = true
 	isDirect := len(direct) != 0 && direct[0]
-	if checked, exists := d.seen[relative]; exists && (!executable || checked) && (!isDirect || d.directSeen[relative]) {
+	proof := "container/" + relative
+	if d.host {
+		proof = "host/" + relative
+	}
+	if checked, exists := d.seen[proof]; exists && (!executable || checked) && (!isDirect || d.directSeen[proof]) {
 		return nil
 	}
-	d.seen[relative] = executable
+	d.seen[proof] = executable
 	if isDirect {
-		d.directSeen[relative] = true
+		d.directSeen[proof] = true
 	}
 	data, err := readStageInput(resolved, stageMaxFileBytes)
 	if err != nil {

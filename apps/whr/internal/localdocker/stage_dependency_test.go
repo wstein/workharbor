@@ -423,6 +423,57 @@ func setStageFixtureInitialize(t *testing.T, source string, command any) {
 	}
 }
 func TestLocalStageExecutionRootsMatchActualPhase(t *testing.T) {
+	t.Run("captured_initializer_override_and_labels", func(t *testing.T) {
+		c, opts, ports, statePath := fixtureStageLifecycle(t, false)
+		if err := os.Mkdir(filepath.Join(opts.Source, "scripts"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(opts.Source, "scripts", "host.sh"), []byte("true\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		setStageFixtureInitialize(t, opts.Source, []any{"sh", "${localWorkspaceFolder}/scripts/host.sh"})
+		stage, err := c.prepareStage(context.Background(), opts, ports)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer stage.Close()
+		data, err := os.ReadFile(stage.invocation.Override)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg map[string]any
+		if err = json.Unmarshal(data, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		command := cfg["initializeCommand"].([]any)
+		if len(command) != 2 || command[1] != "${localWorkspaceFolder}/scripts/host.sh" {
+			t.Fatalf("override changed source command: %v", command)
+		}
+		expected := "Run: sh " + filepath.Join(stage.capture.Path, "scripts", "host.sh")
+		if len(stage.initializeLabels) != 1 || stage.initializeLabels[0] != expected || strings.Contains(stage.initializeLabels[0], opts.Source) {
+			t.Fatalf("observed initializer did not resolve captured E: %v", stage.initializeLabels)
+		}
+		state := readFakeStageState(t, statePath)
+		if state.Candidate != nil || state.Volume != nil {
+			t.Fatal("preview executed initializer resources")
+		}
+		if _, err = os.Lstat(ports.StateRoot); !os.IsNotExist(err) {
+			t.Fatal("preview wrote retained state")
+		}
+	})
+	t.Run("exact_phase_argv_with_spaces", func(t *testing.T) {
+		root := filepath.Join(t.TempDir(), "captured space")
+		if err := os.Mkdir(root, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "child.sh"), []byte("true\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		cfg := map[string]any{"initializeCommand": []any{"sh", "${localWorkspaceFolder}/child.sh"}, "postCreateCommand": []any{"sh", "${containerWorkspaceFolder}/child.sh"}}
+		if _, _, err := admitStageDependencies(context.Background(), root, "/original space", "/workspaces/container space", cfg, false, ".devcontainer/devcontainer.json"); err != nil {
+			t.Fatalf("exact phase argv: %v", err)
+		}
+	})
 	t.Run("nested_shell_is_not_configuration", func(t *testing.T) {
 		root := t.TempDir()
 		if err := os.WriteFile(filepath.Join(root, "child.sh"), []byte("true\n"), 0600); err != nil {

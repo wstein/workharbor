@@ -71,6 +71,29 @@ func fixtureStageLifecycle(t *testing.T, health bool) (Client, StageOptions, sta
 	return c, opts, p, statePath
 }
 
+// The official CLI resolves initializeCommand from its workspace-folder input.
+// Model only that data substitution; these synthetic scripts are never run.
+func stageFakeInitialize(value any, workspace string) any {
+	switch value := value.(type) {
+	case string:
+		return strings.ReplaceAll(value, "${localWorkspaceFolder}", workspace)
+	case []any:
+		out := make([]any, len(value))
+		for i, v := range value {
+			out[i] = stageFakeInitialize(v, workspace)
+		}
+		return out
+	case map[string]any:
+		out := map[string]any{}
+		for k, v := range value {
+			out[k] = stageFakeInitialize(v, workspace)
+		}
+		return out
+	default:
+		return value
+	}
+}
+
 // A temporary test executable models only declared Docker/official-CLI vectors.
 // It never calls a daemon, builds an image, or executes a source hook or smoke.
 func TestLocalStageFakeToolProcess(t *testing.T) {
@@ -153,7 +176,9 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if json.Unmarshal(data, &cfg) != nil {
 				os.Exit(118)
 			}
-			emit(map[string]any{"configuration": cfg, "mergedConfiguration": merged(cfg, false)})
+			resolved := stageCopyConfig(cfg)
+			resolved["initializeCommand"] = stageFakeInitialize(cfg["initializeCommand"], argValue(args, "--workspace-folder"))
+			emit(map[string]any{"configuration": resolved, "mergedConfiguration": merged(cfg, false)})
 		case "up":
 			data, e := os.ReadFile(argValue(args, "--override-config"))
 			if e != nil {
@@ -163,7 +188,7 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if json.Unmarshal(data, &cfg) != nil {
 				os.Exit(96)
 			}
-			labels, _ := stageInitializeLabels(cfg["initializeCommand"])
+			labels, _ := stageInitializeLabels(stageFakeInitialize(cfg["initializeCommand"], argValue(args, "--workspace-folder")))
 			for i, label := range labels {
 				data, _ := json.Marshal(map[string]any{"type": "start", "timestamp": i + 1, "text": label})
 				fmt.Fprintln(os.Stderr, string(data))
