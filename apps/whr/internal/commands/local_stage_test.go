@@ -45,6 +45,24 @@ func stageCLIHandlers(f *stageTransactionFixture, prepares *int, options *locald
 	return h
 }
 func TestLocalStageCLIRefusalReasonsBeforePrepare(t *testing.T) {
+	for _, tc := range []struct{ flag, reason string }{{"--trust", "--yes"}, {"--yes", "--trust"}} {
+		t.Run("json-terminal-"+tc.flag, func(t *testing.T) {
+			f := &stageTransactionFixture{preview: stageCLIResult()}
+			n := 0
+			var o localdocker.StageOptions
+			var out, diag bytes.Buffer
+			args := []string{"workspace", "stage", "--local", "--source", "/src", "primary", "--json", tc.flag}
+			if tc.flag == "--trust" {
+				args = append(args, "digest")
+			}
+			env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader("yes\n"), InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
+			code := commands.Execute(context.Background(), args, env, stageCLIHandlers(f, &n, &o))
+			if code != 70 || !strings.Contains(diag.String(), tc.reason) || strings.Contains(diag.String(), "[y/N]") || strings.Contains(diag.String(), "Enter the exact fingerprint") || n != 0 || f.applies != 0 {
+				t.Fatalf("code=%d diag=%q prepare=%d fixture=%+v", code, diag.String(), n, f)
+			}
+		})
+	}
+
 	for _, tc := range []struct {
 		name   string
 		args   []string
@@ -70,6 +88,28 @@ func TestLocalStageCLIRefusalReasonsBeforePrepare(t *testing.T) {
 	}
 }
 func TestLocalStageCLIPreviewAndConsent(t *testing.T) {
+	t.Run("human-preview", func(t *testing.T) {
+		f := &stageTransactionFixture{preview: stageCLIResult()}
+		n := 0
+		var o localdocker.StageOptions
+		g := run(t, stageCLIHandlers(f, &n, &o), "workspace", "stage", "--local", "--source", "/src", "--dry-run", "primary")
+		for _, text := range []string{"Pause input writers", "Hashes cannot detect a writer that changes and restores bytes during a phase"} {
+			if g.code != 0 || !strings.Contains(g.stdout, text) || f.applies != 0 {
+				t.Fatalf("missing %q: %+v", text, g)
+			}
+		}
+	})
+	for _, fp := range []*string{nil, new(string)} {
+		f := &stageTransactionFixture{preview: stageCLIResult()}
+		f.preview.Fingerprint = fp
+		n := 0
+		var o localdocker.StageOptions
+		g := run(t, stageCLIHandlers(f, &n, &o), "workspace", "stage", "--local", "--source", "/src", "--yes", "--trust", "digest", "primary")
+		if g.code != 68 || !strings.Contains(g.err, "stage preview has no source fingerprint") || f.applies != 0 || f.closes != 1 {
+			t.Fatalf("missing fingerprint: %+v fixture=%+v", g, f)
+		}
+	}
+
 	for _, dry := range []bool{true, false} {
 		t.Run(map[bool]string{true: "preview", false: "apply"}[dry], func(t *testing.T) {
 			p := stageCLIResult()
@@ -126,34 +166,79 @@ func TestLocalStageCLIPartialEnvelopePreservesRecovery(t *testing.T) {
 		t.Fatalf("lost local partial inventory: %v", env)
 	}
 }
+
+type cancelStageReader struct {
+	cancel context.CancelFunc
+	text   string
+}
+
+func (r *cancelStageReader) Read(p []byte) (int, error) {
+	r.cancel()
+	return strings.NewReader(r.text).Read(p)
+}
+
 func TestLocalStageCLIInteractiveTrustAndConfirmation(t *testing.T) {
-	for _, answer := range []string{"DECLINE\n", "MATCH\nno\n", "MATCH\nyes\n"} {
-		t.Run(strings.ReplaceAll(answer, "\n", "-"), func(t *testing.T) {
+	for _, tc := range []struct {
+		name, answer, reason string
+		code                 int
+		supplied             bool
+	}{
+		{"trust-declined", "DECLINE\n", "source fingerprint trust declined", 70, false},
+		{"confirmation-declined", "MATCH\nno\n", "stage confirmation declined", 70, false},
+		{"accepted", "MATCH\nyes\n", "", 0, false},
+		{"upper", "MATCH\nY\n", "", 0, false},
+		{"padded", "MATCH\n YES \r\n", "", 0, false},
+		{"supplied-trust", "yes\n", "", 0, true},
+		{"padded-digest", " MATCH\nyes\n", "source fingerprint trust declined", 70, false},
+		{"changed-digest-case", "SHA256:" + strings.Repeat("a", 64) + "\nyes\n", "source fingerprint trust declined", 70, false},
+		{"oversized", strings.Repeat("x", 1100) + "\n", "confirmation declined: a complete bounded answer is required", 70, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			p := stageCLIResult()
-			input := strings.ReplaceAll(answer, "MATCH", *p.Fingerprint)
 			n := 0
 			var o localdocker.StageOptions
 			f := &stageTransactionFixture{preview: p, result: p}
 			var out, diag bytes.Buffer
-			env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(input), InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
-			code := commands.Execute(context.Background(), []string{"workspace", "stage", "--local", "--source", "/src", "primary"}, env, stageCLIHandlers(f, &n, &o))
-			want := 70
-			if strings.HasSuffix(answer, "yes\n") {
-				want = 0
+			env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(strings.ReplaceAll(tc.answer, "MATCH", *p.Fingerprint)), InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
+			args := []string{"workspace", "stage", "--local", "--source", "/src", "--no-color", "primary"}
+			if tc.supplied {
+				args = append(args, "--trust", *p.Fingerprint)
 			}
-			if code != want || f.closes != 1 || f.applies != map[bool]int{true: 1, false: 0}[want == 0] {
-				t.Fatalf("code=%d out=%q diag=%q applies=%d", code, out.String(), diag.String(), f.applies)
+			code := commands.Execute(context.Background(), args, env, stageCLIHandlers(f, &n, &o))
+			wantApply := 0
+			if tc.code == 0 {
+				wantApply = 1
 			}
-			for _, text := range []string{"fingerprint", "Pause input writers"} {
+			if code != tc.code || f.applies != wantApply || f.closes != 1 || !strings.Contains(diag.String(), tc.reason) {
+				t.Fatalf("code=%d diag=%q fixture=%+v", code, diag.String(), f)
+			}
+			for _, text := range []string{"fingerprint", "Pause input writers", "Hashes cannot detect a writer that changes and restores bytes during a phase"} {
 				if !strings.Contains(diag.String(), text) {
-					t.Fatalf("missing disclosure %q: %q", text, diag.String())
+					t.Fatalf("missing %q: %q", text, diag.String())
 				}
 			}
+			if tc.supplied && (strings.Contains(diag.String(), "Enter the exact fingerprint") || strings.Count(diag.String(), "[y/N]") != 1) {
+				t.Fatal(diag.String())
+			}
 			if strings.ContainsAny(out.String(), "\x1b\r") || strings.Contains(out.String(), "\nforged") {
-				t.Fatalf("unsafe output %q", out.String())
+				t.Fatal(out.String())
 			}
 		})
 	}
+	t.Run("canceled-during-answer", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		p := stageCLIResult()
+		f := &stageTransactionFixture{preview: p, result: p}
+		n := 0
+		var o localdocker.StageOptions
+		var out, diag bytes.Buffer
+		env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: &cancelStageReader{cancel: cancel, text: *p.Fingerprint + "\nyes\n"}, InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
+		code := commands.Execute(ctx, []string{"workspace", "stage", "--local", "--source", "/src", "primary", "--no-color"}, env, stageCLIHandlers(f, &n, &o))
+		if code != 72 || !strings.Contains(diag.String(), "interrupted") || f.applies != 0 || f.closes != 1 {
+			t.Fatalf("code=%d diag=%q fixture=%+v", code, diag.String(), f)
+		}
+	})
 }
 
 func TestLocalStageJSONClosedResultSchema(t *testing.T) {
