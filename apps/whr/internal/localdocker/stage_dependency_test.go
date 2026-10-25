@@ -300,7 +300,7 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 		if err = os.WriteFile(filepath.Join(spaced, "simple.sh"), []byte("true\n"), 0700); err != nil {
 			t.Fatal(err)
 		}
-		if _, _, err = admitStageDependencies(context.Background(), spaced, original, "/workspaces/test", map[string]any{"postCreateCommand": []any{"sh", "${localWorkspaceFolder}/simple.sh"}}, false, ".devcontainer/devcontainer.json"); err != nil {
+		if _, _, err = admitStageDependencies(context.Background(), spaced, original, "/workspaces/test", map[string]any{"initializeCommand": []any{"sh", "${localWorkspaceFolder}/simple.sh"}}, false, ".devcontainer/devcontainer.json"); err != nil {
 			t.Fatalf("literal argv path: %v", err)
 		}
 	})
@@ -423,6 +423,19 @@ func setStageFixtureInitialize(t *testing.T, source string, command any) {
 	}
 }
 func TestLocalStageExecutionRootsMatchActualPhase(t *testing.T) {
+	t.Run("nested_shell_is_not_configuration", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "child.sh"), []byte("true\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "entry.sh"), []byte("sh -c 'sh ${localWorkspaceFolder}/child.sh'\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err := admitStageDependencies(context.Background(), root, "/original", "/workspaces/test", map[string]any{"initializeCommand": []any{"sh", filepath.Join(root, "entry.sh")}}, false, ".devcontainer/devcontainer.json")
+		if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), "execution dependency capability unsupported") {
+			t.Fatalf("script payload treated as configuration substitution: %v", err)
+		}
+	})
 	for _, form := range []string{"host_original", "host_nested_original", "host_container", "container_original", "container_nested_original"} {
 		t.Run(form, func(t *testing.T) {
 			c, opts, ports, statePath := fixtureStageLifecycle(t, false)
