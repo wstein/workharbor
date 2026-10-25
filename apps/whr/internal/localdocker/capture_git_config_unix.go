@@ -46,7 +46,10 @@ func stageConfigEntries(ctx context.Context, home string, s stageGitSnapshot) (m
 	return values, "sha256:" + hex.EncodeToString(hash[:]), nil
 }
 func stageCredentialFreeURL(value string) bool {
-	if value == "" || len(value) > 4096 || strings.ContainsAny(value, "\x00\r\n\t") {
+	if value == "" || strings.HasPrefix(value, "-") || len(value) > 4096 || strings.ContainsAny(value, "\x00\r\n\t") {
+		return false
+	}
+	if prefix, _, found := strings.Cut(value, "::"); found && prefix != "" && !strings.ContainsAny(prefix, "/@[]:") {
 		return false
 	}
 	if strings.Contains(value, "://") {
