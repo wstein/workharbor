@@ -305,3 +305,50 @@ func TestResolverVersion2IntegrationSettingsIgnored(t *testing.T) {
 		}
 	}
 }
+
+// Each malformed input has one defect relative to an accepted control. Shared
+// vectors may have several defects, which cannot isolate these admission guards.
+func TestResolverManifestSingleDefectRefusals(t *testing.T) {
+	for _, version := range []string{"1", "2"} {
+		t.Run("v"+version, func(t *testing.T) {
+			valid := string(resolverManifest(version, ""))
+			path := func(value string) []byte {
+				return []byte(strings.Replace(valid, `".devcontainer/devcontainer.json"`, `"`+value+`"`, 1))
+			}
+			type defect struct {
+				name string
+				raw  []byte
+			}
+			cases := []defect{
+				{"duplicate_literal", resolverManifest(version, `,"schema_version":`+version)},
+				{"duplicate_escaped", resolverManifest(version, `,"schema\u005fversion":`+version)},
+				{"lone_high_surrogate", path(`\ud800`)},
+				{"lone_low_surrogate", path(`\udc00`)},
+				{"high_then_non_surrogate", path(`\ud800\u0041`)},
+				{"escaped_quote_then_high", path(`a\"\ud800`)},
+				{"overlong_utf8", path(string([]byte{0xc0, 0xaf}))},
+				{"cesu8_surrogate", path(string([]byte{0xed, 0xa0, 0x80}))},
+				{"trailing_token", []byte(valid + "x")},
+				{"trailing_object", []byte(valid + " {}")},
+			}
+			if version == "2" {
+				cases = append(cases,
+					defect{"unknown_v2_field", resolverManifest(version, `,"agent_shell":"bash"`)},
+					defect{"nested_duplicate", resolverManifest(version, `,"project":{"url":"https://example.test/org/app.git","path":"projects/app","pa\u0074h":"projects/app"}`)})
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					_, _, err := decodeResolverManifest(tc.raw)
+					resolverManifestError(t, err, "invalid_configuration")
+				})
+			}
+			// Valid scalar pairs, replacement characters, quotes and whitespace
+			// ensure broad Unicode or trailing-byte refusals cannot pass.
+			for _, control := range [][]byte{[]byte(valid), path(`\ufffd`), path(`\ud800\udc00`), path(`a\"b`), []byte(valid + " \r\n\t")} {
+				if _, _, err := decodeResolverManifest(control); err != nil {
+					t.Fatalf("valid single-defect control refused: %q: %v", control, err)
+				}
+			}
+		})
+	}
+}
