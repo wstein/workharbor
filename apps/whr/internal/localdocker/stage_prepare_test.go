@@ -244,7 +244,7 @@ func TestLocalStageGitFixtureCanonicalSourceUnderAlias(t *testing.T) {
 	t.Run("native_capture_selection", TestLocalStageGitStatusPredicateRejectsCorruptIndexWithoutExecutingConfig)
 }
 
-func TestLocalStagePreparationRetainsReplacedTemporaryRoot(t *testing.T) {
+func TestLocalStageGitPreparationRetainsReplacedTemporaryRoot(t *testing.T) {
 	parent := t.TempDir()
 	original, replacement := filepath.Join(parent, "original"), filepath.Join(parent, "replacement")
 	for _, dir := range []string{original, replacement} {
