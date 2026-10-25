@@ -83,7 +83,7 @@ func localLifecycleHandler(kind string, prepare func(context.Context, localLifec
 	return func(ctx context.Context, call Call) (res Result, err error) {
 		v, _ := ctx.Value(localLifecycleKey{}).(localLifecycleInvocation)
 		if !v.local {
-			return res, exitcode.Errorf(exitcode.PathUnavailableCommand, "workspace.%s requires --local; remote lifecycle operations are unavailable", kind)
+			return res, exitcode.Errorf(exitcode.PathUnavailableCommand, "workspace.%s is not available without --local; remote lifecycle operations are unavailable", kind)
 		}
 		if len(call.Args) != 1 {
 			return res, exitcode.Errorf(exitcode.PathBadArguments, "%s --local requires exactly one primary container id/name", kind)
