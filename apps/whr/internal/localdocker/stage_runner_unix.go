@@ -199,21 +199,18 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 		progress = newStageInitializeProgress(r.InitializationLabels, host, budget, cancelChild)
 		output.observeStderr = progress.write
 	}
+	var waitErr error
 	e = cmd.Start()
 	if e == nil {
-		waitErr := stageWaitLeader(cmd.Process.Pid)
+		waitErr = stageWaitLeader(cmd.Process.Pid)
 		group.releaseBeforeReap(waitErr == nil)
 		e = cmd.Wait()
-		if waitErr != nil {
-			return result, stageConflict("phase process ownership observation failed: " + phase)
-		}
 	} else {
 		group.releaseBeforeReap(false)
 	}
+	var progressErr error
 	if progress != nil {
-		if err := progress.close(); err != nil {
-			return result, err
-		}
+		progressErr = progress.close()
 	}
 	result.Stdout = output.stdout.Bytes()
 	result.Stderr = output.stderr.Bytes()
@@ -222,11 +219,17 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 	hash.Write([]byte{0})
 	hash.Write(result.Stderr)
 	result.OutputDigest = "sha256:" + hex.EncodeToString(hash.Sum(nil))
-	if output.exceeded {
-		return result, stageConflict("phase output quota exceeded: " + phase)
-	}
 	if ctx.Err() != nil {
 		return result, ctx.Err()
+	}
+	if waitErr != nil {
+		return result, stageConflict("phase process ownership observation failed: " + phase)
+	}
+	if progressErr != nil {
+		return result, progressErr
+	}
+	if output.exceeded {
+		return result, stageConflict("phase output quota exceeded: " + phase)
 	}
 	if e != nil {
 		var ee *exec.ExitError
