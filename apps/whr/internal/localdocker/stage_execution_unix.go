@@ -28,7 +28,7 @@ func stageExecutionDigest(ctx context.Context, root string, paths []string) (str
 		if e = ctx.Err(); e != nil {
 			return "", e
 		}
-		entries, omitted, e := scanStageFilesSelected(ctx, root, "", selected)
+		entries, omitted, e := scanStageExecutionFiles(ctx, root, selected)
 		if e != nil {
 			return "", e
 		}
