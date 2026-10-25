@@ -41,7 +41,7 @@ func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOption
 			return Result{}, exitcode.Errorf(exitcode.PathBadArguments, "use workspace promote --local <exact-name|full-id>")
 		}
 		if v.volumes && !v.force || !v.dryRun && (!v.volumes || !v.force) {
-			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "promote apply requires explicit --volumes and --force; --yes supplies neither")
+			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "candidate home deletion requires both --volumes and --force; --yes supplies neither")
 		}
 		if !v.dryRun && !v.yes && !v.interactive {
 			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "unattended promote requires --yes (or --dry-run)")
@@ -57,7 +57,7 @@ func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOption
 		}()
 		preview := tx.Preview()
 		if v.dryRun {
-			return Result{Value: preview, Human: promoteHuman(preview)}, nil
+			return Result{Value: preview, Human: promoteHuman(preview) + "Apply requires explicit --volumes and --force, plus confirmation or --yes.\n"}, nil
 		}
 		if v.interactive && !v.yes {
 			if _, err = io.WriteString(v.diagnostics, promoteHuman(preview)+"Pause input writers for every execution phase. Promote and remove the exact candidate and candidate home? [y/N] "); err != nil {
@@ -67,6 +67,7 @@ func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOption
 			if e != nil {
 				return Result{}, e
 			}
+			answer = strings.ToLower(strings.TrimSpace(answer))
 			if answer != "y" && answer != "yes" {
 				return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionRefused, "promote confirmation declined")
 			}
@@ -83,5 +84,5 @@ func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOption
 	}
 }
 func promoteHuman(r localdocker.LifecycleResult) string {
-	return lifecycleHuman(r) + "Primary replacement ends all whr shell panes and other exec sessions. The original primary home is preserved; only the candidate home is a cleanup target. Trusted container hooks may write the original workspace.\n"
+	return lifecycleHuman(r) + "Primary replacement ends all whr shell panes and other exec sessions. The original primary home is never a cleanup target. Trusted container hooks may write the original workspace.\n"
 }
