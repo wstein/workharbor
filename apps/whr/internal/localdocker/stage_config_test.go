@@ -95,3 +95,34 @@ func TestLocalPromoteMountCSVRetainsPathBytes(t *testing.T) {
 		t.Fatalf("override mount rendering diverged: %#v %v", config, err)
 	}
 }
+
+func TestLocalStageSourceMetadataOriginRequiresActualBakeBranch(t *testing.T) {
+	hook := "echo ${localEnv:ANCHORAGE_HOST_NAME}"
+	for _, tc := range []struct {
+		name   string
+		config map[string]any
+		baked  bool
+	}{
+		{"plain image", map[string]any{"image": "example/base", "postCreateCommand": hook}, false},
+		{"build", map[string]any{"build": map[string]any{"dockerfile": "Dockerfile"}, "postCreateCommand": hook}, true},
+		{"features", map[string]any{"image": "example/base", "features": map[string]any{"example/feature:1": map[string]any{}}, "postCreateCommand": hook}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if stageSourceContributionBaked(tc.config) != tc.baked {
+				t.Fatal("wrong official source-origin branch")
+			}
+			projection := stageSourceMetadata(tc.config)
+			if projection["postCreateCommand"] != hook {
+				t.Fatal("raw substitution token was resolved in image-label provenance")
+			}
+			if err := stageCheckBakedSourceMetadata(projection, []map[string]any{projection}); err != nil {
+				t.Fatal(err)
+			}
+			if tc.baked {
+				if err := stageCheckBakedSourceMetadata(projection, []map[string]any{{"postCreateCommand": "echo resolved"}}); err == nil {
+					t.Fatal("accepted different raw source contribution")
+				}
+			}
+		})
+	}
+}

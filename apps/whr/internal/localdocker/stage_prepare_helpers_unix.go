@@ -295,6 +295,7 @@ func (s *LocalStage) prepareCLIConfiguration(ctx context.Context) error {
 		return stageConflict("private configuration storage unavailable")
 	}
 	override := filepath.Join(configRoot, "devcontainer.json")
+	s.sourceMetadata = stageSourceMetadata(full)
 	data, _ := json.Marshal(full)
 	if e = os.WriteFile(override, append(data, '\n'), 0600); e != nil {
 		return stageConflict("private configuration publication unavailable")

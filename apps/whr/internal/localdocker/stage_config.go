@@ -80,6 +80,19 @@ func stageSourceMetadata(source map[string]any) map[string]any {
 	}
 	return stageCopyConfig(result)
 }
+
+// Only build and feature extension branches bake the current raw source
+// contribution into the image. A plain image may contain identical text from
+// an independent origin, which must remain independent.
+func stageSourceContributionBaked(source map[string]any) bool {
+	for _, key := range []string{"build", "dockerFile", "dockerfile"} {
+		if _, ok := source[key]; ok {
+			return true
+		}
+	}
+	features, ok := source["features"].(map[string]any)
+	return ok && len(features) != 0
+}
 func stageCheckBakedSourceMetadata(source map[string]any, metadata []map[string]any) error {
 	expected := stageSourceMetadata(source)
 	if len(expected) == 0 {

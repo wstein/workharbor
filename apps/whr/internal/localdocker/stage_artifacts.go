@@ -12,6 +12,7 @@ import (
 // or receipt fields. execution-binding.json is bound by the receipt; its settings
 // digest transitively binds every other private artifact used at promotion.
 type stageSettings struct {
+	SourceMetadataDigest       string   `json:"source_metadata_digest"`
 	ConfigRelativePath         string   `json:"config_relative_path"`
 	PrimaryConfigDigest        string   `json:"primary_config_digest"`
 	GitSnapshotsDigest         string   `json:"git_snapshots_digest"`
