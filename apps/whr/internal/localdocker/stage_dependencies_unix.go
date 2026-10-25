@@ -435,7 +435,7 @@ func (s *LocalStage) admitMergedDependencies(ctx context.Context, merged map[str
 	}
 	if mode != "none" {
 		for _, repo := range s.git.Repositories {
-			current, e := readStageGitSnapshotContext(ctx, repo.ClonePath, true)
+			current, e := readStageCandidateGitSnapshot(ctx, repo.ClonePath)
 			if e != nil {
 				return e
 			}

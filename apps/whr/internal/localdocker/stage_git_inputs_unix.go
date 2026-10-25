@@ -15,7 +15,7 @@ import (
 // upstream-ref information. Bind that projection and the per-context config,
 // rather than assigning the exit-only status predicate to arbitrary Git code.
 func stageConsumedGitInputDigest(ctx context.Context, repository, current stageGitSnapshot, identity bool) (string, error) {
-	original, err := readStageGitSnapshotContext(ctx, repository.Source, false)
+	original, err := readStageGitSnapshotContext(ctx, repository.Source)
 	if err != nil {
 		return "", err
 	}

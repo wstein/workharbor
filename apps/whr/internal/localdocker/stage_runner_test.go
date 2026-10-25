@@ -73,7 +73,7 @@ func TestLocalStagePhaseNeverSignalsReleasedLeader(t *testing.T) {
 	if err := g.terminate(); err != nil {
 		t.Fatal(err)
 	}
-	g.releaseBeforeReap(true)
+	g.releaseBeforeReap()
 	if signals != 2 {
 		t.Fatalf("before release signals=%d want TERM then cleanup KILL", signals)
 	}

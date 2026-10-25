@@ -505,7 +505,7 @@ func (s *LocalStage) persistStageVerification(ctx context.Context, candidate sta
 	}
 	s.execution = stageExecutionBinding{SettingsDigest: stageDigest(s.settings), CandidateDigest: executionDigest, OriginalDigest: original, GitInputs: []stageExecutionGitInput{}}
 	for i, repository := range s.git.Repositories {
-		current, e := readStageGitSnapshotContext(ctx, repository.ClonePath, true)
+		current, e := readStageCandidateGitSnapshot(ctx, repository.ClonePath)
 		if e != nil {
 			return e
 		}

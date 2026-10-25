@@ -97,7 +97,7 @@ func stageCheckExecutionGit(ctx context.Context, inputs []stageExecutionGitInput
 		if repository == nil {
 			return stageConflict("executed Git repository binding missing")
 		}
-		current, e := readStageGitSnapshotContext(ctx, repository.ClonePath, true)
+		current, e := readStageCandidateGitSnapshot(ctx, repository.ClonePath)
 		if e != nil {
 			return e
 		}
