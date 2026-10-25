@@ -99,8 +99,16 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	if e = store.saveReceipt(s.receipt, false); e != nil {
 		return s.stagePartial("home observation receipt failed", e)
 	}
-	// Resource/hook/verification orchestration is the next ordered internal gate.
-	return s.stagePartial("candidate resource phase did not complete", stageConflict("candidate resource phase did not complete"))
+	if e = s.writeStageArtifact("candidate-home.json", plan); e != nil {
+		return s.stagePartial("home plan persistence failed", e)
+	}
+	if e = s.writeStageArtifact("candidate-home-observation.json", observed); e != nil {
+		return s.stagePartial("home observation persistence failed", e)
+	}
+	if e = s.prepareStageRuntime(ctx); e != nil {
+		return s.stagePartial("runtime preparation failed", e)
+	}
+	return s.executeStage(ctx, observed)
 }
 
 func (s *LocalStage) initialStageReceipt(consent LifecycleConsent) *stageReceipt {

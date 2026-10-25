@@ -56,6 +56,10 @@ type LocalStage struct {
 	applied, closed                                  bool
 	store                                            *stageStore
 	receipt                                          *stageReceipt
+	primaryObserved                                  stageContainerDetails
+	settings                                         stageSettings
+	execution                                        stageExecutionBinding
+	effectiveConfig                                  map[string]any
 }
 
 func nativeStagePreparationPorts(c Client) (stagePreparationPorts, error) {

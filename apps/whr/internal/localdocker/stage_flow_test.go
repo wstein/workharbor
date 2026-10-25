@@ -141,7 +141,7 @@ func TestLocalStageEscapesSmokeOutput(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	if strings.ContainsRune(diagnostics.String(), '\x1b') || !strings.Contains(diagnostics.String(), "\\x1b[31msmoke-marker") {
+	if strings.ContainsRune(diagnostics.String(), '\x1b') || !strings.Contains(diagnostics.String(), "<U+001B>[31msmoke-marker<U+000A>") {
 		t.Fatalf("escaped diagnostic missing: %q", diagnostics.String())
 	}
 }
