@@ -220,4 +220,5 @@ func TestLocalStageFixtureSocketIgnoresLongTMPDIR(t *testing.T) {
 			t.Fatalf("socket missing: %v", err)
 		}
 	})
+	t.Run("health_notification", TestLocalStageReviewInterruptDuringHealthWaitFlow)
 }
