@@ -73,7 +73,7 @@ func openStageStore(root, daemon, endpoint string) (*stageStore, error) {
 			}
 		}
 	}
-	sum := sha256.Sum256([]byte(daemon + "\x00" + endpoint))
+	sum := sha256.Sum256([]byte(daemon))
 	key := hex.EncodeToString(sum[:])
 	if e = unix.Mkdirat(fd, key, 0700); e != nil && !errors.Is(e, unix.EEXIST) {
 		unix.Close(fd)
