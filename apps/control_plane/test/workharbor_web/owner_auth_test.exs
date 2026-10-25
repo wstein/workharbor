@@ -96,6 +96,52 @@ defmodule WorkHarborWeb.OwnerAuthTest do
     assert get(conn, "https://localhost/owner").status in [401, 403]
   end
 
+  test "navigation hook revalidates owner before continuing or denying", c do
+    for state <- [:active, :expired, :revoked] do
+      {conn, principal} = signed_in(c, "owner_browser")
+      view = mount_shell(conn)
+      socket = :sys.get_state(view.pid).socket
+      case state do
+        :active -> :ok
+        :expired -> Application.put_env(:workharbor, :clock, fn -> principal.expires_at end)
+        :revoked -> assert :ok = Accounts.revoke(principal, principal.credential_id)
+      end
+      before = denied_count()
+      result = Phoenix.LiveView.Lifecycle.handle_params(%{}, "https://localhost/owner", socket)
+      case state do
+        :active ->
+          assert {:cont, ^socket} = result
+          assert denied_count() == before
+        _ ->
+          assert {:halt, stopped} = result
+          assert stopped.redirected == {:redirect, %{to: "/login/owner"}}
+          assert stopped.private.owner_auth.stopped
+          assert stopped.private.owner_auth.principal == nil
+          assert stopped.private.owner_auth.timer == nil
+          assert stopped.private.owner_auth.ref == nil
+          assert denied_count() in before..(before + 1)
+      end
+      Application.put_env(:workharbor, :clock, fn -> 2_000_000_000 end)
+    end
+  end
+
+  test "malformed stale and queued owner ticks never authorize or reschedule", c do
+    {conn, _} = signed_in(c, "owner_browser")
+    view = mount_shell(conn)
+    socket = :sys.get_state(view.pid).socket
+    unbound = put_in(socket.private[:owner_auth], %{socket.private.owner_auth | ref: nil})
+    stopped = put_in(socket.private[:owner_auth], %{socket.private.owner_auth | stopped: true, ref: nil, principal: nil})
+    before = denied_count()
+    for {candidate, tick} <- [{unbound, nil}, {unbound, 0}, {unbound, "FORGED-TICK-CANARY"}, {socket, make_ref()}, {stopped, socket.private.owner_auth.ref}] do
+      assert {:halt, ^candidate} = Phoenix.LiveView.Lifecycle.handle_info({:owner_session, tick}, candidate)
+    end
+    for malformed <- [:owner_session, {:owner_session}, {:owner_session, nil, "FORGED-TICK-CANARY"}] do
+      assert {:cont, ^socket} = Phoenix.LiveView.Lifecycle.handle_info(malformed, socket)
+    end
+    refute_receive {:owner_session, _}, 10
+    assert denied_count() == before
+  end
+
   test "foreign owner query injection is refused before shell reads", c do
     {conn, _} = signed_in(c, "owner_browser")
     before = DB.count("audit_events")

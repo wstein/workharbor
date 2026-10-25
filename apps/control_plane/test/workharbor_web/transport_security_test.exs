@@ -534,6 +534,59 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     assert request(c, "GET", "/api/v1/auth/status").status == 401
   end
 
+  @tag :tls
+  test "owner WSS bounds actual frames while preserving heartbeat", c do
+    {selected, csrf} = browser(c, "owner")
+    assert {:ok, sock} = connect(c, ["http/1.1"])
+    try do
+      path = "/owner/live/websocket?" <> URI.encode_query(%{"_csrf_token" => csrf, "vsn" => "2.0.0"})
+      wire = "GET " <> path <> " HTTP/1.1\r\n" <>
+        "host: localhost:#{c.port}\r\norigin: #{c.origin}\r\ncookie: #{selected}\r\n" <>
+        "connection: upgrade\r\nupgrade: websocket\r\nsec-websocket-version: 13\r\n" <>
+        "sec-websocket-key: " <> Base.encode64(<<0::128>>) <> "\r\n\r\n"
+      assert :ok = :ssl.send(sock, wire)
+      assert response(sock).status == 101
+      heartbeat = Jason.encode!([nil, "bounded-heartbeat", "phoenix", "heartbeat", %{}])
+      assert :ok = :ssl.send(sock, masked_frame(heartbeat))
+      assert {1, reply} = socket_frame(sock)
+      assert [nil, "bounded-heartbeat", "phoenix", "phx_reply", %{"status" => "ok"}] = Jason.decode!(reply)
+      before = WorkHarbor.FoundationDatabase.count("audit_events")
+      payload = Jason.encode!([nil, "large", "phoenix", "heartbeat", %{"padding" => String.duplicate("x", 65_536), "canary" => "OVERSIZE-FRAME-CANARY"}])
+      logs = ExUnit.CaptureLog.capture_log(fn ->
+        assert :ok = :ssl.send(sock, masked_frame(payload))
+        assert {8, <<1009::16, _reason::binary>>} = socket_frame(sock)
+      end)
+      refute logs =~ "OVERSIZE-FRAME-CANARY"
+      assert WorkHarbor.FoundationDatabase.count("audit_events") == before
+    after
+      :ssl.close(sock)
+    end
+  end
+
+  defp masked_frame(payload) do
+    size = byte_size(payload)
+    cond do
+      size < 126 -> <<0x81, 0x80 + size, 0::32, payload::binary>>
+      size <= 65_535 -> <<0x81, 0xFE, size::16, 0::32, payload::binary>>
+      true -> <<0x81, 0xFF, size::64, 0::32, payload::binary>>
+    end
+  end
+
+  defp socket_frame(sock) do
+    assert {:ok, <<1::1, 0::3, opcode::4, 0::1, length::7>>} = :ssl.recv(sock, 2, 2_000)
+    length = case length do
+      126 ->
+        assert {:ok, <<size::16>>} = :ssl.recv(sock, 2, 2_000)
+        size
+      127 ->
+        assert {:ok, <<size::64>>} = :ssl.recv(sock, 8, 2_000)
+        size
+      size -> size
+    end
+    assert {:ok, payload} = :ssl.recv(sock, length, 2_000)
+    {opcode, payload}
+  end
+
   defp upgrade(c, kind, csrf, selected, origin) do
     path =
       "/#{kind}/live/websocket?" <> URI.encode_query(%{"_csrf_token" => csrf, "vsn" => "2.0.0"})
