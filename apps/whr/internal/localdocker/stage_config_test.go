@@ -80,3 +80,18 @@ func TestLocalStageSourceMetadataOriginIsNotStringDedup(t *testing.T) {
 		t.Fatalf("string-only origin admitted: %v", e)
 	}
 }
+
+func TestLocalPromoteMountCSVRetainsPathBytes(t *testing.T) {
+	source := "/original/comma, space and \"quote\""
+	target := "/workspaces/comma, space and \"quote\""
+	raw := renderStageMount("type=bind", "source="+source, "target="+target)
+	parsed, err := stageNativeMount(raw)
+	if err != nil || parsed["source"] != source || parsed["target"] != target {
+		t.Fatalf("mount altered path bytes: %q %#v %v", raw, parsed, err)
+	}
+	primary := stagePrimaryConfiguration{Source: source, Workspace: target, Home: "home", HomeDestination: "/home/vscode", Name: "primary", RemoteUser: "vscode", ContainerUser: "vscode", Mounts: []any{}, ContainerEnv: map[string]any{}, RemoteEnv: map[string]any{}}
+	config, err := stagePromoteConfig(map[string]any{}, primary, "sha256:"+strings.Repeat("a", 64), false)
+	if err != nil || config["workspaceMount"] != raw {
+		t.Fatalf("override mount rendering diverged: %#v %v", config, err)
+	}
+}
