@@ -204,10 +204,12 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 		}
 	}
 	configPath := s.primary.Labels["devcontainer.config_file"]
+	configSource := s.primary.Labels["devcontainer.local_folder"]
 	if configPath == "" {
+		configSource = s.capture.Source
 		configPath = filepath.Join(s.capture.Source, ".devcontainer", "devcontainer.json")
 	}
-	s.configRelative, err = filepath.Rel(s.capture.Source, configPath)
+	s.configRelative, err = filepath.Rel(configSource, configPath)
 	if err != nil || s.configRelative == ".." || strings.HasPrefix(s.configRelative, ".."+string(filepath.Separator)) || filepath.IsAbs(s.configRelative) {
 		return nil, stageConflict("configuration outside admitted source")
 	}

@@ -305,43 +305,50 @@ func TestLocalStageGitAliasedWorkspaceLabelsAndPromotionMount(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("TMPDIR", alias)
-	c, opts, ports, _ := fixtureStageLifecycle(t, false)
-	opts.Smoke = true
-	expected, err := filepath.EvalSymlinks(opts.Source)
-	if err != nil || expected == opts.Source {
-		t.Fatalf("fixture lost lexical alias: %q %q %v", opts.Source, expected, err)
-	}
-	stage, err := c.prepareStage(context.Background(), opts, ports)
-	if err != nil {
-		t.Fatalf("lexical CLI labels refused: %v", err)
-	}
-	defer stage.Close()
-	if stage.primary.Labels["devcontainer.local_folder"] != opts.Source || stage.capture.Source != expected {
-		t.Fatal("fixture did not retain lexical labels and physical capture")
-	}
-	result, err := stage.Apply(context.Background(), LifecycleConsent{TrustDigest: *stage.Preview().Fingerprint, Confirmed: true, Quiescence: true})
-	if err != nil || result.Status != "staged_verified" {
-		t.Fatalf("aliased workspace: %+v %v", result, err)
-	}
-	data, err := os.ReadFile(filepath.Join(stage.store.operationPath(stage.receipt.OperationID), "primary-config.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var config stagePrimaryConfiguration
-	if err := json.Unmarshal(data, &config); err != nil {
-		t.Fatal(err)
-	}
-	for _, raw := range config.Mounts {
-		value, ok := raw.(string)
-		if !ok {
-			t.Fatalf("non-string persisted mount: %v", raw)
-		}
-		mount, err := stageNativeMount(value)
+	t.Run("lexical_labels", func(t *testing.T) {
+		c, opts, ports, _ := fixtureStageLifecycle(t, false)
+		stateParent, err := filepath.EvalSymlinks(filepath.Dir(ports.StateRoot))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if mount["type"] == "bind" && mount["target"] == stage.workspace {
-			t.Fatalf("workspace bind duplicated into promotion mounts: %v", raw)
+		ports.StateRoot = filepath.Join(stateParent, filepath.Base(ports.StateRoot))
+		opts.Smoke = true
+		expected, err := filepath.EvalSymlinks(opts.Source)
+		if err != nil || expected == opts.Source {
+			t.Fatalf("fixture lost lexical alias: %q %q %v", opts.Source, expected, err)
 		}
-	}
+		stage, err := c.prepareStage(context.Background(), opts, ports)
+		if err != nil {
+			t.Fatalf("lexical CLI labels refused: %v", err)
+		}
+		defer stage.Close()
+		if stage.primary.Labels["devcontainer.local_folder"] != opts.Source || stage.capture.Source != expected {
+			t.Fatal("fixture did not retain lexical labels and physical capture")
+		}
+		result, err := stage.Apply(context.Background(), LifecycleConsent{TrustDigest: *stage.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+		if err != nil || result.Status != "staged_verified" {
+			t.Fatalf("aliased workspace: %+v %v", result, err)
+		}
+		data, err := os.ReadFile(filepath.Join(stage.store.operationPath(stage.receipt.OperationID), "primary-config.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var config stagePrimaryConfiguration
+		if err := json.Unmarshal(data, &config); err != nil {
+			t.Fatal(err)
+		}
+		for _, raw := range config.Mounts {
+			value, ok := raw.(string)
+			if !ok {
+				t.Fatalf("non-string persisted mount: %v", raw)
+			}
+			mount, err := stageNativeMount(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if mount["type"] == "bind" && mount["target"] == stage.workspace {
+				t.Fatalf("workspace bind duplicated into promotion mounts: %v", raw)
+			}
+		}
+	})
 }
