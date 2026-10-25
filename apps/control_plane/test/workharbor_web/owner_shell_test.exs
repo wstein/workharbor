@@ -60,6 +60,28 @@ defmodule WorkHarborWeb.OwnerShellTest do
     end
   end
 
+  test "display controls use exact visible markers before HTML escaping" do
+    text = "before" <> <<0, 13, 27, 127, 0xC2, 0x85>> <> "<script>CANARY</script>"
+    assert CoreComponents.display_text(text) == "before<U+0000><U+000D><U+001B><U+007F><U+0085><script>CANARY</script>"
+    assert CoreComponents.display_text("kept\ttab") == "kept\ttab"
+    html = render_component(&CoreComponents.flash/1, kind: :error, flash: %{"error" => text})
+    assert html =~ "before&lt;U+0000&gt;&lt;U+000D&gt;&lt;U+001B&gt;&lt;U+007F&gt;&lt;U+0085&gt;&lt;script&gt;CANARY&lt;/script&gt;"
+    refute html =~ "<script>CANARY"
+  end
+
+  test "owner dot segments are refused without reflection or effects", c do
+    before = database_snapshot()
+    for path <- ["/owner/./auth", "/owner/../owner", "/owner/%2e/auth", "/owner/%2E%2E/owner", "/owner//auth", "/owner/../FORGED-PATH-CANARY"] do
+      conn = %{c.conn | request_path: path, path_info: String.split(path, "/", trim: true)}
+      response = WorkHarborWeb.Security.call(conn, [])
+      assert response.status == 400
+      assert response.halted
+      assert Jason.decode!(response.resp_body) == %{"error" => %{"code" => "invalid_request"}}
+      refute response.resp_body =~ "FORGED-PATH-CANARY"
+    end
+    assert database_snapshot() == before
+  end
+
   test "hostile HTML attributes stay inert in shared error components" do
     payload = ~s(<img src=x onerror="CANARY">&"' <script>CANARY</script>)
 
@@ -157,10 +179,15 @@ defmodule WorkHarborWeb.OwnerShellTest do
 
     logs =
       ExUnit.CaptureLog.capture_log([level: :debug], fn ->
-        for target <- [topic, "lvu:transport-probe", "unknown:transport-probe"],
+        for target <- [topic, "lvu:transport-probe", "unknown:transport-probe", "phoenix"],
+            event <- ["event", "link", "redirect", "phx_reply", "phx_error", "phx_close", "FORGED-EVENT-CANARY"],
             payload <- forged_payloads() do
           assert {:ok, ^transport} =
-                   OwnerSocket.handle_in(wire_message(target, "event", payload), transport)
+                   OwnerSocket.handle_in(wire_message(target, event, payload), transport)
+        end
+
+        for {target, event} <- [{topic, "heartbeat"}, {"phoenix", "phx_join"}, {"phoenix", "phx_leave"}, {"lvu:probe", "phx_join"}, {"unknown:probe", "phx_leave"}] do
+          assert {:ok, ^transport} = OwnerSocket.handle_in(wire_message(target, event, %{"canary" => "FORGED-PAYLOAD-CANARY"}), transport)
         end
 
         assert {:ok, ^transport} = OwnerSocket.handle_in(binary_message(topic), transport)
