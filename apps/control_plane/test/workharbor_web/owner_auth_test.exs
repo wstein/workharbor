@@ -28,25 +28,25 @@ defmodule WorkHarborWeb.OwnerAuthTest do
 
   test "root redirects owner to the read only overview", c do
     {conn, _} = signed_in(c, "owner_browser")
-    assert redirected_to(get(conn, "/"), 303) == "/owner"
+    assert redirected_to(get(conn, "https://localhost/"), 303) == "/owner"
   end
 
   test "only owner browser credentials admit the live shell", c do
-    assert get(base_conn(), "/owner").status in [401, 403]
+    assert get(base_conn(), "https://localhost/owner").status in [401, 403]
 
     for kind <- ["dashboard", "cli_owner"] do
       {conn, _} = signed_in(c, kind)
-      assert get(conn, "/owner").status in [401, 403]
+      assert get(conn, "https://localhost/owner").status in [401, 403]
     end
 
     # The existing read-token login wraps this same dashboard kind, not a fourth kind.
     {:ok, read_token, read_principal} = Accounts.login(c.owner, c.secret, "dashboard")
     assert {:error, :forbidden} = Accounts.authorize(read_principal, :owner_page)
     wrong_kind = cookie_conn(:owner, read_token, read_principal)
-    assert get(wrong_kind, "/owner").status in [401, 403]
+    assert get(wrong_kind, "https://localhost/owner").status in [401, 403]
 
     {conn, _} = signed_in(c, "owner_browser")
-    page = get(conn, "/owner")
+    page = get(conn, "https://localhost/owner")
     assert html_response(page, 200) =~ "data-phx-session"
     assert {:ok, _view, _} = live(page)
   end
@@ -60,7 +60,7 @@ defmodule WorkHarborWeb.OwnerAuthTest do
         :revoked -> assert :ok = Accounts.revoke(p, p.credential_id)
       end
 
-      assert get(conn, "/owner").status in [401, 403]
+      assert get(conn, "https://localhost/owner").status in [401, 403]
       Application.put_env(:workharbor, :clock, fn -> 2_000_000_000 end)
     end
   end
@@ -83,7 +83,7 @@ defmodule WorkHarborWeb.OwnerAuthTest do
     end
 
     assert denied_count() == after_denial
-    assert get(conn, "/owner").status in [401, 403]
+    assert get(conn, "https://localhost/owner").status in [401, 403]
   end
 
   test "mounted expiry clears the shell and requires fresh authentication", c do
@@ -93,13 +93,13 @@ defmodule WorkHarborWeb.OwnerAuthTest do
     before = denied_count()
     assert_redirect(view, "/login/owner", 1_500)
     assert denied_count() in before..(before + 1)
-    assert get(conn, "/owner").status in [401, 403]
+    assert get(conn, "https://localhost/owner").status in [401, 403]
   end
 
   test "foreign owner query injection is refused before shell reads", c do
     {conn, _} = signed_in(c, "owner_browser")
     before = DB.count("audit_events")
-    response = get(conn, "/owner?owner_id=FOREIGN-OWNER-CANARY")
+    response = get(conn, "https://localhost/owner?owner_id=FOREIGN-OWNER-CANARY")
     assert response.status == 400
     refute response.resp_body =~ "FOREIGN-OWNER-CANARY"
     assert DB.count("audit_events") == before
@@ -110,7 +110,7 @@ defmodule WorkHarborWeb.OwnerAuthTest do
              Phoenix.Router.route_info(WorkHarborWeb.Router, "GET", "/owner/auth", "localhost")
 
     {conn, p} = signed_in(c, "owner_browser")
-    page = get(conn, "/owner/auth")
+    page = get(conn, "https://localhost/owner/auth")
     html = html_response(page, 200)
 
     csp =
@@ -131,18 +131,18 @@ defmodule WorkHarborWeb.OwnerAuthTest do
       |> put_req_header("content-type", "application/x-www-form-urlencoded")
 
     body = URI.encode_query(%{"_csrf_token" => csrf})
-    installed = post(request, "/owner/dashboard", body)
+    installed = post(request, "https://localhost/owner/dashboard", body)
     assert installed.status == 303
     assert installed.resp_cookies["__Host-workharbor_dashboard"].http_only
     refute Map.has_key?(installed.resp_cookies, "__Host-workharbor_owner")
-    logout = post(request, "/owner/logout", body)
+    logout = post(request, "https://localhost/owner/logout", body)
     assert redirected_to(logout, 303) == "/login/owner"
     assert logout.resp_cookies["__Host-workharbor_owner"].max_age == 0
     assert {:error, :forbidden} = Accounts.authorize(p, :owner_page)
   end
 
   defp mount_shell(conn) do
-    page = get(conn, "/owner")
+    page = get(conn, "https://localhost/owner")
     assert html_response(page, 200) =~ "data-phx-session"
     assert {:ok, view, _} = live(page)
     view
