@@ -137,6 +137,15 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	if err != nil {
 		return nil, stageConflict("private preparation identity unavailable")
 	}
+	physicalRoot, e := filepath.EvalSymlinks(s.root)
+	if e != nil {
+		return nil, stageConflict("private preparation physical path unavailable")
+	}
+	physicalIdentity, e := os.Lstat(physicalRoot)
+	if e != nil || !os.SameFile(s.rootIdentity, physicalIdentity) {
+		return nil, stageConflict("private preparation physical identity changed")
+	}
+	s.root = physicalRoot
 	phaseRoot := filepath.Join(s.root, "phase")
 	if err = os.Mkdir(phaseRoot, 0700); err != nil {
 		return nil, stageConflict("private phase storage unavailable")
