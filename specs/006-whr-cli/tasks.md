@@ -176,6 +176,17 @@ the repository's ordinary `go build`/application checks; no archive, image, rele
 
 - [ ] T038 [US1, US4] Local devcontainer and temporary container lifecycle with volume protection (FR-066, FR-067, FR-068, SC-024; #142) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, `contracts/cli/commands.json`, and `contracts/cli/output.schema.json`: `--local` and `--label` on `workspace.ls`; `--local`, `--label`, `--role`, `--volumes`, `--force`, `--dry-run`, and `--yes` on `workspace.rm`; bounded 5 s Docker socket inspection; pre-mutation ownership verification (exit 68 on foreign container); default preservation of home volume; deletion of home volume requiring both `--volumes` and `--force` (and `--yes` unattended, exit 70 without it); refusal of staging/temp cleanup resolving to primary home volume (exit 68); refusal of volume deletion if mounted by another container (exit 68); protection of `/opt/bdock/*` and `bundledock-*` tool volumes; side-by-side staging and promotion; `--dry-run` zero mutations; partial failure reporting (exit 73). Failing tests first: `TestLocalLsListsLabelledContainersAndVolumes`, `TestLocalLsLabelFilter`, `TestLocalLsEscapesHostileMetadata`, `TestLocalRmContainerOnlyPreservesHomeVolume`, `TestLocalRmWithVolumesAndForceRemovesHomeVolume`, `TestLocalRmVolumesWithoutForceRefused`, `TestLocalRmNeverRemovesBundleDockOrReadOnlyVolumes`, `TestLocalRmRefusesForeignUnlabelledContainer`, `TestLocalRmRefusesDeletingPrimaryHomeVolumeFromStagingOrTemp`, `TestLocalRmRefusesVolumeMountedByOtherContainer`, `TestLocalRmDryRunExecutesNoMutations`, `TestLocalRmNonInteractiveRequiresYes`, `TestLocalRmPartialVolumeFailureExits73`, `TestLocalCommandsJSONMatchesSchema`, `TestWorkspaceLsAndRmWithoutLocalStillRefuse`. Acceptance: all SC-024 cases pass offline with fake Docker fixtures; `python3 scripts/check_repo.py` and Go tests pass; independent exact-head review is CLEAR. Prerequisite: T025.
 
+T038 disposal amendment (owner, 2026-10-25): new whr-managed candidates are
+throwaway. The [separate amendment](contracts/throwaway-staging-amendment-20261025.md)
+supersedes old retained-clone and extra candidate-home consent expectations;
+other homes and all Anchorage/primary guards stay unchanged. Implement the
+[plan's disposal packages](plan.md#throwaway-staging-delivery-amendment-owner-2026-10-25)
+with red-first zero-artifact remove/promote, failed-stage and rollback tests,
+result refs verified before promote clone deletion, normal confirmation,
+dry-run/refusal-reason coverage and exact residual reporting. Keep this task
+open until its delivered code and acceptance evidence cover the new scope;
+no checkbox is changed by this amendment.
+
 T038 stage/promote amendment (2026-10-24, proposed): follow
 [the selected local interaction](contracts/local-stage-promote.md) and
 [plan packages S0–S4](plan.md#t038-stagepromote-amendment-2026-10-24). D1/D2 direction

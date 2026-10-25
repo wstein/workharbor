@@ -393,6 +393,40 @@ touches accepted provider inputs. In-flight rebases: a branch with a started sin
 finishes its completion before rebasing onto a sibling merge, or the owner re-baselines it; otherwise merges of siblings are
 serialised in graph order. Dependent branches start from the merged `main` that contains their prerequisites.
 
+## Throwaway staging delivery amendment (owner, 2026-10-25)
+
+The owner decided that new whr-managed staging is disposable. The quoted
+[separate amendment](contracts/throwaway-staging-amendment-20261025.md) supersedes
+retained-clone and separate candidate-home deletion-consent rules. The accepted
+execution-profile body is unchanged. This is an implementation delta to the
+merged capture/stage/promote libraries, not a new S0 or owner-decision gate.
+The primary/original-home and complete Anchorage guards remain in force.
+
+| Package / PR estimate | Files and verifiable delivery |
+| --- | --- |
+| A: this docs amendment, one PR | This plan, `spec.md`, the separate amendment, `contracts/candidate-home-cleanup-decision.md`, interaction/task-proposal pointers, `tasks.md` and quickstart reconciliation. Record the decision, precedence, exact disposal inventory and failure tests; no code or completion ticks. |
+| B: shared disposal plus remove/failed stage, one code PR | Focused helper and existing removal/stage/state/receipt files in `apps/whr/internal/localdocker/`, `commands/local_rm.go`, required CLI output/help and tests. Normal candidate confirmation deletes container, home, clone/results and candidate records; generic removal keeps its old consent. Exercise each partially completed stage phase and preserve the primary/home. |
+| C: promote terminal/rollback cleanup and CLI reconciliation, one code PR or revision of #272 | `promote_apply_unix.go`, `promote_rollback_unix.go`, focused fixtures, `commands/local_promote.go` and registry/help, `contracts/cli/`. Verify required result refs before clone deletion, clean all candidate state after success, and remove failed replacement/candidate artifacts after existing rollback restores the original. Remove obsolete promote deletion flags; do not synthesize them. |
+| D: revise stage CLI #271 as needed | Keep existing source trust and normal confirmation. Disclose throwaway disposal and reconcile adapters/tests with B; no extra consent or backup surface. Batch with the head's review fixes. |
+| E: remaining init evidence and final docs/runbook packages | Audit demonstrated init/wizard/reuse gaps without reimplementation; then update `quickstart.md`, command docs and `docs/quality/006-whr-cli/` with usable init → stage → promote and owner-host commands/results. |
+
+B uses the already accepted daemon/resource/receipt bindings and volume guards.
+C depends on that helper and the stage CLI's shared rendering/schema. Tests are
+red first; each code PR is Draft for exact-head Opus review and required CI.
+The [amendment's matrix](contracts/throwaway-staging-amendment-20261025.md#planned-implementation-and-acceptance)
+requires zero candidate artifacts after completed remove/promote and the specified
+failure cleanup, result refs present before promote clone deletion, restored or
+preserved original primary/home, explicit residuals for incomplete cleanup,
+normal consent only, dry-run parity, and all unchanged protected-home refusals.
+These are planned tests, not passing evidence or task-completion claims.
+
+The earlier #271/#272 heads expose the old library/consent model and must be
+reconciled before end-to-end throwaway acceptance. No manual clone-cleanup step,
+keep flag, backup volume or new recovery service is planned. The owner must back
+up a staging home with Docker before disposal if desired. Native Linux Docker
+and macOS+OrbStack results remain owner-host evidence; no build, Docker action,
+release, or host success is implied by this plan.
+
 ## T038 stage/promote amendment (2026-10-24)
 
 Status: proposed direction/interaction reconciliation, **not a ready execution
@@ -439,13 +473,14 @@ home is renamed, adopted or exempted and no protected-prefix test is weakened.
 
 New candidate-home naming/allocation and promote deletion flags require a
 separate owner decision and task, as the #226 decision requires. They are outside
-this interaction amendment and are not silently folded into T038. FR-067(d)'s
-explicit --volumes plus --force and confirmation still apply; --yes is no substitute.
+this interaction amendment and are not silently folded into T038. The 2026-10-25 throwaway amendment supersedes that candidate-only deletion
+consent: normal confirmation covers complete new-candidate disposal. Other homes
+retain FR-067(d)'s explicit --volumes plus --force and confirmation.
 S0 must reference the separately approved cleanup scope before claiming a complete
 execution/cleanup API. No internal force bypass or primary replacement with an
 invalid cleanup plan is permitted.
 
-### Work packages and execution gate
+### Historical work packages and execution gate (2026-10-24)
 
 The T038 task and T039 dependency remain unchanged. The following are ordered
 subpackages of T038, not additional task IDs or independent feature completion:
@@ -455,7 +490,7 @@ subpackages of T038, not additional task IDs or independent feature completion:
 | S0: complete execution profile | Capability matrix, bounded capture/fingerprint and byte-binding algorithm, exact argv/environment/budgets, immutable-image promotion design, separately approved home/cleanup consent proof, durable receipt/lock/recovery and closed output/schema contract. Cover the actual Anchorage config/hook shape and explicit unsupported cases. | Independently reviewed exact technical contract and owner-approved spec/plan/tasks before S1 product code. This amendment leaves S0 open. |
 | S1: source/preview/trust | Pure local planning and refusal first: `TestLocalStageSelectsExactPrimaryAndSource`, `TestLocalStageRejectsUnresolvedLabel`, `TestLocalStageTrustMatchesCapturedInputs`, `TestLocalStageDryRunExecutesNoEffects`, `TestLocalStageRequiresTrustAndConsent`. Reuse current readers/discovery. | S0 complete; fake tools only; no real build/hook/Docker. |
 | S2: candidate/verification | `TestLocalStageLeavesPrimaryRunning`, `TestLocalStageReservesDistinctHome`, `TestLocalStageRefusesCollision`, `TestLocalStageRejectsChangedInputs`, `TestLocalStageHealthAndSmoke`, `TestLocalStageSmokeUsesTrustedStdin`, `TestLocalStageEscapesSmokeOutput`. | S1 accepted; prove official CLI/candidate binding, do not claim actual host acceptance. |
-| S3: promotion/cleanup | `TestLocalPromoteUsesVerifiedImage`, `TestLocalPromotePreservesPrimaryHome`, `TestLocalPromoteConfirmsPaneInterruption`, `TestLocalPromoteRequiresExplicitHomeDeletionConsent`, `TestLocalPromoteNeverBypassesProtectedHome`, `TestLocalPromoteStaleReceiptRefuses`, `TestLocalPromotePartialFailureInventory`. | S2 accepted; preflight full cleanup plan before primary replacement, verify new primary before candidate cleanup. |
+| S3: promotion/cleanup | `TestLocalPromoteUsesVerifiedImage`, `TestLocalPromotePreservesPrimaryHome`, `TestLocalPromoteConfirmsPaneInterruption`, the current throwaway normal-consent matrix (superseding the old candidate-only explicit-home-deletion test), `TestLocalPromoteNeverBypassesProtectedHome`, `TestLocalPromoteStaleReceiptRefuses`, `TestLocalPromotePartialFailureInventory`. | S2 accepted; preflight full cleanup plan before primary replacement, verify new primary before candidate cleanup. |
 | S4: offline composition/evidence | Default-handler fake Docker/CLI integration, exact argv/minimal-env canaries, canonical JSON, no-local refusal64, deadline71 before effects, interrupt72 and partial/uncertain73 precedence; all SC-024 cases. | Independent exact-head review, required CI and owner merges; task completion only for full T038 scope. |
 
 The [revised execution proposal](contracts/local-stage-execution-profile.md)

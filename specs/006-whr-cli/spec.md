@@ -1619,7 +1619,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   process before the exclusive create), with exactly one `left_unchanged` row and no `.claude` row for a non-directory `.claude`.
 - **SC-024**: Local container lifecycle and home volume protection (FR-066, FR-067, FR-068; #142) pass offline unit and fake-Docker
   integration tests covering: (1) `whr ls --local` role and label filtering and FR-022 escaping; (2) container removal preserving the
-  home volume by default; (3) volume deletion requiring both `--volumes` and `--force`; (4) force deletion without `--yes` unattended
+  home volume by default outside new throwaway staging; (3) other home-volume deletion requiring both `--volumes` and `--force`; (4) force deletion without `--yes` unattended
   exiting 70; (5) staging/temp cleanup refusing to touch the primary home volume (68); (6) volume shared with another running container
   refusing deletion (68); (7) read-only, `/opt/bdock/*`, and `bundledock-*` tool volumes never deleted; (8) foreign unlabelled containers
   refused (68); (9) `--dry-run` parity with zero mutations; (10) partial failure exiting 73; and (11) invocation without `--local`
@@ -1629,8 +1629,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   primary running with a distinct admissible new candidate home; (15) health/smoke
   success/failure, exact stdin bytes and FR-022 output; (16) immutable verified-image
   promotion, original primary home retained and pane-loss confirmation;
-  (17) candidate-home cleanup under its separately approved consent contract and
-  protected/shared-home refusal;
+  (17) new candidate-home/clone/metadata disposal under normal confirmation
+  per the 2026-10-25 amendment, and unchanged protected/shared-home refusal;
   (18) collision, stale receipt, interrupted/uncertain effects and honest recovery,
   with dry-run zero effects, exact exit codes and JSON conformance throughout.
   Existing protected Anchorage staging/temp cleanup is excluded by the recorded
