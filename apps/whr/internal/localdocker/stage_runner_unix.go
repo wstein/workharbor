@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -20,6 +21,16 @@ import (
 	"time"
 	"unicode/utf8"
 )
+
+// Only a normally reaped nonzero process exit has this type. Cancellation,
+// signals, wait/output failures and unavailable clients remain uncertain.
+type stageCommandFailure struct {
+	Exit  int
+	cause error
+}
+
+func (e *stageCommandFailure) Error() string { return e.cause.Error() }
+func (e *stageCommandFailure) Unwrap() error { return e.cause }
 
 type stageToolIdentity struct {
 	Path    string `json:"path"`
@@ -238,7 +249,7 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 			if reason := stageDriverRefusal(result.Stderr); reason != "" {
 				return result, stageConflict("Docker driver refused: " + reason)
 			}
-			return result, stageConflict("phase command failed: " + phase)
+			return result, &stageCommandFailure{Exit: ee.ExitCode(), cause: stageConflict(fmt.Sprintf("phase command failed: %s (exit status %d)", phase, ee.ExitCode()))}
 		}
 		return result, stageConflict("phase command unavailable: " + phase)
 	}

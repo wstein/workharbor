@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -309,10 +310,19 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 		if s.options.Diagnostics != nil {
 			fmt.Fprintf(s.options.Diagnostics, "%s%s", terminal.Escape(string(out.Stdout)), terminal.Escape(string(out.Stderr)))
 		}
+		s.result.Verification.OutputDigest = stageString(out.OutputDigest)
 		if e != nil {
+			var failure *stageCommandFailure
+			if ctx.Err() == nil && errors.As(e, &failure) && failure.Exit >= 1 && failure.Exit <= 124 {
+				// docker exec reserves 125..127 for client/launch failures.
+				// A known in-container failure was observed, not interrupted.
+				s.receipt.ActionInventory[len(s.receipt.ActionInventory)-1].State = "observed"
+				if journalErr := s.store.Advance("verifying", "smoke", "observed"); journalErr != nil {
+					return fail("smoke failure observation journal failed", journalErr)
+				}
+			}
 			return s.stageUnverified(ctx, "failed_smoke", candidate.ImageID, before, e)
 		}
-		s.result.Verification.OutputDigest = stageString(out.OutputDigest)
 		s.receipt.ActionInventory[len(s.receipt.ActionInventory)-1].State = "observed"
 		if e = s.store.Advance("verifying", "smoke", "observed"); e != nil {
 			return fail("smoke observation journal failed", e)
@@ -393,6 +403,12 @@ func (s *LocalStage) awaitStageHealth(parent context.Context, id string) error {
 }
 
 func (s *LocalStage) stageUnverified(ctx context.Context, reason, image, digest string, cause error) (LifecycleResult, error) {
+	if ctx.Err() != nil {
+		return s.stagePartial("verification incomplete", ctx.Err())
+	}
+	if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) {
+		return s.stagePartial("verification incomplete", cause)
+	}
 	if s.result.Verification == nil {
 		s.result.Verification = &StageVerification{Policy: "smoke", Status: "stale", BindingMode: "cooperative_quiescence", Quiescence: "caller_acknowledged", PreInputDigest: digest, ImageID: image, InputDigest: digest, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	}
