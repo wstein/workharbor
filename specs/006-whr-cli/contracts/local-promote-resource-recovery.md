@@ -26,19 +26,41 @@ distinct replacement has completed configured hooks and health/smoke verificatio
 Only then may guarded old-primary, candidate and candidate-home cleanup proceed.
 Every action records durable intent and an observed or uncertain outcome.
 
+## Original retention admission
+
+Observe and bind `HostConfig.AutoRemove` and `HostConfig.RestartPolicy` on the
+original. Promotion refuses with exit 68 before mutation when AutoRemove is true
+or a restart policy is active. Empty/`no` names mean disabled; the retry count is
+retained in the observation binding. Recheck before the primary stop. This avoids
+stop-triggered deletion of the original writable layer and autonomous restart of
+the renamed original while a replacement uses its home.
+
 ## Bounded resource recovery
 
-A known, normally reaped nonzero hook/smoke result, or an explicitly observed
-unhealthy replacement, may initiate recovery while the old primary is retained
-and the replacement is not verified. Native-client failure, signal, timeout,
-missing observation, input/identity drift or an unobserved effect never qualifies.
-Cleanup failures after primary verification do not initiate recovery.
+A normally reaped nonzero hook/smoke process result qualifies only after an
+immediate fresh inspection observes the exact replacement running with its
+admitted immutable binding. Smoke exits 125–127 remain client uncertainty. A
+separately observed unhealthy replacement may also initiate recovery while the
+old primary is retained and the replacement is not verified. Signal, timeout,
+missing/stopped/unavailable observations, binding drift or an unobserved effect
+never qualifies. Cleanup failures after primary verification do not initiate
+recovery.
+
+Exit 1 alone cannot diagnose a hook failure: it can also come from a native
+client while the replacement remains running. The fresh running/binding gate
+permits only bounded resource recovery in that case; it does not prove that the
+user command started, identify the exit's cause or undo any application writes.
 
 Use a fresh recovery context, bounded to 120 seconds overall and 30 seconds per
 native action. Recheck the bound Unix endpoint, daemon, private receipt, current
 configuration and inputs, exact original/replacement IDs and bindings, name
 occupancy and shared primary mounts between actions. Refuse an occupied retention
-name or a foreign mount of the primary home/original writable workspace.
+name or a foreign mount of the primary home. Resolve both sides of a foreign
+read-write bind comparison and refuse equal, ancestor or descendant overlap with
+the original workspace. An unresolved foreign read-write bind source refuses
+recovery; read-only binds and nonoverlapping siblings do not introduce a writer.
+Both the temporary and persisted promotion configuration are rechecked between
+recovery actions.
 
 The only recovery actions are:
 
