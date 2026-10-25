@@ -1259,11 +1259,18 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (b) Pre-mutation ownership check: before stopping or removing any container, `whr` verifies that the target carries a
   recognized workspace/devcontainer label; foreign unlabelled containers are refused with exit 68 (`conflict`) with zero mutations.
   (c) Hard volume invariant 1 (Default preservation): removing or recreating a container preserves its `/home/captain` (or
-  legacy `/home/vscode`) named home volume by default and states `preserve_home_volume: true` in the preview.
+  legacy `/home/vscode`) named home volume by default and states `preserve_home_volume: true` in the preview,
+  except the receipt-bound new whr-managed staging candidates in the owner
+  [throwaway amendment of 2026-10-25](contracts/throwaway-staging-amendment-20261025.md).
+  Their normal confirmed removal deletes all candidate artifacts, including home,
+  private clone/result tree and candidate receipts/journals/metadata.
   (d) Hard volume invariant 2 (Force requirement): deleting a home volume requires both an explicit volume flag (`--volumes`)
   and an explicit force flag (`--force`), accompanied by confirmation (`--yes` in non-interactive/scripted mode); the preview
   MUST explicitly name the target volume and all its mounts. Unattended or scripted deletion without both `--force` and `--yes`
   is refused (70); in automated execution mode, force volume deletion is strictly prohibited without explicit human confirmation.
+  For those new staging candidates only, normal confirmation/`--yes` covers
+  complete disposal without separate `--volumes`/`--force` or a keep mode.
+  Do not manufacture those flags internally; other home removals retain this rule.
   (e) Hard volume invariant 3 (Label scoping & primary volume protection): cleanup of temporary or staging containers (targeted by
   `--role staging`, `--role temp`, or labels `anchorage-temp=1`, `anchorage-staging=1`) strictly refuses to resolve to, unlink, or
   delete the primary workspace volume (`anchorage-home-*` or the volume mounted to the primary devcontainer), even if an argument,
@@ -1275,7 +1282,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   (h) Execution order: `whr` stops and removes the verified container (`docker rm -f -- <id>`), then removes the selected home
   volume (`docker volume rm -- <name>`). If volume deletion fails after container removal, `whr` exits 73 (`partial_failure`)
   naming the residual volume and recovery instructions. `--dry-run` previews all container and volume actions with zero mutations
-  (`applied: false`). Omitting `--local` preserves the remote control-plane contract (exit 64).
+  (`applied: false`). For new whr-managed staging, successful disposal also
+  removes the candidate clone/result tree and candidate metadata, leaving no
+  separate cleanup. Its normal preview discloses loss of unfetched/uncommitted
+  clone work. Omitting `--local` preserves the remote control-plane contract (exit 64).
 - **FR-068**: `whr workspace stage --local --source <dir> <id|name>` and
   `whr workspace promote --local <id|name>` implement side-by-side devcontainer
   verification and promotion per [the local interaction contract](contracts/local-stage-promote.md).
@@ -1303,12 +1313,17 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   recreates the primary from the exact
   immutable verified image, preserving its original home. Preview warns that
   primary exec/shell panes end; require confirmation (`--yes` unattended/JSON).
-  After verifying the resulting primary, remove the candidate/container home per
-  unchanged FR-067. New candidate-home naming and the promote deletion-consent
-  surface are a separate owner decision/task; this interaction amendment does not
-  assign a new volume prefix or add promote deletion flags. The complete source
-  execution profile must reference that approved separate scope before claiming
-  a compatible cleanup path; no private force/volume bypass is allowed.
+  After verifying the resulting primary and the required result refs in the
+  original repository, remove all new candidate artifacts: container, fresh
+  `whr-stage-home-<id>` home, private clone/result tree and candidate records.
+  Normal confirmation/`--yes` covers this disposal, without promote-specific
+  `--volumes`/`--force`, a keep flag, backup or later clone cleanup. The owner's
+  [2026-10-25 amendment](contracts/throwaway-staging-amendment-20261025.md)
+  supersedes retained-clone/separate-home-consent rules for new whr-managed
+  candidates only; the accepted execution-profile body stays unchanged.
+  Failed stage and post-transfer promotion rollback clean their owned artifacts
+  under that amendment; incomplete/uncertain cleanup reports actual residuals,
+  not success. The primary and original home are never cleanup targets.
   Protected/shared/foreign homes refuse 68 before effects. Current Anchorage
   candidates with `anchorage-home-*` homes remain refused even container-only;
   no recovery cleanup path for those excluded candidates is defined here.
@@ -1327,8 +1342,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   worktree preservation does not imply all original Git bytes remain unchanged.
   The explicit cooperative phase-binding amendment (pause ordinary input writers,
   pre/post actual-byte checks, honest race limits) requires exact artifact approval
-  before code. No existing-candidate rerun-verification path is added: retain work,
-  refuse stale verification, then guarded cleanup/fresh stage provide recovery.
+  before code. No existing-candidate rerun-verification path is added: refuse stale
+  verification, then use the current throwaway cleanup/fresh-stage contract.
+  Ordinary removal loses unfetched clone work; it is not retained for recovery.
   Result-only candidate commits/ref moves do not invalidate unchanged actual
   execution verification; Git identities/state consumed by execution remain bound
   and refuse on change. Original-source correspondence and D1/D2 stay unchanged.
@@ -1357,7 +1373,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   input, `--template` while starters are unsupported, `--devcontainer` or plain `init` (no `--non-interactive`, no `--dry-run`) in wave 1a, a `dir` that is a file, an unavailable command, `--json` where
   unsupported, `--no-agents-block` together with `--overwrite AGENTS.md`, missing or conflicting targets in local `rm` (FR-067) 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing manifest
-  edited, a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0), and deleting a home volume without both `--force` and `--yes` (FR-067) 70, in unattended mode only (needs-human,
+  edited, a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0), and deleting a home volume without both `--force` and `--yes` (FR-067, except
+  new throwaway staging whose normal confirmation covers disposal) 70, in unattended mode only (needs-human,
   with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72, except `AGENTS.md`, where a declined edit is not a cancellation (FR-064), and `.claude/settings.json`, which the wizard offers to replace only when `--overwrite .claude/settings.json` names it (FR-065));
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview (no such re-check applies to a path that is left unchanged and not written), pre-existing
   content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a foreign unlabelled container or attempt to delete a volume mounted by another container or resolving staging/temp cleanup to the primary volume (FR-067), unreadable bundle pins or mounts (FR-069), a `doctor` run with a failed check, an unsupported platform for a mutating host
@@ -1618,6 +1635,11 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   with dry-run zero effects, exact exit codes and JSON conformance throughout.
   Existing protected Anchorage staging/temp cleanup is excluded by the recorded
   owner decision, never counted as passing through an invented recovery path.
+  The owner-decided throwaway-staging amendment additionally requires complete
+  candidate cleanup on confirmed removal, successful promotion and the specified
+  failed-stage/rollback paths, result refs verified before promote clone deletion,
+  primary/original-home preservation, no extra deletion consent and truthful
+  residual reporting. See its [planned acceptance matrix](contracts/throwaway-staging-amendment-20261025.md#planned-implementation-and-acceptance).
 - **SC-025**: Bundle mount drift reporting (FR-069; #143) passes offline unit and fake-Docker integration tests covering:
   (1) all bundles in sync (exit 0); (2) one or more bundles drifted (exit 1 or 68, reporting pinned vs mounted identities); (3) missing mount
   or unreadable pin file (status `cannot_determine`, exit 68); (4) stable, parseable `--json` output (`bundleDriftResult`) with no secrets;

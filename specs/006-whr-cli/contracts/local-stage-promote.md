@@ -1,5 +1,12 @@
 # T038: local stage/promote amendment
 
+**Current cleanup override (owner, 2026-10-25):**
+[new whr-managed staging is throwaway](throwaway-staging-amendment-20261025.md).
+Normal confirmation covers its container, candidate home, clone/result tree and
+candidate metadata. The old retained-clone and separate home-deletion consent
+rules below are superseded only for that scope. The accepted execution-profile
+body is unchanged; the separate amendment is authoritative for disposal.
+
 Status and authority: interaction amendment following owner direction
 [LS-1 and its linked owner decision record](../spec.md#ls-1-owner-direction-2026-10-24).
 The approval record is the owner-authored approval or owner merge of
@@ -131,19 +138,22 @@ not covered by this task. No recovery cleanup path for those protected candidate
 is defined here; a FR-067(e) change is a separate decision and task. Do not rename
 existing homes, weaken the guard or introduce an internal force bypass.
 
-FR-068 still requires candidate/container-home cleanup per unchanged FR-067.
-Compatible new-candidate allocation/naming and explicit deletion consent are a
-**separate owner decision and task** under the #226 decision; this amendment does
-not assign a new home prefix, add promote deletion flags or fold that task into
-T038. The surface above is the selected interaction direction, not a complete
-cleanup API. FR-067(d) still requires explicit --volumes plus --force and
-confirmation for home deletion. --yes must not synthesize those options internally.
+The owner decision of 2026-10-25 makes new whr-managed staging throwaway.
+Normal prompt/`--yes` covers complete candidate disposal; promotion no longer
+requires separate `--volumes --force` flags. The primary's original home and
+all existing `anchorage-home-*` guards remain protected. See the
+[separate disposal amendment](throwaway-staging-amendment-20261025.md) for the
+complete artifact inventory and failure/rollback matrix. The prior cleanup
+consent decision is superseded for new candidates only.
 
-The S0 execution profile must cite the approved separate decision/task before
-claiming an executable cleanup surface. No primary replacement is authorized
-while its required cleanup plan would violate FR-067. Protected/shared/foreign
-homes refuse 68 before primary replacement. Existing Anchorage homes remain
-protected and this amendment supplies no recovery cleanup path for them.
+Before clone disposal on promote, verify the required result refs in the original
+repository. Successful promote then removes candidate container/home, clone/result
+tree and candidate receipts/journals/metadata. Ordinary confirmed removal also
+deletes unfetched and uncommitted clone work; its normal preview discloses that
+loss. There is no keep flag, automatic volume backup or later clone-cleanup step.
+Dry-run previews these effects without applying them. Failed stages and promotion
+rollback clean their owned artifacts as the amendment specifies; incomplete or
+uncertain cleanup reports the existing failure category and actual residuals.
 
 ## Exit categories and output
 
@@ -155,7 +165,7 @@ Use existing ADR 0013 codes; no numeric table change:
 | 64 | Bad arguments/flags, missing/conflicting selectors, ambiguity. |
 | 65 | No labelled primary match. |
 | 68 | Wrong role/state, missing/unresolved/mismatched source label, source/receipt drift, collision, unsupported capability, failed verification or protected/shared home refusal before effects. |
-| 70 | Missing required source trust, confirmation or explicit deletion consent. |
+| 70 | Missing required source trust or normal mutation confirmation; separate deletion flags still apply outside the new-candidate exception. |
 | 71 | Local deadline with nothing applied, under this proposed FR-063/ADR 0013 amendment; identify local phase/target, not a fictional remote operation ID. |
 | 72 | Interrupt/cancellation before effects. |
 | 73 | Partial or uncertain effects; list attempted/applied/remaining resources and recovery. Takes precedence over 68/71/72 after partial effects. |
@@ -228,9 +238,9 @@ This explicit clarification preserves normal Git work/result fetch and D1/D2;
 it adds no rerun-verification or replacement attestation interface.
 
 No existing-candidate rerun-verification interface is added. Current collision,
-no-adoption and changed-input refusal remain: retain project work, then guarded
-cleanup and a fresh stage with explicit trust/verification provide the known-safe
-recovery. Candidate/container-home cleanup never deletes the retained clone.
+no-adoption and changed-input refusal remain. The 2026-10-25 throwaway amendment
+replaces retained-clone recovery: removal deletes unfetched work, and a subsequent
+stage starts fresh with explicit trust/verification.
 The proposal explicitly amends unconditional byte binding to a cooperative phase
 contract: pause ordinary writers, compare actual trusted inputs before/after each
 phase, refuse detected drift 68 before effects or 73 after effects, and report that
