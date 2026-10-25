@@ -302,7 +302,7 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 			}
 		}
 	})
-	for _, form := range []string{"quoted_escape", "shebang_arguments", "shebang_python", "direct_without_interpreter", "direct_after_explicit_shell", "carriage_return", "literal_marker", "literal_marker_argv", "literal_marker_script"} {
+	for _, form := range []string{"quoted_escape", "shebang_arguments", "shebang_python", "direct_without_interpreter", "direct_after_explicit_shell", "carriage_return", "literal_marker", "literal_marker_argv", "literal_marker_script", "literal_marker_concat", "literal_marker_escape"} {
 		t.Run(form, func(t *testing.T) {
 			c, opts, ports, statePath := fixtureStageLifecycle(t, false)
 			if err := os.Mkdir(filepath.Join(opts.Source, "scripts"), 0700); err != nil {
@@ -340,6 +340,12 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 				command = "sh @workspace@/scripts/actual.sh"
 				files = map[string]string{"scripts/actual.sh": "true\n", "@workspace@/scripts/actual.sh": "true\n"}
 				reason = "reserved workspace marker dependency capability unsupported"
+				if form == "literal_marker_concat" {
+					command = `sh "@""workspace@/scripts/actual.sh"`
+				}
+				if form == "literal_marker_escape" {
+					command = `sh \@workspace\@/scripts/actual.sh`
+				}
 				if form == "literal_marker_argv" {
 					command = []any{"sh", "@workspace@/scripts/actual.sh"}
 				}
