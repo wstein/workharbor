@@ -11,8 +11,15 @@ defmodule WorkHarborWeb.OwnerSocket do
   @impl Phoenix.Socket.Transport
   def handle_in({payload, opts} = message, {_state, socket} = transport) do
     case socket.serializer.decode!(payload, opts) do
-      %Phoenix.Socket.Message{event: "event"} -> {:ok, transport}
-      _ -> super(message, transport)
+      %Phoenix.Socket.Message{topic: "phoenix", event: "heartbeat"} ->
+        super(message, transport)
+
+      %Phoenix.Socket.Message{topic: "lv:" <> id, event: event}
+      when id != "" and event in ["phx_join", "phx_leave"] ->
+        super(message, transport)
+
+      _ ->
+        {:ok, transport}
     end
   end
 

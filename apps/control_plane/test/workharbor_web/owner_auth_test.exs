@@ -101,6 +101,8 @@ defmodule WorkHarborWeb.OwnerAuthTest do
       {conn, principal} = signed_in(c, "owner_browser")
       view = mount_shell(conn)
       socket = :sys.get_state(view.pid).socket
+      GenServer.stop(view.pid, :normal)
+
       case state do
         :active -> :ok
         :expired -> Application.put_env(:workharbor, :clock, fn -> principal.expires_at end)
@@ -114,7 +116,7 @@ defmodule WorkHarborWeb.OwnerAuthTest do
           assert denied_count() == before
         _ ->
           assert {:halt, stopped} = result
-          assert stopped.redirected == {:redirect, %{to: "/login/owner"}}
+          assert {:redirect, %{to: "/login/owner"}} = stopped.redirected
           assert stopped.private.owner_auth.stopped
           assert stopped.private.owner_auth.principal == nil
           assert stopped.private.owner_auth.timer == nil

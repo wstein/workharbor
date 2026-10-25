@@ -39,7 +39,7 @@ defmodule WorkHarborWeb.OwnerAuth do
     state = socket.private.owner_auth
 
     cond do
-      state.stopped or state.ref != ref ->
+      not is_reference(ref) or state.stopped or state.ref != ref ->
         {:halt, socket}
 
       true ->
