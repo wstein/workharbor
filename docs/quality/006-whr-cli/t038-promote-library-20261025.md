@@ -32,7 +32,7 @@ separate and retains all FR-067 guards and explicit deletion consent.
 ## Measured author checks
 
 - Known hook recovery assertion RED: replacement remained running and original
-  was not restored. Exact test-only checkpoint `36ba4563` reconfirmed that failure
+  was not restored. Exact test-only checkpoint `36ba456395d930238233c49d37ba752e34371f07` reconfirmed that failure
   in 9.274 seconds; implementation was restored afterward.
 - Observed unhealthy recovery assertion RED: original remained stopped. Its
   focused corrected run, with stage mode/state regressions, passed in 11.088 seconds.
