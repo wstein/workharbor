@@ -80,4 +80,27 @@ func TestLocalStageAnchorageFactsRemainIndependentThroughPromotion(t *testing.T)
 	if got, err := os.ReadFile(factsPath); err != nil || !bytes.Equal(got, original) {
 		t.Fatal("promotion overwrote original facts with E/W output")
 	}
+	if err = p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Return the test-owned dispatcher to stage mode for a genuinely fresh stage.
+	if err = os.Remove(path + ".promotion"); err != nil {
+		t.Fatal(err)
+	}
+	opts.Target = "primary"
+	fresh, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fresh.Close()
+	next, err := fresh.Apply(context.Background(), LifecycleConsent{TrustDigest: *fresh.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if err != nil || next.Status != "staged_verified" {
+		t.Fatalf("fresh stage after completed promotion: %+v %v", next, err)
+	}
+	if fresh.operationID == s.operationID || fresh.clonePath == s.clonePath || fresh.homeIntent.Plan().Mount.Name == s.homeIntent.Plan().Mount.Name {
+		t.Fatal("completed promotion reused prior stage allocation")
+	}
+	if _, err = os.Stat(s.clonePath); err != nil {
+		t.Fatalf("prior completed-stage clone not retained: %v", err)
+	}
 }
