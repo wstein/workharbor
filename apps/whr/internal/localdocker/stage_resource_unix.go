@@ -465,8 +465,14 @@ func (s *LocalStage) stageUnverified(ctx context.Context, reason, image, digest 
 func (s *LocalStage) persistStageVerification(ctx context.Context, candidate stageContainerDetails, image stageImageDetails, home stageVolumeDetails, paths []string, user, executionDigest string) error {
 	primary := stagePrimaryConfiguration{Source: s.capture.Source, Workspace: s.workspace, Home: s.home, HomeDestination: s.homeDestination, Name: strings.TrimPrefix(s.primary.Name, "/"), Hostname: s.primaryObserved.Hostname, RemoteUser: user, ContainerUser: s.primaryObserved.User, Mounts: []any{}, RunArgs: []any{}, ContainerEnv: map[string]any{}, RemoteEnv: map[string]any{}, OverrideCommand: true}
 	for _, m := range s.primaryObserved.Mounts {
-		if m.Type == "bind" && m.Source == s.capture.Source && m.Destination == s.workspace {
-			continue
+		if m.Type == "bind" && m.Destination == s.workspace {
+			physicalSource, err := filepath.EvalSymlinks(m.Source)
+			if err != nil {
+				return stageConflict("primary workspace mount source unavailable")
+			}
+			if physicalSource == s.capture.Source {
+				continue
+			}
 		}
 		fields := []string{"type=" + m.Type, "source=" + m.Source, "target=" + m.Destination}
 		if m.Type == "volume" {
