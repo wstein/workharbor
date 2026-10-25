@@ -27,10 +27,12 @@ type stageToolIdentity struct {
 	Digest  string `json:"digest"`
 }
 type stageRunner struct {
-	Policy         *stageDriverPolicy
-	Root, Endpoint string
-	Tools          map[string]stageToolIdentity
-	Environment    []string
+	InitializationLabels []string
+	InitializationBudget time.Duration
+	Policy               *stageDriverPolicy
+	Root, Endpoint       string
+	Tools                map[string]stageToolIdentity
+	Environment          []string
 }
 type stagePhaseOutput struct {
 	Stdout, Stderr []byte
