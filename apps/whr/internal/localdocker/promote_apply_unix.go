@@ -362,7 +362,20 @@ func (p *LocalPromotion) resourceEffect(ctx context.Context, action string, targ
 }
 func (p *LocalPromotion) effectFailure(action string, target *StageResource, reason string, err error) (LifecycleResult, error) {
 	var failed *stageCommandFailure
-	if (action == "container_hooks" || action == "smoke") && errors.As(err, &failed) && failed.Exit > 0 && (action != "smoke" || failed.Exit < 125) && p.newPrimary != nil {
+	eligible := (action == "container_hooks" || action == "smoke") && errors.As(err, &failed) && failed.Exit > 0 && (action != "smoke" || failed.Exit < 125) && p.newPrimary != nil
+	if eligible {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		current, observationErr := readStageContainer(ctx, p.runner, p.newPrimary.ID)
+		cancel()
+		if observationErr != nil {
+			err = errors.Join(err, stageConflict("promotion failure replacement observation unavailable"), observationErr)
+			eligible = false
+		} else if !current.Running || stageContainerBindingDigest(current) != stageContainerBindingDigest(*p.newPrimary) {
+			err = errors.Join(err, stageConflict("promotion failure replacement not observed running with admitted binding"))
+			eligible = false
+		}
+	}
+	if eligible {
 		if e := p.recordEffect(action, StageTarget{Resource: target}, "observed"); e == nil {
 			p.rollbackEligible = true
 			if p.result.Verification != nil {
