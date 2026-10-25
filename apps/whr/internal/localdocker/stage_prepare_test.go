@@ -27,11 +27,6 @@ func fixtureStagePreparationNamed(t *testing.T, basename string) (Client, StageO
 	if e := os.Mkdir(source, 0700); e != nil {
 		t.Fatal(e)
 	}
-	physicalSource, err := filepath.EvalSymlinks(source)
-	if err != nil {
-		t.Fatal(err)
-	}
-	source = physicalSource
 	fixtureGit(t, source, "init", "--template=", "--initial-branch=main")
 	if e := os.Mkdir(filepath.Join(source, ".devcontainer"), 0700); e != nil {
 		t.Fatal(e)
@@ -297,4 +292,56 @@ func TestLocalStageGitPreparationRetainsReplacedTemporaryRoot(t *testing.T) {
 			t.Fatalf("original root lost: %v", err)
 		}
 	})
+}
+
+func TestLocalStageGitAliasedWorkspaceLabelsAndPromotionMount(t *testing.T) {
+	parent := t.TempDir()
+	physical := filepath.Join(parent, "physical")
+	if err := os.Mkdir(physical, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(parent, "alias")
+	if err := os.Symlink(physical, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", alias)
+	c, opts, ports, _ := fixtureStageLifecycle(t, false)
+	opts.Smoke = true
+	expected, err := filepath.EvalSymlinks(opts.Source)
+	if err != nil || expected == opts.Source {
+		t.Fatalf("fixture lost lexical alias: %q %q %v", opts.Source, expected, err)
+	}
+	stage, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatalf("lexical CLI labels refused: %v", err)
+	}
+	defer stage.Close()
+	if stage.primary.Labels["devcontainer.local_folder"] != opts.Source || stage.capture.Source != expected {
+		t.Fatal("fixture did not retain lexical labels and physical capture")
+	}
+	result, err := stage.Apply(context.Background(), LifecycleConsent{TrustDigest: *stage.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if err != nil || result.Status != "staged_verified" {
+		t.Fatalf("aliased workspace: %+v %v", result, err)
+	}
+	data, err := os.ReadFile(filepath.Join(stage.store.operationPath(stage.receipt.OperationID), "primary-config.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config stagePrimaryConfiguration
+	if err := json.Unmarshal(data, &config); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range config.Mounts {
+		value, ok := raw.(string)
+		if !ok {
+			t.Fatalf("non-string persisted mount: %v", raw)
+		}
+		mount, err := stageNativeMount(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mount["type"] == "bind" && mount["target"] == stage.workspace {
+			t.Fatalf("workspace bind duplicated into promotion mounts: %v", raw)
+		}
+	}
 }

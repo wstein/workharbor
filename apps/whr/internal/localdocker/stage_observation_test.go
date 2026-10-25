@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 )
 
 func TestLocalStageNativeObservationsKeepImmutableConfigAndExactIdentities(t *testing.T) {
@@ -63,5 +65,26 @@ func TestLocalStageArtifactCanonicalizesAllObjectKeys(t *testing.T) {
 	}
 	if stageDigest(value) != stageDigest(map[string]string{"a": "first", "z": "last"}) {
 		t.Fatal("struct field declaration order changed digest")
+	}
+}
+
+func TestLocalStageCandidateVolumeNamesMustMatchDeclaredPlan(t *testing.T) {
+	policy := &stageDriverPolicy{Home: "whr-stage-home-fixture", HomeDestination: "/home/vscode", AllowedMounts: []string{"type=volume,source=declared-cache,target=/cache"}}
+	for _, target := range []string{"/home/vscode", "/cache"} {
+		t.Run(target, func(t *testing.T) {
+			mounts := []mount{{Type: "volume", Name: policy.Home, Destination: policy.HomeDestination}, {Type: "volume", Name: "declared-cache", Destination: "/cache"}}
+			if err := checkStageCandidateVolumes(mounts, policy); err != nil {
+				t.Fatalf("declared control: %v", err)
+			}
+			for i := range mounts {
+				if mounts[i].Destination == target {
+					mounts[i].Name = "different-volume"
+				}
+			}
+			err := checkStageCandidateVolumes(mounts, policy)
+			if err == nil || exitcode.FromError(err) != exitcode.Conflict || err.Error() != "local stage candidate volume mount not in declared plan" {
+				t.Fatalf("wrong volume admitted or wrong reason: %v", err)
+			}
+		})
 	}
 }
