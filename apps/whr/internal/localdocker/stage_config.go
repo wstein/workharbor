@@ -16,6 +16,7 @@ var stageMetadataKeys = []string{"onCreateCommand", "updateContentCommand", "pos
 type stageCLIInvocation struct {
 	Workspace, Config, Override, Driver, UserData, ContainerID string
 	Labels                                                     []string
+	Promote                                                    bool
 }
 
 func (v stageCLIInvocation) Arguments(phase string) ([]string, error) {
@@ -45,6 +46,9 @@ func (v stageCLIInvocation) Arguments(phase string) ([]string, error) {
 		args = append(args, "--include-merged-configuration", "true")
 	case "up":
 		args = append(args, "--user-data-folder", v.UserData, "--skip-post-create", "true", "--skip-post-attach", "true", "--omit-syntax-directive", "true", "--include-configuration", "true", "--include-merged-configuration", "true")
+		if v.Promote {
+			args = append(args, "--update-remote-user-uid-default", "never")
+		}
 	case "run-user-commands":
 		args = append(args, "--user-data-folder", v.UserData, "--container-id", v.ContainerID, "--skip-post-attach", "true")
 	}
@@ -99,6 +103,43 @@ func stageCheckBakedSourceMetadata(source map[string]any, metadata []map[string]
 	}
 	return nil
 }
+func stagePromoteConfig(source map[string]any, primary stagePrimaryConfiguration, image string, sourceBaked bool) (map[string]any, error) {
+	if len(image) != 71 || !strings.HasPrefix(image, "sha256:") || !fullID(strings.TrimPrefix(image, "sha256:")) {
+		return nil, stageConflict("promote requires verified immutable image identity")
+	}
+	if !filepath.IsAbs(primary.Source) || !filepath.IsAbs(primary.Workspace) || !volumeName(primary.Home) || (primary.HomeDestination != "/home/vscode" && primary.HomeDestination != "/home/captain") || primary.Name == "" {
+		return nil, stageConflict("promote primary configuration binding missing")
+	}
+	p := stageCopyConfig(source)
+	for _, key := range []string{"build", "dockerFile", "dockerfile", "dockerComposeFile", "service", "features", "additionalFeatures", "initializeCommand", "overrideFeatureInstallOrder", "runServices"} {
+		delete(p, key)
+	}
+	p["image"] = image
+	p["updateRemoteUserUID"] = false
+	p["workspaceFolder"] = primary.Workspace
+	p["workspaceMount"] = renderStageMount("type=bind", "source="+primary.Source, "target="+primary.Workspace)
+	p["mounts"] = primary.Mounts
+	p["containerUser"] = primary.ContainerUser
+	p["remoteUser"] = primary.RemoteUser
+	p["containerEnv"] = primary.ContainerEnv
+	p["remoteEnv"] = primary.RemoteEnv
+	p["overrideCommand"] = primary.OverrideCommand
+	args := append([]any(nil), primary.RunArgs...)
+	if len(args) == 0 {
+		args = []any{"--name", primary.Name}
+		if primary.Hostname != "" {
+			args = append(args, "--hostname", primary.Hostname)
+		}
+	}
+	p["runArgs"] = args
+	if sourceBaked {
+		for _, key := range stageLifecycleHooks {
+			delete(p, key)
+		}
+	}
+	return p, nil
+}
+
 func renderStageMount(fields ...string) string {
 	var b bytes.Buffer
 	w := csv.NewWriter(&b)

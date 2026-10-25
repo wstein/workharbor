@@ -13,13 +13,17 @@ type StageOptions struct {
 	Smoke          bool
 	Diagnostics    io.Writer
 }
+type PromoteOptions struct {
+	Target      string
+	Diagnostics io.Writer
+}
 
 // LifecycleConsent contains explicit caller decisions. Confirmed acknowledges
-// the disclosed pause-writers condition; Quiescence separately acknowledges it.
-// This stage-only API cannot authorize home deletion.
+// the disclosed pause-writers condition; neither it nor TrustDigest supplies
+// the independent home-deletion flags.
 type LifecycleConsent struct {
-	TrustDigest           string
-	Confirmed, Quiescence bool
+	TrustDigest                           string
+	Confirmed, Volumes, Force, Quiescence bool
 }
 
 // LifecycleTransaction holds an immutable prepared preview. Apply is one-use;
