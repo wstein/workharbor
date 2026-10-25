@@ -200,7 +200,12 @@ defmodule WorkHarborWeb.OwnerShellTest do
       path = Path.expand("../../lib/workharbor_web/live/" <> name, __DIR__)
       assert File.regular?(path), "the read-only shell requires #{name}"
       source = File.read!(path)
-      refute source =~ ~r/\b(Repo|Hosts|Foundation|ConfigTrust|HostConnections)\b/
+      # Domain module references are forbidden; visible headings such as "Hosts" are text.
+      refute source =~ ~r/\b(Repo|Hosts|Foundation|ConfigTrust|HostConnections)\s*\./
+
+      refute source =~
+               ~r/\b(alias|import|use)\s+WorkHarbor\.(\{[^}]*\b)?(Repo|Hosts|Foundation|ConfigTrust|HostConnections)\b/
+
       refute source =~ ~r/\braw\s*\(|\|>\s*raw\b|\{\s*:safe\s*,/
       refute source =~ ~r/Accounts\.(revoke|deny|bootstrap|login|issue_dashboard)\s*\(/
       refute source =~ ~r/\b(push_event|JS\.push)\s*\(/
