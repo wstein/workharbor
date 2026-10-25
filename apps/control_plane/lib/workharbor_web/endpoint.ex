@@ -34,6 +34,14 @@ defmodule WorkHarborWeb.Endpoint do
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
+  plug Plug.Static,
+    at: "/assets",
+    from: {:workharbor, "priv/static/assets"},
+    only: ~w(css js),
+    gzip: false,
+    cache_control_for_etags: "no-store",
+    cache_control_for_vsn_requests: "no-store"
+
   plug WorkHarborWeb.BrowserSession
   plug WorkHarborWeb.Router
 end

@@ -15,10 +15,12 @@ defmodule WorkHarborWeb.Security do
          true <- socket_origin?(conn),
          :ok <- canonical_path(conn),
          :ok <- query_admission(conn),
-         true <- upgrade_headers?(conn) do
+         true <- upgrade_headers?(conn),
+         :ok <- asset_admission(conn) do
       conn |> put_private(:auth_target, target) |> put_private(:auth_store, store) |> headers()
     else
       {:error, :invalid_request} -> deny(conn, 400, :invalid_request)
+      {:error, :not_found} -> deny(conn, 404, :not_found)
       _ -> deny(conn, 403, :forbidden)
     end
   end
@@ -34,6 +36,40 @@ defmodule WorkHarborWeb.Security do
     )
     |> put_resp_header("referrer-policy", "no-referrer")
     |> put_resp_header("strict-transport-security", "max-age=31536000")
+  end
+
+  def owner_headers(conn) do
+    origin = Keyword.fetch!(Application.fetch_env!(:workharbor, :owner_http), :origin)
+
+    case WorkHarborWeb.Authority.origin(origin) do
+      {:ok, {host, port}} ->
+        authority = if String.contains?(host, ":"), do: "[" <> host <> "]", else: host
+        authority = if port == 443, do: authority, else: authority <> ":" <> Integer.to_string(port)
+
+        csp =
+          "default-src 'none'; script-src 'self'; style-src 'self'; " <>
+            "connect-src 'self' wss://" <> authority <>
+            "; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+
+        conn |> headers() |> put_resp_header("content-security-policy", csp)
+
+      _ ->
+        deny(conn, 503, :unavailable)
+    end
+  end
+
+  defp asset_admission(conn) do
+    cond do
+      conn.request_path in ["/assets/js/app.js", "/assets/css/app.css"] ->
+        if conn.method in ["GET", "HEAD"], do: :ok, else: {:error, :not_found}
+
+      String.starts_with?(conn.request_path, ["/assets", "/images", "/fonts"]) or
+          conn.request_path in ["/robots.txt", "/favicon.ico"] ->
+        {:error, :not_found}
+
+      true ->
+        :ok
+    end
   end
 
   def deny(conn, status, code),
@@ -89,7 +125,9 @@ defmodule WorkHarborWeb.Security do
   defp canonical_path(conn) do
     path = conn.request_path
 
-    if String.contains?(path, ["%", "//", "\\"]) or (path != "/" and String.ends_with?(path, "/")),
+    if String.contains?(path, ["%", "//", "\\"]) or
+         Enum.any?(String.split(path, "/"), &(&1 in [".", ".."])) or
+         (path != "/" and String.ends_with?(path, "/")),
       do: {:error, :invalid_request},
       else: :ok
   end

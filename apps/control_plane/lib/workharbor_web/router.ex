@@ -49,6 +49,14 @@ defmodule WorkHarborWeb.Router do
     plug RequireOwner, :owner_page
   end
 
+  pipeline :owner_live do
+    plug :accepts, ["html"]
+    plug :fetch_live_flash
+    plug :put_root_layout, html: {WorkHarborWeb.Layouts, :root}
+    plug :protect_from_forgery
+    plug :owner_headers
+  end
+
   pipeline :dashboard do
     plug RequireOwner, :dashboard_page
   end
@@ -136,14 +144,24 @@ defmodule WorkHarborWeb.Router do
 
   scope "/", WorkHarborWeb do
     pipe_through [:session, :owner]
-    get "/", AuthController, :page
-    get "/owner", AuthController, :page
+    get "/", AuthController, :owner_entry, log: false
+    get "/owner/auth", AuthController, :page, log: false
+  end
+
+  scope "/", WorkHarborWeb do
+    pipe_through [:session, :owner, :owner_live]
+
+    live_session :owner, on_mount: WorkHarborWeb.OwnerAuth do
+      live "/owner", OverviewLive, :index, log: false
+    end
   end
 
   scope "/", WorkHarborWeb do
     pipe_through [:session, :dashboard]
     get "/dashboard", AuthController, :page
   end
+
+  defp owner_headers(conn, _), do: WorkHarborWeb.Security.owner_headers(conn)
 
   defp cli_secret(conn, opts), do: RequireOwner.cli_secret(conn, opts)
 
