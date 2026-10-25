@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: EUPL-1.2
 package localdocker
 
-import "context"
+import (
+	"context"
+	"io"
+)
 
 // StageOptions selects the source and primary. Prepare is an inspection and
 // temporary-capture operation; consent is supplied only to Apply after preview.
 type StageOptions struct {
 	Source, Target string
 	Smoke          bool
+	Diagnostics    io.Writer
 }
-type PromoteOptions struct{ Target string }
+type PromoteOptions struct {
+	Target      string
+	Diagnostics io.Writer
+}
 
 // LifecycleConsent contains explicit caller decisions. Confirmed acknowledges
 // the disclosed pause-writers condition; neither it nor TrustDigest supplies
