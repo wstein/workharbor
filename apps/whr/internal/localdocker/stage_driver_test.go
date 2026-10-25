@@ -93,6 +93,9 @@ func TestLocalStageDriverNeverForwardsPrimaryOrVolumeMutation(t *testing.T) {
 	}{
 		{[]string{"stop", primary}, "protected_resource_mutation"}, {[]string{"rm", "-f", primary}, "protected_resource_mutation"}, {[]string{"container", "rm", primary}, "protected_resource_mutation"}, {[]string{"volume", "rm", home}, "volume_mutation"}, {[]string{"network", "create", "foreign"}, "protected_resource_mutation"}, {[]string{"exec", primary, "true"}, "old_primary_target"},
 		{[]string{"run", "--name", "whr-anchorage-staging", "--mount", mount, "--mount", homeMount, "--mount", "type=volume,source=anchorage-home-primary,target=/mnt/primary", "candidate-image"}, "undeclared_native_mount"},
+		{[]string{"run", "--name", "whr-anchorage-staging", "--mount", mount, "--mount", homeMount, "-e", "PATH", "candidate-image"}, "unbound_env_copy"},
+		{[]string{"run", "--name", "whr-anchorage-staging", "--mount", mount, "--mount", homeMount, "--env=PATH", "candidate-image"}, "unbound_env_copy"},
+		{[]string{"run", "--name", "whr-anchorage-staging", "--mount", mount, "--mount", homeMount, "-ePATH", "candidate-image"}, "unbound_env_copy"},
 	}
 	for _, c := range cases {
 		t.Run(c.reason+strings.Join(c.args[:1], ""), func(t *testing.T) {
