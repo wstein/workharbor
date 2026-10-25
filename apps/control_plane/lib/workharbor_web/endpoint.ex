@@ -5,6 +5,7 @@ defmodule WorkHarborWeb.Endpoint do
 
   socket "/owner/live", WorkHarborWeb.OwnerSocket,
     websocket: [
+      max_frame_size: 65_536,
       connect_info: [session: {WorkHarborWeb.BrowserSession, :options, [:owner]}],
       check_csrf: true,
       check_origin: {WorkHarborWeb.Security, :socket_origin, []}

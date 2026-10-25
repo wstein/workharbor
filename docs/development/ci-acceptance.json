@@ -1920,7 +1920,12 @@
       "WorkHarborWeb.TransportSecurityTest/test owner client selects guarded socket without longpoll or embedded credentials",
       "WorkHarborWeb.OwnerShellTest/test owner routes permit only read pages and existing controller POST exceptions",
       "WorkHarborWeb.OwnerShellTest/test owner transport drops application envelopes before channel dispatch",
-      "WorkHarborWeb.OwnerShellTest/test owner transport preserves protocol joins and protects mounted flash state"
+      "WorkHarborWeb.OwnerShellTest/test owner transport preserves protocol joins and protects mounted flash state",
+      "WorkHarborWeb.OwnerShellTest/test display controls use exact visible markers before HTML escaping",
+      "WorkHarborWeb.OwnerShellTest/test owner dot segments are refused without reflection or effects",
+      "WorkHarborWeb.OwnerAuthTest/test navigation hook revalidates owner before continuing or denying",
+      "WorkHarborWeb.OwnerAuthTest/test malformed stale and queued owner ticks never authorize or reschedule",
+      "WorkHarborWeb.TransportSecurityTest/test owner WSS bounds actual frames while preserving heartbeat"
     ]
   }
 }

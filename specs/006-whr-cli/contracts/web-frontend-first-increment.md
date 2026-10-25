@@ -101,14 +101,13 @@ headers. Sources: [endpoint](../../../apps/control_plane/lib/workharbor_web/endp
 [security](../../../apps/control_plane/lib/workharbor_web/security.ex),
 [client](../../../apps/control_plane/assets/js/app.js).
 
-Keep `img-src 'self'` exact: no `data:` image exception. The bundled
-[heroicons plugin](../../../apps/control_plane/assets/vendor/heroicons.js) emits
-`data:image/svg+xml` CSS mask URLs, incompatible with that policy. W1 adapts
-`lib/workharbor_web/components/{core_components.ex,layouts.ex}`
-(relative to `apps/control_plane/`, both already W1-owned): render needed icons
-as static, vetted inline SVG markup, or omit decorative icons where text labels
-suffice. Include theme-toggle, flash and connection-state icons; preserve accessible
-names. Do not use data-image masks or fetch/inline untrusted SVG.
+Keep `img-src 'self'` exact: no `data:` image exception. W1 renders needed
+icons as static, vetted inline SVG markup in
+[core components](../../../apps/control_plane/lib/workharbor_web/components/core_components.ex),
+with accessible names retained for theme, flash and connection controls.
+The unused Heroicons CSS-mask plugin and Heroicons/daisyUI build dependencies
+are removed by the owner-requested W1 follow-up; no data-image masks or untrusted
+SVG are fetched or inlined.
 
 Data pages distinguish loading, empty, error, stale/disconnected and success.
 Last-known data requires uncertainty and observation time; missing projections
@@ -126,13 +125,16 @@ Existing controller authentication forms above are the explicit separate excepti
 Owner decision (2026-10-25): the forged-event guarantee also covers reserved
 `lv:*` names, including `lv:clear-flash`; there is no framework-reserved exception.
 Because LiveView 1.2.12 consumes those names before page hooks, W1 filters at
-`OwnerSocket.handle_in/2`: decode with the negotiated serializer, then discard
-every decoded outer `event` envelope, regardless of topic or nested event,
-type, value, component or upload metadata. Return the unchanged transport state
-without a reply, logging or channel dispatch; do not fabricate a successful
-mutation acknowledgement. Heartbeat, join, leave and other protocol control
-frames retain Phoenix handling. Undecodable wire frames retain the stock decoder
-behavior; the guarantee covers valid decoded forged application envelopes.
+`OwnerSocket.handle_in/2` with the negotiated serializer. The owner-requested
+follow-up fails closed: only `heartbeat` on the `phoenix` topic and `phx_join` or
+`phx_leave` on a nonempty `lv:*` topic retain Phoenix handling. Every other decoded
+envelope returns the unchanged transport state without reply, logging or channel
+dispatch, including application events, links, redirects and unknown controls.
+Undecodable wire frames retain the stock decoder behavior. The owner WebSocket
+has a 65,536-byte maximum frame size selected as an engineering bound; the owner
+requested a bound, not that specific numeric value. Dashboard transport is not
+broadened. Plain GET navigation remains, with owner revalidation on its existing
+navigation hook; no W2 route or mutating channel is added.
 Keep separate page catch-all tests and required serialized transport-entry tests,
 including mounted flash/audit/log canaries and ordinary protocol controls.
 
