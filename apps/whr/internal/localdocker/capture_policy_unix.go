@@ -11,11 +11,10 @@ import (
 )
 
 const stageMaxWorkingEntries = 100000
-const stageMaxObjectEntries = 1000000
 
 type stageCaptureLimits struct {
-	WorkingEntries, ObjectEntries, ObjectStores, SubmoduleDepth, SubmoduleCount, Objects int
-	FileBytes, WorkingBytes, ObjectBytes                                                 int64
+	WorkingEntries, SubmoduleDepth, SubmoduleCount, Objects int
+	FileBytes, WorkingBytes, ObjectBytes                    int64
 }
 type stageCaptureControl struct {
 	Limits  *stageCaptureLimits
@@ -25,7 +24,7 @@ type stageCaptureControl struct {
 type stageCaptureControlKey struct{}
 
 func defaultStageCaptureLimits() stageCaptureLimits {
-	return stageCaptureLimits{WorkingEntries: stageMaxWorkingEntries, ObjectEntries: stageMaxObjectEntries, ObjectStores: 32, SubmoduleDepth: 8, SubmoduleCount: 32, Objects: 1000000, FileBytes: stageMaxFileBytes, WorkingBytes: stageMaxWorkingBytes, ObjectBytes: 8 << 30}
+	return stageCaptureLimits{WorkingEntries: stageMaxWorkingEntries, SubmoduleDepth: 8, SubmoduleCount: 32, Objects: 1000000, FileBytes: stageMaxFileBytes, WorkingBytes: stageMaxWorkingBytes, ObjectBytes: 8 << 30}
 }
 func stageCaptureLimitsFor(ctx context.Context) stageCaptureLimits {
 	if control, ok := ctx.Value(stageCaptureControlKey{}).(stageCaptureControl); ok && control.Limits != nil {
@@ -47,7 +46,6 @@ func stageCaptureCommand(ctx context.Context, cmd *exec.Cmd) {
 type stageObjectAudit struct {
 	mu      sync.Mutex
 	checked map[string]bool
-	entries int
 }
 type stageObjectAuditKey struct{}
 
