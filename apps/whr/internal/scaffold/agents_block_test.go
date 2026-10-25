@@ -37,6 +37,9 @@ func TestAgentsBlockClassificationAndActions(t *testing.T) {
 					t.Fatalf("edit=%v error=%v", edit, err)
 				}
 				if err != nil {
+					if exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "is "+tt.class+";") {
+						t.Fatalf("wrong refusal code or class: %v", err)
+					}
 					continue
 				}
 				action := "left_unchanged"
@@ -69,8 +72,8 @@ func TestAgentsBlockRejectsMarkerLikeLines(t *testing.T) {
 			t.Run(fmt.Sprintf("case=%d/edit=%v", i, edit), func(t *testing.T) {
 				got, err := planAgentsBlock([]byte(data), edit)
 				if edit {
-					if exitcode.FromError(err) != exitcode.Conflict {
-						t.Fatalf("malformed edit must be refused with 68: %+v %v", got, err)
+					if exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "is malformed;") {
+						t.Fatalf("malformed edit must be refused with its reason and 68: %+v %v", got, err)
 					}
 				} else if err != nil || got.action != "left_unchanged" || got.warning != "agents_block.malformed" {
 					t.Fatalf("unrequested malformed block: %+v %v", got, err)
