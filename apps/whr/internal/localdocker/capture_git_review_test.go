@@ -43,7 +43,7 @@ func TestLocalStageGitCombinedRefQuota(t *testing.T) {
 			if err := os.WriteFile(filepath.Join(source, ".git", "packed-refs"), []byte(packed.String()), 0600); err != nil {
 				t.Fatal(err)
 			}
-			_, err := readStageGitSnapshotContext(context.Background(), source, false)
+			_, err := readStageGitSnapshotContext(context.Background(), source)
 			if count == stageMaxEntries-1 {
 				if err != nil {
 					t.Fatalf("exact combined ref bound refused: %v", err)
@@ -74,7 +74,7 @@ func TestLocalStageGitIndexHeaderQuotaBeforeBody(t *testing.T) {
 	if err = file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err = readStageGitSnapshotContext(context.Background(), source, false)
+	_, err = readStageGitSnapshotContext(context.Background(), source)
 	requireCaptureConflict(t, err, "Git index version or entry bound unsupported")
 }
 
@@ -101,7 +101,7 @@ func TestLocalStageGitSharedIndexHeaderQuota(t *testing.T) {
 	if err = file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err = readStageGitSnapshotContext(context.Background(), source, false)
+	_, err = readStageGitSnapshotContext(context.Background(), source)
 	requireCaptureConflict(t, err, "Git index version or entry bound unsupported")
 }
 

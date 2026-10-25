@@ -132,13 +132,8 @@ func stageGitCommand(ctx context.Context, home, gitdir, objects, index string, t
 		}
 	}
 	cmd.Err = err
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return os.ErrProcessDone
-		}
-		e := syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-		return e
-	}
+	stageCaptureCommand(ctx, cmd)
+
 	return cmd
 }
 func runStageGit(cmd *exec.Cmd) error {
@@ -153,11 +148,11 @@ func runStageGit(cmd *exec.Cmd) error {
 	}}
 	cmd.Cancel = group.terminate
 	if err := cmd.Start(); err != nil {
-		group.releaseBeforeReap(false)
+		group.releaseBeforeReap()
 		return captureIOError(err, "Git process start failed")
 	}
 	observed := stageWaitLeader(cmd.Process.Pid)
-	group.releaseBeforeReap(observed == nil)
+	group.releaseBeforeReap()
 	err := cmd.Wait()
 	if observed != nil {
 		return stageConflict("Git process ownership observation failed")

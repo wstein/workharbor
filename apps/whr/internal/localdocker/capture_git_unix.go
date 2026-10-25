@@ -173,7 +173,7 @@ func stageGitPaths(source string) (stageGitSnapshot, error) {
 
 	return s, nil
 }
-func readStageGitSnapshotContext(ctx context.Context, source string, strict bool) (stageGitSnapshot, error) {
+func readStageGitSnapshotContext(ctx context.Context, source string) (stageGitSnapshot, error) {
 	physical, err := filepath.EvalSymlinks(source)
 	if err != nil {
 		return stageGitSnapshot{}, stageConflict("Git source path unavailable")
@@ -305,9 +305,6 @@ func readStageGitSnapshotContext(ctx context.Context, source string, strict bool
 			if !stageRef(name) || (!stageOID(oid, s.ObjectFormat) && !strings.HasPrefix(oid, "ref: ")) {
 				return stageConflict("Git symbolic or malformed export ref unsupported")
 			}
-			if strict && stageExportRef(name) && strings.HasPrefix(oid, "ref: ") {
-				return stageConflict("Git symbolic export ref unsupported")
-			}
 			s.Refs[name] = oid
 			return nil
 		})
@@ -318,9 +315,6 @@ func readStageGitSnapshotContext(ctx context.Context, source string, strict bool
 		return s, stageConflict("Git refs unavailable")
 	}
 	for name, value := range s.Refs {
-		if strict && strings.HasPrefix(name, "refs/replace/") {
-			return s, stageConflict("Git replacement refs unsupported")
-		}
 		seen := map[string]bool{name: true}
 		for strings.HasPrefix(value, "ref: ") {
 			next := strings.TrimPrefix(value, "ref: ")
@@ -358,16 +352,11 @@ func readStageGitSnapshotContext(ctx context.Context, source string, strict bool
 	if e != nil {
 		return s, e
 	}
-	s.AlternatesDigest, e = stageObjectStoreBinding(ctx, s.ObjectDir, strict)
+	s.AlternatesDigest, e = stageObjectStoreBinding(ctx, s.ObjectDir)
 	if e != nil {
 		return s, e
 	}
 	s.BindingDigest = stageSnapshotDigest(s)
-	if strict {
-		if _, err := os.Lstat(filepath.Join(s.ObjectDir, "info", "alternates")); !os.IsNotExist(err) {
-			return s, stageConflict("candidate Git alternates unsupported")
-		}
-	}
 	return s, nil
 }
 
@@ -394,22 +383,19 @@ func initStageGit(ctx context.Context, home, path, format string) error {
 	return nil
 }
 func captureStageGitOne(ctx context.Context, source, captured, clone string) (stageGitCapture, error) {
+	limits := stageCaptureLimitsFor(ctx)
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	var result stageGitCapture
-	ctx, tool, pinErr := pinStageGit(ctx)
+	ctx, _, pinErr := pinStageGit(ctx)
 	if pinErr != nil {
 		return result, pinErr
 	}
-	_ = tool
 	if !filepath.IsAbs(source) || !filepath.IsAbs(captured) || !filepath.IsAbs(clone) {
 		return result, stageConflict("Git capture paths must be physical absolute paths")
 	}
-	s, e := readStageGitSnapshotContext(ctx, source, false)
+	s, e := readStageGitSnapshotContext(ctx, source)
 	if e != nil {
-		return result, e
-	}
-	if e = checkStageObjectStores(ctx, s.ObjectDir, false); e != nil {
 		return result, e
 	}
 	private, e := os.MkdirTemp(filepath.Dir(clone), "git-capture-")
@@ -465,12 +451,12 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 			roots.WriteString(parts[1] + "\n")
 		}
 	}
-	objects, e := stageGitReadLimit(ctx, private, reader, s.ObjectDir, "", []byte(roots.String()), 66*1000000, "rev-list", "--objects", "--no-object-names", "--stdin")
+	objects, e := stageGitReadLimit(ctx, private, reader, s.ObjectDir, "", []byte(roots.String()), 66*int64(limits.Objects), "rev-list", "--objects", "--no-object-names", "--stdin")
 	if e != nil {
 		return result, e
 	}
 	ids := strings.Fields(string(objects))
-	if len(ids) > 1000000 {
+	if len(ids) > limits.Objects {
 		return result, stageConflict("Git object count quota exceeded")
 	}
 	for _, id := range ids {
@@ -478,7 +464,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 			return result, stageConflict("Git object listing malformed")
 		}
 	}
-	sizes, e := stageGitReadLimit(ctx, private, reader, s.ObjectDir, "", objects, 128*1000000, "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
+	sizes, e := stageGitReadLimit(ctx, private, reader, s.ObjectDir, "", objects, 128*int64(limits.Objects), "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)")
 	if e != nil {
 		return result, e
 	}
@@ -493,7 +479,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 			return result, stageConflict("Git object inventory malformed")
 		}
 		n, err := strconv.ParseInt(fields[2], 10, 64)
-		if err != nil || n < 0 || n > 8<<30-expanded {
+		if err != nil || n < 0 || n > limits.ObjectBytes-expanded {
 			return result, stageConflict("Git expanded object byte quota exceeded")
 		}
 		expanded += n
@@ -511,7 +497,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	defer pack.Close()
 	packCmd := stageGitCommand(ctx, private, reader, s.ObjectDir, "", false, "pack-objects", "--stdout", "--revs")
 	packCmd.Stdin = strings.NewReader(roots.String())
-	packCmd.Stdout = &stageBoundedWriter{Writer: pack, Remaining: (8 << 30) + 128*1000000}
+	packCmd.Stdout = &stageBoundedWriter{Writer: pack, Remaining: limits.ObjectBytes + 128*int64(limits.Objects)}
 	packCmd.Stderr = io.Discard
 	if e = runStageGit(packCmd); e != nil {
 		if ctx.Err() != nil {
@@ -580,10 +566,11 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 			return result, stageConflict("Git populated submodule administration unavailable")
 		}
 	}
-	if e = copyStageWorkingSkip(captured, clone, skip); e != nil {
+	if e = copyStageWorkingSkip(ctx, captured, clone, skip); e != nil {
 		return result, e
 	}
-	current, e := readStageGitSnapshotContext(ctx, source, false)
+	stageCapturePhase(ctx, "repository-copied", source)
+	current, e := readStageGitSnapshotContext(ctx, source)
 	if e != nil || current.Head != s.Head || current.IndexDigest != s.IndexDigest || current.ConfigDigest != s.ConfigDigest || !stageSameRefs(current.Refs, s.Refs) {
 		return result, stageConflict("source Git state changed during capture")
 	}
@@ -637,6 +624,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	if e != nil {
 		return result, stageConflict("Git admitted source status unavailable")
 	}
+	stageCapturePhase(ctx, "before-candidate-status", clone)
 	afterStatus, e := stageGitRead(ctx, private, reader, filepath.Join(clone, ".git", "objects"), filepath.Join(clone, ".git", "index"), nil, append([]string{"--work-tree=" + clone}, statusArgs...)...)
 	if e != nil {
 		return result, stageConflict("Git candidate status unavailable")
@@ -678,7 +666,8 @@ func stageSameRefs(a, b map[string]string) bool {
 	}
 	return true
 }
-func copyStageWorkingSkip(source, destination string, skip map[string]bool) error {
+func copyStageWorkingSkip(ctx context.Context, source, destination string, skip map[string]bool) error {
+	limits := stageCaptureLimitsFor(ctx)
 	var total int64
 	count := 0
 	type directoryMode struct {
@@ -704,7 +693,7 @@ func copyStageWorkingSkip(source, destination string, skip map[string]bool) erro
 			return stageConflict("populated submodule working path is not a directory")
 		}
 		count++
-		if count > stageMaxEntries {
+		if count > limits.WorkingEntries {
 			return stageConflict("captured working entry quota exceeded")
 		}
 		target := filepath.Join(destination, rel)
@@ -738,7 +727,7 @@ func copyStageWorkingSkip(source, destination string, skip map[string]bool) erro
 		}
 		defer in.Close()
 		held, err := in.Stat()
-		if err != nil || !held.Mode().IsRegular() || !os.SameFile(st, held) || held.Size() > stageMaxFileBytes || held.Size() > stageMaxWorkingBytes-total {
+		if err != nil || !held.Mode().IsRegular() || !os.SameFile(st, held) || held.Size() > limits.FileBytes || held.Size() > limits.WorkingBytes-total {
 			return stageConflict("captured working file identity or quota")
 		}
 		total += held.Size()

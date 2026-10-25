@@ -8,8 +8,6 @@ import (
 	"errors"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"io"
-	"path/filepath"
-	"strings"
 )
 
 func stageConflict(reason string) error {
@@ -26,15 +24,6 @@ func (r stageContextReader) Read(p []byte) (int, error) {
 		return 0, e
 	}
 	return r.Reader.Read(p)
-}
-
-func stageSelectedPath(path string, selected []string) bool {
-	for _, p := range selected {
-		if p == "." || path == p || strings.HasPrefix(path, p+string(filepath.Separator)) || strings.HasPrefix(p, path+string(filepath.Separator)) {
-			return true
-		}
-	}
-	return false
 }
 
 func captureIOError(err error, reason string) error {

@@ -130,6 +130,7 @@ func captureStageFiles(ctx context.Context, source, parent string) (*capturedSta
 		return nil, e
 	}
 	c.Digest = captureDigest(physical, c.Entries, c.Omitted)
+	stageCapturePhase(ctx, "files-copied", c.Path)
 	if e = c.Check(ctx); e != nil {
 		if cleanupErr := c.Close(); cleanupErr != nil {
 			return c, cleanupErr
@@ -151,9 +152,7 @@ func stageOmit(path string) bool {
 	return name == ".git" || name == ".ssh" || name == ".aws" || name == ".gnupg" || name == ".docker" || name == ".netrc" || name == ".npmrc" || name == ".pypirc" || name == ".git-credentials" || name == ".env" || strings.HasPrefix(name, ".env.") || path == ".devcontainer/host.env" || path == ".devcontainer/smoke.env"
 }
 func scanStageFiles(ctx context.Context, source, destination string) ([]map[string]any, []string, error) {
-	return scanStageFilesSelected(ctx, source, destination, nil)
-}
-func scanStageFilesSelected(ctx context.Context, source, destination string, selected []string) ([]map[string]any, []string, error) {
+	limits := stageCaptureLimitsFor(ctx)
 	root, e := os.OpenRoot(source)
 	if e != nil {
 		return nil, nil, stageConflict("source root unavailable")
@@ -171,14 +170,8 @@ func scanStageFilesSelected(ctx context.Context, source, destination string, sel
 		if walkErr != nil {
 			return fail("enumeration changed or unavailable")
 		}
-		if selected != nil && path != "." && !stageSelectedPath(path, selected) {
-			if d.IsDir() {
-				return fs.SkipDir
-			}
-			return nil
-		}
 		count++
-		if count > stageMaxEntries {
+		if count > limits.WorkingEntries {
 			return fail("filesystem entry quota exceeded")
 		}
 		if len(path) > 4096 || !utf8.ValidString(path) {
@@ -229,7 +222,7 @@ func scanStageFilesSelected(ctx context.Context, source, destination string, sel
 				}
 			}
 		case info.Mode().IsRegular():
-			if info.Size() > stageMaxFileBytes {
+			if info.Size() > limits.FileBytes {
 				return fail("per-file working-byte quota exceeded")
 			}
 			file, err := root.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW, 0)
@@ -253,7 +246,7 @@ func scanStageFilesSelected(ctx context.Context, source, destination string, sel
 				}
 				writer = io.MultiWriter(hash, output)
 			}
-			n, readErr := io.Copy(writer, io.LimitReader(file, stageMaxFileBytes+1))
+			n, readErr := io.Copy(writer, io.LimitReader(file, limits.FileBytes+1))
 			after, statErr := file.Stat()
 			file.Close()
 			if output != nil {
@@ -265,11 +258,11 @@ func scanStageFilesSelected(ctx context.Context, source, destination string, sel
 					err = closeErr
 				}
 			}
-			if readErr != nil || statErr != nil || err != nil || n > stageMaxFileBytes || n != before.Size() || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || after.Mode() != before.Mode() {
+			if readErr != nil || statErr != nil || err != nil || n > limits.FileBytes || n != before.Size() || after.Size() != before.Size() || !after.ModTime().Equal(before.ModTime()) || after.Mode() != before.Mode() {
 				return fail("regular input changed or exceeded bound")
 			}
 			working += n
-			if working > stageMaxWorkingBytes {
+			if working > limits.WorkingBytes {
 				return fail("total working-byte quota exceeded")
 			}
 			record["type"] = "file"

@@ -38,7 +38,7 @@ func (g *stageProcessGroup) terminate() error {
 	}
 	return e
 }
-func (g *stageProcessGroup) releaseBeforeReap(_ bool) {
+func (g *stageProcessGroup) releaseBeforeReap() {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.timer != nil {

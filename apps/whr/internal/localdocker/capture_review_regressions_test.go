@@ -97,7 +97,7 @@ func TestLocalStageGitCopyFailureIsClassifiedWithoutHostPath(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	err := copyStageWorkingSkip(src, dst, nil)
+	err := copyStageWorkingSkip(context.Background(), src, dst, nil)
 	requireCaptureConflict(t, err, "captured working output unavailable")
 	if strings.Contains(err.Error(), dst) || strings.Contains(err.Error(), "CANARY") {
 		t.Fatal("host pathname leaked")
@@ -164,7 +164,7 @@ func TestLocalStageGitReftableRefusalNamesStorage(t *testing.T) {
 	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	_, err = readStageGitSnapshotContext(context.Background(), src, false)
+	_, err = readStageGitSnapshotContext(context.Background(), src)
 	requireCaptureConflict(t, err, "Git reftable reference storage unsupported")
 }
 func TestLocalStageGitUnsafeRemoteFormsRefused(t *testing.T) {
