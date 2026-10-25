@@ -102,6 +102,9 @@ func (a *app) build() {
 					return exitcode.Errorf(exitcode.PathBadArguments, "console --local is unavailable; use whr shell --local <ws> inside the host multiplexer session")
 				}
 			}
+			if e.ID == "workspace.stage" || e.ID == "workspace.promote" {
+				ctx = context.WithValue(ctx, localLifecycleKey{}, a.localLifecycleOptions(c))
+			}
 			if e.ID == "workspace.rm" {
 				ctx = context.WithValue(ctx, localRmKey{}, a.localRmOptions(c))
 			}
@@ -133,7 +136,19 @@ func (a *app) build() {
 					return out, cobra.ShellCompDirectiveNoFileComp
 				}
 			}
-			if e.ID == "workspace.init" {
+			if e.ID == "workspace.stage" || e.ID == "workspace.promote" {
+				c.Flags().Bool("local", false, "use local Docker lifecycle operations")
+				c.Flags().Bool("dry-run", false, "preview exact resources and effects without mutation")
+				c.Flags().Bool("yes", false, "confirm effects and acknowledge paused input writers")
+				if e.ID == "workspace.stage" {
+					c.Flags().String("source", "", "explicit source directory matching the selected primary")
+					c.Flags().Bool("smoke", false, "request the trusted workspace smoke in the candidate")
+					c.Flags().String("trust", "", "trust the exact previewed sha256 source fingerprint")
+				} else {
+					c.Flags().Bool("volumes", false, "authorize candidate home deletion (requires --force)")
+					c.Flags().Bool("force", false, "authorize candidate home deletion with --volumes")
+				}
+			} else if e.ID == "workspace.init" {
 				addInitFlags(c, e)
 			} else if e.ID == "workspace.drift" {
 				c.Flags().Bool("local", false, "compare local running primary bundle references")

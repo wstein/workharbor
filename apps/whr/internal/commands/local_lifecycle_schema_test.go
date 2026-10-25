@@ -54,6 +54,11 @@ func TestLocalLifecycleSchemaClosesResultsAndTargets(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	unknownImage := lifecycleFixtureResult("preview")
+	unknownImage.Verification = nil
+	if err := schema.Validate(lifecycleDocument(t, "workspace.stage", unknownImage)); err != nil {
+		t.Fatalf("preview before image identity is known: %v", err)
+	}
 	cases := []struct {
 		name   string
 		mutate func(map[string]any)
@@ -68,6 +73,7 @@ func TestLocalLifecycleSchemaClosesResultsAndTargets(t *testing.T) {
 		{"unverified_without_reason", func(r map[string]any) { r["status"] = "staged_unverified" }},
 		{"resource_unknown", func(r map[string]any) { lifecycleObject(r["primary"])["environment"] = "secret" }},
 		{"short_container_id", func(r map[string]any) { lifecycleObject(r["primary"])["id"] = "abcd" }},
+		{"unknown_verification_image", func(r map[string]any) { lifecycleObject(r["verification"])["image_id"] = "" }},
 		{"wrong_repository_oid", func(r map[string]any) { lifecycleItem(r["repositories"], 0)["object_format"] = "sha256" }},
 		{"public_clone_mode", func(r map[string]any) { lifecycleItem(r["repositories"], 0)["clone_root_mode"] = 0755 }},
 		{"bad_result_namespace", func(r map[string]any) { lifecycleItem(r["result_refs"], 0)["target_ref"] = "refs/heads/main" }},

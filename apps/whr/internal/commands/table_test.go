@@ -821,3 +821,41 @@ func TestLocalShellContractAmendment(t *testing.T) {
 		t.Fatal("shell/console registry entries missing")
 	}
 }
+
+// T038 adds local-only canonical verbs; the workspace group alias is sufficient.
+func TestLocalLifecycleContractAmendment(t *testing.T) {
+	want := map[string]string{
+		"workspace.stage":   "--local,--source,--smoke,--dry-run,--yes,--trust,--json",
+		"workspace.promote": "--local,--volumes,--force,--dry-run,--yes,--json",
+	}
+	found := 0
+	for _, e := range commands.Table() {
+		flags, ok := want[e.ID]
+		if !ok {
+			continue
+		}
+		found++
+		if strings.Join(e.Flags, ",") != flags || e.Short != nil || e.Increment != "first" || e.Needs != "host_local" || e.Writes != "host" || e.JSON != "envelope" || e.BlockedOn != "" {
+			t.Fatalf("unexpected lifecycle command contract: %+v", e)
+		}
+		for _, sp := range spellings(e) {
+			got := run(t, stubHandlers(), append(append([]string{}, sp...), "--local", "--dry-run", "--json", "primary")...)
+			if got.code != 0 || decodeEnvelope(t, got.stdout)["command"] != e.ID {
+				t.Fatalf("canonical/alias dispatch %v: %+v", sp, got)
+			}
+			help := run(t, nil, append(sp, "--help")...)
+			if help.code != 0 || !strings.Contains(help.stdout, "Short form: none") {
+				t.Fatalf("lifecycle help: %+v", help)
+			}
+		}
+	}
+	if found != 2 {
+		t.Fatalf("found %d lifecycle commands, want stage and promote", found)
+	}
+	for _, verb := range []string{"stage", "promote"} {
+		got := run(t, stubHandlers(), verb, "--json")
+		if got.code != 64 || !strings.Contains(got.err, "unknown") {
+			t.Fatalf("invented bare lifecycle alias %s: %+v", verb, got)
+		}
+	}
+}

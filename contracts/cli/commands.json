@@ -26,6 +26,8 @@
     "owner_client": "the typed TLS owner client and credential storage work item (T011); the router already serves /api/v1/auth/login|status|logout and /api/v1/hosts/:id"
   },
   "commands": [
+    {"id":"workspace.stage","path":["workspace","stage"],"increment":"first","needs":"host_local","writes":"host","json":"envelope","flags":["--local","--source","--smoke","--dry-run","--yes","--trust","--json"],"note":"T038 local-only stage; exact primary selector and explicit source; source fingerprint trust is separate from mutation confirmation; no bare short form"},
+    {"id":"workspace.promote","path":["workspace","promote"],"increment":"first","needs":"host_local","writes":"host","json":"envelope","flags":["--local","--volumes","--force","--dry-run","--yes","--json"],"note":"T038 local-only promote; receipt-bound candidate, exact result refs, guarded home deletion with explicit --volumes --force and confirmation; no bare short form"},
     {"id":"workspace.drift","path":["workspace","drift"],"increment":"first","needs":"none","writes":"none","json":"envelope","flags":["--local","--source","--json"]},
     {"id": "workspace.ls", "path": ["workspace", "ls"], "short": ["ls"], "increment": "later", "needs": "control_plane", "writes": "none", "json": "envelope", "blocked_on": "owner_api", "flags": ["--local", "--role", "--label", "--json"], "note": "FR-066 local-only discovery is implemented; without --local owner_api still refuses with exit 64"},
     {"id": "workspace.show", "path": ["workspace", "show"], "short": ["show"], "increment": "later", "needs": "control_plane", "writes": "none", "json": "envelope", "blocked_on": "owner_api"},
@@ -65,6 +67,7 @@
   "freeze": {
     "test_file": "apps/whr/internal/commands/table_test.go",
     "test_ids": [
+      "TestLocalLifecycleContractAmendment",
       "TestLocalShellContractAmendment",
       "TestLocalLsContractAmendment",
       "TestCommandTableMatchesContract",
