@@ -1,9 +1,9 @@
 # T038 local stage/promote implementation evidence
 
 Measurements below were made on 2026-10-25 UTC, using Go 1.27.2 and Git 2.56.0
-on Linux/arm64. This record covers measured Git capture/result transfer and
-command/schema work. Backend integration, independent review, final repository
-checks and live lifecycle acceptance remain **PENDING** in the sections below.
+on Linux/arm64. This record covers Git capture/result transfer, official-CLI orchestration,
+durable state, verification, promotion and the actual default command bridge.
+Final integrated checks and independent/live acceptance are distinguished below.
 It does not mark T038, FR-068 or the feature complete.
 
 ## Accepted contract and scope
@@ -205,31 +205,112 @@ made `TestLocalLifecycleSchemaClosesResultsAndTargets/unknown_result` fail with
 `go -C apps/whr test ./internal/commands -run '^TestLocalLifecycleSchema' -count=1 -timeout=30s`
 passed again. No mutation, test-only source hook or runtime bypass is retained.
 
-## Backend and default-handler integration — PENDING
+## Backend and default-handler integration
 
-The integrating author owns measured source/state capture, execution manifests,
-official CLI/Docker phase orchestration, locks/journal/receipt durability,
-verification, cleanup guards and recovery acceptance. Add exact committed heads,
-offline fake-driver matrix results, mutation failures and integration fixes here
-after they have actually run. The command author's production `DefaultHandlers`
-bridge also awaits the committed `Client.PrepareStage`/`PreparePromotion`
-constructors. Injected command tests do not establish that bridge or backend
-execution acceptance.
+The production constructors are connected to the canonical command registry.
+`TestLocalLifecycleDefaultHandlersStageThenPromote` exercises real handler dispatch,
+JSON envelopes and diagnostics through installed test-owned executable stand-ins.
+It asserts preview disclosure of cooperative writer pause, source hooks' writable
+workspace/mount/network access, trust and omitted postAttach execution.
+No stand-in executes an actual Docker operation, source hook or smoke script.
 
-## Final integration, review and remaining acceptance — PENDING
+S1 binds independent source capture, Git state, installed tool bytes and admitted
+substitutions to a stable fingerprint: independent previews allocate different
+private paths and operation IDs while preserving the fingerprint. S2 retains an
+independent writable clone, records allocation intent before native calls, and
+keeps the primary running during official `up`, hooks and health/trusted-stdin
+smoke. S3 validates the retained receipt, immutable image, execution dependencies,
+original bindings and whole cleanup plan before importing any Git objects or
+replacing the primary. S4 reaches those paths through default command handlers.
 
-No independent CLEAR verdict or public-review URL is claimed in this record.
-The final published head still needs its own independent executed review,
-separate QA, required repository checks and hosted checks. `make check`, the
-complete integrated `localdocker` gate and the final default-handler dispatch
-check are not reported as passing here. New IDs have ordinary Go test discovery;
-no explicit CI inventory binding is claimed. The parallel CI inventory file is
-outside this author's ownership.
+The private raw `source-metadata.json` projection is taken from the complete
+stage override. The pinned CLI serializes its raw image contribution, while its
+returned configuration is substituted. Build/feature source contributions must
+match the full final metadata entry; a plain image's independent contribution is
+never removed merely because hook text matches. See upstream
+[metadata serialization](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/imageMetadata.ts)
+and [config resolution](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/configContainer.ts).
 
-No standalone build, tool installation, real Docker/Dev Container lifecycle,
-native-agent/provider invocation, remote Git operation or live hook/smoke run was
-performed for these component measurements. Local real-Git fixtures and injected
-command transactions are the measured scope. Stress allocation at the maximum
-1,000,000-object/8-GiB graph or all 32 populated submodules is not claimed by the
-small-fixture coverage above. Required live acceptance and any build authorization
-remain for the coordinator/owner; absent evidence does not pass a gate.
+Meaningful backend authoring RED/GREEN checkpoints (pre-rebase SHAs identify
+retained authoring objects):
+
+| Test / guard | RED | GREEN |
+| --- | --- | --- |
+| Full stage success and missing-smoke retention | `4fcd614f`: compiled allocation-only Apply returned partial | `821de644`: resource/hooks/verification paths passed 10.591 s |
+| Durable home intent before native create | `68c091b8`: fake native create rejected missing retained nonce binding | `9149b32f`: intent, receipt and versioned artifacts bound before create, 9.527 s |
+| Safe actual Git status | `f28dec82`: corrupted native index passed the constant predicate | `e8396c43`: config-free private reader validates status; normal candidate work remains admitted, 1.801 s |
+| Raw metadata origin | `782a15d6`: full-stage artifact absent | `820eb4bc`: raw override projection transitively receipt-bound, 4.906 s |
+| Preeffect tool/substitution drift | `45380e60`: home was allocated before refusal | `946a6e9b`: typed 68 before persistent state/allocation, 3.560 s |
+| Anchorage greeting facts | `443462a4`: fresh initializer facts absent, precise partial 73 | `fb2b646e`: synthetic E producer, create-only W publication before hooks/smoke, unchanged A through promotion, 9.752 s |
+| Unverified cleanup then fresh stage | `70af00bd`: retained clone permanently blocked fresh staging | `e2375ed1`: known unverified receipt/resources absent, journal archived after fresh consent; new OP/home/clone, old clone retained, 6.977 s |
+| Separate initializer deadline | `c010d4a5`: synthetic host phase escaped its deadline | `85e9d37a`: short independent host/resource timing, missing/raw/mismatched progress refusals, 0.168 s |
+
+`TestLocalStageAnchorageFactsRemainIndependentThroughPromotion` additionally
+changes admitted A facts before promotion and requires typed 68 with the specific
+receipt-bound facts reason, then restores them for successful promotion. The
+synthetic initializer is test-owned and does not invoke umbrella scripts.
+`TestLocalStageInitializerProgressSeparatesResourceBudget` correlates the pinned
+CLI's structured outer start/stop events by exact admitted resolved argv and
+start timestamp; child raw events cannot finish initialization. Host phase is
+bounded at 600 seconds, resource phase at 1800, combined up at 2400, within the
+3600-second stage deadline. Missing/ambiguous progress fails closed. Upstream
+[event shape](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-utils/log.ts)
+and [host command events](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-common/commonUtils.ts)
+define the tested protocol. There is no duplicate initialize invocation.
+
+Promotion helper measurements include actual stage-produced receipt → immutable
+replacement → verified new primary → candidate/home cleanup, preserving the
+original home and retained clone. The six required promotion guard declarations
+passed 17 leaf cases in 104.801 s before the later wrong-image leaf was added.
+Final focused source-origin/success/post-cleanup-drift cases passed 20.308 s;
+actual default dispatch/contract checks passed 21.316 s. Full integrated checks
+below supersede these historical component counts.
+
+Compiled mutations failed after successful compilation: wrong collision reason
+while preserving 68; bypassing immutable-image checks; bypassing the substitution
+trust guard; skipping post-home-cleanup input validation; reporting candidate's
+passed verification after replacement smoke failed; wrong baked-origin reason
+while preserving 68; and removing actual preview write-access disclosure.
+The final stage reason mutation replaces only `admitted environment changed since
+preview` with `admitted tool changed since preview` in `stage_apply_unix.go`.
+`go -C apps/whr test -overlay OVERLAY ./internal/localdocker -run
+'^TestLocalStageRejectsChangedToolsAndSubstitutionsBeforeEffects/environment$'
+-count=1` fails while exit 68 remains intact (0.725 s). Use the earlier overlay
+recipe; no mutant is retained in source.
+
+## Final integration and remaining acceptance
+
+Final integrated check results are recorded after execution below. This record
+claims no independent CLEAR verdict, hosted CI result or live operation evidence.
+The CI acceptance manifest appends 101 new critical literal Go test IDs, retaining
+all baseline entries; fake re-execution entrypoints are harness helpers, not
+standalone acceptance IDs.
+
+Delivered scope: canonical stage/promote commands, source trust and consent,
+independent Git capture/result transfer, accepted candidate home intent/guards,
+retained durable state, official CLI phases, verification, cleanup preflight and
+actual default-handler integration. Existing merged ls/rm/shell/drift contracts
+remain separate. This does not close the whole feature or historical issue #142.
+
+Open gates: independent review at the final exact head, hosted native CI and
+separate owner-authorized real-host acceptance. macOS unknown state-root sharing,
+unknown/VM/forwarded native mount correspondence, missing pinned installed tools,
+or other named unsupported capabilities refuse 68 before effects. Linux native
+admission samples matching primary bind/host facts; it does not claim proof of an
+identical mount namespace. Maximum-size stress allocations are not claimed.
+
+For a separately authorized native run, the owner should first record installed
+CLI 0.89.0 and pinned tool identities, pause writers, and run `whr workspace stage
+--source /absolute/source --smoke --dry-run --json`. Inspect the reported trust
+fingerprint and human stderr disclosures, then apply with the exact `--trust`
+digest and explicit confirmation. Inspect that the original primary/home/source
+are preserved and the candidate uses the independent clone/fresh home. Preview
+`whr workspace promote --dry-run --json`, then explicitly consent with both
+`--volumes --force`; verify immutable replacement and hooks/smoke before candidate
+cleanup. Preserve the receipt and clone, and independently inspect all failure
+inventory before any retry. These are an owner runbook, not executed evidence.
+
+No standalone product build, installation, real Docker/Dev Container lifecycle,
+provider invocation, remote Git operation or actual source hook/smoke execution
+was performed by this author. Temporary real-Git fixtures and test-owned fake
+executables are the measured scope.
