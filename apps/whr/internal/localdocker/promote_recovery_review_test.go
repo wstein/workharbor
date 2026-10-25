@@ -153,7 +153,7 @@ func TestLocalPromoteRecoveryRechecksBothConfigurationsBetweenActions(t *testing
 
 func TestLocalPromoteClientFailureRequiresFreshRunningObservation(t *testing.T) {
 	t.Parallel()
-	for _, mode := range []string{"hooks_client_stopped", "hooks_client_unreachable", "smoke_client_stopped", "smoke_client_unreachable"} {
+	for _, mode := range []string{"hooks_client_stopped", "hooks_client_unreachable", "hooks_client_binding", "smoke_client_stopped", "smoke_client_unreachable"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
 			p, path, _ := fixtureVerifiedPromotion(t)
@@ -181,6 +181,29 @@ func TestLocalPromoteClientFailureRequiresFreshRunningObservation(t *testing.T) 
 			}
 			if !found {
 				t.Fatalf("missing uncertain %s effect", action)
+			}
+		})
+	}
+}
+
+// A live binding permits bounded resource recovery, not a claim that exit 1
+// identifies the native client's cause or proves that the user command ran.
+func TestLocalPromoteReapedExitOneWithLiveReplacementIsConditional(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"hooks_client_live", "smoke_client_live"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Parallel()
+			p, path, _ := fixtureVerifiedPromotion(t)
+			state := readFakePromotionState(t, path)
+			state.Failure = mode
+			writeFakePromotionState(t, path, state)
+			result, err := p.Apply(context.Background(), reviewPromotionConsent())
+			state = readFakePromotionState(t, path)
+			if err == nil || exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "exit status 1") || result.Status != "partial" || state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Candidate == nil || state.Volume == nil {
+				t.Fatalf("conditional live resource recovery: %+v %v", result, err)
+			}
+			if len(result.Recovery) == 0 || !strings.Contains(result.Recovery[0].Instruction, "original container restored") {
+				t.Fatalf("missing limited recovery disclosure: %+v", result.Recovery)
 			}
 		})
 	}
