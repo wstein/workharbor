@@ -471,8 +471,9 @@ contract approval; native evidence later establishes compatibility.
 
 State root proposed: `${XDG_STATE_HOME:-$HOME/.local/state}/workharbor/local-stage/v1`,
 resolved once before constructing child env; require owner UID, 0700 directories,
-0600 files, no symlink path components. Key daemon directories by sha256 of daemon
-ID plus canonical endpoint. An OS advisory exclusive lock covers that daemon for
+0600 files, no symlink path components. Key daemon directories by sha256 of the daemon
+ID alone, so socket aliases cannot acquire independent operation locks. The canonical
+endpoint and socket identity remain receipt/trust bindings, not lock-key inputs. An OS advisory exclusive lock covers that daemon for
 the whole operation; do not remove a lock file to steal a retained intent.
 Dry-run creates neither persistent state nor receipt; temporary capture is removed.
 
