@@ -115,7 +115,7 @@ func TestLocalStageReviewFailedSmokeIsUncertain(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			stage := fixtureStageReviewAttempt(t, "verifying", "smoke")
-			result, err := stage.stageUnverified("failed_smoke", "sha256:"+strings.Repeat("d", 64), "sha256:"+strings.Repeat("b", 64), tc.cause)
+			result, err := stage.stageUnverified(context.Background(), "failed_smoke", "sha256:"+strings.Repeat("d", 64), "sha256:"+strings.Repeat("b", 64), tc.cause)
 			if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("smoke failure lost cause: %+v %v", result, err)
 			}
