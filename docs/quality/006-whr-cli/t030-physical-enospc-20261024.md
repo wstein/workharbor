@@ -152,10 +152,10 @@ Required execution still fails explicitly when all launchers are unavailable.
 | `go test -count=1 -run '^TestInitPhysicalENOSPC(Fallback\|DirectMap\|MappingHelper\|Prelude\|Privileged\|Required\|Native\|Child)' -json ./internal/scaffold` | 27 test/subtest passes, zero failures/skips. Includes closed argv/environment, restricted-native required failures, hard bounds and mutable-alias controls. |
 | `go test -count=1 -run '^TestInitPhysicalENOSPC(PremountedFallback)?$' -v ./internal/scaffold` | All four actual physical cases pass via `direct` with zero native refusals (five passing outcomes including parent). Forced premounted fallback explicitly SKIPs locally: sudo/unshare returns EPERM before the prelude. Package exit 0 with this skip is not CI acceptance or staged-runtime proof. |
 
-The new staged fallback has not executed successfully on this local host, whose
+At that checkpoint, the new staged fallback had not executed successfully on this local host, whose
 initial user namespace lacks the required mount/network capability. Authentic
-hosted execution remains pending publication and a green required CI run; no
-hosted success is claimed. Each successful case logs the actual launcher and
+hosted execution was pending publication and a green required CI run. The later
+hosted proof below supersedes that pending result. Each successful case logs the actual launcher and
 refusal count. Package vet, gofmt, source, spelling and whitespace checks passed;
 full-suite/build/race checks were not run for this bounded correction.
 
@@ -184,3 +184,40 @@ system-tool positive control is missing or untrusted: explicit local skip,
 but hard failure under CI or required-proof flags. Its affected regression and
 the required-policy test passed after this portability correction; no privileged
 alias execution or complete-suite rerun was used.
+
+## Hosted fallback proof and runtime guard follow-up
+
+[Run 40141145793](https://github.com/wstein/workharbor/actions/runs/40141145793/job/121013356109)
+at `6f478bdca648b5c99cb792bd3013ed1cf1b3c7d9` passed all four physical
+cases through the `premounted` launcher after one native refusal each. The
+dedicated `TestInitPhysicalENOSPCPremountedFallback` also passed through that
+launcher with zero native refusals. The bootstrap event stream reported 3043
+passing Go outcomes, without failure or skip events, as read back by the
+[independent review](https://github.com/wstein/workharbor/pull/250#pullrequestreview-5640572957).
+This proves the hosted portable fallback; the local forced-fallback refusal
+above remains historical evidence for that container.
+
+On 2026-10-25, review F6 gained owner-only negative subprocess tests against the
+actual `TestInitPhysicalENOSPCProcess` entry point. Its existing premounted
+identity guard now runs before namespace inspection. Identity and supplementary
+group failures have separate diagnostics, retaining both checks while allowing
+an ID mismatch to be distinguished from inherited owner groups. The fixed root
+prelude, canonical argv and namespace/mount/fill protections are unchanged.
+
+The negatives pass a wrong nonzero expected UID, a wrong expected GID, or an
+extra nonsecret environment field. They require the corresponding guard's
+specific diagnostic and an untouched empty mountpoint. Each test subprocess is
+the ordinary owner, with an exact four-field environment except for that one
+negative field, bounded output, a five-second deadline and group cleanup.
+All namespace IDs are unchanged, so even bypassing a guard cannot reach a
+mount or fill. A compiled overlay disabling all four real/effective UID/GID
+comparisons, while retaining parsing and supplementary-group checks, fails
+both identity negatives. Disabling the actual closed-environment assertion
+fails the environment negative. Neither probe uses root, sudo, unshare, a
+mount or product execution.
+
+These tests pin the runtime guard blocks. An ordinary owner cannot independently
+vary real and effective identities, so this is not separate mutation coverage
+for each individual UID/EUID/GID/EGID comparison. Hosted runtime proof above
+belongs to the accepted prior head; fresh exact-head checks and review remain
+required for the follow-up.

@@ -101,6 +101,19 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 	if !premounted && args[8] != "direct" {
 		t.Fatal("unknown private fixture launcher")
 	}
+	// Reject an invalid dropped identity before inspecting namespaces. This
+	// also lets owner-only negatives reach the actual guard without mounting.
+	if premounted {
+		uid, uidErr := strconv.Atoi(args[5])
+		gid, gidErr := strconv.Atoi(args[6])
+		groups, groupErr := os.Getgroups()
+		if uidErr != nil || gidErr != nil || uid <= 0 || os.Getuid() != uid || os.Geteuid() != uid || os.Getgid() != gid || os.Getegid() != gid {
+			t.Fatal("premounted Go fixture must run only as the original non-root owner")
+		}
+		if groupErr != nil || len(groups) != 0 {
+			t.Fatal("premounted Go fixture requires cleared supplementary groups")
+		}
+	}
 	for i, name := range []string{"user", "net", "mnt"} {
 		current, err := os.Readlink("/proc/self/ns/" + name)
 		wantSame := premounted && name == "user"
@@ -108,14 +121,7 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 			t.Fatalf("refuse mount/fill with unexpected %s namespace: %v", name, err)
 		}
 	}
-	if premounted {
-		uid, uidErr := strconv.Atoi(args[5])
-		gid, gidErr := strconv.Atoi(args[6])
-		groups, groupErr := os.Getgroups()
-		if uidErr != nil || gidErr != nil || uid <= 0 || os.Getuid() != uid || os.Geteuid() != uid || os.Getgid() != gid || os.Getegid() != gid || groupErr != nil || len(groups) != 0 {
-			t.Fatal("premounted Go fixture must run only as the original non-root owner with cleared groups")
-		}
-	} else {
+	if !premounted {
 		for i, name := range []string{"uid", "gid"} {
 			mapping, err := os.ReadFile("/proc/self/" + name + "_map")
 			if err != nil || !physicalENOSPCDirectMapMatches(string(mapping), args[i+5]) {
@@ -347,6 +353,71 @@ func TestInitPhysicalENOSPCProcess(t *testing.T) {
 		}
 	}
 	fmt.Printf("physical-enospc:%s:%d\n", caseName, want)
+}
+
+// Re-execute the actual runtime entry point as the ordinary owner. Deliberate
+// identity/environment mismatches must fail at their specific guards. All
+// namespace identities remain unchanged, so even a disabled guard cannot get
+// past namespace validation to a mount or filesystem fill.
+func TestInitPhysicalENOSPCHelperRejectsUnsafeRuntime(t *testing.T) {
+	if os.Getuid() == 0 || os.Geteuid() == 0 {
+		t.Fatal("runtime guard negatives require an ordinary non-root owner")
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var namespaces []string
+	for _, name := range []string{"user", "net", "mnt"} {
+		value, err := os.Readlink("/proc/self/ns/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		namespaces = append(namespaces, value)
+	}
+	for _, name := range []string{"owner-uid", "owner-gid", "extra-environment"} {
+		t.Run(name, func(t *testing.T) {
+			private := t.TempDir()
+			mountpoint := filepath.Join(private, "bounded-filesystem")
+			if err := os.Mkdir(mountpoint, 0700); err != nil {
+				t.Fatal(err)
+			}
+			uid, gid := os.Getuid(), os.Getgid()
+			if name == "owner-uid" {
+				uid++
+			}
+			if name == "owner-gid" {
+				gid++
+			}
+			args := []string{"-test.run=^TestInitPhysicalENOSPCProcess$", "--", "create-write", mountpoint}
+			args = append(args, namespaces...)
+			args = append(args, strconv.Itoa(uid), strconv.Itoa(gid), "0", "premounted")
+			env := []string{"HOME=" + private, "TMPDIR=" + private, "PATH=" + private, "TERM=dumb"}
+			want := "premounted Go fixture must run only as the original non-root owner"
+			if name == "extra-environment" {
+				env = append(env, "WHR_ENOSPC_UNEXPECTED_ENV=owned-negative-control")
+				want = "physical fixture child environment is not closed"
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			cmd := exec.CommandContext(ctx, executable, args...)
+			cmd.Dir, cmd.Env = private, env
+			cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+			cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+			cmd.WaitDelay = time.Second
+			var stdout, stderr physicalENOSPCOutput
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			err := cmd.Run()
+			var exit *exec.ExitError
+			if ctx.Err() != nil || stdout.overflow || stderr.overflow || !errors.As(err, &exit) || exit.ExitCode() != 1 || !strings.Contains(stdout.String(), "physical-enospc-child-started\n") || !strings.Contains(stdout.String(), want) {
+				t.Fatalf("runtime guard did not refuse with %q: error=%v stdout=%q stderr=%q", want, err, stdout.String(), stderr.String())
+			}
+			entries, err := os.ReadDir(mountpoint)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("runtime negative touched owned mountpoint: %v, %v", entries, err)
+			}
+		})
+	}
 }
 
 func physicalENOSPCProofRequired(ci, netns, physical string) bool {
