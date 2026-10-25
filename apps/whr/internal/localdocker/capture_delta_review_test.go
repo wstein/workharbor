@@ -161,7 +161,7 @@ func TestLocalStageGitReaderSharesPlatformFilemode(t *testing.T) {
 				// Only the clone-generated platform config has its default origin remote.
 				if bytes.Contains(data, []byte("[remote \"origin\"]")) {
 					forced = true
-					data = append(data, []byte("\n[core]\nfilemode = false\n")...)
+					data = bytes.ReplaceAll(data, []byte("filemode = true"), []byte("filemode = false"))
 					if err = os.WriteFile(path, data, 0600); err != nil {
 						t.Fatal(err)
 					}
