@@ -712,6 +712,232 @@
           }
         ]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "workspace.stage"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/localStageResult"
+          }
+        },
+        "not": {
+          "required": [
+            "operation_id"
+          ]
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "ok": {
+                  "const": true
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "preview",
+                        "staged_verified"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "exit_code": {
+                  "const": 73
+                }
+              },
+              "required": [
+                "exit_code"
+              ]
+            },
+            "then": {
+              "required": [
+                "result"
+              ],
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "staged_unverified",
+                        "partial"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "staged_unverified",
+                        "partial"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              },
+              "required": [
+                "result"
+              ]
+            },
+            "then": {
+              "properties": {
+                "ok": {
+                  "const": false
+                },
+                "exit_code": {
+                  "const": 73
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "command": {
+            "const": "workspace.promote"
+          }
+        },
+        "required": [
+          "command"
+        ]
+      },
+      "then": {
+        "properties": {
+          "result": {
+            "$ref": "#/$defs/localPromoteResult"
+          }
+        },
+        "not": {
+          "required": [
+            "operation_id"
+          ]
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "ok": {
+                  "const": true
+                }
+              },
+              "required": [
+                "ok"
+              ]
+            },
+            "then": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "preview",
+                        "promoted"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "exit_code": {
+                  "const": 73
+                }
+              },
+              "required": [
+                "exit_code"
+              ]
+            },
+            "then": {
+              "required": [
+                "result"
+              ],
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "staged_unverified",
+                        "partial"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "result": {
+                  "properties": {
+                    "status": {
+                      "enum": [
+                        "staged_unverified",
+                        "partial"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
+                }
+              },
+              "required": [
+                "result"
+              ]
+            },
+            "then": {
+              "properties": {
+                "ok": {
+                  "const": false
+                },
+                "exit_code": {
+                  "const": 73
+                }
+              }
+            }
+          }
+        ]
+      }
     }
   ],
   "$defs": {
@@ -1652,6 +1878,1023 @@
           }
         }
       }
+    },
+    "localStageResource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name",
+        "id",
+        "daemon_id"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "container",
+            "volume",
+            "image"
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "daemon_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "container"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "image"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^sha256:[a-f0-9]{64}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "volume"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 1024,
+                    "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.-]*$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "localStageRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_path",
+        "clone_path",
+        "clone_owner_uid",
+        "clone_root_mode",
+        "container_workspace_path",
+        "head_oid",
+        "object_format",
+        "dirty",
+        "uncommitted_retained"
+      ],
+      "properties": {
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "clone_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "clone_owner_uid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "clone_root_mode": {
+          "const": 448
+        },
+        "container_workspace_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "head_oid": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "object_format": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ]
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "uncommitted_retained": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "object_format": {
+                "const": "sha1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "head_oid": {
+                "pattern": "^[a-f0-9]{40}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "object_format": {
+                "const": "sha256"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "head_oid": {
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "localStageRepositoryBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_path",
+        "git_dir",
+        "common_dir",
+        "object_format",
+        "original_head_oid",
+        "binding_digest"
+      ],
+      "properties": {
+        "source_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "git_dir": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "common_dir": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "object_format": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ]
+        },
+        "original_head_oid": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "binding_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "object_format": {
+                "const": "sha1"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "original_head_oid": {
+                "pattern": "^[a-f0-9]{40}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "object_format": {
+                "const": "sha256"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "original_head_oid": {
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "localStageResultRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository_path",
+        "export_ref",
+        "target_ref",
+        "oid",
+        "state"
+      ],
+      "properties": {
+        "repository_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "export_ref": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^(?:HEAD|refs/(?:heads|tags|notes)/.+)$",
+          "not": {
+            "pattern": "[\\x00-\\x20\\x7f~^:?*\\[\\\\]|\\.\\.|@\\{|//|(?:^|/)\\.|\\.lock(?:/|$)|[./]$"
+          }
+        },
+        "target_ref": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^refs/workharbor/stage/[a-f0-9]{32}/[a-f0-9]{64}/(?:head|(?:heads|tags|notes)/.+)$",
+          "not": {
+            "pattern": "[\\x00-\\x20\\x7f~^:?*\\[\\\\]|\\.\\.|@\\{|//|(?:^|/)\\.|\\.lock(?:/|$)|[./]$"
+          }
+        },
+        "oid": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "state": {
+          "enum": [
+            "planned",
+            "created",
+            "uncertain",
+            "remaining"
+          ]
+        }
+      }
+    },
+    "localStageVerification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "status",
+        "binding_mode",
+        "quiescence",
+        "pre_input_digest",
+        "post_input_digest",
+        "image_id",
+        "input_digest",
+        "observed_at",
+        "output_digest"
+      ],
+      "properties": {
+        "policy": {
+          "enum": [
+            "health",
+            "smoke",
+            "health_and_smoke"
+          ]
+        },
+        "status": {
+          "enum": [
+            "not_requested",
+            "missing",
+            "passed",
+            "failed",
+            "stale"
+          ]
+        },
+        "binding_mode": {
+          "const": "cooperative_quiescence"
+        },
+        "quiescence": {
+          "enum": [
+            "caller_acknowledged",
+            "not_acknowledged"
+          ]
+        },
+        "pre_input_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "post_input_digest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "image_id": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "input_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64,
+          "pattern": "Z$"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "localStageGitObjectsTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "repository",
+        "export_path",
+        "object_manifest_digest",
+        "object_count"
+      ],
+      "properties": {
+        "kind": {
+          "const": "git_objects"
+        },
+        "repository": {
+          "$ref": "#/$defs/localStageRepositoryBinding"
+        },
+        "export_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "object_manifest_digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "object_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      }
+    },
+    "localStageRefCreate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "oid",
+        "expected_absent"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 4096,
+          "pattern": "^refs/workharbor/stage/[a-f0-9]{32}/[a-f0-9]{64}/(?:head|(?:heads|tags|notes)/.+)$",
+          "not": {
+            "pattern": "[\\x00-\\x20\\x7f~^:?*\\[\\\\]|\\.\\.|@\\{|//|(?:^|/)\\.|\\.lock(?:/|$)|[./]$"
+          }
+        },
+        "oid": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "expected_absent": {
+          "const": true
+        }
+      }
+    },
+    "localStageGitRefsTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "repository",
+        "creates"
+      ],
+      "properties": {
+        "kind": {
+          "const": "git_refs"
+        },
+        "repository": {
+          "$ref": "#/$defs/localStageRepositoryBinding"
+        },
+        "creates": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/localStageRefCreate"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "repository": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha1"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "creates": {
+                "items": {
+                  "properties": {
+                    "oid": {
+                      "pattern": "^[a-f0-9]{40}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "repository": {
+                "properties": {
+                  "object_format": {
+                    "const": "sha256"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "creates": {
+                "items": {
+                  "properties": {
+                    "oid": {
+                      "pattern": "^[a-f0-9]{64}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "localStageCloneOutputTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "clone_path",
+        "relative_path",
+        "digest",
+        "producer_operation_id"
+      ],
+      "properties": {
+        "kind": {
+          "const": "clone_output"
+        },
+        "clone_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "relative_path": {
+          "const": ".devcontainer/host.env"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "producer_operation_id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{32}$"
+        }
+      }
+    },
+    "localStageEffectTarget": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/localStageResource"
+        },
+        {
+          "$ref": "#/$defs/localStageGitObjectsTarget"
+        },
+        {
+          "$ref": "#/$defs/localStageGitRefsTarget"
+        },
+        {
+          "$ref": "#/$defs/localStageCloneOutputTarget"
+        }
+      ]
+    },
+    "localStageEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "target",
+        "state"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "create_volume",
+            "host_initialize",
+            "publish_candidate_output",
+            "build",
+            "create_container",
+            "container_hooks",
+            "smoke",
+            "import_objects",
+            "create_result_refs",
+            "stop_primary",
+            "remove_primary",
+            "create_primary",
+            "remove_candidate",
+            "remove_home"
+          ]
+        },
+        "target": {
+          "$ref": "#/$defs/localStageEffectTarget"
+        },
+        "state": {
+          "enum": [
+            "planned",
+            "attempted",
+            "observed",
+            "uncertain",
+            "remaining"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "import_objects"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/localStageGitObjectsTarget"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "create_result_refs"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/localStageGitRefsTarget"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "publish_candidate_output"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/localStageCloneOutputTarget"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "create_volume",
+                  "host_initialize",
+                  "build",
+                  "create_container",
+                  "container_hooks",
+                  "smoke",
+                  "stop_primary",
+                  "remove_primary",
+                  "create_primary",
+                  "remove_candidate",
+                  "remove_home"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "$ref": "#/$defs/localStageResource"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "localStageRecoveryStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "target",
+        "instruction"
+      ],
+      "properties": {
+        "action": {
+          "enum": [
+            "inspect_retained",
+            "restage_after_cleanup",
+            "run_stage_with_smoke",
+            "remove_candidate_with_guarded_rm",
+            "owner_reconcile"
+          ]
+        },
+        "target": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/localStageEffectTarget"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      }
+    },
+    "localLifecycleResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "unverified_reason",
+        "phase",
+        "recovery_id",
+        "fingerprint",
+        "primary",
+        "candidate",
+        "home",
+        "verification",
+        "effects",
+        "recovery",
+        "repositories",
+        "result_refs"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "preview",
+            "staged_verified",
+            "staged_unverified",
+            "promoted",
+            "refused",
+            "partial"
+          ]
+        },
+        "unverified_reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "missing_smoke",
+                "failed_smoke",
+                "failed_health",
+                "stale_candidate_inputs"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "phase": {
+          "enum": [
+            "preflight",
+            "planned",
+            "allocating",
+            "candidate_resources",
+            "candidate_hooks",
+            "verifying",
+            "staged_verified",
+            "staged_unverified",
+            "exporting_results",
+            "importing_results",
+            "promoting",
+            "primary_resources",
+            "primary_verified",
+            "candidate_removed",
+            "home_removed",
+            "complete"
+          ]
+        },
+        "recovery_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fingerprint": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "primary": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/localStageResource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/localStageResource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "home": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/localStageResource"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "verification": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/localStageVerification"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effects": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/localStageEffect"
+          }
+        },
+        "recovery": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/localStageRecoveryStep"
+          }
+        },
+        "repositories": {
+          "type": "array",
+          "maxItems": 33,
+          "items": {
+            "$ref": "#/$defs/localStageRepository"
+          }
+        },
+        "result_refs": {
+          "type": "array",
+          "maxItems": 1024,
+          "items": {
+            "$ref": "#/$defs/localStageResultRef"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "staged_unverified"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "unverified_reason": {
+                "enum": [
+                  "missing_smoke",
+                  "failed_smoke",
+                  "failed_health",
+                  "stale_candidate_inputs"
+                ]
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "unverified_reason": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "preview"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "effects": {
+                "items": {
+                  "properties": {
+                    "state": {
+                      "const": "planned"
+                    }
+                  }
+                }
+              },
+              "result_refs": {
+                "items": {
+                  "properties": {
+                    "state": {
+                      "const": "planned"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "staged_verified",
+                  "promoted"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "verification": {
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/localStageVerification"
+                  },
+                  {
+                    "properties": {
+                      "status": {
+                        "const": "passed"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "localStageResult": {
+      "$ref": "#/$defs/localLifecycleResult"
+    },
+    "localPromoteResult": {
+      "$ref": "#/$defs/localLifecycleResult"
     }
   }
 }
