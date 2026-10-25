@@ -127,13 +127,19 @@ Owner decision (2026-10-25): the forged-event guarantee also covers reserved
 Because LiveView 1.2.12 consumes those names before page hooks, W1 filters at
 `OwnerSocket.handle_in/2` with the negotiated serializer. The owner-requested
 follow-up fails closed: only `heartbeat` on the `phoenix` topic and `phx_join` or
-`phx_leave` on a nonempty `lv:*` topic retain Phoenix handling. Every other decoded
+`phx_leave` on a nonempty `lv:*` topic retain Phoenix handling. Joins require a map
+payload with a binary `session`; optional `static`, `url` and `redirect` values
+must be binary and optional `params` must be a map. Invalid join shapes are
+silently discarded before Phoenix handling. Every other decoded
 envelope returns the unchanged transport state without reply, logging or channel
 dispatch, including application events, links, redirects and unknown controls.
 Undecodable wire frames retain the stock decoder behavior. The owner WebSocket
 has a 65,536-byte maximum frame size selected as an engineering bound; the owner
-requested a bound, not that specific numeric value. Dashboard transport is not
-broadened. Plain GET navigation remains, with owner revalidation on its existing
+requested a bound, not that specific numeric value. Bandit's HTTPS configuration
+also caps aggregate fragmented messages at 65,536 bytes before delivery/decode.
+Phoenix 1.8.15 rejects that option in its per-socket declaration, so this aggregate
+limit applies to both owner and dashboard WebSockets on the authenticated listener.
+Dashboard access is not broadened. Plain GET navigation remains, with owner revalidation on its existing
 navigation hook; no W2 route or mutating channel is added.
 Keep separate page catch-all tests and required serialized transport-entry tests,
 including mounted flash/audit/log canaries and ordinary protocol controls.
