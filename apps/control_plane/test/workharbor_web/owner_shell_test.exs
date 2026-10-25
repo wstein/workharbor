@@ -62,16 +62,30 @@ defmodule WorkHarborWeb.OwnerShellTest do
 
   test "display controls use exact visible markers before HTML escaping" do
     text = "before" <> <<0, 13, 27, 127, 0xC2, 0x85>> <> "<script>CANARY</script>"
-    assert CoreComponents.display_text(text) == "before<U+0000><U+000D><U+001B><U+007F><U+0085><script>CANARY</script>"
+
+    assert CoreComponents.display_text(text) ==
+             "before<U+0000><U+000D><U+001B><U+007F><U+0085><script>CANARY</script>"
+
     assert CoreComponents.display_text("kept\ttab") == "kept\ttab"
     html = render_component(&CoreComponents.flash/1, kind: :error, flash: %{"error" => text})
-    assert html =~ "before&lt;U+0000&gt;&lt;U+000D&gt;&lt;U+001B&gt;&lt;U+007F&gt;&lt;U+0085&gt;&lt;script&gt;CANARY&lt;/script&gt;"
+
+    assert html =~
+             "before&lt;U+0000&gt;&lt;U+000D&gt;&lt;U+001B&gt;&lt;U+007F&gt;&lt;U+0085&gt;&lt;script&gt;CANARY&lt;/script&gt;"
+
     refute html =~ "<script>CANARY"
   end
 
   test "owner dot segments are refused without reflection or effects", c do
     before = database_snapshot()
-    for path <- ["/owner/./auth", "/owner/../owner", "/owner/%2e/auth", "/owner/%2E%2E/owner", "/owner//auth", "/owner/../FORGED-PATH-CANARY"] do
+
+    for path <- [
+          "/owner/./auth",
+          "/owner/../owner",
+          "/owner/%2e/auth",
+          "/owner/%2E%2E/owner",
+          "/owner//auth",
+          "/owner/../FORGED-PATH-CANARY"
+        ] do
       conn = %{c.conn | request_path: path, path_info: String.split(path, "/", trim: true)}
       response = WorkHarborWeb.Security.call(conn, [])
       assert response.status == 400
@@ -79,6 +93,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
       assert Jason.decode!(response.resp_body) == %{"error" => %{"code" => "invalid_request"}}
       refute response.resp_body =~ "FORGED-PATH-CANARY"
     end
+
     assert database_snapshot() == before
   end
 
@@ -185,10 +200,19 @@ defmodule WorkHarborWeb.OwnerShellTest do
           assert_dropped_wires(transport, target, event, payload)
         end
 
-        for {target, event} <- [{topic, "heartbeat"}, {"phoenix", "phx_join"}, {"phoenix", "phx_leave"}, {"lvu:probe", "phx_join"}, {"unknown:probe", "phx_leave"}] do
-          assert {:ok, ^transport} = OwnerSocket.handle_in(wire_message(target, event, %{"canary" => "FORGED-PAYLOAD-CANARY"}), transport)
+        for {target, event} <- [
+              {topic, "heartbeat"},
+              {"phoenix", "phx_join"},
+              {"phoenix", "phx_leave"},
+              {"lvu:probe", "phx_join"},
+              {"unknown:probe", "phx_leave"}
+            ] do
+          assert {:ok, ^transport} =
+                   OwnerSocket.handle_in(
+                     wire_message(target, event, %{"canary" => "FORGED-PAYLOAD-CANARY"}),
+                     transport
+                   )
         end
-
       end)
 
     refute_receive %Phoenix.Socket.Message{}, 50
@@ -447,18 +471,37 @@ defmodule WorkHarborWeb.OwnerShellTest do
   # Explicit negative classes are independent of the production allowlist.
   defp blocked_events do
     [
-      "event", "link", "redirect", "phx_reply", "phx_error", "phx_close",
-      "allow_upload", "progress", "live_patch", "cids_will_destroy", "cids_destroyed",
-      "cids_FORGED-EVENT-CANARY", "FORGED-EVENT-CANARY"
+      "event",
+      "link",
+      "redirect",
+      "phx_reply",
+      "phx_error",
+      "phx_close",
+      "allow_upload",
+      "progress",
+      "live_patch",
+      "cids_will_destroy",
+      "cids_destroyed",
+      "cids_FORGED-EVENT-CANARY",
+      "FORGED-EVENT-CANARY"
     ]
   end
 
   defp assert_dropped_wires(transport, topic, event, payload) do
     encoded = Jason.encode!(payload)
 
-    for {wire, opts} <- [wire_message(topic, event, payload), binary_message(topic, event, payload)] do
+    for {wire, opts} <- [
+          wire_message(topic, event, payload),
+          binary_message(topic, event, payload)
+        ] do
       decoded = Phoenix.Socket.V2.JSONSerializer.decode!(wire, opts)
-      assert %Phoenix.Socket.Message{topic: ^topic, event: ^event, join_ref: "join-ref", ref: "event-ref"} = decoded
+
+      assert %Phoenix.Socket.Message{
+               topic: ^topic,
+               event: ^event,
+               join_ref: "join-ref",
+               ref: "event-ref"
+             } = decoded
 
       case opts[:opcode] do
         :text -> assert decoded.payload == payload
@@ -472,9 +515,10 @@ defmodule WorkHarborWeb.OwnerShellTest do
   defp binary_message(topic, event, payload) do
     # Client V2 push: kind, four one-byte metadata lengths, metadata, raw body.
     body = Jason.encode!(payload)
+
     frame =
-      <<0, 8, 9, byte_size(topic), byte_size(event), "join-ref", "event-ref",
-        topic::binary, event::binary, body::binary>>
+      <<0, 8, 9, byte_size(topic), byte_size(event), "join-ref", "event-ref", topic::binary,
+        event::binary, body::binary>>
 
     {frame, [opcode: :binary]}
   end
