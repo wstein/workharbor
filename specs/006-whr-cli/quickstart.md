@@ -88,7 +88,7 @@ selectors cannot be combined. Without --local, the remote command still refuses.
 
 Removal preserves named home volumes by default, even with --force. An
 interactive run previews then asks for confirmation; scripts and --json require
---yes. Home deletion additionally requires --volumes and --force; its preview
+--yes. Other home deletion additionally requires --volumes and --force; its preview
 names the volumes and mount targets. Protected/shared/primary homes cannot be
 removed through staging/temp cleanup. Inspect a 73 partial-failure inventory
 before retrying: attempted but unacknowledged actions may already have happened.
@@ -116,3 +116,18 @@ work. Candidate-home naming/deletion flags require their separate decision/task;
 --yes alone must not bypass FR-067 protections.
 Current Anchorage protected staging/temp cleanup remains excluded, with no recovery
 cleanup path promised. T038 stays open and T039 follows its complete acceptance.
+
+## New candidate disposal amendment (owner, 2026-10-25)
+
+New whr-managed staging is throwaway. The
+[separate amendment](contracts/throwaway-staging-amendment-20261025.md) changes
+removal/promote to dispose of candidate container, home, clone/result tree and
+candidate metadata under the normal confirmation. No keep mode or later clone
+cleanup remains; back up a staging home with Docker yourself before disposal if
+needed. Existing `anchorage-home-*` and primary-home guards remain unchanged.
+
+The required library/CLI delta and host-run runbook are still planned; the old
+stage/promote library acceptance and pending CLI #271/#272 do not establish this
+new disposal behavior. Follow the
+[current delivery plan](plan.md#throwaway-staging-delivery-amendment-owner-2026-10-25)
+for the code, tests and real Linux/macOS+OrbStack evidence before claiming it.
