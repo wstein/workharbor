@@ -6,7 +6,10 @@ package localdocker
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -106,7 +109,7 @@ func TestLocalStageReviewCompletedSmokeFailureFlow(t *testing.T) {
 				t.Fatalf("smoke exit admitted: %+v %v", result, err)
 			}
 			if code < 125 {
-				if result.Status != "staged_unverified" || result.UnverifiedReason == nil || *result.UnverifiedReason != "failed_smoke" || !strings.Contains(err.Error(), "exit status ") {
+				if result.Status != "staged_unverified" || result.UnverifiedReason == nil || *result.UnverifiedReason != "failed_smoke" || !strings.Contains(err.Error(), "exit status "+strconv.Itoa(code)+")") {
 					t.Fatalf("completed smoke wrongly uncertain: %+v %v", result, err)
 				}
 			} else if result.Status != "partial" {
@@ -206,5 +209,60 @@ func TestLocalStageReviewAnonymousImageVolumeRefused(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("fake did not model Docker anonymous volume")
+	}
+}
+
+func TestLocalStageReviewInterruptDuringHealthWaitFlow(t *testing.T) {
+	c, opts, p, path := fixtureStageLifecycle(t, true)
+	socket := filepath.Join(t.TempDir(), "health.sock")
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	state := readFakeStageState(t, path)
+	state.HealthStatus = "starting"
+	state.HealthNotify = socket
+	writeStageReviewState(t, path, state)
+	stage, err := c.prepareStage(context.Background(), opts, p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stage.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	notified := make(chan error, 1)
+	go func() {
+		conn, err := listener.Accept()
+		if err != nil {
+			notified <- err
+			return
+		}
+		defer conn.Close()
+		var payload [11]byte
+		_, err = io.ReadFull(conn, payload[:])
+		notified <- err
+		cancel()
+	}()
+	// The fake sends the notification only on candidate inspection after hooks,
+	// i.e. from awaitStageHealth. Cancel after that observation, without sleeps.
+	result, err := stage.Apply(ctx, LifecycleConsent{TrustDigest: *stage.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "interrupt") || result.Status != "partial" || result.UnverifiedReason != nil {
+		t.Fatalf("health wait interrupt invented a completed failure: %+v %v", result, err)
+	}
+	select {
+	case err := <-notified:
+		if err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatal("health wait was not reached")
+	}
+	receipt, err := stage.store.loadReceipt(stage.operationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.State != "verifying" || receipt.UnverifiedReason != nil {
+		t.Fatalf("interrupted health receipt became terminal: %+v", receipt)
 	}
 }

@@ -114,7 +114,7 @@ func TestLocalStageDriverPinsEndpoint(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	runner.Policy = &stageDriverPolicy{PrimaryID: strings.Repeat("b", 64), PrimaryName: "primary", PrimaryHome: "candidate-home", OperationID: strings.Repeat("c", 32), WorkspaceSource: "/original", WorkspaceDestination: "/workspaces/repo", Home: "candidate-home", HomeDestination: "/home/vscode"}
+	runner.Policy = &stageDriverPolicy{PrimaryID: strings.Repeat("b", 64), PrimaryName: "primary", PrimaryHome: "primary-home", OperationID: strings.Repeat("c", 32), WorkspaceSource: "/original", WorkspaceDestination: "/workspaces/repo", Home: "candidate-home", HomeDestination: "/home/vscode"}
 	image := "sha256:" + strings.Repeat("a", 64)
 	driver, e := runner.DockerDriver("stage")
 	if e != nil {
