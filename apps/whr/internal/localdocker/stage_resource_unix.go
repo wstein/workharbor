@@ -408,7 +408,11 @@ func (s *LocalStage) stageUnverified(ctx context.Context, reason, image, digest 
 		cause = ctx.Err()
 	}
 	if cause != nil {
-		return s.stagePartial(reason, cause)
+		for _, effect := range s.receipt.ActionInventory {
+			if effect.State == "attempted" || effect.State == "uncertain" {
+				return s.stagePartial(reason, cause)
+			}
+		}
 	}
 	s.result.Status = "staged_unverified"
 	s.result.UnverifiedReason = stageString(reason)
@@ -437,7 +441,7 @@ func (s *LocalStage) stageUnverified(ctx context.Context, reason, image, digest 
 	if e = s.store.saveReceipt(s.receipt, false); e != nil {
 		return s.stagePartial("unverified receipt publication failed", e)
 	}
-	err := exitcode.Errorf(exitcode.PathPartialFailure, "local stage %s", reason)
+	err := exitcode.Errorf(exitcode.PathPartialFailure, "local stage %s", stageFailureMessage(reason, cause))
 	err.Result = s.Preview()
 	return s.Preview(), err
 }
