@@ -126,6 +126,9 @@ func TestLocalStageGitSymlinkedTemporaryParent(t *testing.T) {
 func TestLocalStageGitInfoExcludeRetainsCleanStatus(t *testing.T) {
 	src := captureRegressionRepo(t)
 	exclude := []byte("# inert source exclusions\nscratch\n")
+	if err := os.MkdirAll(filepath.Join(src, ".git", "info"), 0700); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(src, ".git", "info", "exclude"), exclude, 0600); err != nil {
 		t.Fatal(err)
 	}
