@@ -1234,7 +1234,13 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitAtomicPublicationPreservesRacedEmptyDestination",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitCleanupRetainsReplacedPrivateRoot",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitStartAndIndexIOFailuresAreClassified",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageCaptureNativeWaitWithoutReap"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageCaptureNativeWaitWithoutReap",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitSubmoduleUnderReadOnlyDirectory",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitObjectAuditRejectsUnsafeNodes",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitObjectAuditRechecksReplacedIdentity",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitExcludeAdministrationBoundaries",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitExcludeDriftChangesBinding",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitReaderSharesPlatformFilemode"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

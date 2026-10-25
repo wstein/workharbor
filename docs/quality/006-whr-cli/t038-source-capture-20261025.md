@@ -61,7 +61,7 @@ it does not relabel these broader criteria as complete. The final stage/composit
 record must map each literal acceptance ID to its test coverage. No completion box
 is changed here.
 
-## PR 265 review corrections
+## PR 265 initial delta at 33b090ac (historical)
 
 This delta appends focused commits to reviewed 9a4e51e2; no published history is
 rewritten. Stage, Docker and promotion remain outside this package.
@@ -145,3 +145,44 @@ Go checks. No real Docker/devcontainer or host lifecycle check was performed.
 No task/feature completion state is changed. The dependent stage slice must adapt
 removed unused internal signatures when it is restacked; its acceptance remains
 separate.
+
+## Follow-up delta: N1 to N4
+
+The accepted working-entry ceiling is restored to 100,000. The read-only sizing
+measurement of 83,769 Anchorage entries did not authorize the former 500,000
+increase; that increase is withdrawn. A larger working-entry ceiling needs a
+separate owner-accepted profile amendment. No measurement is an owner decision.
+The profile now explicitly marks the existing implementation-only administration
+ceilings as proposed tightening awaiting owner sign-off: 1,000,000 audited entries
+per capture operation and 32 stores per resolved alternate-store graph. The latter
+is not a shared store count over all populated submodules. This approval remains
+a named gate; the author does not claim it settled.
+
+Per-repository Git scratch now lives outside the recursive clone tree, and the
+working directory modes are applied deepest-first only after all populated
+repositories have been captured. `TestLocalStageGitSubmoduleUnderReadOnlyDirectory`
+was assertion-RED before the fix and preserves history and the final 0555 mode.
+The original standalone working-copy helper still applies its modes bottom-up.
+
+SSH URL hostnames/usernames and SCP-style users/hosts beginning with a dash are
+refused; the unsafe remote table covers both newly reported forms and user forms.
+The accepted-ceiling and remote assertions were RED before their corrections.
+
+The seven newly reported controls have direct regressions: object-store symlink
+and file-type refusal, re-audit of a changed physical store identity, exclude-info
+symlink refusal, 256-KiB exclude N/N+1, exclude drift in the recursive binding, and
+reader/candidate status parity under a detected filemode=false platform fixture.
+Refusals assert exit 68 and their specific reason. The identity fixture starts
+with a valid info directory, then replaces the store with a new inode and FIFO.
+The platform fixture substitutes one existing platform config value as data; an
+initial duplicate-key setup failure is not RED evidence. These already-correct
+controls are characterization tests qualified by compiled mutations.
+
+Current local affected packages passed: localdocker 466 and commands 264 test
+identities, no failures/skips (35.796 s / 18.132 s). Linux vet, Darwin/arm64 vet,
+formatting and repository validation passed. Native macOS capture/wait evidence
+exists for historical 33b090ac in run 40212143976 (78 PASS lines), not for the new
+head. That run's bootstrap/check failed the stale synthetic-merge-parent guard;
+the branch is now rebased onto fresh main e186036 with a new event required.
+The PR body records the current script/make-check outcomes and exact native gates.
+No Docker/owner-host lifecycle evidence or task completion is claimed.
