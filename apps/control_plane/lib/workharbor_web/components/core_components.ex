@@ -88,7 +88,7 @@ defmodule WorkHarborWeb.CoreComponents do
           aria-label="Dismiss message"
           phx-click={JS.hide(to: "##{@id}")}
         >
-          <.icon name="hero-x-mark" class="size-5 opacity-40 group-hover:opacity-70" />
+          <.icon name="hero-x-mark" class="size-5" />
         </button>
       </div>
     </div>
