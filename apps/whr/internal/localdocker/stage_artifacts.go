@@ -55,8 +55,9 @@ type stageContainerDetails struct {
 	Command     []string          `json:"Command"`
 }
 type stageImageDetails struct {
-	ID       string           `json:"Id"`
-	Metadata []map[string]any `json:"Metadata"`
+	ID       string                     `json:"Id"`
+	Metadata []map[string]any           `json:"Metadata"`
+	Volumes  map[string]json.RawMessage `json:"Volumes"`
 }
 
 type stageVolumeDetails struct {

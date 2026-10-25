@@ -8,12 +8,13 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 const stageContainerProjection = `{"Id":{{json .Id}},"Name":{{json .Name}},"ImageID":{{json .Image}},"ConfigImage":{{json .Config.Image}},"User":{{json .Config.User}},"Hostname":{{json .Config.Hostname}},"State":{{json .State.Status}},"Running":{{json .State.Running}},"Healthcheck":{{json .Config.Healthcheck}},"Health":{{if .State.Health}}{{json .State.Health.Status}}{{else}}null{{end}},"Labels":{{json .Config.Labels}},"Mounts":{{json .Mounts}},"Environment":{{json .Config.Env}},"Entrypoint":{{json .Config.Entrypoint}},"Command":{{json .Config.Cmd}}}`
-const stageImageProjection = `{"Id":{{json .Id}},"Metadata":{{json (index .Config.Labels "devcontainer.metadata")}}}`
+const stageImageProjection = `{"Id":{{json .Id}},"Metadata":{{json (index .Config.Labels "devcontainer.metadata")}},"Volumes":{{json .Config.Volumes}}}`
 const stageVolumeProjection = `{"Name":{{json .Name}},"Driver":{{json .Driver}},"CreatedAt":{{json .CreatedAt}},"Labels":{{json .Labels}}}`
 
 func readStageContainer(ctx context.Context, r *stageRunner, id string) (stageContainerDetails, error) {
@@ -84,12 +85,14 @@ func readStageImage(ctx context.Context, r *stageRunner, image string) (stageIma
 	var raw struct {
 		ID       string `json:"Id"`
 		Metadata *string
+		Volumes  map[string]json.RawMessage
 	}
 	d := json.NewDecoder(bytes.NewReader(out.Stdout))
 	if e = decodeDockerRecord(d, &raw); e != nil || d.Decode(new(any)) != io.EOF || raw.ID != image {
 		return result, stageConflict("image observation identity or shape changed")
 	}
 	result.ID = raw.ID
+	result.Volumes = raw.Volumes
 	if raw.Metadata != nil && *raw.Metadata != "" {
 		md := json.NewDecoder(strings.NewReader(*raw.Metadata))
 		md.UseNumber()
@@ -120,4 +123,38 @@ func readStageVolume(ctx context.Context, r *stageRunner, name string) (stageVol
 		result.Labels = map[string]string{}
 	}
 	return result, nil
+}
+
+// Every image VOLUME must be covered by an explicit mount in the replacement
+// plan; otherwise Docker creates a fresh anonymous volume during replacement.
+func checkStageImageMounts(image stageImageDetails, mounts []mount) error {
+	destinations := map[string]bool{}
+	for _, m := range mounts {
+		switch m.Type {
+		case "bind":
+			if !filepath.IsAbs(m.Source) {
+				return stageConflict("planned bind mount source invalid")
+			}
+		case "volume":
+			if !volumeName(m.Name) {
+				return stageConflict("planned volume mount source invalid")
+			}
+		default:
+			return stageConflict("unsupported planned mount type: " + m.Type)
+		}
+		if !filepath.IsAbs(m.Destination) || filepath.Clean(m.Destination) != m.Destination || destinations[m.Destination] {
+			return stageConflict("planned mount destination invalid or ambiguous")
+		}
+		destinations[m.Destination] = true
+	}
+	for target, raw := range image.Volumes {
+		var definition map[string]any
+		if !filepath.IsAbs(target) || filepath.Clean(target) != target || json.Unmarshal(raw, &definition) != nil || definition == nil || len(definition) != 0 {
+			return stageConflict("image volume metadata unsupported")
+		}
+		if !destinations[target] {
+			return stageConflict("image volume requires explicit planned mount: " + target)
+		}
+	}
+	return nil
 }

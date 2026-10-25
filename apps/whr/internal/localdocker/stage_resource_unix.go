@@ -196,6 +196,12 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 	if e = s.store.saveReceipt(s.receipt, false); e != nil {
 		return fail("resource observation receipt failed", e)
 	}
+	if e = checkStageImageMounts(image, s.primaryObserved.Mounts); e != nil {
+		return fail("replacement mount preflight failed", e)
+	}
+	if e = checkStageImageMounts(image, candidate.Mounts); e != nil {
+		return fail("candidate mount preflight failed", e)
+	}
 	if e = s.admitMergedDependencies(ctx, up.MergedConfiguration); e != nil {
 		return fail("lifecycle execution dependency capability unsupported", e)
 	}
