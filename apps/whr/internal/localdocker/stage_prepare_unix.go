@@ -251,11 +251,6 @@ func stageContainerResource(item inspection, daemon string) *StageResource {
 	name := strings.TrimPrefix(item.Name, "/")
 	return &StageResource{Kind: "container", Name: &name, ID: stageString(item.ID), DaemonID: daemon}
 }
-func stageDigest(value any) string {
-	b, _ := json.Marshal(value)
-	h := sha256.Sum256(append(b, '\n'))
-	return "sha256:" + hex.EncodeToString(h[:])
-}
 func stageTrustRepositories(repos []stageGitSnapshot) []map[string]any {
 	out := []map[string]any{}
 	for _, r := range repos {
