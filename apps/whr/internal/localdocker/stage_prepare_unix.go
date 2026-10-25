@@ -54,6 +54,8 @@ type LocalStage struct {
 	originalFactsDigest                              string
 	result                                           LifecycleResult
 	applied, closed                                  bool
+	store                                            *stageStore
+	receipt                                          *stageReceipt
 }
 
 func nativeStagePreparationPorts(c Client) (stagePreparationPorts, error) {
@@ -286,6 +288,9 @@ func (s *LocalStage) Preview() LifecycleResult {
 func (s *LocalStage) Close() error {
 	if s == nil || s.closed {
 		return nil
+	}
+	if s.store != nil {
+		defer func() { s.store.Close(); s.store = nil }()
 	}
 	if s.root != "" {
 		info, e := os.Lstat(s.root)
