@@ -11,8 +11,11 @@ Source: the owner's request of 2026-10-25, quoted verbatim:
 > Staging, bitte alle Artefakte weglöschen, wenn Staging gelöscht wird oder Staging promoted wird ... Staging ist Wegwerf ... sonst sammelt sich zu viel Müll ... wer das Volume behalten will, der soll es vorher mit Docker-Mitteln sichern ... nicht overengineeren ... nicht aus übertriebenem Sicherheitsgedanken Müll ansammeln lassen.
 
 For **new whr-managed staging candidates**, this supersedes the retained-clone
-and separate candidate-home deletion-consent rules of the 2026-10-24 decision
-and execution profile. The accepted body of
+and separate candidate-home deletion-consent rules of the 2026-10-24 decision,
+execution profile, and
+[local-promote-resource-recovery.md](local-promote-resource-recovery.md). This
+also supersedes that recovery contract's retained failed-replacement and
+candidate-artifact rules after successful resource rollback. The accepted body of
 [local-stage-execution-profile.md](local-stage-execution-profile.md) remains
 byte-for-byte unchanged; this separate amendment takes precedence for the scope
 below. D1/D2, fingerprint trust, verified-image promotion, original-home
@@ -39,8 +42,14 @@ The normal preview and confirmation cover all candidate artifacts:
 | Exact candidate container | Remove it without targeting the primary. |
 | Its fresh `whr-stage-home-<id>` volume | Remove it after its container; retain all primary/shared/protected-volume guards. |
 | Private candidate clone and result/export tree | Remove the whole operation-owned tree, including uncommitted and unfetched work on ordinary removal. |
-| Candidate receipts, journals and private metadata/configuration | Remove the candidate's records and operation directory; do not archive or leave a tombstone requiring later cleanup. |
+| Candidate receipts, journals and private metadata/configuration | Delete last, after the candidate container, home and clone/result tree are confirmed absent; do not archive or leave a tombstone requiring later cleanup. |
 | Temporary preparation/tool-process state | Close/remove through the existing transaction lifecycle. |
+
+If cleanup is incomplete or uncertain, keep the candidate receipt/journal as a
+reported residual alongside any remaining resources, so normal confirmed `rm`
+of that candidate can finish disposal. Delete those records only after the
+container, home and clone/result tree are confirmed absent. This is unfinished
+cleanup, not an archive or keep mode.
 
 Generic daemon coordination infrastructure is not a retained candidate. It must
 contain no completed candidate record or clone requiring separate cleanup.
@@ -81,11 +90,11 @@ candidate-owned artifact remains to be cleaned separately.
 | Path | Required cleanup and primary outcome |
 | --- | --- |
 | Prepare refused or dry-run | No native apply, execution receipt or persistent candidate allocation. Close temporary preparation. |
-| Stage fails after partial allocation, build, hooks or verification | Clean the candidate resources allocated by that attempt and its private clone/result/metadata. Leave the selected primary and its home alone. An unverified stage is not a retained-clone recovery mode. |
+| Stage fails after partial allocation, build, hooks or verification, including `staged_unverified` (exit 73) when no healthcheck or explicit smoke verification ran | **Derived from the owner's throwaway intent:** clean the attempt's allocated candidate resources and private clone/result tree, then its records last. Leave the selected primary and its home alone. `staged_unverified` is disposed of like any other failed stage, not retained for later recovery. |
 | Ordinary confirmed candidate removal | Remove all candidate artifacts, including unfetched/uncommitted clone work; leave primary/source data alone. |
 | Successful promotion | Verify result refs and replacement first, then remove all candidate artifacts. Preserve the resulting primary and original home. |
-| Promotion fails after result transfer and primary replacement begins; resource rollback succeeds | Restore the original primary through the existing rollback, then remove the failed replacement and candidate artifacts. Do not retain a stopped failed-primary container as a backup. Preserve original home and already imported result refs. |
-| A required result-transfer, rollback or deletion step fails or is uncertain | Do not claim successful promotion/removal or zero remaining artifacts. Report the existing failure category, exact cleanup attempted/completed/remaining and cause. Report any actual residual; do not retain a deliberate archive or backup. |
+| Promotion fails after result transfer and primary replacement begins; resource rollback succeeds | **Derived from the owner's throwaway intent:** restore the original primary through the existing rollback, then remove the failed replacement and candidate artifacts. Do not retain a stopped failed-primary container as a backup. Preserve original home and already imported result refs. |
+| A required result-transfer, rollback or deletion step fails or is uncertain | Do not claim successful promotion/removal or zero remaining artifacts. Report the existing failure category, exact cleanup attempted/completed/remaining and cause. Keep and report the receipt/journal until resource disposal is confirmed complete, alongside any actual residual; do not retain a deliberate archive or backup. |
 
 The existing exit table remains: 70 for missing/declined normal confirmation,
 68/71/72 for the applicable pre-effect refusal/deadline/interruption, and 73 for
@@ -132,6 +141,11 @@ Red-first acceptance must cover:
 - Existing protected Anchorage, primary/shared/read-only/tool-volume and foreign
   target refusals still check both exit code and reason. Mixed removal selections
   do not apply the candidate exception to another container/home.
+- Inject an incomplete or uncertain cleanup: receipts/journals are deleted last,
+  only after container, home and clone/result tree are confirmed absent. Until
+  then, the receipt/journal remains a reported residual, and a normal confirmed
+  `rm` can finish disposal without adopting an orphan. A failed record deletion
+  also reports that record as a residual; no zero-artifact success is claimed.
 - A fresh stage after completed cleanup needs no archive, manual metadata deletion
   or separate clone cleanup. JSON remains closed and reports actual cleanup;
   it does not point to a deliberately deleted receipt as retained recovery state.
