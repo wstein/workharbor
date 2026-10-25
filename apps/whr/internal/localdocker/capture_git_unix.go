@@ -199,6 +199,9 @@ func readStageGitSnapshotContext(ctx context.Context, source string, strict bool
 		return s, e
 	}
 	s.ConfigDigest = digest
+	if storage := values["extensions.refstorage"]; len(storage) > 0 && storage[len(storage)-1] != "files" {
+		return s, stageConflict("Git reftable reference storage unsupported")
+	}
 	if format := values["extensions.objectformat"]; len(format) > 0 {
 		s.ObjectFormat = format[len(format)-1]
 	}
