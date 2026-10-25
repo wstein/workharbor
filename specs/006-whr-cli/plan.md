@@ -429,6 +429,10 @@ release, or host success is implied by this plan.
 
 ## T038 stage/promote amendment (2026-10-24)
 
+Historical design context: the accepted S0 profile and its approval remain in
+place. The 2026-10-25 delivery amendment above governs the new disposal delta;
+pre-code gate language below does not reopen that completed approval.
+
 Status: proposed direction/interaction reconciliation, **not a ready execution
 plan**. Owner direction [LS-1](spec.md#ls-1-owner-direction-2026-10-24), with its
 linked owner decision record, selects container name/full ID plus explicit source directory,
@@ -488,7 +492,7 @@ subpackages of T038, not additional task IDs or independent feature completion:
 
 | Package | Verifiable output / red-first coverage | Gate |
 |---|---|---|
-| S0: complete execution profile | Capability matrix, bounded capture/fingerprint and byte-binding algorithm, exact argv/environment/budgets, immutable-image promotion design, separately approved home/cleanup consent proof, durable receipt/lock/recovery and closed output/schema contract. Cover the actual Anchorage config/hook shape and explicit unsupported cases. | Independently reviewed exact technical contract and owner-approved spec/plan/tasks before S1 product code. This amendment leaves S0 open. |
+| S0: complete execution profile | Capability matrix, bounded capture/fingerprint and byte-binding algorithm, exact argv/environment/budgets, immutable-image promotion design, separately approved home/cleanup consent proof, durable receipt/lock/recovery and closed output/schema contract. Cover the actual Anchorage config/hook shape and explicit unsupported cases. | Independently reviewed exact technical contract and owner-approved spec/plan/tasks before S1 product code. This was the historical pre-code gate; accepted S0 approval is not reopened. |
 | S1: source/preview/trust | Pure local planning and refusal first: `TestLocalStageSelectsExactPrimaryAndSource`, `TestLocalStageRejectsUnresolvedLabel`, `TestLocalStageTrustMatchesCapturedInputs`, `TestLocalStageDryRunExecutesNoEffects`, `TestLocalStageRequiresTrustAndConsent`. Reuse current readers/discovery. | S0 complete; fake tools only; no real build/hook/Docker. |
 | S2: candidate/verification | `TestLocalStageLeavesPrimaryRunning`, `TestLocalStageReservesDistinctHome`, `TestLocalStageRefusesCollision`, `TestLocalStageRejectsChangedInputs`, `TestLocalStageHealthAndSmoke`, `TestLocalStageSmokeUsesTrustedStdin`, `TestLocalStageEscapesSmokeOutput`. | S1 accepted; prove official CLI/candidate binding, do not claim actual host acceptance. |
 | S3: promotion/cleanup | `TestLocalPromoteUsesVerifiedImage`, `TestLocalPromotePreservesPrimaryHome`, `TestLocalPromoteConfirmsPaneInterruption`, the current throwaway normal-consent matrix (superseding the old candidate-only explicit-home-deletion test), `TestLocalPromoteNeverBypassesProtectedHome`, `TestLocalPromoteStaleReceiptRefuses`, `TestLocalPromotePartialFailureInventory`. | S2 accepted; preflight full cleanup plan before primary replacement, verify new primary before candidate cleanup. |
