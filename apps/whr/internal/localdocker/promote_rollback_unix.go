@@ -5,6 +5,7 @@ package localdocker
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -23,6 +24,13 @@ func (p *LocalPromotion) restoreOriginalResource() error {
 		return stageConflict("resource recovery state is not eligible")
 	}
 	check := func(oldName, replacementName string, oldRunning, replacementRunning bool) error {
+
+		if err := p.checkConfiguration(); err != nil {
+			return err
+		}
+		if err := p.checkPersistedConfiguration(); err != nil {
+			return err
+		}
 		metadata, err := readStageMetadata(ctx, p.runner)
 		if err != nil {
 			return err
@@ -66,8 +74,17 @@ func (p *LocalPromotion) restoreOriginalResource() error {
 				continue
 			}
 			for _, m := range item.Mounts {
-				if (m.Type == "volume" && m.Name == p.primaryConfig.Home) || (m.Type == "bind" && m.RW && m.Source == p.receipt.OriginalSource) {
+				if m.Type == "volume" && m.Name == p.primaryConfig.Home {
 					return stageConflict("resource recovery shared primary mount")
+				}
+				if m.Type == "bind" && m.RW {
+					overlap, err := promotionRecoveryPathsOverlap(p.receipt.OriginalSource, m.Source)
+					if err != nil {
+						return err
+					}
+					if overlap {
+						return stageConflict("resource recovery shared primary mount")
+					}
 				}
 			}
 		}
@@ -155,4 +172,27 @@ func (p *LocalPromotion) restoreOriginalResource() error {
 	p.rollbackRestored = true
 	p.result.Primary = p.receipt.Primary
 	return nil
+}
+
+// A foreign bind can expose either the workspace or any part of it. Compare
+// physical paths in both directions; string prefixes confuse sibling names.
+func promotionRecoveryPathsOverlap(workspace, source string) (bool, error) {
+	workspace, err := filepath.EvalSymlinks(workspace)
+	if err != nil || !filepath.IsAbs(workspace) {
+		return false, stageConflict("resource recovery workspace source unavailable")
+	}
+	source, err = filepath.EvalSymlinks(source)
+	if err != nil || !filepath.IsAbs(source) {
+		return false, stageConflict("resource recovery bind source unavailable")
+	}
+	for _, pair := range [][2]string{{workspace, source}, {source, workspace}} {
+		relative, err := filepath.Rel(pair[0], pair[1])
+		if err != nil {
+			return false, stageConflict("resource recovery bind source unavailable")
+		}
+		if relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
