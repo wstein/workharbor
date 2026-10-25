@@ -38,13 +38,13 @@ func (g *stageProcessGroup) terminate() error {
 	}
 	return e
 }
-func (g *stageProcessGroup) releaseBeforeReap(leaderObserved bool) {
+func (g *stageProcessGroup) releaseBeforeReap(_ bool) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.timer != nil {
 		g.timer.Stop()
 	}
-	if g.owned && leaderObserved {
+	if g.owned {
 		_ = g.signal(syscall.SIGKILL)
 	}
 	g.owned = false
