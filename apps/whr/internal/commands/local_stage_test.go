@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -20,39 +19,6 @@ func stageCLIResult() localdocker.LifecycleResult {
 	id := strings.Repeat("b", 64)
 	home := "whr-stage-home-" + strings.Repeat("c", 32)
 	return localdocker.LifecycleResult{Status: "preview", Phase: "planned", Fingerprint: &fingerprint, Primary: &localdocker.StageResource{Kind: "container", Name: &name, ID: &id, DaemonID: "daemon"}, Home: &localdocker.StageResource{Kind: "volume", Name: &home, DaemonID: "daemon"}, Effects: []localdocker.StageEffect{}, Recovery: []localdocker.StageRecoveryStep{}, Repositories: []localdocker.StageRepository{}, ResultRefs: []localdocker.StageResultRef{}}
-}
-
-func TestLocalStageCommandContractAndAlias(t *testing.T) {
-	var entry *commands.Entry
-	for _, e := range commands.Table() {
-		if e.ID == "workspace.stage" {
-			copy := e
-			entry = &copy
-		}
-	}
-	want := []string{"--local", "--source", "--smoke", "--dry-run", "--trust", "--yes", "--json"}
-	if entry == nil || !reflect.DeepEqual(entry.Flags, want) || len(entry.Short) != 0 || entry.Needs != "none" || entry.Writes != "local" {
-		t.Fatalf("stage command entry: %+v", entry)
-	}
-	if commands.DefaultHandlers()["workspace.stage"] == nil {
-		t.Fatal("production stage handler absent")
-	}
-	for _, group := range []string{"workspace", "ws"} {
-		handlers := baseHandlers()
-		called := false
-		handlers["workspace.stage"] = func(context.Context, commands.Call) (commands.Result, error) {
-			called = true
-			return commands.Result{Value: stageCLIResult()}, nil
-		}
-		got := run(t, handlers, group, "stage", "--local", "--source", "/source", "--dry-run", "primary", "--json")
-		if got.code != 0 || !called {
-			t.Fatalf("dispatch: %+v called=%t", got, called)
-		}
-		envelope := decodeEnvelope(t, got.stdout)
-		if envelope["command"] != "workspace.stage" {
-			t.Fatalf("canonical command: %v", envelope)
-		}
-	}
 }
 
 type stageTransactionFixture struct {
@@ -228,6 +194,36 @@ func TestLocalStageJSONClosedResultSchema(t *testing.T) {
 			}
 			if schema.Validate(env) == nil {
 				t.Fatalf("open stage schema admits %s", kind)
+			}
+		})
+	}
+}
+
+func TestLocalStageCLIApplyErrorCodesAndReasons(t *testing.T) {
+	for _, tc := range []struct {
+		path exitcode.Path
+		code int
+		name string
+	}{
+		{exitcode.PathTargetAbsent, 65, "not_found"}, {exitcode.PathConflict, 68, "conflict"}, {exitcode.PathHumanDecisionMissing, 70, "needs_human"}, {exitcode.PathDeadlineExceeded, 71, "timeout"}, {exitcode.PathUserInterrupt, 72, "interrupted"}, {exitcode.PathPartialFailure, 73, "partial_failure"}, {exitcode.PathUnclassified, 74, "internal"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := stageCLIResult()
+			r := p
+			r.Status = "refused"
+			r.Phase = "preflight"
+			message := "library refusal " + tc.name
+			n := 0
+			var o localdocker.StageOptions
+			f := &stageTransactionFixture{preview: p, result: r, err: exitcode.Errorf(tc.path, "%s", message).WithRemediation("inspect the reported phase")}
+			g := run(t, stageCLIHandlers(f, &n, &o), "workspace", "stage", "--local", "--source", "/src", "--yes", "--trust", *p.Fingerprint, "primary", "--json")
+			env := decodeEnvelope(t, g.stdout)
+			failure := env["error"].(map[string]any)
+			if g.code != tc.code || failure["code"] != tc.name || failure["message"] != message || failure["remediation"] != "inspect the reported phase" || f.applies != 1 || f.closes != 1 {
+				t.Fatalf("lost code/reason: %+v env=%v applies=%d closes=%d", g, env, f.applies, f.closes)
+			}
+			if err := compileSchema(t).Validate(env); err != nil {
+				t.Fatal(err)
 			}
 		})
 	}

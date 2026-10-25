@@ -6,6 +6,7 @@ package commands
 // the same change in the contract, its freeze test and an owner-reviewed
 // amendment (ADR 0014, FR-052).
 var entries = []Entry{
+	{ID: "workspace.stage", Path: []string{"workspace", "stage"}, Increment: "first", Needs: "none", Writes: "local", JSON: "envelope", Flags: []string{"--local", "--source", "--smoke", "--dry-run", "--trust", "--yes", "--json"}},
 	{ID: "workspace.drift", Path: []string{"workspace", "drift"}, Increment: "first", Needs: "none", Writes: "none", JSON: "envelope", Flags: []string{"--local", "--source", "--json"}},
 	{ID: "workspace.ls", Path: []string{"workspace", "ls"}, Short: []string{"ls"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "envelope", BlockedOn: "owner_api", Flags: []string{"--local", "--role", "--label", "--json"}},
 	{ID: "workspace.show", Path: []string{"workspace", "show"}, Short: []string{"show"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "envelope", BlockedOn: "owner_api"},

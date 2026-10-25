@@ -821,3 +821,36 @@ func TestLocalShellContractAmendment(t *testing.T) {
 		t.Fatal("shell/console registry entries missing")
 	}
 }
+
+func TestLocalStageCommandContractAndAlias(t *testing.T) {
+	var entry *commands.Entry
+	for _, e := range commands.Table() {
+		if e.ID == "workspace.stage" {
+			copy := e
+			entry = &copy
+		}
+	}
+	want := []string{"--local", "--source", "--smoke", "--dry-run", "--trust", "--yes", "--json"}
+	if entry == nil || !reflect.DeepEqual(entry.Flags, want) || len(entry.Short) != 0 || entry.Needs != "none" || entry.Writes != "local" {
+		t.Fatalf("stage command entry: %+v", entry)
+	}
+	if commands.DefaultHandlers()["workspace.stage"] == nil {
+		t.Fatal("production stage handler absent")
+	}
+	for _, group := range []string{"workspace", "ws"} {
+		handlers := baseHandlers()
+		called := false
+		handlers["workspace.stage"] = func(context.Context, commands.Call) (commands.Result, error) {
+			called = true
+			return commands.Result{Value: stageCLIResult()}, nil
+		}
+		got := run(t, handlers, group, "stage", "--local", "--source", "/source", "--dry-run", "primary", "--json")
+		if got.code != 0 || !called {
+			t.Fatalf("dispatch: %+v called=%t", got, called)
+		}
+		envelope := decodeEnvelope(t, got.stdout)
+		if envelope["command"] != "workspace.stage" {
+			t.Fatalf("canonical command: %v", envelope)
+		}
+	}
+}

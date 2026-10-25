@@ -57,7 +57,8 @@ type Handler func(ctx context.Context, call Call) (Result, error)
 // here.
 func DefaultHandlers() map[string]Handler {
 	return map[string]Handler{
-		"version": versionHandler,
+		"version":         versionHandler,
+		"workspace.stage": LocalStageHandler((localdocker.Client{}).PrepareStage),
 		"workspace.drift": LocalDriftHandler(func(ctx context.Context, source, selector string) (localdocker.BundleDriftResult, error) {
 			return (localdocker.Client{}).Drift(ctx, doctor.SystemPorts(nil), source, selector)
 		}),
