@@ -69,6 +69,12 @@ func DefaultHandlers() map[string]Handler {
 		"workspace.rm": LocalRmHandler(func(ctx context.Context, o localdocker.RemovalOptions) (RemovalTransaction, error) {
 			return (localdocker.Client{}).PrepareRemoval(ctx, doctor.SystemPorts(nil), o)
 		}),
+		"workspace.stage": LocalStageHandler(func(ctx context.Context, options localdocker.StageOptions) (localdocker.LifecycleTransaction, error) {
+			return (localdocker.Client{}).PrepareStage(ctx, options)
+		}),
+		"workspace.promote": LocalPromoteHandler(func(ctx context.Context, options localdocker.PromoteOptions) (localdocker.LifecycleTransaction, error) {
+			return (localdocker.Client{}).PreparePromotion(ctx, options)
+		}),
 		"workspace.init":  initHandler,
 		"workspace.shell": LocalShellHandler(localshell.SystemPorts()),
 	}
