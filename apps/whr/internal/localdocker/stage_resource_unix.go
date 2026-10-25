@@ -23,7 +23,31 @@ func (s *LocalStage) writeStageArtifact(name string, value any) error {
 	if e != nil {
 		return stageConflict("private artifact encoding failed")
 	}
-	return s.store.writeArtifact(s.operationID, name, b, true)
+	if s.artifacts == nil {
+		s.artifacts = map[string]string{}
+	}
+	digest := stageDigest(value)
+	if previous, known := s.artifacts[name]; known {
+		current, e := s.store.readArtifact(s.operationID, name, stageMaxArtifactBytes)
+		if e != nil || stageBytesDigest(current) != previous {
+			return stageConflict("private artifact changed after publication")
+		}
+		if digest == previous {
+			return nil
+		}
+	}
+	// Retain each referenced manifest version, so the initial intent remains
+	// inspectable after later phase receipts legitimately replace active aliases.
+	version := strings.TrimSuffix(name, ".json") + "-" + strings.TrimPrefix(digest, "sha256:") + ".json"
+	if e = s.store.writeArtifact(s.operationID, version, b, true); e != nil {
+		return e
+	}
+	_, replace := s.artifacts[name]
+	if e = s.store.writeArtifact(s.operationID, name, b, !replace); e != nil {
+		return e
+	}
+	s.artifacts[name] = digest
+	return nil
 }
 
 func (s *LocalStage) prepareStageRuntime(ctx context.Context) error {

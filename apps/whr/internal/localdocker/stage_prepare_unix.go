@@ -60,6 +60,7 @@ type LocalStage struct {
 	settings                                         stageSettings
 	execution                                        stageExecutionBinding
 	effectiveConfig                                  map[string]any
+	artifacts                                        map[string]string
 }
 
 func nativeStagePreparationPorts(c Client) (stagePreparationPorts, error) {

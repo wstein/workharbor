@@ -63,8 +63,20 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	}
 	s.result.RecoveryID = stageString(filepath.Base(store.path) + "/" + s.operationID)
 	s.receipt = s.initialStageReceipt(consent)
+	plan := s.homeIntent.Plan()
+	s.settings = stageSettings{HomePlanDigest: stageDigest(plan), ExecutionPaths: []string{}}
+	s.execution = stageExecutionBinding{SettingsDigest: stageDigest(s.settings), GitInputs: []stageExecutionGitInput{}}
+	s.receipt.ExecutionManifestDigest = stageDigest(s.execution)
+	for name, value := range map[string]any{"candidate-home.json": plan, "stage-settings.json": s.settings, "execution-binding.json": s.execution} {
+		if e = s.writeStageArtifact(name, value); e != nil {
+			return s.stagePartial("allocation intent artifact publication failed", e)
+		}
+	}
 	if e = store.saveReceipt(s.receipt, true); e != nil {
 		return s.stagePartial("durable intent publication failed", e)
+	}
+	if e = s.writeStageArtifact("intent.json", s.receipt); e != nil {
+		return s.stagePartial("retained intent publication failed", e)
 	}
 	if e = s.retainStageClone(); e != nil {
 		return s.stagePartial("writable clone retention failed", e)
@@ -76,7 +88,6 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	if e = store.saveReceipt(s.receipt, false); e != nil {
 		return s.stagePartial("home intent publication failed", e)
 	}
-	plan := s.homeIntent.Plan()
 	start := time.Now().UTC()
 	_, e = s.runner.Run(ctx, "allocate_home", "docker", []string{"volume", "create", "--driver", "local", "--label", "workharbor.stage.operation=" + s.operationID, "--label", "workharbor.stage.nonce=" + plan.Nonce, plan.Mount.Name}, nil, 30*time.Second)
 	if e != nil {
@@ -104,6 +115,18 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	}
 	if e = s.writeStageArtifact("candidate-home-observation.json", observed); e != nil {
 		return s.stagePartial("home observation persistence failed", e)
+	}
+	s.settings.HomeObservationDigest = stageDigest(observed)
+	s.execution.SettingsDigest = stageDigest(s.settings)
+	s.receipt.ExecutionManifestDigest = stageDigest(s.execution)
+	if e = s.writeStageArtifact("stage-settings.json", s.settings); e != nil {
+		return s.stagePartial("home binding settings failed", e)
+	}
+	if e = s.writeStageArtifact("execution-binding.json", s.execution); e != nil {
+		return s.stagePartial("home execution binding failed", e)
+	}
+	if e = store.saveReceipt(s.receipt, false); e != nil {
+		return s.stagePartial("home binding receipt failed", e)
 	}
 	if e = s.prepareStageRuntime(ctx); e != nil {
 		return s.stagePartial("runtime preparation failed", e)
