@@ -198,11 +198,17 @@ cleanup and output contract with independent review and owner approval. Addition
 red-first IDs and SC-024 stage/promote coverage are enumerated there. Preserve the
 existing FR-067 guard and all removal regressions. Current protected Anchorage
 staging/temp cleanup remains excluded; a FR-067(e) change is a separate decision
-and task. New candidate-home naming and promote deletion flags likewise need
-that separately approved task; this amendment does not add or approve them. This note neither
+and task. Fresh candidate-home naming is decided in the
+[candidate-home decision](contracts/candidate-home-cleanup-decision.md). The
+[2026-10-25 throwaway amendment](contracts/throwaway-staging-amendment-20261025.md)
+supersedes separate deletion flags for new whr-managed candidates. This note neither
 checks T038 nor changes T025/T038/T039 dependencies, other tasks or prior evidence.
 
-Separate discussion only: [candidate-home decision](contracts/candidate-home-cleanup-decision.md) and [proposed cleanup task](contracts/candidate-home-cleanup-task-proposal.md). These proposed artifacts neither add a task nor change approved requirements, dependencies or checkmarks.
+The [candidate-home decision](contracts/candidate-home-cleanup-decision.md) is
+DECIDED (owner, 2026-10-25). The
+[cleanup task proposal](contracts/candidate-home-cleanup-task-proposal.md) tracks
+implementation units reconciled with that decision. This documentation update
+adds no task or acceptance evidence and changes no dependencies or checkmarks.
 
 - [x] T039 [US1, US4] Bundle mount drift reporting (FR-069, SC-025; #143) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, and `contracts/cli/output.schema.json`: read-only comparison of pinned bundle references in `.devcontainer/bundle-pins.json` or devcontainer configuration against mounted image/volume references on running container; per-bundle reporting of pinned, mounted, and status (`in_sync`, `drift`, `cannot_determine`); exit code 0 when all in sync, and exit 68 for drift or unreadable/undetermined results, distinguished by report status (owner decision 2026-10-24); `--json` output conforming to `bundleDriftResult`; zero mutations verified. Failing tests first: `TestBundleDriftAllInSync`, `TestBundleDriftDetected`, `TestBundleDriftMissingMount`, `TestBundleDriftUnreadablePins`, `TestBundleDriftJSONMatchesSchema`, `TestBundleDriftZeroMutations`. Acceptance: all SC-025 cases pass offline with fake Docker fixtures; independent review is CLEAR. Prerequisites: T025, T038.
 

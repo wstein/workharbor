@@ -44,7 +44,9 @@ existing Anchorage staging/temp cleanup from that task. This amendment neither
 changes FR-067(e) nor claims a cleanup path for those protected containers.
 New candidate-home naming and a compatible promote deletion-consent surface are
 reserved for a separate owner decision and task, not folded into T038 by this
-amendment or inferred as approved by LS-1.
+amendment or inferred as approved by LS-1. Those later decisions are recorded
+in the [candidate-home decision](contracts/candidate-home-cleanup-decision.md)
+and [2026-10-25 throwaway amendment](contracts/throwaway-staging-amendment-20261025.md).
 
 ### LS-1: owner direction (2026-10-24)
 
@@ -68,7 +70,10 @@ D1/D2 were decided by the owner on 2026-10-24; that comment is the decision reco
   are authorized.
 
 This decision does not select new home names or promote deletion flags; those
-remain a separate owner decision and task. It does not approve the execution
+were addressed by later owner decisions, now recorded in the
+[candidate-home decision](contracts/candidate-home-cleanup-decision.md) and
+[2026-10-25 throwaway amendment](contracts/throwaway-staging-amendment-20261025.md).
+This LS-1 record does not approve the execution
 profile or authorize provider operations. The interaction amendment's exact-text
 approval record remains the owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229);
 S0 remains a separate engineering and approval gate.
@@ -1373,8 +1378,7 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   input, `--template` while starters are unsupported, `--devcontainer` or plain `init` (no `--non-interactive`, no `--dry-run`) in wave 1a, a `dir` that is a file, an unavailable command, `--json` where
   unsupported, `--no-agents-block` together with `--overwrite AGENTS.md`, missing or conflicting targets in local `rm` (FR-067) 64; a `dir` or `init` parent that does not exist 65; a missing required input in unattended `init`
   (including a missing devcontainer), `--non-interactive` without `--yes`, flags that need an existing manifest
-  edited, a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0), and deleting a home volume without both `--force` and `--yes` (FR-067, except
-  new throwaway staging whose normal confirmation covers disposal) 70, in unattended mode only (needs-human,
+  edited, a regular file that existed at preview time without `--overwrite` (except `AGENTS.md`, FR-064: left unchanged with a warning, exit 0, and `.claude/settings.json`, FR-065: left unchanged, exit 0), and generic home-volume deletion without both `--force` and `--yes` (FR-067) 70, in unattended mode only (needs-human,
   with the flag names; the interactive wizard instead asks per path, and a refused path is a cancellation, 72, except `AGENTS.md`, where a declined edit is not a cancellation (FR-064), and `.claude/settings.json`, which the wizard offers to replace only when `--overwrite .claude/settings.json` names it (FR-065));
   invalid configuration (`validate`), a target path that is not a regular file or is a symbolic link, a path created or replaced after the preview, a file changed since preview (no such re-check applies to a path that is left unchanged and not written), pre-existing
   content that fails validation, with an edit requested (FR-064) an `AGENTS.md` with malformed or marker-like lines, larger than 64 KiB or whose result would exceed it, a foreign unlabelled container or attempt to delete a volume mounted by another container or resolving staging/temp cleanup to the primary volume (FR-067), unreadable bundle pins or mounts (FR-069), a `doctor` run with a failed check, an unsupported platform for a mutating host
@@ -1382,6 +1386,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   or SIGTERM and wizard cancellation (wave 1b) 72; an incomplete rollback or volume removal failure after container deletion (FR-067) 73, which takes precedence over 72 and over
   the original failure code; in `init` a failed self-validation of generated files and any other unclassified failure
   74. An existing `AGENTS.md` left unchanged (no edit requested or declined; `agents_block.*` warnings), and `--no-agents-block` are not failures: exit 0, nothing written for that file; the same holds for an existing `.claude/settings.json` or a non-regular target left unchanged without `--overwrite` (FR-065); with the flag, a symbolic link, special file or non-directory `.claude`, is 68; a file that appears after the preview is 68 with or without the flag.
+  For new throwaway staging candidates, missing or declined normal confirmation,
+  including unattended/JSON disposal without `--yes`, is 70; no `--force` is
+  required for their disposal under the
+  [2026-10-25 amendment](contracts/throwaway-staging-amendment-20261025.md).
   Unauthenticated (66), forbidden (67) and incompatible-contract (69) do not occur
   in the first increment. Timeout (71) does not occur there except for the proposed
   local stage/promote amendment (FR-068): a deadline with nothing applied is 71,
@@ -1389,9 +1397,10 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   remote operation ID. Partial/uncertain effects instead return 73, which takes
   precedence over 68/71/72. Stage/promote uses 64 for bad arguments/ambiguity, 65
   for no labelled primary match, 68 for wrong role/state or invalid/unresolved
-  source/label/receipt bindings, and 70 for missing required trust/confirmation or
-  explicit candidate-home deletion consent once defined by its separate owner
-  decision/task; FR-067 removal's mapping is unchanged.
+  source/label/receipt bindings, and 70 for missing required trust or normal
+  confirmation. New whr-managed candidate disposal requires no separate
+  `--volumes`/`--force` consent under the 2026-10-25 amendment; missing normal
+  confirmation/`--yes` remains 70. Other FR-067 removal mapping is unchanged.
   The macOS `setup` wizard and `doctor --fix` of [Feature 009](../009-host-setup-wizard/spec.md) use the same table without a new code: 0 success or an answer `no`; 64 usage; 68 refusal
   (unsupported platform, root start, run lock, blocked or failed with nothing applied, failed doctor check); 70 needs-human (unattended without
   confirmation, privileged step without terminal); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial

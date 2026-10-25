@@ -86,8 +86,10 @@ Inspect a local workspace before removal with
 group instead with `--role temp`, `--role staging`, or `--label key[=value]`;
 selectors cannot be combined. Without --local, the remote command still refuses.
 
-Removal preserves named home volumes by default, even with --force. An
-interactive run previews then asks for confirmation; scripts and --json require
+Outside the new-candidate exception defined by the
+[throwaway amendment](contracts/throwaway-staging-amendment-20261025.md), removal
+preserves named home volumes by default, even with --force. An interactive run
+previews then asks for confirmation; scripts and --json require
 --yes. Other home deletion additionally requires --volumes and --force; its preview
 names the volumes and mount targets. Protected/shared/primary homes cannot be
 removed through staging/temp cleanup. Inspect a 73 partial-failure inventory
@@ -112,8 +114,11 @@ smoke direction from [LS-1](spec.md#ls-1-owner-direction-2026-10-24) is recorded
 [local stage/promote amendment](contracts/local-stage-promote.md). It is not an
 implemented command. The owner approval/merge record of [PR #229](https://github.com/wstein/workharbor/pull/229)
 approves the interaction only; the execution-profile gate still precedes source
-work. Candidate-home naming/deletion flags require their separate decision/task;
---yes alone must not bypass FR-067 protections.
+work. Fresh candidate-home naming is recorded in the
+[candidate-home decision](contracts/candidate-home-cleanup-decision.md). The
+[2026-10-25 throwaway amendment](contracts/throwaway-staging-amendment-20261025.md)
+removes separate deletion flags for new whr-managed candidates; normal
+confirmation does not waive protected-resource or ownership checks in FR-067.
 Current Anchorage protected staging/temp cleanup remains excluded, with no recovery
 cleanup path promised. T038 stays open and T039 follows its complete acceptance.
 
