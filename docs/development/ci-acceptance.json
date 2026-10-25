@@ -1371,7 +1371,15 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteProjectsNativeRetentionPolicy",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteRefusesUnsafeOriginalNativePolicy",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteRechecksNativePolicyBeforeEffects",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteAllowsDisabledNativePolicy"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalPromoteAllowsDisabledNativePolicy",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIRefusalReasonsBeforePrepare",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIPreviewAndConsent",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIWrongTrustRefusesAndCloses",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIPartialEnvelopePreservesRecovery",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIInteractiveTrustAndConfirmation",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageJSONClosedResultSchema",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCLIApplyErrorCodesAndReasons",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalStageCommandContractAndAlias"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
