@@ -1,134 +1,70 @@
-# Proposed decision: new candidate homes and promotion cleanup
+# Decision: new candidate homes and throwaway cleanup
 
-Status: **proposed for owner review**, 2026-10-24. This document approves nothing.
-It is separate from [PR #229](https://github.com/wstein/workharbor/pull/229)'s
-[stage/promote interaction](local-stage-promote.md) and from T038's S0 execution
-profile. Approval of a documentation PR may record this proposed decision only
-if the owner explicitly accepts it at that exact revision; it does not approve
-implementation, S0, live Docker operations, builds or deployment.
+Status: **DECIDED by the owner, 2026-10-25**. This updates the 2026-10-24
+candidate-home decision for new whr-managed candidates. The fresh-home allocation
+model remains; retained clones and separate candidate-home deletion flags are
+superseded. Implementation and host acceptance of this delta remain pending.
 
-## Authority and scope
+The owner's words, scope, failure matrix and planned code/tests are recorded in
+the separate [throwaway staging amendment](throwaway-staging-amendment-20261025.md).
+The accepted [execution-profile body](local-stage-execution-profile.md) is retained
+unchanged; the separate amendment overrides its old disposal rules.
 
-The [owner decision on #226](https://github.com/wstein/workharbor/pull/226#issuecomment-6382864474)
-keeps the entire `anchorage-home-*` staging/temp guard, including container-only
-refusal, and requires a separate decision and task for a later naming change.
-This proposal concerns **new WorkHarbor-managed candidates only**. Existing
-Anchorage home names and containers are never renamed, adopted or exempted.
-FR-067(e), all existing removal tests and the owner limitation remain intact.
-There is no protected-candidate cleanup or recovery path in this proposal.
+## Allocation and identity stay decided
 
-Recommendation: accept both the new-home scheme and the explicit promotion
-cleanup consent below, then separately approve an implementation task and the
-completed S0 profile. Until then the interaction amendment has no executable
-cleanup surface and primary replacement remains gated.
+Allocate a fresh `whr-stage-home-<opaque-id>` named volume per new candidate,
+using a random 128-bit ID encoded as 32 lowercase hex characters. Its admitted
+home destination remains `/home/captain` or `/home/vscode`. The fixed candidate
+name `whr-anchorage-staging`, label `anchorage-staging=1` and one-candidate-per-
+Docker-daemon limit remain unchanged.
 
-## New allocation, without adoption
+Keep the existing allocation, daemon/operation/nonce/full-ID bindings and
+collision/no-adoption rules. A Docker name, prefix, label or idempotent volume
+creation response alone does not prove ownership. Candidate home must differ
+from primary homes, including stopped primaries, and all protected/shared homes.
+The allocation libraries are merged in #265/#266/#267; this documentation does
+not claim their new terminal-disposal behavior is implemented.
 
-Allocate a fresh named volume `whr-stage-home-<opaque-id>` for each new candidate
-attempt, mounted only at existing `/home/captain` or `/home/vscode` home destinations. Recommend a cryptographically random 128-bit ID encoded as 32 lowercase
-hex characters, unrelated to source paths, user names or secrets. The fixed
-candidate name remains `whr-anchorage-staging`, label `anchorage-staging=1`:
-**one candidate per admitted Docker daemon**, not one per source or primary.
-A different volume ID does not allow a second candidate.
+## Normal confirmation includes complete disposal
 
-Before effects, inspect the admitted daemon for the fixed name/label, any retained
-attempt, the selected primary home, and the proposed volume name. Any candidate,
-unrelated or abandoned attempt, or pre-existing proposed volume is a collision
-(68); never adopt it, silently choose another candidate, delete it or retry the
-whole stage. The candidate home must differ from every recognized primary home,
-including stopped primaries, and from all protected/shared volumes. A name prefix
-is not ownership evidence. Bind the allocated name, daemon identity and actual
-container/mount identities to the private receipt/journal.
+Removing or successfully promoting a new whr-managed candidate removes its
+container, fresh home, private clone/result tree and candidate receipts,
+journals/configuration/metadata. No archive, keep mode, automatic backup or
+separate cleanup remains. Ordinary removal deliberately loses unfetched commits
+and uncommitted clone work; preview that loss under the normal prompt/`--yes`.
+Users who want to retain a staging volume must back it up with Docker themselves
+before disposal.
 
-Allocation is **not implemented** by merged removal code. S0 must specify bounded
-volume inspection, safe creation/reservation, durable intent before allocation,
-metadata/receipt correlation, official-CLI mount configuration and interruption
-handling. Docker's create-or-return-existing behavior is not exclusive allocation.
-Use fresh absence checks, rechecks and an attempt journal; a local lock cannot
-exclude another client of the same Docker user. That race limitation is explicit:
-no atomic daemon-wide reservation is promised. S0 must prove its admitted
-allocation model or refuse unsupported cases; no helper is invented here.
+Promotion uses `whr workspace promote --local [--dry-run] [--yes] <id|name>`.
+The previous promote-specific `--volumes --force` surface is removed. Do not
+manufacture those flags internally. Generic `rm` keeps its existing flags for
+other homes; those flags cannot turn new staging into a keep mode.
 
-## Promotion requires explicit deletion consent
+| Condition | Required behavior |
+| --- | --- |
+| Dry-run | Preview all candidate disposal with zero apply effects; no deletion flags required. |
+| Normal interactive confirmation declined, or unattended/JSON `--yes` missing | 70 before apply; explicit interruption remains 72 before effects. |
+| Confirmed ordinary candidate removal | Delete all candidate artifacts, including unfetched work. |
+| Confirmed successful promote | Verify the required result refs in the original and replacement primary before terminal candidate disposal. |
+| Failed stage or post-transfer promote rollback | Clean the attempt's candidate artifacts through the existing bounded lifecycle; keep/restore the original primary and preserve its home. |
+| Cleanup cannot finish or its result is uncertain | Report the existing failure category and actual remaining resources/cause; never claim successful complete cleanup. |
 
-Proposed complete apply form, extending only the interaction's promotion surface:
+## Existing protected resources stay protected
 
-```text
-whr workspace promote --local --volumes --force [--yes] <id|name>
-whr workspace promote --local --dry-run [--volumes --force] <id|name>
-```
+The entire `anchorage-home-*` staging/temp guard from
+[the owner decision on #226](https://github.com/wstein/workharbor/pull/226#issuecomment-6382864474)
+remains, including container-only refusal. No existing Anchorage container/home
+is renamed, adopted or exempted. Do not broaden the new-candidate exception to
+an arbitrary prefix match or another container in a mixed removal selection.
 
-`--volumes` and `--force`
-must each be explicitly supplied for apply. Interactive apply also confirms the
-exact preview; unattended/JSON apply also requires `--yes`. Neither `--yes`, source
-trust, automation nor internal defaults may set either deletion option. Force
-volume deletion in automated execution still requires the explicit human
-confirmation required by FR-067(d); machine policy is not a substitute.
+Keep primary-home, shared-volume (running or stopped), read-only, `/opt/bdock`
+and `bundledock-*` protection and the existing ownership/drift checks. Candidate
+cleanup never targets the primary or original home. Promotion still performs its
+accepted primary replacement with that same original home; imported result refs
+belong to the original repository and remain there.
 
-| Invocation/condition | Proposed result before any effects |
-|---|---|
-| Apply missing either deletion flag, even with `--yes` | 70, no primary replacement and no candidate/container/home deletion. |
-| Both flags, but interactive consent declined or unattended/JSON `--yes` absent | 70, no mutation. Explicit cancellation remains 72. |
-| Valid dry-run without deletion flags | 0 preview, no consent needed and zero effects; explicitly show that apply requires both flags. |
-| Dry-run with `--volumes` but no `--force` | 70, consistent with the existing removal flag rule; zero effects. |
-| Protected, primary-shared, otherwise shared, foreign or drifted cleanup target | 68, zero effects, regardless of flags/confirmation. |
-
-Default data preservation remains FR-067(c). Promotion without explicit deletion
-consent **refuses**; it does not replace the primary and leave a candidate while
-claiming success. Successful promotion under FR-068 includes candidate container
-and home cleanup. There is no new preserve-candidate mode. The original primary
-home is always preserved, even when the new flags are supplied.
-
-The fresh preview identifies the primary full ID/name and lost exec sessions,
-exact candidate full ID and allocated home, **all mounts** of that home, preserved
-primary home, daemon identity and all replacement/cleanup actions. Dry-run
-never creates a volume, lock/receipt recording an execution, container or image,
-and never runs a hook, smoke, pull or build; read-only collision checks are allowed.
-
-## Compatibility with merged removal and failure ordering
-
-Checked against merged #226 foundation `ae9cbb7410df42e62687a476ccdd6f6d1abb25da`,
-present in proposal base `d55cd6b413512cd88c25cfbcabdd403ea1935aba`:
-
-- [The removal planner](../../../apps/whr/internal/localdocker/removal_plan.go)
-  rejects staging/temp home mounts named `anchorage-home-*` or mounted by a
-  recognized primary before its container-only preservation branch. Keep this.
-- Home deletion rejects any other container mount, **including stopped
-  containers**, and globally protected read-only, `/opt/bdock` or `/opt/bdock/*`,
-  and `bundledock-*` volumes. Keep this stricter existing behavior. A new prefix
-  never overrides any of these checks; unsupported/missing home metadata refuses.
-- [Removal application](../../../apps/whr/internal/localdocker/removal.go)
-  reinspects targets, consumes an apply attempt once, removes the exact container
-  before its home, rechecks mounts before volume deletion and reports uncertain
-  or partial mutation as 73. Its command handler requires explicit deletion
-  options independently of confirmation. Reuse these invariants, without an
-  internal bypass or assuming a prepared transaction remains valid indefinitely.
-
-Before stopping/replacing the primary, preflight the **entire** candidate cleanup
-plan with the real deletion options and receipt-bound IDs against fresh daemon
-metadata. Refuse 68 if candidate cleanup is inadmissible; missing consent is 70.
-Reinspect before effects and again before cleanup. Recreate the primary from the
-verified immutable image with its original home; verify the resulting primary
-before removing the candidate container, then its home. Do not delete any other
-volume. S0 must define promotion composition and closed schemas before code.
-
-A concurrent mount or drift appearing after replacement prevents unsafe cleanup;
-report 73 with attempted/applied/remaining resources and honest recovery guidance.
-No rollback, automatic retry, hook rerun or successful-cleanup claim follows.
-If home deletion fails after candidate removal, retain and identify the residual
-volume. Missing receipts and orphaned volumes are not proof of ownership; existing
-`rm` selects containers, so it cannot clean up a detached orphan home. A separate
-recovery capability needs its own approved scope; no volume prune, manual deletion
-recipe or protected-home bypass is authorized here. Retained/uncertain attempts
-block another stage until an approved recovery has resolved them.
-
-## Approval boundaries
-
-Owner acceptance must name the exact reviewed revision and explicitly accept the
-new-only prefix/ID scheme, no-adoption rules, consent matrix and preserve-by-refusal
-behavior. It leaves the approved task graph/checkmarks and FR-067 guard unchanged.
-The follow-on task must be approved separately; S0 then incorporates this decision
-and resolves allocation, receipts, concurrency and recovery limitations before
-implementation. Exact-head independent review, repository/application checks,
-real-host evidence and owner merge gates remain separate. No existing task or
-feature is completed by this documentation.
+Use the existing source trust, verification, receipt and resource rollback model.
+Do not introduce volume backup, another consent layer, global cleanup or a new
+recovery service. The amendment changes disposal, not D1/D2 or source execution.
+No task checkbox, feature completion, native-host result, build, release or live
+Docker action is implied by this documentation.

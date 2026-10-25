@@ -1,5 +1,12 @@
 # Proposed task: new candidate allocation and cleanup consent
 
+**Current disposal override (owner, 2026-10-25):** the historical retained-clone
+and separate deletion-consent expectations below are superseded for new
+whr-managed candidates by the [throwaway staging amendment](throwaway-staging-amendment-20261025.md).
+Its planned code/test packages replace the old consent-matrix expectations;
+allocation, ownership and protected-home cases remain applicable. This pointer
+does not turn the historical proposed T040 number into a new task or tick.
+
 Status: **proposal only**, 2026-10-24. T040 is unused at proposal base
 `d55cd6b413512cd88c25cfbcabdd403ea1935aba`; reserve it here only. This is not an
 approved task entry, execution order or completion claim. Authoritative
