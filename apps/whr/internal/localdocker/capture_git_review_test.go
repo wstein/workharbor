@@ -19,7 +19,7 @@ import (
 
 func captureReviewRepository(t *testing.T) (string, string) {
 	t.Helper()
-	source := t.TempDir()
+	source := capturePhysicalTemp(t)
 	fixtureGit(t, source, "init", "--template=", "--initial-branch=main")
 	fixtureGit(t, source, "commit", "--allow-empty", "-m", "base")
 	return source, fixtureGit(t, source, "rev-parse", "HEAD")

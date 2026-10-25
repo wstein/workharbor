@@ -4,9 +4,12 @@
 package localdocker
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestLocalStageCaptureObservationFailureKillsOwnedGroup(t *testing.T) {
@@ -32,5 +35,21 @@ func TestLocalStageCaptureObservationFailureKillsOwnedGroup(t *testing.T) {
 				t.Fatal("signaled an already released group")
 			}
 		})
+	}
+}
+
+func TestLocalStageCaptureNativeWaitWithoutReap(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "/bin/sh", "-c", "exit 0")
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := runStageGit(cmd); err != nil {
+		t.Fatalf("native wait/owned-group cleanup: %v", err)
+	}
+	if cmd.ProcessState == nil || !cmd.ProcessState.Success() {
+		t.Fatal("native wait consumed leader before exec.Cmd.Wait")
+	}
+	if err := stageWaitLeader(cmd.Process.Pid); err == nil {
+		t.Fatal("reaped leader remained waitable")
 	}
 }
