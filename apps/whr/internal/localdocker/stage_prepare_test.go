@@ -36,7 +36,7 @@ func fixtureStagePreparationNamed(t *testing.T, basename string) (Client, StageO
 	}
 	fixtureGit(t, source, "add", ".")
 	fixtureGit(t, source, "commit", "-m", "baseline")
-	socket := filepath.Join(t.TempDir(), "docker.sock")
+	socket := fixtureStageSocketPath(t)
 	listener, e := net.Listen("unix", socket)
 	if e != nil {
 		t.Fatal(e)
@@ -175,6 +175,26 @@ func TestLocalStagePreviewBindsToolBytesAndAllowedSubstitution(t *testing.T) {
 	}
 }
 
+func fixtureStageSocketPath(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "whr-sock-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.RemoveAll(dir); err != nil {
+			t.Error(err)
+		}
+	})
+	if err = os.Chmod(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	physical, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(physical, "d.sock")
+}
 func TestLocalStageFixtureSocketIgnoresLongTMPDIR(t *testing.T) {
 	long := filepath.Join(t.TempDir(), strings.Repeat("long", 30))
 	if err := os.Mkdir(long, 0700); err != nil {
