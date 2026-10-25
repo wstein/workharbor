@@ -120,3 +120,29 @@ time out within them; no completion guarantee follows from size admission.
 Deriving transfer solely from the enclosing promotion deadline would be a
 separate owner choice. Keep this PR Draft for that decision, exact-head review
 and required CI. No T038/T039 completion or native owner-host proof is claimed.
+
+## Review-fix verification
+
+The integrated safety matrix passed 31 test identities in 55.622 seconds, with no
+failures/skips. The final client/binding and conditional exit-one matrix passed
+nine identities in 33.340 seconds. The latter characterizes the fresh-binding
+limit; it does not claim that exit 1 identifies the process failure's cause.
+
+Nine compiling isolated overlays were assertion-killed against the integrated
+code: foreign symlink normalization, ancestor and descendant overlap, home-only
+sharing, temporary and persisted configuration checks, and fresh running,
+immutable-binding and available observations. The native-policy unit separately
+killed three compiling overlays (AutoRemove, restart policy and HostConfig
+projection) before integration. No production file was changed by these probes.
+The original root test-only checkpoint had 14 failing leaf assertions before its
+fixes; home-only sharing and harmless-bind controls already passed. The isolated
+native-policy checkpoint was assertion-RED in 16.548 seconds, then GREEN in
+11.691 seconds. Compiler errors are excluded from mutation/RED evidence.
+
+After #266 merged, all 17 promote/review-fix patches replayed equally from parent
+`34b5cf05d28ee7f9456ce3ca7c86e4a7a07a83e7` onto fresh main
+`75889f5364863538530f3fd78fcabd6b375b643e`; acceptance identities were then added.
+The inherited accepted profile body is unchanged by this correction. The source
+remains frozen while broad author checks and the required exact-head rewrite
+review run; final outcomes belong in the PR body. Native CI and the owner's F6
+budget decision remain blockers. No independent Ready verdict is claimed here.
