@@ -98,7 +98,7 @@ func prepareStageResults(ctx context.Context, operationID string, repositories [
 	if err != nil {
 		return nil, err
 	}
-	root, err := os.MkdirTemp(filepath.Dir(repositories[0].ClonePath), "git-results-")
+	root, err := os.MkdirTemp("", "whr-git-results-")
 	if err != nil {
 		return nil, stageConflict("private Git result reader unavailable")
 	}
