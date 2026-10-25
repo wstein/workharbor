@@ -174,3 +174,30 @@ func TestLocalStagePreviewBindsToolBytesAndAllowedSubstitution(t *testing.T) {
 		t.Fatal("changed installed tool retained trust")
 	}
 }
+
+func TestLocalStageFixtureSocketIgnoresLongTMPDIR(t *testing.T) {
+	long := filepath.Join(t.TempDir(), strings.Repeat("long", 30))
+	if err := os.Mkdir(long, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", long)
+	t.Run("fresh_temp_root", func(t *testing.T) {
+		_, _, ports := fixtureStagePreparation(t)
+		endpoint, err := ports.Endpoint(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := strings.TrimPrefix(endpoint, "unix://")
+		if len(path) > 103 {
+			t.Fatalf("fixture socket exceeds portable sockaddr limit: %d", len(path))
+		}
+		physical, err := filepath.EvalSymlinks(path)
+		if err != nil || physical != path {
+			t.Fatalf("socket path is not physical: %v", err)
+		}
+		st, err := os.Lstat(path)
+		if err != nil || st.Mode()&os.ModeSocket == 0 {
+			t.Fatalf("socket missing: %v", err)
+		}
+	})
+}
