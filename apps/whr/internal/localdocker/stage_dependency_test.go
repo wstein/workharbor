@@ -277,6 +277,12 @@ func TestLocalStageLateMergedOpaqueHookRetainsPartialBeforeHooks(t *testing.T) {
 }
 
 func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T) {
+	t.Run("escaped_line_break", func(t *testing.T) {
+		_, err := stageLiteralCommand("sh scripts/policy\\\nname.sh")
+		if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), "command continuation dependency capability unsupported") {
+			t.Fatalf("escaped line break: %v", err)
+		}
+	})
 	t.Run("plain_interpreter", func(t *testing.T) {
 		root := t.TempDir()
 		if err := os.WriteFile(filepath.Join(root, "simple.sh"), []byte("#!/bin/sh\ntrue\n"), 0700); err != nil {
