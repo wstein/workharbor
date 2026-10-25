@@ -178,8 +178,7 @@ func (p *LocalPromotion) checkHostFacts() error {
 	return nil
 }
 func (p *LocalPromotion) prepareConfiguration(ctx context.Context) error {
-	baked := len(p.image.Metadata) > 0 && stageCheckBakedSourceMetadata(p.sourceConfig, p.image.Metadata) == nil
-	config, err := stagePromoteConfig(p.sourceConfig, p.primaryConfig, p.receipt.Verification.ImageID, baked)
+	config, err := p.boundConfiguration()
 	if err != nil {
 		return err
 	}
@@ -251,4 +250,14 @@ func (p *LocalPromotion) readConfiguration(ctx context.Context) error {
 		return stageConflict("promotion official configuration changed verified image")
 	}
 	return nil
+}
+
+func (p *LocalPromotion) boundConfiguration() (map[string]any, error) {
+	baked := stageSourceContributionBaked(p.sourceConfig)
+	if baked {
+		if err := stageCheckBakedSourceMetadata(p.sourceMetadata, p.image.Metadata); err != nil {
+			return nil, err
+		}
+	}
+	return stagePromoteConfig(p.sourceConfig, p.primaryConfig, p.receipt.Verification.ImageID, baked)
 }

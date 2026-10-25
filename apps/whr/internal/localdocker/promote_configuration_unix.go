@@ -111,6 +111,7 @@ func (p *LocalPromotion) activatePromotionRunner(ctx context.Context) (string, e
 		return "", err
 	}
 	p.runner = r
+	p.receipt.ToolManifest = r.Tools
 	p.invocation.UserData = filepath.Join(root, "user-data")
 	return driver, nil
 }

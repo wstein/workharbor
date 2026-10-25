@@ -62,6 +62,9 @@ func TestLocalPromoteUsesVerifiedImage(t *testing.T) {
 	if err != nil || result.Status != "promoted" {
 		t.Fatalf("promote: %+v %v", result, err)
 	}
+	if p.receipt.ToolManifest["docker_driver"].Path != p.invocation.Driver {
+		t.Fatal("receipt did not record actual promotion driver identity")
+	}
 	state := readFakePromotionState(t, path)
 	if state.Primary == nil || state.Primary["ImageID"] != "sha256:"+strings.Repeat("d", 64) || state.Primary["ConfigImage"] != "sha256:"+strings.Repeat("d", 64) || state.Primary["Id"] == before.Primary["Id"] || state.Candidate != nil || state.Volume != nil {
 		t.Fatalf("native promotion resources: %+v", state)

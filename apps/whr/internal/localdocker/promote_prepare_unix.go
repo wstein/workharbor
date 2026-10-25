@@ -32,6 +32,7 @@ type LocalPromotion struct {
 	settings                                 stageSettings
 	execution                                stageExecutionBinding
 	sourceConfig                             map[string]any
+	sourceMetadata                           map[string]any
 	primaryConfig                            stagePrimaryConfiguration
 	homePlan                                 CandidateHomePlan
 	primaryObservation, candidateObservation stageContainerDetails
@@ -203,6 +204,7 @@ func (p *LocalPromotion) loadArtifacts() error {
 		value        any
 	}{
 		{"source-config.json", p.receipt.ConfigDigest, &p.sourceConfig},
+		{"source-metadata.json", p.settings.SourceMetadataDigest, &p.sourceMetadata},
 		{"primary-config.json", p.settings.PrimaryConfigDigest, &p.primaryConfig},
 		{"git-snapshots.json", p.settings.GitSnapshotsDigest, &p.snapshots},
 		{"candidate-home.json", p.settings.HomePlanDigest, &p.homePlan},
@@ -214,7 +216,7 @@ func (p *LocalPromotion) loadArtifacts() error {
 			return err
 		}
 	}
-	if !stageGitRelativePath(p.settings.ConfigRelativePath) || len(p.settings.ExecutionPaths) == 0 || len(p.settings.ExecutionPaths) > stageMaxEntries || p.sourceConfig == nil {
+	if !stageGitRelativePath(p.settings.ConfigRelativePath) || len(p.settings.ExecutionPaths) == 0 || len(p.settings.ExecutionPaths) > stageMaxEntries || p.sourceConfig == nil || p.sourceMetadata == nil {
 		return stageConflict("promotion execution inventory is invalid")
 	}
 	if len(p.snapshots) == 0 || len(p.snapshots) > 33 || len(p.snapshots) != len(p.receipt.OriginBinding) || len(p.snapshots) != len(p.receipt.CloneRepositories) {
