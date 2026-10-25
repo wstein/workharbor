@@ -84,7 +84,7 @@ func (s *LocalStage) prepareStageRuntime(ctx context.Context) error {
 	s.runner = r
 	s.invocation.Driver = driver
 	s.invocation.UserData = filepath.Join(root, "user-data")
-	s.receipt.ToolManifest = r.Tools
+	s.receipt.ToolManifest = stageTrustTools(r.Tools)
 	s.primaryObserved, e = readStageContainer(ctx, r, s.primary.ID)
 	if e != nil {
 		return e
