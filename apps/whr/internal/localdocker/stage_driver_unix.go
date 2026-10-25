@@ -69,7 +69,6 @@ func (r *stageRunner) DockerDriver(mode, image string) (string, error) {
 command=$1
 case "$command" in --host|--host=*|-H|-H?*|--context|--context=*|--config|--config=*) refuse routing_override ;; stop|rm|kill|restart|prune) refuse protected_resource_mutation ;; esac
 case "$command" in --version|-v|version|info|ps|inspect|events|exec|start|run|build|buildx|image|volume|container|network|context|pull) ;; *) refuse unsupported_native_command ;; esac
-case "$command" in stop|rm|kill|restart|prune) refuse protected_resource_mutation ;; esac
 # Docker global routing/config overrides never enter a managed vector. Native
 # run/exec parsers below stop at their image/command boundary.
 if [ "$command" != run ] && [ "$command" != exec ]; then
