@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 )
 
 func fixtureStagePreparation(t *testing.T) (Client, StageOptions, stagePreparationPorts) {
@@ -240,4 +242,59 @@ func TestLocalStageGitFixtureCanonicalSourceUnderAlias(t *testing.T) {
 	}
 	t.Setenv("TMPDIR", alias)
 	t.Run("native_capture_selection", TestLocalStageGitStatusPredicateRejectsCorruptIndexWithoutExecutingConfig)
+}
+
+func TestLocalStagePreparationRetainsReplacedTemporaryRoot(t *testing.T) {
+	parent := t.TempDir()
+	original, replacement := filepath.Join(parent, "original"), filepath.Join(parent, "replacement")
+	for _, dir := range []string{original, replacement} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	alias := filepath.Join(parent, "alias")
+	if err := os.Symlink(original, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", alias)
+	t.Run("fresh_temp_root", func(t *testing.T) {
+		c, opts, ports := fixtureStagePreparation(t)
+		var oldRoot, foreignRoot string
+		ctx := captureControl(context.Background(), nil, func(phase, path string) {
+			if phase != "preparation-root-created" {
+				return
+			}
+			oldRoot = filepath.Join(original, filepath.Base(path))
+			foreignRoot = filepath.Join(replacement, filepath.Base(path))
+			if err := os.Mkdir(foreignRoot, 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(foreignRoot, "sentinel"), []byte("retain foreign bytes"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Remove(alias); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(replacement, alias); err != nil {
+				t.Fatal(err)
+			}
+		}, nil)
+		stage, err := c.prepareStage(ctx, opts, ports)
+		if oldRoot == "" {
+			t.Fatal("root identity checkpoint not reached")
+		}
+		if stage != nil || exitcode.FromError(err) != exitcode.Conflict || err.Error() != "local stage temporary preparation identity changed; retained for inspection" {
+			t.Fatalf("replaced root refusal: %v %v", stage, err)
+		}
+		if _, err := os.Lstat(filepath.Join(foreignRoot, "phase")); !os.IsNotExist(err) {
+			t.Fatalf("foreign root modified before identity refusal: %v", err)
+		}
+		data, err := os.ReadFile(filepath.Join(foreignRoot, "sentinel"))
+		if err != nil || string(data) != "retain foreign bytes" {
+			t.Fatalf("foreign bytes changed: %v", err)
+		}
+		if _, err := os.Lstat(oldRoot); err != nil {
+			t.Fatalf("original root lost: %v", err)
+		}
+	})
 }
