@@ -10,8 +10,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Resolver owns fresh configuration staging only. It never opens retained data.
@@ -172,11 +175,7 @@ func (r Resolver) Resolve(ctx context.Context, d Descriptor) (result *Resolved, 
 	if e != nil {
 		return nil, invalidConfiguration()
 	}
-	v, e := r.Parser.Parse(ctx, raw, true)
-	if e != nil {
-		return nil, e
-	}
-	dc, projects, e := resolverManifestPaths(v)
+	dc, projects, e := decodeResolverManifest(raw)
 	if e != nil {
 		return nil, e
 	}
@@ -192,7 +191,7 @@ func (r Resolver) Resolve(ctx context.Context, d Descriptor) (result *Resolved, 
 	if e != nil {
 		return nil, invalidConfiguration()
 	}
-	v, e = r.Parser.Parse(ctx, raw, false)
+	v, e := r.Parser.Parse(ctx, raw, false)
 	if e != nil {
 		return nil, e
 	}
@@ -380,33 +379,268 @@ func readModules(git func(string, ...string) ([]byte, error), dir, commit string
 	return modules, nil
 }
 
-// resolverManifestPaths validates only provider manifest inputs. Runtime session
-// preferences are not part of its return value.
+// resolverManifestPaths returns only provider inputs. Session preferences are
+// validated declarations; they never affect source, tools or resolved output.
 func resolverManifestPaths(value any) (string, string, error) {
 	manifest, ok := value.(map[string]any)
-	if !ok || !fields(manifest, []string{"schema_version", "devcontainer_path", "projects_path", "bundles"}) || manifest["schema_version"] != json.Number("1") {
+	if !ok {
 		return "", "", invalidConfiguration()
+	}
+	required := []string{"schema_version", "devcontainer_path", "projects_path", "bundles"}
+	switch manifest["schema_version"] {
+	case json.Number("1"):
+		if !fields(manifest, required) {
+			return "", "", invalidConfiguration()
+		}
+	case json.Number("2"):
+		if !fields(manifest, required, "name", "start_dir", "human_shell", "console_mode", "shortcuts", "project") {
+			return "", "", invalidConfiguration()
+		}
+	default:
+		return "", "", invalidConfiguration()
+	}
+	dc, e := resolverManifestPath(manifest["devcontainer_path"], false)
+	if e != nil {
+		return "", "", e
+	}
+	projects, e := resolverManifestPath(manifest["projects_path"], false)
+	if e != nil {
+		return "", "", e
 	}
 	bundles, ok := manifest["bundles"].([]any)
-	if !ok || len(bundles) != 0 {
+	if !ok {
+		return "", "", invalidConfiguration()
+	}
+	if manifest["schema_version"] == json.Number("2") {
+		if value, exists := manifest["name"]; exists {
+			name, ok := value.(string)
+			if !ok || !manifestWorkspaceName.MatchString(name) {
+				return "", "", invalidConfiguration()
+			}
+		}
+		if value, exists := manifest["start_dir"]; exists {
+			if _, e := resolverManifestPath(value, true); e != nil {
+				return "", "", e
+			}
+		}
+		for name, allowed := range map[string][]string{"human_shell": {"fish", "bash", "zsh", "nu"}, "console_mode": {"herdr", "plain"}, "shortcuts": {"on", "off"}} {
+			if value, exists := manifest[name]; exists {
+				text, ok := value.(string)
+				found := false
+				for _, candidate := range allowed {
+					found = found || text == candidate
+				}
+				if !ok || !found {
+					return "", "", invalidConfiguration()
+				}
+			}
+		}
+		if value, exists := manifest["project"]; exists {
+			if !resolverManifestProject(value, projects) {
+				return "", "", invalidConfiguration()
+			}
+		}
+	}
+	// A well-shaped nonempty list retains the existing provider capability error;
+	// invalid manifests cannot mask their schema failure behind that capability.
+	if len(bundles) != 0 {
 		return "", "", unsupportedConfiguration()
-	}
-	dc, e := CanonicalPath(manifest["devcontainer_path"])
-	if e != nil {
-		return "", "", invalidConfiguration()
-	}
-	projects, e := CanonicalPath(manifest["projects_path"])
-	if e != nil {
-		return "", "", invalidConfiguration()
 	}
 	return dc, projects, nil
 }
+
+var manifestWorkspaceName = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
+var manifestProjectURL = regexp.MustCompile(`^(https://[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+|ssh://(?:[A-Za-z0-9._-]+@)?[A-Za-z0-9.-]+(?::[0-9]{1,5})?/[A-Za-z0-9._~!$&'()*+,;=:@%/-]+)$`)
+var manifestProjectName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
+
+func resolverManifestProject(value any, projects string) bool {
+	project, ok := value.(map[string]any)
+	if !ok || !fields(project, []string{"url", "path"}) {
+		return false
+	}
+	url, ok := project["url"].(string)
+	if !ok || len(url) > 2048 || !manifestProjectURL.MatchString(url) || !validOrigin(url) {
+		return false
+	}
+	// validOrigin is intentionally broader than manifest URLs. The manifest adds
+	// an exact lower-case scheme, no credentials, strict port/path and name rules.
+	tail := url[strings.Index(url, "://")+3:]
+	slash := strings.IndexByte(tail, '/')
+	authority, rest := tail[:slash], tail[slash:]
+	if strings.Contains(rest, "//") {
+		return false
+	}
+	if at := strings.LastIndexByte(authority, '@'); at >= 0 {
+		if !strings.HasPrefix(url, "ssh://") || at == 0 || strings.HasPrefix(authority, "-") {
+			return false
+		}
+		authority = authority[at+1:]
+	}
+	if colon := strings.LastIndexByte(authority, ':'); colon >= 0 {
+		port, e := strconv.Atoi(authority[colon+1:])
+		if e != nil || port < 1 || port > 65535 {
+			return false
+		}
+		authority = authority[:colon]
+	}
+	if !hostName.MatchString(authority) {
+		return false
+	}
+	name := strings.TrimSuffix(rest[strings.LastIndexByte(rest, '/')+1:], ".git")
+	if !manifestProjectName.MatchString(name) {
+		return false
+	}
+	path, e := resolverManifestPath(project["path"], false)
+	return e == nil && utf8.RuneCountInString(path) >= 3 && path == projects+"/"+name
+}
+func resolverManifestPath(value any, allowDot bool) (string, error) {
+	path, e := CanonicalPathWithDot(value, allowDot)
+	if e != nil {
+		return "", invalidConfiguration()
+	}
+	if allowDot && path == "." {
+		return path, nil
+	}
+	for _, part := range strings.Split(path, "/") {
+		// Same Windows aliases as the whr/Python manifest contract, without changing
+		// CanonicalPath semantics for the provider's other accepted inputs.
+		folded := strings.Map(func(r rune) rune {
+			switch {
+			case r >= 0x200b && r <= 0x200f, r >= 0x202a && r <= 0x202e, r >= 0x206a && r <= 0x206f, r == 0xfeff:
+				return -1
+			case r == 0xff0e:
+				return '.'
+			case r == 0xa0 || r == 0x3000:
+				return ' '
+			}
+			return r
+		}, part)
+		if strings.Trim(folded, ". ") == "" {
+			return "", invalidConfiguration()
+		}
+		base, _, _ := strings.Cut(folded, ":")
+		base = strings.TrimRight(base, ". ")
+		if strings.EqualFold(base, ".git") || strings.EqualFold(base, "git~1") {
+			return "", invalidConfiguration()
+		}
+	}
+	return path, nil
+}
+
+// decodeResolverManifest preserves exact JSON number lexemes and validates the
+// shared manifest byte/depth limits before any external parser or runtime tool.
 func decodeResolverManifest(raw []byte) (string, string, error) {
+	if len(raw) > 65536 || !utf8.Valid(raw) || bytes.HasPrefix(raw, []byte{0xef, 0xbb, 0xbf}) || bytes.IndexByte(raw, 0) >= 0 || !resolverManifestScalars(raw) {
+		return "", "", invalidConfiguration()
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
-	var value any
-	if decoder.Decode(&value) != nil || decoder.Decode(new(any)) != io.EOF {
+	value, e := resolverManifestJSON(decoder, 0)
+	if e != nil {
+		return "", "", e
+	}
+	if _, e = decoder.Token(); e != io.EOF {
 		return "", "", invalidConfiguration()
 	}
 	return resolverManifestPaths(value)
+}
+func resolverManifestJSON(decoder *json.Decoder, depth int) (any, error) {
+	token, e := decoder.Token()
+	if e != nil {
+		return nil, invalidConfiguration()
+	}
+	delim, container := token.(json.Delim)
+	if !container {
+		return token, nil
+	}
+	if depth >= 128 {
+		return nil, invalidConfiguration()
+	}
+	switch delim {
+	case '{':
+		object := map[string]any{}
+		for decoder.More() {
+			key, e := decoder.Token()
+			if e != nil {
+				return nil, invalidConfiguration()
+			}
+			name, ok := key.(string)
+			if !ok {
+				return nil, invalidConfiguration()
+			}
+			if _, duplicate := object[name]; duplicate {
+				return nil, invalidConfiguration()
+			}
+			value, e := resolverManifestJSON(decoder, depth+1)
+			if e != nil {
+				return nil, e
+			}
+			object[name] = value
+		}
+		end, e := decoder.Token()
+		if e != nil || end != json.Delim('}') {
+			return nil, invalidConfiguration()
+		}
+		return object, nil
+	case '[':
+		array := []any{}
+		for decoder.More() {
+			value, e := resolverManifestJSON(decoder, depth+1)
+			if e != nil {
+				return nil, e
+			}
+			array = append(array, value)
+		}
+		end, e := decoder.Token()
+		if e != nil || end != json.Delim(']') {
+			return nil, invalidConfiguration()
+		}
+		return array, nil
+	}
+	return nil, invalidConfiguration()
+}
+
+// encoding/json replaces lone escaped UTF-16 surrogates. Reject them in the
+// original strings instead; a literal U+FFFD and a valid surrogate pair remain valid.
+func resolverManifestScalars(raw []byte) bool {
+	quoted := false
+	for i := 0; i < len(raw); i++ {
+		if raw[i] == '"' {
+			quoted = !quoted
+			continue
+		}
+		if !quoted || raw[i] != '\\' {
+			continue
+		}
+		i++
+		if i >= len(raw) {
+			return false
+		}
+		if raw[i] != 'u' {
+			continue
+		}
+		if i+4 >= len(raw) {
+			return false
+		}
+		n, e := strconv.ParseUint(string(raw[i+1:i+5]), 16, 16)
+		if e != nil {
+			return false
+		}
+		i += 4
+		if n >= 0xdc00 && n <= 0xdfff {
+			return false
+		}
+		if n < 0xd800 || n > 0xdbff {
+			continue
+		}
+		if i+6 >= len(raw) || raw[i+1] != '\\' || raw[i+2] != 'u' {
+			return false
+		}
+		low, e := strconv.ParseUint(string(raw[i+3:i+7]), 16, 16)
+		if e != nil || low < 0xdc00 || low > 0xdfff {
+			return false
+		}
+		i += 6
+	}
+	return true
 }
