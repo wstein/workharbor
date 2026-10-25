@@ -46,8 +46,8 @@ other homes; those flags cannot turn new staging into a keep mode.
 | Normal interactive confirmation declined, or unattended/JSON `--yes` missing | 70 before apply; explicit interruption remains 72 before effects. |
 | Confirmed ordinary candidate removal | Delete all candidate artifacts, including unfetched work. |
 | Confirmed successful promote | Verify the required result refs in the original and replacement primary before terminal candidate disposal. |
-| Failed stage or post-transfer promote rollback | Clean the attempt's candidate artifacts through the existing bounded lifecycle; keep/restore the original primary and preserve its home. |
-| Cleanup cannot finish or its result is uncertain | Report the existing failure category and actual remaining resources/cause; never claim successful complete cleanup. |
+| Failed stage (including `staged_unverified`) or post-transfer promote rollback | Derived from the owner's throwaway intent: clean the attempt's candidate artifacts through the existing bounded lifecycle; keep/restore the original primary and preserve its home. |
+| Cleanup cannot finish or its result is uncertain | Report the existing failure category and actual remaining resources/cause. Keep the receipt/journal as a reported residual until container, home and clone/result tree are confirmed absent; delete candidate records last. Never claim successful complete cleanup. |
 
 ## Existing protected resources stay protected
 

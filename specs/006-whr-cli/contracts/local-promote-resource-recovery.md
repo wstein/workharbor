@@ -4,6 +4,16 @@ Status: implementation contract for the owner's 2026-10-25 direction to continue
 with promote and rollback; exact-head security review, required CI and native
 owner-host evidence remain pending. This does not claim T038/T039 completion.
 
+For **new whr-managed candidates**, the owner's
+[2026-10-25 throwaway amendment](throwaway-staging-amendment-20261025.md)
+supersedes the separate `--volumes --force` consent and retained-resource rules
+below. Promotion drops those flags for new candidates; normal confirmation
+covers their disposal. After successful resource rollback, remove the failed replacement and
+all candidate artifacts; the original primary and its home remain protected.
+The amendment requires candidate receipts/journals to be deleted last and kept
+as reported residuals while cleanup is incomplete. Other recovery admission,
+ordering and uncertainty rules below remain in force.
+
 ## Scope and preserved decisions
 
 This amendment reconciles the later rollback direction with the
