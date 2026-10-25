@@ -40,6 +40,7 @@ type LocalStage struct {
 	root                                             string
 	rootIdentity                                     os.FileInfo
 	capture                                          *capturedStageFiles
+	smokeDigest                                      string
 	git                                              stageGitCapture
 	runner                                           *stageRunner
 	metadata                                         stageMetadata
@@ -212,7 +213,12 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 		return nil, err
 	}
 	if options.Smoke {
-		if _, e = readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10); e != nil {
+		for _, entry := range s.capture.Entries {
+			if entry["path"] == ".devcontainer/smoke-container.sh" && entry["type"] == "file" {
+				s.smokeDigest, _ = entry["digest"].(string)
+			}
+		}
+		if _, e = readStageTrustedSmoke(s.capture.Path, s.smokeDigest); e != nil {
 			return nil, stageConflict("smoke input exceeds 256 KiB or is unavailable")
 		}
 	}

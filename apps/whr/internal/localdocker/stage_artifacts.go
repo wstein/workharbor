@@ -21,6 +21,7 @@ type stageSettings struct {
 	PrimaryObservationDigest   string   `json:"primary_observation_digest"`
 	CandidateObservationDigest string   `json:"candidate_observation_digest"`
 	AnchorageFacts             bool     `json:"anchorage_facts"`
+	SmokeDigest                string   `json:"smoke_digest,omitempty"`
 	SmokeRequested             bool     `json:"smoke_requested"`
 	ExecutionPaths             []string `json:"execution_paths"`
 }
