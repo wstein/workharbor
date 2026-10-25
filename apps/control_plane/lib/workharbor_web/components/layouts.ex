@@ -5,7 +5,7 @@ defmodule WorkHarborWeb.Layouts do
   embed_templates "layouts/*"
 
   attr :flash, :map, required: true
-  slot :inner_block, required: true
+  attr :inner_content, :any, required: true
 
   def app(assigns) do
     ~H"""
@@ -19,7 +19,7 @@ defmodule WorkHarborWeb.Layouts do
       <.theme_toggle />
     </header>
     <main id="main-content" class="page-content">
-      {render_slot(@inner_block)}
+      {@inner_content}
     </main>
     <.flash_group flash={@flash} />
     """
