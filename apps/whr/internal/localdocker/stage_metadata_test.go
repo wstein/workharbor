@@ -47,7 +47,7 @@ func TestLocalStageMetadataUsesPinnedClosedRunnerAndMetadataQuota(t *testing.T) 
 
 func TestLocalStagePrimarySelectionReasons(t *testing.T) {
 	id := strings.Repeat("a", 64)
-	primary := inspection{ID: id, Name: "/primary", State: "running", Labels: map[string]string{"anchorage-role": "primary"}}
+	primary := inspection{ID: id, Name: "/primary", State: "running", Labels: map[string]string{"devcontainer.local_folder": "/source"}}
 	for _, tc := range []struct {
 		name             string
 		all              []inspection

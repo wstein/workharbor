@@ -121,13 +121,17 @@ func (c Client) discoverAt(ctx context.Context, endpoint string) ([]Workspace, e
 }
 
 func (c Client) inspectAllAt(ctx context.Context, endpoint string) ([]inspection, map[string]string, error) {
+	return inspectAllWithReader(ctx, func(args ...string) ([]byte, error) { return c.read(ctx, endpoint, args...) })
+}
+
+func inspectAllWithReader(ctx context.Context, read func(...string) ([]byte, error)) ([]inspection, map[string]string, error) {
 	fail := func(message string) ([]inspection, map[string]string, error) {
 		if ctx.Err() != nil {
 			return nil, nil, ctx.Err()
 		}
 		return nil, nil, exitcode.Errorf(exitcode.PathConflict, "%s", message).WithRemediation("Check whr doctor and the local Docker CLI; inspection changed no container.")
 	}
-	raw, err := c.read(ctx, endpoint, "container", "ls", "--all", "--no-trunc", "--format", "{{json .}}")
+	raw, err := read("container", "ls", "--all", "--no-trunc", "--format", "{{json .}}")
 	if err != nil {
 		return fail("local Docker container listing failed")
 	}
@@ -155,7 +159,7 @@ func (c Client) inspectAllAt(ctx context.Context, endpoint string) ([]inspection
 	}
 	sort.Strings(ids)
 	args := append([]string{"container", "inspect", "--format", inspectFormat}, ids...)
-	raw, err = c.read(ctx, endpoint, args...)
+	raw, err = read(args...)
 	if err != nil {
 		return fail("local Docker container inspection failed")
 	}
