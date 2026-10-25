@@ -130,6 +130,8 @@ defmodule WorkHarborWeb.AuthController do
         if(conn.private.auth_target == :owner, do: "owner_browser", else: "dashboard")
       )
 
+  def owner_entry(conn, _), do: redirect_to(conn, "/owner")
+
   def page(conn, _) do
     conn = Plug.CSRFProtection.call(conn, Plug.CSRFProtection.init([]))
     token = Plug.CSRFProtection.get_csrf_token()
