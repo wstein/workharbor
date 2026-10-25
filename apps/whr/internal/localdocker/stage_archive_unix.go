@@ -57,7 +57,7 @@ func (s *stageStore) checkCompletedArchive(op string) error {
 		return e
 	}
 	last := rows[len(rows)-1]
-	if last.OperationID != op || last.State != "complete" || last.Observation != "observed" {
+	if last.OperationID != op || (last.State != "complete" && last.State != "staged_unverified") || last.Observation != "observed" {
 		return stageConflict("retained attempt is incomplete")
 	}
 	b, e = s.readArtifact(op, "receipt.json", stageMaxArtifactBytes)
@@ -65,8 +65,18 @@ func (s *stageStore) checkCompletedArchive(op string) error {
 		return e
 	}
 	var receipt stageReceipt
-	if decodeStageClosed(b, &receipt) != nil || receipt.Version != 1 || receipt.OperationID != op || receipt.Sequence != last.Sequence || receipt.PreviousHash != last.PreviousHash || receipt.State != "complete" || receipt.UnverifiedReason != nil || last.ReceiptDigest != stageReceiptDigest(receipt) {
+	if decodeStageClosed(b, &receipt) != nil || receipt.Version != 1 || receipt.OperationID != op || receipt.Sequence != last.Sequence || receipt.PreviousHash != last.PreviousHash || receipt.State != last.State || (last.State == "complete" && receipt.UnverifiedReason != nil) || last.ReceiptDigest != stageReceiptDigest(receipt) {
 		return stageConflict("completed receipt binding changed")
+	}
+	if last.State == "staged_unverified" {
+		raw, e := s.readArtifact(op, "removed-observation.json", stageMaxArtifactBytes)
+		if e != nil {
+			return e
+		}
+		var observed stageRemovedObservation
+		if decodeStageClosed(raw, &observed) != nil || observed.OperationID != op || observed.ReceiptDigest != stageReceiptDigest(receipt) || receipt.Candidate == nil || receipt.Candidate.ID == nil || observed.CandidateID != *receipt.Candidate.ID || receipt.Home == nil || receipt.Home.Name == nil || observed.Home != *receipt.Home.Name || observed.Endpoint != receipt.EndpointIdentity || observed.ObservedAt == "" {
+			return stageConflict("removed unverified archive binding changed")
+		}
 	}
 	return nil
 }

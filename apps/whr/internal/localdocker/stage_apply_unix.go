@@ -71,6 +71,9 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	if e = s.checkStageAllocation(ctx); e != nil {
 		return refuse(e)
 	}
+	if e = s.archiveRemovedUnverified(ctx); e != nil {
+		return refuse(e)
+	}
 	if e = store.Begin(s.operationID, s.fingerprint); e != nil {
 		return refuse(e)
 	}
