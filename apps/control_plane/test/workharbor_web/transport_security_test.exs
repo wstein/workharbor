@@ -150,6 +150,7 @@ defmodule WorkHarborWeb.TransportSecurityTest do
         port: 443,
         certfile: ctx.certfile,
         keyfile: ctx.keyfile,
+        websocket_options: [max_fragmented_message_size: 65_536],
         http_1_options: [enabled: true],
         http_2_options: [enabled: false]
       ]
@@ -267,6 +268,36 @@ defmodule WorkHarborWeb.TransportSecurityTest do
     assert :ok = RuntimeSecurity.validate!([server: false], [])
   end
 
+  test "active listener requires the exact aggregate websocket bound", c do
+    cfg = independent(c)
+
+    assert :ok =
+             RuntimeSecurity.validate!(cfg,
+               origin: "https://localhost",
+               authorities: [{"localhost", 443}]
+             )
+
+    for value <- [
+          nil,
+          [],
+          [max_fragmented_message_size: 8_000_000],
+          [max_fragmented_message_size: "65536"],
+          [max_fragmented_message_size: 65_536, max_fragmented_message_size: 8_000_000],
+          [max_fragmented_message_size: 65_536, compress: true],
+          %{max_fragmented_message_size: 65_536}
+        ] do
+      refused(Keyword.put(cfg, :https, Keyword.put(cfg[:https], :websocket_options, value)))
+    end
+
+    refused(Keyword.put(cfg, :https, Keyword.delete(cfg[:https], :websocket_options)))
+
+    refused(
+      Keyword.put(cfg, :https, [
+        {:websocket_options, cfg[:https][:websocket_options]} | cfg[:https]
+      ])
+    )
+  end
+
   test "listener activation requires explicit true or false before protocol validation", c do
     cfg = independent(c)
     unsafe = Keyword.put(cfg, :https, Keyword.put(cfg[:https], :http_2_options, enabled: true))
@@ -306,6 +337,7 @@ defmodule WorkHarborWeb.TransportSecurityTest do
       {cfg, owner} = runtime(c, env, 443)
       assert cfg[:https][:http_1_options] == [enabled: true]
       assert cfg[:https][:http_2_options] == [enabled: false]
+      assert cfg[:https][:websocket_options] == [max_fragmented_message_size: 65_536]
 
       assert cfg[:adapter] == Bandit.PhoenixAdapter
       assert :ok = RuntimeSecurity.validate!(cfg, owner)
