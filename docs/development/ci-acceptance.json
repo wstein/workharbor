@@ -1305,7 +1305,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageOpaqueAndDynamicDependencyFormsRefuse",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageKnownGitConsumptionBindsReceiptThenCandidateCommit",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageMergedOriginsCannotHideGitConsumption",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageLateMergedOpaqueHookRetainsPartialBeforeHooks"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageLateMergedOpaqueHookRetainsPartialBeforeHooks",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

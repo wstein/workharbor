@@ -520,3 +520,56 @@ behavior or dependency was changed by message normalization. At this normalizati
 branch resynchronization was needed. Final
 exact-head delta review and native CI remain pending. Full `make check` and
 real-host acceptance remain incomplete as recorded above.
+
+
+## Exact-head raw-boundary review correction
+
+The security delta at `1915c18d` reproduced residual dependency omissions:
+double-quoted backslashes selected a different pathname, interpreter arguments
+in an `env -S` shebang consumed an unbound child, and `TrimSpace` removed a
+shell-significant carriage return. The independent fake-tool lifecycle probes
+staged successfully and then accepted changes to the original actually consumed
+file. A literal `@workspace@` token also collided with the former internal alias.
+These are the same execution-input finding, not accepted dependency closure.
+
+`c1c69606` records genuine stage-admission RED for quoted escapes/shebang arguments
+(1.474 s). `f67a20d6` extends the same boundary test to raw CR/direct interpreter
+requirements (RED 1.423 s) and literal marker string/argv/script forms (RED
+2.113 s). Continuations (`75b64689`, RED 0.003 s), an earlier explicit-shell cache
+bypassing later direct interpreter proof (`2e32acdb`, RED 0.874 s), assembled
+marker tokens (`af121b36`, RED 1.781 s), and scalar phase-path substitution
+(`5ea7f2fe`, RED 0.002 s) have focused semantic regressions as well.
+
+The correction refuses unsupported double-quoted escapes, continuations and
+interpreter forms with named capability 68 before retained state or Docker
+resource effects. Noncatalogued direct scripts require a supported exact
+absolute shell shebang without arguments; an earlier explicit-shell admission
+cannot bypass this proof. Generic script lines retain their raw bytes; only
+ASCII shell indentation is ignored for comment detection. Exact inspected
+catalogue bodies retain their existing admission and transitive inventory.
+
+Magic workspace aliases are no longer generated or interpreted. Known config
+variables resolve before scalar tokenization; physical root mapping applies
+only to admitted path tokens afterward. Literal marker tokens assembled with
+quotes or escapes refuse instead of selecting a decoy. Scalar path substitutions
+requiring unsupported quoting in a phase refuse explicitly; arrays keep exact
+argv and admit space-containing paths. Script bodies do not undergo DevContainer
+configuration substitution. This remains a bounded grammar, not a POSIX parser
+or arbitrary program dependency inference.
+
+Final source `d6c36521` passed the focused boundary/catalogue/named candidate and
+original drift/known Git/merged-origin/Anchorage full-lifecycle group (27.884 s).
+The single new critical top-level guard has 14 boundary/positive leaves; the
+inventory now contains 110 appended T038 IDs. Existing W1 and lifecycle IDs are
+unchanged. Actual DefaultHandlers passed again (10.642 s); affected vet and
+Darwin/arm64 test compilation passed. Compiled final overlays failed semantically:
+restoring the unsafe `1915c18d` admission accepted the boundary inputs (8.237 s),
+and replacing refusal messages while preserving exit 68 failed the reason
+oracles (1.679 s). The checked-in boundary test and named substitutions document
+these mutation recipes; no mutant is retained in product code.
+
+The earlier complete-package measurements remain historical qualifications of
+their recorded source trees; they are not claimed as complete reruns of this
+new raw-boundary delta. No real Docker, source hook or smoke was executed.
+Exact-head independent review, hosted native CI, complete make-check acceptance
+and owner real-host evidence remain separate open gates.
