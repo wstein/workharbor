@@ -15,11 +15,49 @@ import (
 func stageGitRelativePath(value string) bool {
 	return value != "" && value != "." && len(value) <= 4096 && !filepath.IsAbs(value) && filepath.ToSlash(filepath.Clean(value)) == value && value != ".." && !strings.HasPrefix(value, "../") && !strings.Contains("/"+value+"/", "/.git/") && !strings.ContainsAny(value, "\x00\r\n")
 }
-func captureStageGit(ctx context.Context, source, captured, clone string) (stageGitCapture, error) {
+func captureStageGit(ctx context.Context, source, captured, clone string) (result stageGitCapture, failure error) {
 	ctx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
-	ctx, _, err := pinStageGit(ctx)
-	result := stageGitCapture{Clone: clone}
+	var err error
+	for _, path := range []*string{&source, &captured} {
+		*path, err = filepath.EvalSymlinks(*path)
+		if err != nil {
+			return result, stageConflict("Git capture input path unavailable")
+		}
+		*path, err = filepath.Abs(*path)
+		if err != nil {
+			return result, stageConflict("Git capture input path unavailable")
+		}
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(clone))
+	if err != nil {
+		return result, stageConflict("Git clone parent unavailable")
+	}
+	parent, err = filepath.Abs(parent)
+	if err != nil {
+		return result, stageConflict("Git clone parent unavailable")
+	}
+	clone = filepath.Join(parent, filepath.Base(clone))
+	result.Clone = clone
+	if _, err = os.Lstat(clone); !os.IsNotExist(err) {
+		return result, stageConflict("Git clone destination already present or unavailable")
+	}
+	private, err := os.MkdirTemp(parent, "clone-capture-")
+	if err != nil {
+		return result, stageConflict("Git clone staging storage unavailable")
+	}
+	identity, err := os.Lstat(private)
+	if err != nil {
+		return result, stageConflict("Git clone staging identity unavailable")
+	}
+	cleanup := &capturedStageFiles{Path: private, identity: identity}
+	defer func() {
+		if err := cleanup.Close(); err != nil {
+			failure = err
+		}
+	}()
+	stagedClone := filepath.Join(private, "tree")
+	ctx, _, err = pinStageGit(ctx)
 	if err != nil {
 		return result, err
 	}
@@ -62,7 +100,7 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 		}
 		return privateStageGitAdmin(filepath.Join(out, ".git"))
 	}
-	err = capture(source, captured, clone, 0)
+	err = capture(source, captured, stagedClone, 0)
 	if err == nil {
 		for _, s := range result.Repositories {
 			current, e := readStageGitSnapshotContext(ctx, s.Source, false)
@@ -71,12 +109,23 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (stage
 			}
 		}
 	}
+	if err == nil {
+		if err = publishStageClone(stagedClone, clone); err != nil {
+			return result, stageConflict("Git clone publication failed or destination changed")
+		}
+		for i := range result.Repositories {
+			rel, _ := filepath.Rel(stagedClone, result.Repositories[i].ClonePath)
+			result.Repositories[i].ClonePath = filepath.Join(clone, rel)
+		}
+		result.stageGitSnapshot.ClonePath = clone
+		result.Clone = clone
+	}
 	return result, err
 }
 func privateStageGitAdmin(dir string) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return err
+			return stageConflict("private Git administration enumeration unavailable")
 		}
 		if d.Type()&os.ModeSymlink != 0 {
 			return stageConflict("private Git administration is symlinked")
@@ -85,6 +134,9 @@ func privateStageGitAdmin(dir string) error {
 		if d.IsDir() {
 			mode = 0700
 		}
-		return os.Chmod(path, mode)
+		if err := os.Chmod(path, mode); err != nil {
+			return stageConflict("private Git administration mode unavailable")
+		}
+		return nil
 	})
 }
