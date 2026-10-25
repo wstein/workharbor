@@ -277,13 +277,32 @@ func TestLocalStageLateMergedOpaqueHookRetainsPartialBeforeHooks(t *testing.T) {
 }
 
 func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T) {
-	for _, form := range []string{"quoted_escape", "shebang_arguments"} {
+	t.Run("plain_interpreter", func(t *testing.T) {
+		root := t.TempDir()
+		if err := os.WriteFile(filepath.Join(root, "simple.sh"), []byte("#!/bin/sh\ntrue\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		for _, command := range []string{"sh simple.sh", "./simple.sh"} {
+			paths, _, err := admitStageDependencies(context.Background(), root, root, "/workspaces/test", map[string]any{"postCreateCommand": command}, false, ".devcontainer/devcontainer.json")
+			if err != nil {
+				t.Fatalf("plain interpreter: %v", err)
+			}
+			found := false
+			for _, path := range paths {
+				found = found || path == "simple.sh"
+			}
+			if !found {
+				t.Fatal("plain script missing execution manifest path")
+			}
+		}
+	})
+	for _, form := range []string{"quoted_escape", "shebang_arguments", "shebang_python", "direct_without_interpreter", "carriage_return", "literal_marker", "literal_marker_argv", "literal_marker_script"} {
 		t.Run(form, func(t *testing.T) {
 			c, opts, ports, statePath := fixtureStageLifecycle(t, false)
 			if err := os.Mkdir(filepath.Join(opts.Source, "scripts"), 0700); err != nil {
 				t.Fatal(err)
 			}
-			command := `sh "scripts/policy\name.sh"`
+			var command any = `sh "scripts/policy\name.sh"`
 			files := map[string]string{"scripts/policyname.sh": "true\n", "scripts/policy\\name.sh": "true\n"}
 			reason := "quoted command escape dependency capability unsupported"
 			if form == "shebang_arguments" {
@@ -291,7 +310,37 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 				files = map[string]string{"scripts/entry": "#!/usr/bin/env -S sh scripts/child.sh\ntrue\n", "scripts/child.sh": "true\n"}
 				reason = "script interpreter dependency capability unsupported"
 			}
+			if form == "shebang_python" {
+				command = "./scripts/entry"
+				files = map[string]string{"scripts/entry": "#!/usr/bin/python3\ntrue\n"}
+				reason = "script interpreter dependency capability unsupported"
+			}
+			if form == "direct_without_interpreter" {
+				command = "./scripts/entry"
+				files = map[string]string{"scripts/entry": "true\n"}
+				reason = "script interpreter dependency capability unsupported"
+			}
+			if form == "carriage_return" {
+				command = "sh scripts/entry"
+				files = map[string]string{"scripts/entry": "#!/bin/sh\nsh scripts/child.sh\r\n", "scripts/child.sh": "true\n", "scripts/child.sh\r": "true\n"}
+				reason = "execution dependency capability unsupported"
+			}
+			if strings.HasPrefix(form, "literal_marker") {
+				command = "sh @workspace@/scripts/actual.sh"
+				files = map[string]string{"scripts/actual.sh": "true\n", "@workspace@/scripts/actual.sh": "true\n"}
+				reason = "reserved workspace marker dependency capability unsupported"
+				if form == "literal_marker_argv" {
+					command = []any{"sh", "@workspace@/scripts/actual.sh"}
+				}
+				if form == "literal_marker_script" {
+					command = "sh scripts/entry"
+					files["scripts/entry"] = "#!/bin/sh\nsh @workspace@/scripts/actual.sh\n"
+				}
+			}
 			for name, data := range files {
+				if err := os.MkdirAll(filepath.Dir(filepath.Join(opts.Source, name)), 0700); err != nil {
+					t.Fatal(err)
+				}
 				if err := os.WriteFile(filepath.Join(opts.Source, name), []byte(data), 0700); err != nil {
 					t.Fatal(err)
 				}
