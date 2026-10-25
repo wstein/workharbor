@@ -61,7 +61,13 @@ func stageCredentialFreeURL(value string) bool {
 		case "https", "http", "git", "file":
 			return u.User == nil
 		case "ssh":
+			if strings.HasPrefix(u.Hostname(), "-") {
+				return false
+			}
 			if u.User != nil {
+				if strings.HasPrefix(u.User.Username(), "-") {
+					return false
+				}
 				_, password := u.User.Password()
 				return !password
 			}
@@ -84,9 +90,11 @@ func stageCredentialFreeURL(value string) bool {
 		if strings.Contains(authority, "/") {
 			return true
 		}
-		return authority != "" && !strings.Contains(authority, ":") && !strings.Contains(value[at+1:], "@")
+		host, _, _ := strings.Cut(value[at+1:], ":")
+		return authority != "" && !strings.HasPrefix(authority, "-") && !strings.HasPrefix(host, "-") && !strings.Contains(authority, ":") && !strings.Contains(value[at+1:], "@")
 	}
-	return true
+	host, _, found := strings.Cut(value, ":")
+	return !found || !strings.HasPrefix(host, "-")
 }
 func writeStageSafeConfig(ctx context.Context, home string, s stageGitSnapshot, clone string, values map[string][]string) error {
 	gitdir := filepath.Join(clone, ".git")
