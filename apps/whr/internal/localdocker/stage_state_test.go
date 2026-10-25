@@ -129,7 +129,7 @@ func TestLocalStageLostJournalBlocksFreshAttempt(t *testing.T) {
 	}
 }
 
-func TestLocalStageCompletedAttemptRetainsCloneAndAllowsFreshStage(t *testing.T) {
+func TestLocalStageVerifiedAttemptRequiresReconciliation(t *testing.T) {
 	s, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
@@ -140,27 +140,15 @@ func TestLocalStageCompletedAttemptRetainsCloneAndAllowsFreshStage(t *testing.T)
 	if err = s.Begin(op, digest); err != nil {
 		t.Fatal(err)
 	}
-	retained := filepath.Join(s.path, op, "retained-clone")
-	if err = os.WriteFile(retained, []byte("uncommitted owner work"), 0600); err != nil {
-		t.Fatal(err)
-	}
 	for _, state := range stageStates[1:] {
 		if err = s.Advance(state, "", "observed"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	receipt := stageReceipt{OperationID: op, ToolManifest: map[string]stageToolIdentity{}, OutputInventory: []StageOutputEntry{}, OriginBinding: []StageRepositoryBinding{}, CandidateGitVersion: []stageCandidateGitVersion{}, CloneRepositories: []StageRepository{}, ExportedRefs: []StageResultRef{}, ImportedObjects: []StageGitObjectsTarget{}, ResultRefTransactions: []StageGitRefsTarget{}, ActionInventory: []StageEffect{}}
-	if err = s.saveReceipt(&receipt, true); err != nil {
-		t.Fatal(err)
+	if err = s.Advance("exporting_results", "", "observed"); err == nil || !strings.Contains(err.Error(), "state transition") {
+		t.Fatalf("promote-only state admitted: %v", err)
 	}
-	if err = s.Begin(strings.Repeat("2", 32), digest); err != nil {
-		t.Fatalf("completed attempt blocked fresh stage: %v", err)
-	}
-	b, err := os.ReadFile(retained)
-	if err != nil || string(b) != "uncommitted owner work" {
-		t.Fatalf("retained clone changed: %q %v", b, err)
-	}
-	if _, err = os.Stat(filepath.Join(s.path, op, "journal.json")); err != nil {
-		t.Fatalf("completed recovery mapping lost: %v", err)
+	if err = s.Begin(strings.Repeat("2", 32), digest); err == nil || !strings.Contains(err.Error(), "retained attempt requires owner reconciliation") {
+		t.Fatalf("verified stage adopted: %v", err)
 	}
 }

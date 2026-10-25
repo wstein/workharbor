@@ -308,7 +308,7 @@ func (s *LocalStage) prepareCLIConfiguration(ctx context.Context) error {
 		}
 	}
 	s.runner.Policy = &policy
-	driver, e := s.runner.DockerDriver("preview", "")
+	driver, e := s.runner.DockerDriver("preview")
 	if e != nil {
 		return e
 	}

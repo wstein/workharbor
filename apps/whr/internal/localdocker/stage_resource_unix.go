@@ -78,7 +78,7 @@ func (s *LocalStage) prepareStageRuntime(ctx context.Context) error {
 		r.Tools[name] = fresh
 	}
 	r.Policy = s.runner.Policy
-	driver, e := r.DockerDriver("stage", "")
+	driver, e := r.DockerDriver("stage")
 	if e != nil {
 		return e
 	}
