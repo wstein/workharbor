@@ -136,6 +136,14 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	}
 	p.newPrimary = &actual
 	p.result.Primary = target
+	policy := "smoke"
+	if actual.Healthcheck {
+		policy = "health"
+		if p.settings.SmokeRequested {
+			policy = "health_and_smoke"
+		}
+	}
+	p.result.Verification = &StageVerification{Policy: policy, Status: "not_requested", BindingMode: "cooperative_quiescence", Quiescence: "caller_acknowledged", PreInputDigest: p.execution.OriginalDigest, InputDigest: p.execution.OriginalDigest, ImageID: p.receipt.Verification.ImageID, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
 	if err = p.checkBeforePhase(ctx, false); err != nil {
 		return p.effectFailure("create_primary", target, "inputs changed during primary resources", err)
 	}
@@ -162,22 +170,25 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	if err = p.recordEffect("container_hooks", StageTarget{Resource: target}, "observed"); err != nil {
 		return p.partial("primary hook observation publication failed", err)
 	}
-	verification := &StageVerification{Policy: "smoke", Status: "passed", BindingMode: "cooperative_quiescence", Quiescence: "caller_acknowledged", PreInputDigest: p.execution.OriginalDigest, PostInputDigest: stageString(p.execution.OriginalDigest), InputDigest: p.execution.OriginalDigest, ImageID: p.receipt.Verification.ImageID, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	verification := p.result.Verification
 	if actual.Healthcheck {
 		verification.Policy = "health"
 		if p.settings.SmokeRequested {
 			verification.Policy = "health_and_smoke"
 		}
 		if err = p.awaitHealth(ctx, actual.ID); err != nil {
+			verification.Status = "failed"
 			return p.partial("primary health verification failed", err)
 		}
 	} else if !p.settings.SmokeRequested {
+		verification.Status = "missing"
 		return p.partial("primary has no healthcheck and smoke was not requested", stageConflict("promotion missing_smoke"))
 	}
 	if p.settings.SmokeRequested {
 		if err = p.checkBeforePhase(ctx, false); err != nil {
 			return p.partial("pre-smoke binding changed", err)
 		}
+		verification.Status = "failed"
 		if err = p.recordEffect("smoke", StageTarget{Resource: target}, "attempted"); err != nil {
 			return p.partial("primary smoke intent failed", err)
 		}
@@ -200,6 +211,8 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 			return p.partial("primary smoke observation publication failed", err)
 		}
 	}
+	verification.Status = "passed"
+	verification.PostInputDigest = stageString(p.execution.OriginalDigest)
 	verification.ObservedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	p.result.Verification = verification
 	p.primaryVerified = true

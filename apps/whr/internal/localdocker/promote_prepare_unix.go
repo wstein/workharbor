@@ -232,7 +232,7 @@ func (p *LocalPromotion) loadArtifacts() error {
 			return stageConflict("promotion retained clone path changed")
 		}
 		info, err := os.Lstat(s.ClonePath)
-		owner, owned := infoOwner(info)
+		owner, owned := promotionInfoOwner(info)
 		if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 || !owned || owner != os.Getuid() {
 			return stageConflict("promotion retained clone mode changed")
 		}
@@ -329,7 +329,7 @@ func promotionPhaseError(ctx context.Context, phase string, err error) error {
 	return err
 }
 
-func infoOwner(info os.FileInfo) (int, bool) {
+func promotionInfoOwner(info os.FileInfo) (int, bool) {
 	if info == nil {
 		return 0, false
 	}

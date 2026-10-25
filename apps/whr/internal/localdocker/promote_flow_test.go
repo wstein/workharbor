@@ -17,9 +17,12 @@ func fixtureVerifiedPromotion(t *testing.T) (*LocalPromotion, string, stagePrepa
 	return fixtureVerifiedPromotionWithEdit(t, nil)
 }
 func fixtureVerifiedPromotionWithEdit(t *testing.T, edit func(string)) (*LocalPromotion, string, stagePreparationPorts) {
+	return fixtureVerifiedPromotionPolicy(t, false, true, edit)
+}
+func fixtureVerifiedPromotionPolicy(t *testing.T, health, smoke bool, edit func(string)) (*LocalPromotion, string, stagePreparationPorts) {
 	t.Helper()
-	c, opts, ports, path := fixturePromotionLifecycle(t)
-	opts.Smoke = true
+	c, opts, ports, path := fixturePromotionLifecycle(t, health)
+	opts.Smoke = smoke
 	s, err := c.prepareStage(context.Background(), opts, ports)
 	if err != nil {
 		t.Fatal(err)
@@ -199,6 +202,9 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
 			if exitcode.FromError(err) != exitcode.PartialFailure || err == nil || !strings.Contains(err.Error(), tc.reason) || result.Status != "partial" || len(result.Recovery) == 0 {
 				t.Fatalf("partial: %+v %v", result, err)
+			}
+			if tc.failure == "smoke" && (result.Verification == nil || result.Verification.Status != "failed") {
+				t.Fatalf("failed primary smoke reported candidate success: %+v", result.Verification)
 			}
 			found := false
 			for _, e := range result.Effects {
@@ -414,4 +420,33 @@ func TestLocalPromoteOriginalMustMatchVerifiedExecution(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertPromotionRefusal(t, p, path, LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}, exitcode.Conflict, "promotion original execution inputs differ from verified candidate")
+}
+
+func TestLocalPromoteHonorsVerifiedHealthAndSmokePolicy(t *testing.T) {
+	for _, smoke := range []bool{false, true} {
+		t.Run(map[bool]string{false: "health_only", true: "health_and_smoke"}[smoke], func(t *testing.T) {
+			p, path, _ := fixtureVerifiedPromotionPolicy(t, true, smoke, nil)
+			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+			if err != nil || result.Status != "promoted" {
+				t.Fatalf("health promotion: %s %v", result.Status, err)
+			}
+			want := "health"
+			if smoke {
+				want = "health_and_smoke"
+			}
+			if result.Verification == nil || result.Verification.Policy != want || result.Verification.Status != "passed" {
+				t.Fatalf("verification policy: %+v", result.Verification)
+			}
+			state := readFakePromotionState(t, path)
+			runs := 0
+			for _, a := range state.Calls {
+				if len(a) > 0 && a[0] == "exec" && strings.Contains(strings.Join(a, " "), strings.Repeat("e", 64)+" bash -s") {
+					runs++
+				}
+			}
+			if (runs > 0) != smoke {
+				t.Fatalf("implicit or missing primary smoke: %d requested=%v", runs, smoke)
+			}
+		})
+	}
 }

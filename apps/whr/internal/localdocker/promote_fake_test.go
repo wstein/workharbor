@@ -58,9 +58,9 @@ func writeFakePromotionState(t *testing.T, path string, s fakePromotionState) {
 		t.Fatal(e)
 	}
 }
-func fixturePromotionLifecycle(t *testing.T) (Client, StageOptions, stagePreparationPorts, string) {
+func fixturePromotionLifecycle(t *testing.T, health ...bool) (Client, StageOptions, stagePreparationPorts, string) {
 	t.Helper()
-	c, opts, p, path := fixtureStageLifecycle(t, false)
+	c, opts, p, path := fixtureStageLifecycle(t, len(health) > 0 && health[0])
 	binary, e := os.Executable()
 	if e != nil {
 		t.Fatal(e)
@@ -283,6 +283,10 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 				}
 			}
 			state.Primary = map[string]any{"Id": strings.Repeat("e", 64), "Name": "/" + value(args, "--name"), "ImageID": "sha256:" + strings.Repeat("d", 64), "ConfigImage": "sha256:" + strings.Repeat("d", 64), "User": value(args, "--user"), "Hostname": value(args, "--hostname"), "State": "running", "Running": true, "Healthcheck": nil, "Health": nil, "Labels": labels, "Mounts": mounts, "Environment": env, "Entrypoint": []string{"/bin/sh"}, "Command": []string{"-c", "fixture native entrypoint"}}
+			if state.Health {
+				state.Primary["Healthcheck"] = map[string]any{"Test": []string{"CMD", "true"}}
+				state.Primary["Health"] = "healthy"
+			}
 			if state.Failure == "wrong_image" {
 				state.Primary["ImageID"] = "sha256:" + strings.Repeat("f", 64)
 				state.Primary["ConfigImage"] = "sha256:" + strings.Repeat("f", 64)
