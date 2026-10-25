@@ -4,6 +4,7 @@ package workspacecfg
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"unicode/utf8"
@@ -79,4 +80,46 @@ func CheckDevcontainer(raw []byte) []Finding {
 		}
 	}
 	return c.list
+}
+
+// DecodeDevcontainerData returns inert parsed JSONC data. It reuses the strict
+// scanner and its encoding/size/duplicate/depth limits. Provider-subset findings
+// remain warnings owned by CheckDevcontainer, not local admission decisions.
+func DecodeDevcontainerData(raw []byte) (map[string]any, error) {
+	for _, f := range CheckDevcontainer(raw) {
+		switch f.Code {
+		case "devcontainer.too_large", "devcontainer.encoding", "devcontainer.syntax", "devcontainer.duplicate_key":
+			return nil, fmt.Errorf("invalid devcontainer data: %s", f.Code)
+		}
+	}
+	doc, e := parseStrict(raw, true)
+	if e != nil || doc.kind != jObject {
+		return nil, fmt.Errorf("invalid devcontainer data")
+	}
+	return devcontainerData(doc).(map[string]any), nil
+}
+func devcontainerData(v jvalue) any {
+	switch v.kind {
+	case jNull:
+		return nil
+	case jBool:
+		return v.b
+	case jNumber:
+		return json.Number(v.str)
+	case jString:
+		return v.str
+	case jArray:
+		out := make([]any, len(v.arr))
+		for i, item := range v.arr {
+			out[i] = devcontainerData(item)
+		}
+		return out
+	case jObject:
+		out := make(map[string]any, len(v.obj))
+		for _, item := range v.obj {
+			out[item.key] = devcontainerData(item.val)
+		}
+		return out
+	}
+	return nil
 }
