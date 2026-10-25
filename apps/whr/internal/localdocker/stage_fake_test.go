@@ -24,6 +24,7 @@ type fakeStageState struct {
 	Health                   bool
 	StateRoot                string
 	RequireDurableHomeIntent bool
+	RequireFreshFacts        bool
 }
 
 func readFakeStageState(t *testing.T, path string) fakeStageState {
@@ -133,6 +134,12 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			var cfg map[string]any
 			if json.Unmarshal(data, &cfg) != nil {
 				os.Exit(96)
+			}
+			if stageAnchorageHostInitializer(cfg) {
+				facts := strings.Replace(string(stageFactsFixture()), "HOST_NAME='captain'", "HOST_NAME='fresh-execution'", 1)
+				if e = os.WriteFile(filepath.Join(argValue(args, "--workspace-folder"), ".devcontainer", "host.env"), []byte(facts), 0600); e != nil {
+					os.Exit(113)
+				}
 			}
 			vector := []string{"run", "--sig-proxy=false", "-a", "STDOUT", "-a", "STDERR", "--mount", cfg["workspaceMount"].(string)}
 			for _, value := range cfg["mounts"].([]any) {
@@ -307,6 +314,27 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			save()
 			fmt.Println(strings.Repeat("c", 64))
 		} else if args[0] == "exec" {
+			if state.RequireFreshFacts {
+				data, _ := json.Marshal(state.Candidate)
+				var candidate stageContainerDetails
+				if json.Unmarshal(data, &candidate) != nil {
+					os.Exit(114)
+				}
+				found := false
+				for _, mount := range candidate.Mounts {
+					if mount.Type == "bind" && mount.Destination == "/workspaces/Anchorage" {
+						facts, e := os.ReadFile(filepath.Join(mount.Source, ".devcontainer", "host.env"))
+						expected := strings.Replace(string(stageFactsFixture()), "HOST_NAME='captain'", "HOST_NAME='fresh-execution'", 1)
+						if e != nil || string(facts) != expected {
+							os.Exit(115)
+						}
+						found = true
+					}
+				}
+				if !found {
+					os.Exit(116)
+				}
+			}
 			for i, v := range args {
 				if v == "bash" && i+1 < len(args) && args[i+1] == "-s" {
 					data, _ := io.ReadAll(os.Stdin)

@@ -16,6 +16,9 @@ import (
 func TestLocalStageAnchorageFactsRemainIndependentThroughPromotion(t *testing.T) {
 	c, opts, ports, path := fixturePromotionLifecycle(t)
 	opts.Smoke = true
+	state := readFakePromotionState(t, path)
+	state.RequireFreshFacts = true
+	writeFakePromotionState(t, path, state)
 	original := stageFactsFixture()
 	factsPath := filepath.Join(opts.Source, ".devcontainer", "host.env")
 	if err := os.WriteFile(factsPath, original, 0600); err != nil {
