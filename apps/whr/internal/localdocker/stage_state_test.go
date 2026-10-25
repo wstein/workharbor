@@ -110,3 +110,21 @@ func TestLocalStageJournalNeverSkipsUnobservedEffect(t *testing.T) {
 		t.Fatalf("uncertain effect retried: %v", err)
 	}
 }
+
+func TestLocalStageLostJournalBlocksFreshAttempt(t *testing.T) {
+	s, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	retained := filepath.Join(s.path, strings.Repeat("2", 32))
+	if err = os.Mkdir(retained, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Begin(strings.Repeat("1", 32), "sha256:"+strings.Repeat("a", 64)); err == nil || !strings.Contains(err.Error(), "retained attempt") {
+		t.Fatalf("lost-journal orphan adopted: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(s.path, "journal.json")); !os.IsNotExist(err) {
+		t.Fatalf("fresh intent written despite retained data: %v", err)
+	}
+}
