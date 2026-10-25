@@ -128,3 +128,39 @@ func TestLocalStageLostJournalBlocksFreshAttempt(t *testing.T) {
 		t.Fatalf("fresh intent written despite retained data: %v", err)
 	}
 }
+
+func TestLocalStageCompletedAttemptRetainsCloneAndAllowsFreshStage(t *testing.T) {
+	s, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	op := strings.Repeat("1", 32)
+	digest := "sha256:" + strings.Repeat("a", 64)
+	if err = s.Begin(op, digest); err != nil {
+		t.Fatal(err)
+	}
+	retained := filepath.Join(s.path, op, "retained-clone")
+	if err = os.WriteFile(retained, []byte("uncommitted owner work"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range stageStates[1:] {
+		if err = s.Advance(state, "", "observed"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	receipt := stageReceipt{OperationID: op, ToolManifest: map[string]stageToolIdentity{}, OutputInventory: []StageOutputEntry{}, OriginBinding: []StageRepositoryBinding{}, CandidateGitVersion: []stageCandidateGitVersion{}, CloneRepositories: []StageRepository{}, ExportedRefs: []StageResultRef{}, ImportedObjects: []StageGitObjectsTarget{}, ResultRefTransactions: []StageGitRefsTarget{}, ActionInventory: []StageEffect{}}
+	if err = s.saveReceipt(&receipt, true); err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Begin(strings.Repeat("2", 32), digest); err != nil {
+		t.Fatalf("completed attempt blocked fresh stage: %v", err)
+	}
+	b, err := os.ReadFile(retained)
+	if err != nil || string(b) != "uncommitted owner work" {
+		t.Fatalf("retained clone changed: %q %v", b, err)
+	}
+	if _, err = os.Stat(filepath.Join(s.path, op, "journal.json")); err != nil {
+		t.Fatalf("completed recovery mapping lost: %v", err)
+	}
+}
