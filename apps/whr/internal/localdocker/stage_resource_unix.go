@@ -196,6 +196,9 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 	if e = s.store.saveReceipt(s.receipt, false); e != nil {
 		return fail("resource observation receipt failed", e)
 	}
+	if e = s.admitMergedDependencies(ctx, up.MergedConfiguration); e != nil {
+		return fail("lifecycle execution dependency capability unsupported", e)
+	}
 	if stageAnchorageHostInitializer(s.config) {
 		facts, digest, e := readStageHostFacts(filepath.Join(s.capture.Path, ".devcontainer", "host.env"))
 		if e != nil {
@@ -229,7 +232,7 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 	if s.originalFacts != nil {
 		s.receipt.OutputInventory = append(s.receipt.OutputInventory, StageOutputEntry{Path: filepath.Join(s.capture.Source, ".devcontainer", "host.env"), Origin: "admitted_A", Size: int64(len(s.originalFacts)), Digest: s.originalFactsDigest, AdmissionOperationID: s.operationID, AdmissionInputDigest: s.fingerprint})
 	}
-	paths := []string{".devcontainer", "Makefile", ".gitignore", ".gitmodules", "bundledock", "BundleDock", s.configRelative}
+	paths := s.executionPaths
 	before, e := stageExecutionDigest(ctx, s.clonePath, paths)
 	if e != nil {
 		return fail("candidate execution inventory failed", e)
@@ -479,7 +482,18 @@ func (s *LocalStage) persistStageVerification(ctx context.Context, candidate sta
 		s.result.Repositories[i].HeadOID = current.Head
 		s.result.Repositories[i].Dirty = current.Dirty
 		s.result.Repositories[i].UncommittedRetained = current.UncommittedRetained
-		s.execution.GitInputs = append(s.execution.GitInputs, stageExecutionGitInput{RepositoryPath: repository.Source, Predicate: "status_success", InputDigest: stageDigest("git status succeeds")})
+		input := stageExecutionGitInput{RepositoryPath: repository.Source, Predicate: "status_success", InputDigest: stageDigest("git status succeeds")}
+		if s.gitInputMode != "none" {
+			input.Predicate = "literal_status_success"
+			if s.gitInputMode == "known_identity" {
+				input.Predicate = "known_git_identity"
+			}
+			input.InputDigest, e = stageConsumedGitInputDigest(ctx, repository, current, s.gitInputMode == "known_identity")
+			if e != nil {
+				return e
+			}
+		}
+		s.execution.GitInputs = append(s.execution.GitInputs, input)
 	}
 	if e = stageCheckExecutionGit(ctx, s.execution.GitInputs, s.git.Repositories); e != nil {
 		return e

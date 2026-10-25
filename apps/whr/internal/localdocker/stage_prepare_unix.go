@@ -62,6 +62,8 @@ type LocalStage struct {
 	effectiveConfig                                  map[string]any
 	sourceMetadata                                   map[string]any
 	initializeLabels                                 []string
+	executionPaths                                   []string
+	gitInputMode                                     string
 	artifacts                                        map[string]string
 }
 
@@ -209,6 +211,15 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	if err = admitStageConfig(s.config, s.capture.Omitted); err != nil {
 		return nil, err
 	}
+	s.executionPaths, s.gitInputMode, err = admitStageDependencies(ctx, s.capture.Path, s.capture.Source, s.workspace, s.config, options.Smoke, s.configRelative)
+	if err != nil {
+		return nil, err
+	}
+	if s.gitInputMode == "known_identity" {
+		if err = stageKnownSmokeOmittedInput(s.capture.Source); err != nil {
+			return nil, err
+		}
+	}
 	if options.Smoke {
 		if _, e = readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10); e != nil {
 			return nil, stageConflict("smoke input exceeds 256 KiB or is unavailable")
@@ -224,6 +235,17 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	s.git, err = captureStageGit(ctx, s.capture.Source, s.capture.Path, previewClone)
 	if err != nil {
 		return nil, err
+	}
+	if s.gitInputMode != "none" {
+		for _, repo := range s.git.Repositories {
+			current, e := readStageGitSnapshotContext(ctx, repo.ClonePath, true)
+			if e != nil {
+				return nil, e
+			}
+			if _, e = stageConsumedGitInputDigest(ctx, repo, current, s.gitInputMode == "known_identity"); e != nil {
+				return nil, e
+			}
+		}
 	}
 	for _, repo := range s.git.Repositories {
 		if err = os.Chmod(repo.ClonePath, 0700); err != nil {
@@ -373,6 +395,10 @@ func (s *LocalStage) disclose() {
 		return
 	}
 	fmt.Fprintln(s.options.Diagnostics, "Pause input writers for capture and every execution phase; hashes are cooperative drift checks. Trusted container hooks have read-write access to their previewed workspace.")
+	fmt.Fprintln(s.options.Diagnostics, "Execution dependency capability: literal non-expanding commands and exact inspected Anchorage helper bodies only; opaque or dynamic bodies require a supported capability before execution.")
+	if s.gitInputMode == "known_identity" {
+		fmt.Fprintln(s.options.Diagnostics, "Known greeting/smoke consumes HEAD, selected branch/upstream counts and status; changes to these execution inputs require fresh staging. Unrelated result-only refs remain eligible.")
+	}
 	fmt.Fprintf(s.options.Diagnostics, "verification policy: healthcheck when present; trusted stdin smoke requested=%t; otherwise staged_unverified.\n", s.options.Smoke)
 	if _, ok := s.config["initializeCommand"]; ok {
 		fmt.Fprintln(s.options.Diagnostics, "host initialization: captured source contribution; effects and generated host facts are part of this trust decision.")

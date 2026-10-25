@@ -25,6 +25,9 @@ func TestLocalStageAnchorageFactsRemainIndependentThroughPromotion(t *testing.T)
 	if err := os.WriteFile(factsPath, original, 0600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(opts.Source, ".devcontainer", "host-info.sh"), []byte("printf synthetic-host-producer\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	cfg := map[string]any{"image": "example:local", "remoteUser": "vscode", "initializeCommand": []any{"sh", "${localWorkspaceFolder}/.devcontainer/host-info.sh"}, "postCreateCommand": []any{"sh", ".devcontainer/setup.sh"}}
 	raw, _ := json.Marshal(cfg)
 	if err := os.WriteFile(filepath.Join(opts.Source, ".devcontainer", "devcontainer.json"), raw, 0600); err != nil {

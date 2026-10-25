@@ -315,6 +315,9 @@ func (s *LocalStage) prepareCLIConfiguration(ctx context.Context) error {
 	if e = decodeDockerRecord(d, &response); e != nil || d.Decode(new(any)) != io.EOF || response.Configuration == nil || response.MergedConfiguration == nil {
 		return stageConflict("official merged configuration capability unavailable")
 	}
+	if e = s.admitMergedDependencies(ctx, response.MergedConfiguration); e != nil {
+		return e
+	}
 	s.initializeLabels, e = stageInitializeLabels(response.Configuration["initializeCommand"])
 	return e
 }

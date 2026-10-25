@@ -169,6 +169,11 @@ func TestLocalStageKnownGitConsumptionBindsReceiptThenCandidateCommit(t *testing
 	opts.Smoke = true
 	writeStageKnownDependencyFixture(t, opts.Source, ".devcontainer/greeting-info.sh", ".devcontainer/pins-hash.sh")
 	setStageFixtureHook(t, opts.Source, []any{"sh", ".devcontainer/greeting-info.sh", "commit"})
+	branch := fixtureGit(t, opts.Source, "symbolic-ref", "--short", "HEAD")
+	fixtureGit(t, opts.Source, "remote", "add", "origin", "https://example.invalid/fixture.git")
+	fixtureGit(t, opts.Source, "update-ref", "refs/remotes/origin/"+branch, "HEAD")
+	fixtureGit(t, opts.Source, "branch", "--set-upstream-to=origin/"+branch, branch)
+
 	s, err := c.prepareStage(context.Background(), opts, ports)
 	if err != nil {
 		t.Fatal(err)
@@ -185,6 +190,20 @@ func TestLocalStageKnownGitConsumptionBindsReceiptThenCandidateCommit(t *testing
 	}
 	clone := s.clonePath
 	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Unrelated result refs do not affect the selected branch/status/upstream.
+	tree := fixtureGit(t, clone, "rev-parse", "HEAD^{tree}")
+	unrelated := fixtureGit(t, clone, "commit-tree", tree, "-p", "HEAD", "-m", "unrelated result")
+	fixtureGit(t, clone, "update-ref", "refs/heads/unrelated-result", unrelated)
+	if err = os.WriteFile(path+".promotion", []byte("1"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	unchanged, err := c.preparePromotion(context.Background(), PromoteOptions{Target: strings.Repeat("a", 64)}, ports)
+	if err != nil {
+		t.Fatalf("unrelated result branch invalidated consumed projection: %v", err)
+	}
+	if err = unchanged.Close(); err != nil {
 		t.Fatal(err)
 	}
 	if err = os.WriteFile(filepath.Join(clone, "file"), []byte("normal result commit consumes different HEAD\n"), 0600); err != nil {

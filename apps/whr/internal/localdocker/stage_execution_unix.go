@@ -121,6 +121,14 @@ func stageCheckExecutionGit(ctx context.Context, inputs []stageExecutionGitInput
 			if e = stageValidateGitStatus(ctx, current); e != nil {
 				return e
 			}
+		case "known_git_identity", "literal_status_success":
+			digest, e := stageConsumedGitInputDigest(ctx, *repository, current, input.Predicate == "known_git_identity")
+			if e != nil {
+				return e
+			}
+			if digest != input.InputDigest {
+				return stageConflict("consumed Git execution inputs changed")
+			}
 		case "exact_version":
 			if input.InputDigest != stageExactGitInputDigest(current) {
 				return stageConflict("executed Git input version changed")
@@ -133,37 +141,48 @@ func stageCheckExecutionGit(ctx context.Context, inputs []stageExecutionGitInput
 }
 
 func stageValidateGitStatus(parent context.Context, snapshot stageGitSnapshot) error {
+	_, err := stageGitStatusDigest(parent, snapshot)
+	return err
+}
+func stageGitStatusDigest(parent context.Context, snapshot stageGitSnapshot) (string, error) {
+	return stageReadGitStatusDigest(parent, snapshot, false)
+}
+func stageReadGitStatusDigest(parent context.Context, snapshot stageGitSnapshot, known bool) (string, error) {
 	ctx, tool, e := pinStageGit(parent)
 	if e != nil {
-		return e
+		return "", e
 	}
 	if tool.Path != snapshot.GitToolPath || tool.Digest != snapshot.GitToolDigest {
-		return stageConflict("executed Git tool identity changed")
+		return "", stageConflict("executed Git tool identity changed")
 	}
 	private, e := os.MkdirTemp("", "whr-git-predicate-")
 	if e != nil {
-		return stageConflict("executed Git status predicate storage unavailable")
+		return "", stageConflict("executed Git status predicate storage unavailable")
 	}
 	defer os.RemoveAll(private)
 	if e = os.Chmod(private, 0700); e != nil {
-		return stageConflict("executed Git status predicate storage mode")
+		return "", stageConflict("executed Git status predicate storage mode")
 	}
 	reader := filepath.Join(private, "reader.git")
 	if e = initStageGit(ctx, private, reader, snapshot.ObjectFormat); e != nil {
-		return e
+		return "", e
 	}
 	if e = os.WriteFile(filepath.Join(reader, "HEAD"), []byte(snapshot.Head+"\n"), 0600); e != nil {
-		return stageConflict("executed Git status predicate storage failed")
+		return "", stageConflict("executed Git status predicate storage failed")
 	}
 	if _, _, e = prepareStageIndex(ctx, private, reader, snapshot); e != nil {
-		return stageConflict("executed Git status predicate failed")
+		return "", stageConflict("executed Git status predicate failed")
 	}
-	_, e = stageGitRead(ctx, private, reader, snapshot.ObjectDir, filepath.Join(reader, "index"), nil, "--work-tree="+snapshot.Source, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=all", "--no-renames")
+	args := []string{"--work-tree=" + snapshot.Source, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignore-submodules=all", "--no-renames"}
+	if known {
+		args = []string{"--work-tree=" + snapshot.Source, "status", "--porcelain=v1", "--ignore-submodules=dirty"}
+	}
+	output, e := stageGitRead(ctx, private, reader, snapshot.ObjectDir, filepath.Join(reader, "index"), nil, args...)
 	if e != nil {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return "", ctx.Err()
 		}
-		return stageConflict("executed Git status predicate failed")
+		return "", stageConflict("executed Git status predicate failed")
 	}
-	return nil
+	return stageBytesDigest(output), nil
 }
