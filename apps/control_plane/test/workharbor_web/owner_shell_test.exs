@@ -153,7 +153,8 @@ defmodule WorkHarborWeb.OwnerShellTest do
   end
 
   test "owner page CSP is exact and contains no inline scripts or styles", c do
-    page = get(c.conn, "/owner")
+    page = get(c.conn, "https://localhost/owner")
+    assert page.status == 200
 
     csp =
       "default-src 'none'; script-src 'self'; style-src 'self'; " <>
@@ -207,7 +208,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
   end
 
   defp mount_shell(conn) do
-    page = get(conn, "/owner")
+    page = get(conn, "https://localhost/owner")
     html = html_response(page, 200)
     assert html =~ "data-phx-session", "owner page must become a LiveView before connecting"
     assert {:ok, view, connected_html} = live(page)
