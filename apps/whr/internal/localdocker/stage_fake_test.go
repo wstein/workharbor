@@ -27,6 +27,8 @@ type fakeStageState struct {
 	RequireFreshFacts        bool
 	MergedLifecycle          map[string][]any
 	LateMergedLifecycle      map[string][]any
+	MutateCapturedSmokePath  string
+	HooksCompleted           bool
 }
 
 func readFakeStageState(t *testing.T, path string) fakeStageState {
@@ -267,6 +269,11 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if item == nil || item["Id"] != id {
 				os.Exit(102)
 			}
+			if id == state.Primary["Id"] && state.HooksCompleted && state.MutateCapturedSmokePath != "" {
+				if e = os.WriteFile(state.MutateCapturedSmokePath, []byte("printf tampered-smoke\n"), 0600); e != nil {
+					os.Exit(119)
+				}
+			}
 			labels := item["Labels"].(map[string]any)
 			if strings.Contains(format, "{{.Name}} {{index") {
 				fmt.Printf("%s %s\n", item["Name"], labels["workharbor.stage.operation"])
@@ -376,6 +383,8 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			save()
 			fmt.Println(strings.Repeat("c", 64))
 		} else if args[0] == "exec" {
+			state.HooksCompleted = true
+			save()
 			if state.RequireFreshFacts {
 				data, _ := json.Marshal(state.Candidate)
 				var candidate stageContainerDetails
