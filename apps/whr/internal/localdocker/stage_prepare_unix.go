@@ -211,6 +211,11 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	if err = admitStageConfig(s.config, s.capture.Omitted); err != nil {
 		return nil, err
 	}
+	if options.Smoke {
+		if _, e = readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10); e != nil {
+			return nil, stageConflict("smoke input exceeds 256 KiB or is unavailable")
+		}
+	}
 	s.executionPaths, s.gitInputMode, err = admitStageDependencies(ctx, s.capture.Path, s.capture.Source, s.workspace, s.config, options.Smoke, s.configRelative)
 	if err != nil {
 		return nil, err
@@ -218,11 +223,6 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	if s.gitInputMode == "known_identity" {
 		if err = stageKnownSmokeOmittedInput(s.capture.Source); err != nil {
 			return nil, err
-		}
-	}
-	if options.Smoke {
-		if _, e = readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10); e != nil {
-			return nil, stageConflict("smoke input exceeds 256 KiB or is unavailable")
 		}
 	}
 	// Git construction is local and private even during preview. No persistent
