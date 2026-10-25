@@ -7,7 +7,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
   import Phoenix.LiveViewTest
   alias WorkHarbor.{Accounts, Repo}
   alias WorkHarbor.FoundationDatabase, as: DB
-  alias WorkHarborWeb.{BrowserSession, CoreComponents, Endpoint, Layouts}
+  alias WorkHarborWeb.{BrowserSession, CoreComponents, Endpoint, Layouts, OwnerSocket}
   @endpoint Endpoint
 
   setup tags do
@@ -129,7 +129,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
 
     logs =
       ExUnit.CaptureLog.capture_log([level: :debug], fn ->
-        for event <- ["delete", "approve", "enroll", "lv:clear-flash", "unknown"] do
+        for event <- ["delete", "approve", "enroll", "unknown", "FORGED-EVENT-CANARY"] do
           render_hook(view, event, payload)
         end
       end)
@@ -137,6 +137,111 @@ defmodule WorkHarborWeb.OwnerShellTest do
     assert Process.alive?(view.pid)
     assert database_snapshot() == before
     refute logs =~ "FORGED-PAYLOAD-CANARY"
+    refute logs =~ "FORGED-EVENT-CANARY"
+  end
+
+  test "owner transport drops application envelopes before channel dispatch" do
+    topic = "lv:transport-probe"
+
+    state = %{
+      channels: %{topic => {self(), make_ref(), :joined}},
+      channels_inverse: %{self() => {topic, "join-ref"}},
+      max_channels_per_transport: 100
+    }
+
+    transport = {state, %Phoenix.Socket{serializer: Phoenix.Socket.V2.JSONSerializer}}
+    before = database_snapshot()
+    prior_level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: prior_level) end)
+
+    logs =
+      ExUnit.CaptureLog.capture_log([level: :debug], fn ->
+        for target <- [topic, "lvu:transport-probe", "unknown:transport-probe"],
+            payload <- forged_payloads() do
+          assert {:ok, ^transport} =
+                   OwnerSocket.handle_in(wire_message(target, "event", payload), transport)
+        end
+      end)
+
+    refute_receive %Phoenix.Socket.Message{}, 50
+    refute_receive {:socket_push, _, _}, 50
+    assert database_snapshot() == before
+    refute logs =~ "FORGED-PAYLOAD-CANARY"
+    refute logs =~ "FORGED-EVENT-CANARY"
+  end
+
+  test "owner transport preserves protocol joins and protects mounted flash state", c do
+    page = get(c.conn, "https://localhost/owner")
+    html = html_response(page, 200)
+    [_, signed] = Regex.run(~r/data-phx-session="([^"]+)"/, html)
+    [_, static] = Regex.run(~r/data-phx-static="([^"]*)"/, html)
+    assert {:ok, %{id: id}} = Phoenix.LiveView.Static.verify_token(Endpoint, signed)
+    topic = "lv:" <> id
+
+    assert {:ok, transport} =
+             OwnerSocket.connect(%{
+               endpoint: Endpoint,
+               transport: :websocket,
+               options: [serializer: [{Phoenix.Socket.V2.JSONSerializer, "~> 2.0.0"}]],
+               params: %{"vsn" => "2.0.0"},
+               connect_info: %{session: get_session(page)}
+             })
+
+    assert {:ok, transport} = OwnerSocket.init(transport)
+    heartbeat = wire_message("phoenix", "heartbeat", %{}, nil, "heartbeat-ref")
+    assert {:reply, :ok, {:text, encoded}, ^transport} = OwnerSocket.handle_in(heartbeat, transport)
+
+    assert [nil, "heartbeat-ref", "phoenix", "phx_reply", %{"status" => "ok"}] =
+             Jason.decode!(IO.iodata_to_binary(encoded))
+
+    join = %{
+      "session" => signed,
+      "static" => static,
+      "url" => "https://localhost/owner",
+      "params" => %{"_mounts" => 0}
+    }
+
+    assert {:reply, :ok, {:text, joined}, transport} =
+             OwnerSocket.handle_in(wire_message(topic, "phx_join", join), transport)
+
+    assert ["join-ref", "event-ref", ^topic, "phx_reply", %{"status" => "ok"}] =
+             Jason.decode!(IO.iodata_to_binary(joined))
+
+    {state, _socket} = transport
+    {pid, _monitor, :joined} = Map.fetch!(state.channels, topic)
+    monitor = Process.monitor(pid)
+    on_exit(fn -> if Process.alive?(pid), do: GenServer.stop(pid, :normal) end)
+
+    :sys.replace_state(pid, fn state ->
+      %{state | socket: Phoenix.LiveView.put_flash(state.socket, :info, "RESERVED-FLASH-CANARY")}
+    end)
+
+    before = database_snapshot()
+    prior_level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: prior_level) end)
+
+    logs =
+      ExUnit.CaptureLog.capture_log([level: :debug], fn ->
+        for payload <- forged_payloads() do
+          assert {:ok, ^transport} =
+                   OwnerSocket.handle_in(wire_message(topic, "event", payload), transport)
+        end
+
+        assert :ok = Phoenix.LiveView.Channel.ping(pid)
+      end)
+
+    assert Process.alive?(pid)
+    assert :sys.get_state(pid).socket.assigns.flash["info"] == "RESERVED-FLASH-CANARY"
+    assert database_snapshot() == before
+    refute logs =~ "FORGED-PAYLOAD-CANARY"
+    refute logs =~ "FORGED-EVENT-CANARY"
+
+    assert {:ok, _transport} =
+             OwnerSocket.handle_in(wire_message(topic, "phx_leave", %{}), transport)
+
+    assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}, 1_000
   end
 
   test "shell refresh performs no domain reads or writes", c do
@@ -281,5 +386,26 @@ defmodule WorkHarborWeb.OwnerShellTest do
     Map.new(tables, fn table ->
       {table, DB.sql("SELECT * FROM " <> table <> " ORDER BY rowid").rows}
     end)
+  end
+
+  defp forged_payloads do
+    for event <- ["delete", "unknown", "lv:clear-flash", "lv:FORGED-EVENT-CANARY"],
+        payload <- [
+          %{"event" => event, "type" => "hook", "value" => %{"secret" => "FORGED-PAYLOAD-CANARY"}},
+          %{
+            "event" => event,
+            "type" => "form",
+            "value" => "secret=FORGED-PAYLOAD-CANARY",
+            "cid" => 123,
+            "uploads" => %{"FORGED-PAYLOAD-CANARY" => []}
+          },
+          %{"event" => event},
+          "FORGED-PAYLOAD-CANARY"
+        ],
+        do: payload
+  end
+
+  defp wire_message(topic, event, payload, join_ref \\ "join-ref", ref \\ "event-ref") do
+    {Jason.encode!([join_ref, ref, topic, event, payload]), [opcode: :text]}
   end
 end
