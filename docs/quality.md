@@ -220,3 +220,108 @@ native passes apply only to the recorded historical head. No local tool install,
 standalone build or product implementation follows from these three narrow REDs;
 remaining behavior waits for working fixtures and the separate implementation
 instruction.
+
+### HTTPS fixtures and authorized W1 implementation (2026-10-25)
+
+[CI run 40141642719, bootstrap job](https://github.com/wstein/workharbor/actions/runs/40141642719/job/121015021901)
+executed `ea5c97da12cb0f6530582db46f3d1e83c6f5a5b5`'s corrected Host fixtures.
+Native format, warnings-as-errors compilation and asset build passed; ExUnit
+reported **224/241 passed, 17 failed**. The protected Host-setter exceptions were
+gone. Classification of all 17 failure records:
+
+| Classification | Count | Evidence |
+| --- | --- | --- |
+| Earlier semantic RED, retained | 3 | Client socket path, root 303 response and missing `/owner/auth` controller route. |
+| Additional semantic RED | 4 | Missing assets, route verbs, raw FR-022 U+0000 and absent owner-auth module. |
+| HTTP fixture admission blocks | 10 | Relative ConnTest dispatch resets the scheme to HTTP; owner-positive requests receive 403, including the CSP test. These do not prove the intended shell assertions. |
+
+The expired/revoked admission test also passed without proving its intended HTTPS
+path: HTTP admission rejected the fixture first. The hostile HTML/attribute test
+did execute and pass. The absolute HTTPS fixture correction now preserves the
+production TLS/authority/origin guards and asserts a positive 200 response before
+checking owner-page CSP. The cause follows pinned
+[Phoenix ConnTest dispatch](https://github.com/phoenixframework/phoenix/blob/v1.8.15/lib/phoenix/test/conn_test.ex#L212)
+and [Plug test connection construction](https://github.com/elixir-plug/plug/blob/v1.20.3/lib/plug/adapters/test/conn.ex#L7),
+whose relative-URI default is HTTP.
+
+The owner subsequently authorized W1 implementation in this same PR with new
+commits only. The implementation provides the protected links-only `/owner`
+LiveView, root 303 alias, separate `/owner/auth` controller forms, existing guarded
+`/owner/live` transport, strict owner CSP, exact two-asset allowlist and encrypted
+cookie namespace separation. Page events ignore forged payloads without logging;
+the page has no application mutation handlers, domain reads or writes. Private
+credential admission state is revalidated on navigation and a one-second server
+timer; the first denial cancels the timer, clears the principal and redirects.
+No future host/workspace/trust routes, storage, lifecycle controls or dependencies
+were added. The original 18 required W1 test identities remain unchanged.
+
+The credential-to-DOM boundary was checked against pinned LiveView 1.2.12 source:
+[Static.load_session and rendering](https://github.com/phoenixframework/phoenix_live_view/blob/v1.2.12/lib/phoenix_live_view/static.ex#L43)
+keep the default user mount-session map separate from the merged server cookie
+session, and only the former is signed into `data-phx-session`.
+[Channel mount](https://github.com/phoenixframework/phoenix_live_view/blob/v1.2.12/lib/phoenix_live_view/channel.ex#L1207)
+merges the server-side transport session for mount. This implementation supplies no
+explicit mount-session override and keeps the principal in socket private state.
+The shell test verifies the rendered signed token and rejects a `credential` key.
+The existing custom OwnerSocket and encrypted HttpOnly cookie remain unchanged.
+
+Needed icons now use fixed inline SVG geometry; theme buttons use text labels.
+The stylesheet removes both icon-mask and component generators that can emit
+image data URLs. The required test inspects the actual generated CSS bundle for
+`data:image`, in addition to source/markup guards; no passing bundle result on the
+new implementation is claimed before CI. The root has no inline script or style.
+Theme changes and flash dismissal use client-only operations under the strict
+policy; the WSS source comes from the validated configured origin, never Host.
+
+### W1 accessibility checklist and verification limits
+
+Source review covers landmarks, one primary heading, ordered owner navigation,
+skip link, named theme buttons and dismiss controls, visible keyboard focus,
+responsive wrapping and system/light/dark CSS variables. Navigation and buttons
+declare at least 44px target height; theme/dismiss buttons also declare 44px width.
+These declarations exceed the plan's 24px minimum, but browser dimensions have
+not been measured.
+
+A Python calculation of the committed hex variables used WCAG sRGB linearization
+and `(lighter luminance + 0.05) / (darker luminance + 0.05)`. Each cell below is the
+minimum against both page and surface backgrounds; these are source-palette
+ratios, not computed browser styles or a full accessibility audit.
+
+| Foreground / purpose | Light | Dark | Threshold |
+| --- | --- | --- | --- |
+| Main text | 15.55 | 13.40 | 4.5 |
+| Muted text | 7.24 | 9.89 | 4.5 |
+| Links | 7.23 | 8.80 | 4.5 |
+| Error text | 7.94 | 7.73 | 4.5 |
+| Focus outline | 7.23 | 8.80 | 3.0 |
+| Control/surface borders | 4.55 | 3.08 | 3.0 |
+
+Actual local `python3 scripts/check_repo.py`, scoped `typos`, `git diff --check`,
+the 18-identity inventory comparison and read-only source-boundary checks passed.
+The context guard distinguishes module calls/imports from the visible `Hosts`
+heading. These checks do not execute ExUnit or verify the generated bundle. Mix, Elixir,
+Erlang and Node are absent from PATH and inspected known locations; `mix test`
+and `node --check` attempts exit 127. No tools were installed. Native format,
+warnings-as-errors compile, asset build, generated-bundle checks and ExUnit for
+the new implementation remain **unverified pending CI**. Historical native passes
+above apply only to those exact earlier test heads. Full `make check` and
+independent exact-head review are separate coordinator checks.
+
+The named **W1 owner browser walkthrough** remains unverified. On an independently
+owner-authorized TLS host and browser, record the exact source head, browser and
+origin, then check:
+
+1. Owner login, `/` to `/owner` 303, overview and `/owner/auth` navigation; inactive
+   future sections, controller-only credential/logout forms and CSRF refusal.
+2. Native WSS join/reconnect and CSP console; only the two self-hosted assets,
+   visible inline icons, no data-image requests or blocked inline script/styles.
+3. Keyboard-only skip/navigation/theme/dismiss focus order, accessible names and
+   pressed states; light, dark and system changes; computed contrast and target
+   dimensions at 320px, 768px and 1280px without horizontal overflow.
+4. Connection-loss/stale banner, recovery, mounted expiry and revocation redirect;
+   a single denial audit without a repeating loop. Inspect no token in rendered
+   signed session or application browser storage, without recording credentials.
+
+No server, browser, host workspace, relay, local daemon or provider operation was
+activated for this handoff. No W1, T012, feature or browser acceptance completion
+is claimed by these source changes or historical CI evidence.
