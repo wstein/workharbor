@@ -17,6 +17,7 @@ type stageDependencyAdmission struct {
 	ctx                     context.Context
 	root, source, workspace string
 	paths, seen             map[string]bool
+	directSeen              map[string]bool
 	catalogue               map[string]stageKnownDependency
 	gitIdentity             bool
 	gitStatus               bool
@@ -27,7 +28,7 @@ type stageDependencyAdmission struct {
 // Opaque known Anchorage bodies require exact inspected bytes and recursively
 // admitted helpers. Other opaque/dynamic programs refuse before allocation.
 func admitStageDependencies(ctx context.Context, root, source, workspace string, config map[string]any, smoke bool, configuration string) ([]string, string, error) {
-	d := &stageDependencyAdmission{ctx: ctx, root: root, source: source, workspace: workspace, paths: map[string]bool{}, seen: map[string]bool{}, catalogue: stageKnownDependencies}
+	d := &stageDependencyAdmission{ctx: ctx, root: root, source: source, workspace: workspace, paths: map[string]bool{}, seen: map[string]bool{}, directSeen: map[string]bool{}, catalogue: stageKnownDependencies}
 	for _, path := range []string{".devcontainer", "Makefile", ".gitignore", ".gitmodules", "bundledock", "BundleDock", configuration} {
 		d.paths[path] = true
 	}
@@ -65,11 +66,11 @@ func (d *stageDependencyAdmission) command(value any) error {
 		if strings.Contains(value, "@workspace@") {
 			return stageConflict("reserved workspace marker dependency capability unsupported")
 		}
-		logical := d.logical(value)
-		if strings.Contains(logical, "${") {
-			return stageDependencyUnsupported()
+		resolved, err := d.configCommand(value, true)
+		if err != nil {
+			return err
 		}
-		argv, err := stageLiteralCommand(logical)
+		argv, err := stageLiteralCommand(resolved)
 		if err != nil {
 			return err
 		}
@@ -84,11 +85,11 @@ func (d *stageDependencyAdmission) command(value any) error {
 			if strings.Contains(arg, "@workspace@") {
 				return stageConflict("reserved workspace marker dependency capability unsupported")
 			}
-			logical := d.logical(arg)
-			if strings.Contains(logical, "${") {
-				return stageDependencyUnsupported()
+			resolved, err := d.configCommand(arg, false)
+			if err != nil {
+				return err
 			}
-			argv = append(argv, logical)
+			argv = append(argv, resolved)
 		}
 		return d.argv(argv)
 	case map[string]any:
@@ -107,10 +108,39 @@ func (d *stageDependencyAdmission) command(value any) error {
 		return stageDependencyUnsupported()
 	}
 }
+
+// Resolve only official config substitutions before tokenization. File path
+// normalization happens later, after argv boundaries are fixed. Scalar forms
+// whose phase paths need shell quoting are outside this bounded capability.
+func (d *stageDependencyAdmission) configCommand(value string, scalar bool) (string, error) {
+	for _, item := range []struct {
+		variable, actual string
+		phases           []string
+	}{
+		{"${localWorkspaceFolder}", d.root, []string{d.root, d.source}},
+		{"${containerWorkspaceFolder}", d.workspace, []string{d.workspace}},
+	} {
+		if !strings.Contains(value, item.variable) {
+			continue
+		}
+		if scalar {
+			for _, path := range item.phases {
+				if strings.ContainsAny(path, " \t\r\n'\"\\$`;&|<>(){}*?[]~") {
+					return "", stageConflict("workspace path substitution dependency capability unsupported")
+				}
+			}
+		}
+		value = strings.ReplaceAll(value, item.variable, item.actual)
+	}
+	if strings.Contains(value, "${") {
+		return "", stageDependencyUnsupported()
+	}
+	return value, nil
+}
 func (d *stageDependencyAdmission) logical(value string) string {
-	for _, prefix := range []string{"${localWorkspaceFolder}", "${containerWorkspaceFolder}", d.root, d.source, d.workspace} {
+	for _, prefix := range []string{d.root, d.source, d.workspace} {
 		if prefix != "" {
-			value = strings.ReplaceAll(value, prefix+"/", "@workspace@/")
+			value = strings.ReplaceAll(value, prefix+"/", d.root+"/")
 		}
 	}
 	return value
@@ -166,7 +196,19 @@ func (d *stageDependencyAdmission) file(name string, executable bool, direct ...
 	if err := d.ctx.Err(); err != nil {
 		return err
 	}
-	name = strings.TrimPrefix(d.logical(name), "@workspace@/")
+	name = d.logical(name)
+	// Normalize admitted physical path tokens only; never interpret a user
+	// pathname as a magic workspace alias, even after shell token assembly.
+	if strings.HasPrefix(name, "@workspace@") {
+		return stageConflict("reserved workspace marker dependency capability unsupported")
+	}
+	if filepath.IsAbs(name) {
+		relative, err := filepath.Rel(d.root, name)
+		if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return stageDependencyUnsupported()
+		}
+		name = relative
+	}
 	name = strings.TrimPrefix(name, "./")
 	if name == "" || filepath.IsAbs(name) || filepath.Clean(name) != name || name == ".." || strings.HasPrefix(name, "../") || strings.ContainsRune(name, 0) {
 		return stageDependencyUnsupported()
@@ -187,10 +229,14 @@ func (d *stageDependencyAdmission) file(name string, executable bool, direct ...
 		return stageConflict("execution dependency path outside workspace")
 	}
 	d.paths[relative] = true
-	if checked, exists := d.seen[relative]; exists && (!executable || checked) {
+	isDirect := len(direct) != 0 && direct[0]
+	if checked, exists := d.seen[relative]; exists && (!executable || checked) && (!isDirect || d.directSeen[relative]) {
 		return nil
 	}
 	d.seen[relative] = executable
+	if isDirect {
+		d.directSeen[relative] = true
+	}
 	data, err := readStageInput(resolved, stageMaxFileBytes)
 	if err != nil {
 		return stageConflict("required execution dependency unavailable")
@@ -213,7 +259,7 @@ func (d *stageDependencyAdmission) file(name string, executable bool, direct ...
 	if !executable {
 		return nil
 	}
-	if len(direct) != 0 && direct[0] && !strings.HasPrefix(string(data), "#!") {
+	if isDirect && !strings.HasPrefix(string(data), "#!") {
 		return stageConflict("script interpreter dependency capability unsupported")
 	}
 	if strings.HasPrefix(string(data), "#!") {
@@ -236,7 +282,7 @@ func (d *stageDependencyAdmission) file(name string, executable bool, direct ...
 		if line == "" || strings.HasPrefix(strings.TrimLeft(line, " \t"), "#") {
 			continue
 		}
-		argv, err := stageLiteralCommand(d.logical(line))
+		argv, err := stageLiteralCommand(line)
 		if err != nil {
 			return err
 		}
