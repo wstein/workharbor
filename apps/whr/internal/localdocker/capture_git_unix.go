@@ -395,7 +395,11 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	if e != nil {
 		return result, e
 	}
-	private, e := os.MkdirTemp(filepath.Dir(clone), "git-capture-")
+	scratchParent := filepath.Dir(clone)
+	if operation, _ := ctx.Value(stageCaptureOperationKey{}).(*stageCaptureOperation); operation != nil {
+		scratchParent = operation.scratchParent
+	}
+	private, e := os.MkdirTemp(scratchParent, "git-capture-")
 	if e != nil {
 		return result, stageConflict("private Git capture storage unavailable")
 	}
@@ -667,11 +671,7 @@ func copyStageWorkingSkip(ctx context.Context, source, destination string, skip 
 	limits := stageCaptureLimitsFor(ctx)
 	var total int64
 	count := 1
-	type directoryMode struct {
-		path string
-		mode fs.FileMode
-	}
-	var directories []directoryMode
+	var directories []stageDirectoryMode
 	err := filepath.WalkDir(source, func(path string, d fs.DirEntry, walkErr error) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -705,7 +705,7 @@ func copyStageWorkingSkip(ctx context.Context, source, destination string, skip 
 			if err := os.Mkdir(target, 0700); err != nil {
 				return stageConflict("captured working directory publication failed")
 			}
-			directories = append(directories, directoryMode{target, st.Mode().Perm()})
+			directories = append(directories, stageDirectoryMode{target, st.Mode().Perm()})
 			return nil
 		}
 		if st.Mode()&os.ModeSymlink != 0 {
@@ -759,8 +759,24 @@ func copyStageWorkingSkip(ctx context.Context, source, destination string, skip 
 	if err != nil {
 		return err
 	}
-	for i := len(directories) - 1; i >= 0; i-- {
-		if err := os.Chmod(directories[i].path, directories[i].mode); err != nil {
+	if operation, _ := ctx.Value(stageCaptureOperationKey{}).(*stageCaptureOperation); operation != nil {
+		operation.directories = append(operation.directories, directories...)
+		return nil
+	}
+	return applyStageDirectoryModes(ctx, directories)
+}
+func applyStageDirectoryModes(ctx context.Context, directories []stageDirectoryMode) error {
+	for i := 0; i < len(directories); i++ {
+		// A standalone working copy supplies traversal order; recursive capture
+		// supplies global deepest-first order after every populated repository.
+		index := i
+		if operation, _ := ctx.Value(stageCaptureOperationKey{}).(*stageCaptureOperation); operation == nil {
+			index = len(directories) - 1 - i
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := os.Chmod(directories[index].path, directories[index].mode); err != nil {
 			return stageConflict("captured working directory mode publication failed")
 		}
 	}

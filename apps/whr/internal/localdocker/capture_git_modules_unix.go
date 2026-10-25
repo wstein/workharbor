@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -67,6 +68,8 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 		}
 	}()
 	stagedClone := private
+	operation := &stageCaptureOperation{scratchParent: parent}
+	ctx = context.WithValue(ctx, stageCaptureOperationKey{}, operation)
 	ctx, _, err = pinStageGit(ctx)
 	if err != nil {
 		return result, err
@@ -119,6 +122,10 @@ func captureStageGit(ctx context.Context, source, captured, clone string) (resul
 				return result, stageConflict("source Git state changed during recursive capture")
 			}
 		}
+	}
+	if err == nil {
+		sort.Slice(operation.directories, func(i, j int) bool { return len(operation.directories[i].path) > len(operation.directories[j].path) })
+		err = applyStageDirectoryModes(ctx, operation.directories)
 	}
 	if err == nil {
 		if current, e := os.Lstat(private); e != nil || !os.SameFile(current, identity) {
