@@ -153,7 +153,10 @@ func TestLocalPromoteCLIPartialResultAndErrorReason(t *testing.T) {
 	g := run(t, promoteCLIHandlers(f, &n, &o), "workspace", "promote", "--local", "--volumes", "--force", "--yes", "primary", "--json")
 	env := decodeEnvelope(t, g.stdout)
 	failure := env["error"].(map[string]any)
-	result := env["result"].(map[string]any)
+	result, present := env["result"].(map[string]any)
+	if !present {
+		t.Fatalf("partial result missing: %v", env)
+	}
 	if g.code != 73 || failure["message"] != "replacement failed; original recovered" || failure["code"] != "partial_failure" || result["recovery_id"] != rid || f.applies != 1 || f.closes != 1 {
 		t.Fatalf("lost partial result or cause: %+v", env)
 	}
