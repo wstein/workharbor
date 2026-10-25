@@ -35,6 +35,10 @@ func resolverFixture(t *testing.T, mutate func(string)) (Resolver, Descriptor) {
 }
 func resolverFixtureFormat(t *testing.T, format string, mutate func(string)) (Resolver, Descriptor) {
 	t.Helper()
+	return resolverFixtureWithParser(t, format, mutate, jsoncTool(t))
+}
+func resolverFixtureWithParser(t *testing.T, format string, mutate func(string), parser JSONC) (Resolver, Descriptor) {
+	t.Helper()
 	repo := t.TempDir()
 	gitFixture(t, repo, "init", "--quiet", "--object-format="+format)
 	if e := os.MkdirAll(filepath.Join(repo, ".devcontainer"), 0700); e != nil {
@@ -63,7 +67,7 @@ func resolverFixtureFormat(t *testing.T, format string, mutate func(string)) (Re
 	if e := os.Chmod(stageRoot, 0700); e != nil {
 		t.Fatal(e)
 	}
-	return Resolver{GitPath: git, StageRoot: stageRoot, CAFile: ca, Parser: jsoncTool(t)}, Descriptor{RepositoryIdentity: server.URL + "/", Commit: commit, Submodules: []Submodule{}}
+	return Resolver{GitPath: git, StageRoot: stageRoot, CAFile: ca, Parser: parser}, Descriptor{RepositoryIdentity: server.URL + "/", Commit: commit, Submodules: []Submodule{}}
 }
 func TestResolverExactHTTPSCommitPrivateStageAndNoAmbientHooks(t *testing.T) {
 	sentinel := filepath.Join(t.TempDir(), "hook-ran")
@@ -348,6 +352,69 @@ func TestResolverManifestSingleDefectRefusals(t *testing.T) {
 				if _, _, err := decodeResolverManifest(control); err != nil {
 					t.Fatalf("valid single-defect control refused: %q: %v", control, err)
 				}
+			}
+		})
+	}
+}
+
+func TestResolverVersion1AdmissionCharacterization(t *testing.T) {
+	valid := string(resolverManifest("1", ""))
+	for _, tc := range []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{"size_65537", []byte(valid + strings.Repeat(" ", 65537-len(valid))), "invalid_configuration"},
+		{"bom", append([]byte{0xef, 0xbb, 0xbf}, []byte(valid)...), "invalid_configuration"},
+		{"nul", append([]byte(valid), 0), "invalid_configuration"},
+		{"depth_129", []byte(strings.Replace(valid, `"bundles":[]`, `"bundles":`+strings.Repeat("[", 128)+"0"+strings.Repeat("]", 128), 1)), "invalid_configuration"},
+		{"bundles_non_array", []byte(strings.Replace(valid, `"bundles":[]`, `"bundles":{}`, 1)), "invalid_configuration"},
+		{"bundles_nonempty_valid_paths", []byte(strings.Replace(valid, `"bundles":[]`, `"bundles":["future"]`, 1)), "unsupported_configuration"},
+		{"bundles_nonempty_invalid_path", []byte(strings.Replace(strings.Replace(valid, `"bundles":[]`, `"bundles":["future"]`, 1), `"projects"`, `"../projects"`, 1)), "invalid_configuration"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, err := decodeResolverManifest(tc.raw)
+			resolverManifestError(t, err, tc.want)
+		})
+	}
+	for _, field := range []string{"devcontainer_path", "projects_path"} {
+		for _, alias := range []string{".GIT", ".git.", ".git ", "GIT~1", ".git:x", "...", "\u200b", "．git"} {
+			t.Run(field+"/"+alias, func(t *testing.T) {
+				old := `"` + field + `":"projects"`
+				if field == "devcontainer_path" {
+					old = `"devcontainer_path":".devcontainer/devcontainer.json"`
+				}
+				raw := strings.Replace(valid, old, `"`+field+`":"`+alias+`"`, 1)
+				_, _, err := decodeResolverManifest([]byte(raw))
+				resolverManifestError(t, err, "invalid_configuration")
+			})
+		}
+	}
+	if _, _, err := decodeResolverManifest([]byte(valid + strings.Repeat(" ", 65536-len(valid)))); err != nil {
+		t.Fatalf("65536-byte v1 control refused: %v", err)
+	}
+}
+
+func TestResolverManifestAdmissionBeforeMissingParser(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  []byte
+		want string
+	}{
+		{"invalid_manifest", resolverManifest("1", `,"unexpected":true`), "invalid_configuration"},
+		{"valid_manifest", resolverManifest("1", ""), "tool_unavailable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// A real HTTPS Git fixture and an absent parser exercise Resolve
+			// ordering without requiring or imitating a Node toolchain.
+			r, d := resolverFixtureWithParser(t, "sha1", func(repo string) {
+				writeResolverManifest(t, repo, tc.raw)
+			}, JSONC{})
+			_, err := r.Resolve(context.Background(), d)
+			resolverManifestError(t, err, tc.want)
+			entries, err := os.ReadDir(r.StageRoot)
+			if err != nil || len(entries) != 0 {
+				t.Fatalf("failed resolution retained stage: %v %v", entries, err)
 			}
 		})
 	}
