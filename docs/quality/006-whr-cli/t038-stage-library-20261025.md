@@ -5,7 +5,9 @@ library over the source-capture prerequisite in #265. It adds no CLI registratio
 promotion, result transfer or candidate-home deletion. T038/T039 completion and
 owner-host acceptance remain open. Command/schema composition follows separately.
 
-## Review corrections
+## Initial e36f0645 evidence (historical)
+
+### Review corrections
 
 | Finding | Correction and regression |
 | --- | --- |
@@ -22,7 +24,7 @@ owner-host acceptance remain open. Command/schema composition follows separately
 No exact-head CLEAR claim is made by the author. The extraction keeps historical
 source/tests; new failing assertions precede the review fixes (6e883f73 and
 044dab89). The prior compile-only failures during extraction are not TDD evidence.
-Fifteen compiled stage mutants failed on intended assertions: context wrapping in
+Compiled stage mutants failed on intended assertions: context wrapping in
 admission/apply; discarded cause; observed pending smoke; bypassed smoke digest;
 socket-scoped lock; missing group kill; progress masking deadline; driver included
 in receipt; uncovered image volume; admitted tmpfs; lost known-health reason;
@@ -71,3 +73,50 @@ trust, cooperative quiescence, no adoption and all FR-067 protections remain.
 The committed pristine `umask 022; timeout 180s make check` run ended with exit 124
 in Python checks before application checks. It is incomplete, not green. No absent
 Elixir/native-host checks are called passing; the published head needs native CI.
+
+
+## PR 266 review delta
+
+The base now names the real capture dependency, codex/006-t038-capture-20261025
+at 33b090ac. The stage branch was restacked from capture 9a4e51e2 onto that
+parent. Range-diff retained 22 patches unchanged; the CI-list patch has only the
+additive parent-ID context adjustment. Further focused stage commits adapt the
+parent interface and implement the corrections below; the complete round is not
+claimed to be an equal-range-diff-only rebase. No parent-owned capture file is
+changed by this stage delta. The exact rewritten head requires independent review
+before its explicit-lease push; native CI and the foreman's review remain gates.
+
+| Finding | Current implementation / regression |
+| --- | --- |
+| F1 | PR base is the capture branch; source-capture changes are reviewed in #265, not counted as stage-owned work. Selected execution inventory and candidate-only Git restrictions live in the stage layer after adapting the parent interface. |
+| F2 | Flow regressions cover smoke exit, unhealthy candidate, primary stopped after up, foreign operation label and up returning the primary ID. The consent table independently checks matching trust plus confirmation without quiescence: exit 70, exact reason and no persistent state. `TestLocalStageReviewFlowRefusalGuards`, `TestLocalStageReviewUnhealthyCandidateFlow`, `TestLocalStageReviewCompletedSmokeFailureFlow`, `TestLocalStageRequiresTrustAndConsent`. |
+| F3 | Remove PromoteOptions, public deletion consent flags, stagePromoteConfig, invocation Promote switch, driver promote mode and promotion-only journal states. Remove the two promote-config tests from this slice's CI inventory. Retain endpoint tests as stage tests and refuse the unsupported promote mode explicitly. The closed private receipt retains its required volumes/force fields as false; it authorizes no deletion. Stage records the primary configuration as data for the later slice, without executing promotion. |
+| F4 | Primary mount type/source/destination validation runs in bindStagePrimary before home allocation or up. tmpfs refuses with exit 68 and its specific reason, no Docker effect calls. `TestLocalStageReviewImageAndTmpfsMountPreflight`. Image-VOLUME compatibility still needs the immutable candidate image and is checked after up, before hooks. |
+| F5 | The fake now adds anonymous volume mounts for uncovered image VOLUMEs, as Docker does. Candidate volume names and destinations must match the declared home/additional-volume plan, not merely cover image destinations. `TestLocalStageReviewAnonymousImageVolumeRefused` gives the primary a named /cache volume but no candidate declaration, exposing the anonymous mount. |
+| F6 | A normally reaped smoke process exit in 1..124 is observed and yields staged_unverified / failed_smoke with exit status retained in the error and guarded-remove/fresh-stage recovery. Docker-reserved exits 125..127, signals, deadline, cancellation and client/observation failures remain uncertain partial outcomes. `TestLocalStageReviewCompletedSmokeFailureFlow` asserts result, exact exit status, effect and durable receipt; existing uncertain-smoke tests remain. |
+| F7 | Context cancellation or deadline, including the health sub-deadline, takes the partial path before recording terminal verification failure. No failed_health is invented. `TestLocalStageReviewInterruptedHealthIsPartial` and `TestLocalStageReviewInterruptDuringHealthWaitFlow` assert result and retained verifying journal/receipt. The actual wait flow synchronizes cancellation with a Unix-socket notification from the fake's post-hook candidate observation, with no sleep-based trigger. |
+
+Test-only 8af85eb8 (87787e48 after restack) precedes the corrective source commits.
+The ordinary smoke exit 1/124 cases, early tmpfs refusal, anonymous volume case
+and interrupted-health outcome failed assertions against the original code. The
+initial smoke subtest labels for 124..127 contained non-ASCII characters, which
+made their temporary socket endpoints fail admission; corrected decimal labels
+then produced the intended semantic RED. Those fixture failures are not counted
+as RED evidence. The interrupted-health fixture was strengthened to contain a
+valid observed hook receipt and verifying row, avoiding an unrelated receipt-shape
+failure. Existing guard coverage and the later notification-flow test are
+characterization qualified by mutation checks, not blanket RED-first claims.
+
+Eleven compiled Go-overlay mutants were assertion-killed: smoke failure call-site,
+unhealthy candidate, quiescence, primary running, candidate operation, up returning
+the primary, early primary mount admission, candidate volume plan, interrupted
+health mapping, Docker-reserved smoke exit boundary and retained exit status.
+These include all six survivors reported in the review. Production source bytes
+were not replaced on disk. Reproduce by deleting the named guard and running its
+literal regression; no compiler error is counted as a killed mutant.
+
+Current full-package, formatter/compiler, script and pristine make-check outcomes
+are recorded in the PR body. Historical counts above do not describe the new head.
+No Docker/official-CLI or owner-host lifecycle test was run; the fake remains a
+fixture, including its anonymous-volume model. No task/progress completion ticks
+are changed and the later promote/composition packages remain separate.
