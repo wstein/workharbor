@@ -372,3 +372,77 @@ func TestLocalStageGitObjectStoreQuotaBoundary(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalStageGitAtomicPublicationPreservesRacedEmptyDestination(t *testing.T) {
+	src := captureRegressionRepo(t)
+	files := captureRegressionFiles(t, src)
+	clone := filepath.Join(capturePhysicalTemp(t), "clone")
+	var protected os.FileInfo
+	ctx := captureControl(context.Background(), nil, func(phase, _ string) {
+		if phase == "repositories-copied" {
+			if err := os.Mkdir(clone, 0700); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			protected, err = os.Lstat(clone)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}, nil)
+	_, err := captureStageGit(ctx, src, files.Path, clone)
+	requireCaptureConflict(t, err, "Git clone publication failed or destination changed")
+	current, err := os.Lstat(clone)
+	if err != nil || !os.SameFile(protected, current) {
+		t.Fatal("raced empty destination was replaced")
+	}
+}
+func TestLocalStageGitCleanupRetainsReplacedPrivateRoot(t *testing.T) {
+	src := captureRegressionRepo(t)
+	files := captureRegressionFiles(t, src)
+	parent := capturePhysicalTemp(t)
+	clone := filepath.Join(parent, "clone")
+	var staged string
+	var foreign os.FileInfo
+	ctx := captureControl(context.Background(), nil, func(phase, _ string) {
+		if phase == "repositories-copied" {
+			if err := os.Rename(staged, filepath.Join(parent, "retained-original")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Mkdir(staged, 0700); err != nil {
+				t.Fatal(err)
+			}
+			var err error
+			foreign, err = os.Lstat(staged)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}, func(cmd *exec.Cmd) {
+		if slices.Contains(cmd.Args, "clone") {
+			staged = cmd.Args[len(cmd.Args)-1]
+		}
+	})
+	result, err := captureStageGit(ctx, src, files.Path, clone)
+	requireCaptureConflict(t, err, "temporary capture retained after cleanup failure")
+	if result.Clone != staged {
+		t.Fatal("cleanup refusal omitted retained root inventory")
+	}
+	current, err := os.Lstat(staged)
+	if err != nil || !os.SameFile(current, foreign) {
+		t.Fatal("cleanup removed a replaced root")
+	}
+	if _, err := os.Stat(filepath.Join(parent, "retained-original", ".git")); err != nil {
+		t.Fatal("original private payload disappeared")
+	}
+	if _, err := os.Lstat(clone); !os.IsNotExist(err) {
+		t.Fatal("unverified root was published")
+	}
+}
+func TestLocalStageGitStartAndIndexIOFailuresAreClassified(t *testing.T) {
+	cmd := exec.Command(filepath.Join(capturePhysicalTemp(t), "CANARY\nmissing"))
+	requireCaptureConflict(t, runStageGit(cmd), "Git process start failed")
+	src := captureRegressionRepo(t)
+	_, _, err := stageReadIndex(context.Background(), filepath.Join(src, ".git"), "index", "sha1", capturePhysicalTemp(t))
+	requireCaptureConflict(t, err, "private Git index publication failed")
+}
