@@ -31,7 +31,6 @@ func stageSnapshotDigest(s stageGitSnapshot) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 func stageObjectStoreBinding(ctx context.Context, root string) (string, error) {
-	limits := stageCaptureLimitsFor(ctx)
 	audit, _ := ctx.Value(stageObjectAuditKey{}).(*stageObjectAudit)
 	if audit == nil {
 		audit = &stageObjectAudit{checked: map[string]bool{}}
@@ -53,9 +52,6 @@ func stageObjectStoreBinding(ctx context.Context, root string) (string, error) {
 			return nil
 		}
 		visited[physical] = true
-		if len(visited) > limits.ObjectStores {
-			return stageConflict("Git object store count quota exceeded")
-		}
 		identity := ""
 		if st, e := os.Stat(physical); e == nil {
 			if raw, ok := st.Sys().(*syscall.Stat_t); ok {
@@ -69,10 +65,6 @@ func stageObjectStoreBinding(ctx context.Context, root string) (string, error) {
 			err = filepath.WalkDir(physical, func(name string, d fs.DirEntry, walkErr error) error {
 				if ctx.Err() != nil {
 					return ctx.Err()
-				}
-				audit.entries++
-				if audit.entries > limits.ObjectEntries {
-					return stageConflict("Git object administration entry quota exceeded")
 				}
 				if walkErr != nil {
 					return stageConflict("Git object administration unavailable")

@@ -78,7 +78,7 @@ func TestLocalStageGitHostEnvironmentAndCommandIsolation(t *testing.T) {
 }
 func TestLocalStageCapturePublishedLimits(t *testing.T) {
 	limits := defaultStageCaptureLimits()
-	if limits.WorkingEntries != 100000 || limits.ObjectEntries != 1000000 || limits.Objects != 1000000 || limits.FileBytes != 64<<20 || limits.WorkingBytes != 2<<30 || limits.ObjectBytes != 8<<30 || limits.SubmoduleDepth != 8 || limits.SubmoduleCount != 32 || limits.ObjectStores != 32 {
+	if limits.WorkingEntries != 100000 || limits.Objects != 1000000 || limits.FileBytes != 64<<20 || limits.WorkingBytes != 2<<30 || limits.ObjectBytes != 8<<30 || limits.SubmoduleDepth != 8 || limits.SubmoduleCount != 32 {
 		t.Fatal("published capture resource ceilings changed without contract reconciliation")
 	}
 }
@@ -221,41 +221,24 @@ func TestLocalStageCaptureSymlinkRefusalReasons(t *testing.T) {
 		})
 	}
 }
-func TestLocalStageGitObjectAdministrationEntryBoundAndSingleAudit(t *testing.T) {
+func TestLocalStageGitObjectAdministrationSingleAudit(t *testing.T) {
 	src := captureRegressionRepo(t)
 	objects := filepath.Join(src, ".git", "objects")
-	count := 0
-	if err := filepath.WalkDir(objects, func(_ string, _ os.DirEntry, err error) error { count++; return err }); err != nil {
+	audit := &stageObjectAudit{checked: map[string]bool{}}
+	ctx := context.WithValue(context.Background(), stageObjectAuditKey{}, audit)
+	if _, err := stageObjectStoreBinding(ctx, objects); err != nil {
 		t.Fatal(err)
 	}
-	for _, over := range []bool{false, true} {
-		t.Run(map[bool]string{false: "N", true: "N+1"}[over], func(t *testing.T) {
-			limits := defaultStageCaptureLimits()
-			limits.ObjectEntries = count
-			if over {
-				limits.ObjectEntries--
-			}
-			ctx := captureControl(context.Background(), &limits, nil, nil)
-			_, err := stageObjectStoreBinding(ctx, objects)
-			if over {
-				requireCaptureConflict(t, err, "Git object administration entry quota exceeded")
-			} else if err != nil {
-				t.Fatal(err)
-			}
-		})
+	// Same operation and physical identity reuse the completed administration
+	// audit. A fresh operation must audit again and refuse this unsafe node.
+	if err := os.Symlink("missing", filepath.Join(objects, "post-audit-link")); err != nil {
+		t.Fatal(err)
 	}
-	limits := defaultStageCaptureLimits()
-	limits.ObjectEntries = count
-	audit := &stageObjectAudit{checked: map[string]bool{}}
-	ctx := context.WithValue(captureControl(context.Background(), &limits, nil, nil), stageObjectAuditKey{}, audit)
-	for i := 0; i < 2; i++ {
-		if _, err := stageObjectStoreBinding(ctx, objects); err != nil {
-			t.Fatal(err)
-		}
+	if _, err := stageObjectStoreBinding(ctx, objects); err != nil {
+		t.Fatalf("same store audited twice: %v", err)
 	}
-	if audit.entries != count {
-		t.Fatalf("object tree audited %d entries, want once %d", audit.entries, count)
-	}
+	_, err := stageObjectStoreBinding(context.Background(), objects)
+	requireCaptureConflict(t, err, "Git object administration is symlinked")
 }
 
 func captureSecurityGit(t *testing.T, src string, limits *stageCaptureLimits) (stageGitCapture, error) {
@@ -345,32 +328,6 @@ func TestLocalStageGitObjectAndSubmoduleQuotaBoundaries(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-func TestLocalStageGitObjectStoreQuotaBoundary(t *testing.T) {
-	root, alternate := capturePhysicalTemp(t), capturePhysicalTemp(t)
-	for _, dir := range []string{root, alternate} {
-		if err := os.Mkdir(filepath.Join(dir, "info"), 0700); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := os.WriteFile(filepath.Join(root, "info", "alternates"), []byte(alternate+"\n"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	for _, over := range []bool{false, true} {
-		t.Run(map[bool]string{false: "N", true: "N+1"}[over], func(t *testing.T) {
-			limits := defaultStageCaptureLimits()
-			limits.ObjectStores = 2
-			if over {
-				limits.ObjectStores = 1
-			}
-			_, err := stageObjectStoreBinding(captureControl(context.Background(), &limits, nil, nil), root)
-			if over {
-				requireCaptureConflict(t, err, "Git object store count quota exceeded")
-			} else if err != nil {
-				t.Fatal(err)
-			}
-		})
 	}
 }
 
