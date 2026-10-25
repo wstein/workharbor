@@ -211,7 +211,7 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 			}
 			found := false
 			for _, e := range result.Effects {
-				if e.Action == tc.action && e.State == "uncertain" {
+				if e.Action == tc.action && (e.State == "uncertain" || ((tc.failure == "hooks" || tc.failure == "smoke") && e.State == "observed")) {
 					found = true
 				}
 			}
@@ -219,7 +219,7 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 				t.Fatalf("missing exact uncertain action %s: %+v", tc.action, result.Effects)
 			}
 			state = readFakePromotionState(t, path)
-			if tc.action == "create_primary" || tc.action == "container_hooks" || tc.action == "smoke" {
+			if tc.action == "create_primary" {
 				if state.Retained == nil || state.Retained["Id"] != p.primaryObservation.ID || state.Retained["Running"] != false {
 					t.Fatalf("failed replacement lost original writable layer: %+v", state.Retained)
 				}

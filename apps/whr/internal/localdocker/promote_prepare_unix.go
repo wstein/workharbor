@@ -52,6 +52,8 @@ type LocalPromotion struct {
 	persistentConfiguration                  bool
 	primaryVerified                          bool
 	originalRetained, originalRemoved        bool
+	rollbackEligible, rollbackRestored       bool
+	rollbackFailure                          error
 }
 
 func (c Client) PreparePromotion(ctx context.Context, options PromoteOptions) (LifecycleTransaction, error) {
@@ -81,7 +83,7 @@ func (c Client) preparePromotion(parent context.Context, options PromoteOptions,
 	defer func() {
 		if err != nil {
 			if closeErr := p.Close(); closeErr != nil {
-				err = closeErr
+				err = errors.Join(err, closeErr)
 			}
 		}
 	}()
@@ -96,6 +98,15 @@ func (c Client) preparePromotion(parent context.Context, options PromoteOptions,
 	if err != nil {
 		return nil, stageConflict("promotion private storage identity unavailable")
 	}
+	physicalRoot, rootErr := filepath.EvalSymlinks(p.root)
+	if rootErr != nil {
+		return nil, stageConflict("promotion private storage physical path unavailable")
+	}
+	physicalInfo, rootErr := os.Lstat(physicalRoot)
+	if rootErr != nil || !os.SameFile(p.rootIdentity, physicalInfo) || !physicalInfo.IsDir() || physicalInfo.Mode().Perm() != 0700 {
+		return nil, stageConflict("promotion private storage physical identity changed")
+	}
+	p.root = physicalRoot
 	phase := filepath.Join(p.root, "phase")
 	if err = os.Mkdir(phase, 0700); err != nil {
 		return nil, stageConflict("promotion phase storage unavailable")
@@ -314,7 +325,7 @@ func (p *LocalPromotion) disclose() {
 	if p.options.Diagnostics == nil {
 		return
 	}
-	fmt.Fprintln(p.options.Diagnostics, "Promotion stops and renames the original primary, terminating all its exec sessions including shell panes. Its writable layer is retained until the replacement passes verification; failures require explicit owner recovery, not automatic rollback. The original primary home is preserved; candidate home cleanup retains the writable project clone.")
+	fmt.Fprintln(p.options.Diagnostics, "Promotion stops and renames the original primary, terminating all its exec sessions including shell panes. Its writable layer is retained until the replacement passes verification; a known hook/smoke failure permits bounded resource recovery only after fresh safety checks; uncertain effects require owner recovery. Failed replacement writable layers are retained. The original primary home is preserved; candidate home cleanup retains the writable project clone.")
 	fmt.Fprintf(p.options.Diagnostics, "Pause ordinary input writers throughout every phase. Trusted container hooks have read-write access to original workspace %s, admitted mounts and container network; hashes do not freeze paths or inventory all hook writes.\n", terminal.Escape(p.receipt.OriginalSource))
 	fmt.Fprintln(p.options.Diagnostics, "Promotion runs no host initialization and uses only the verified immutable image; source container hooks retain their original origins/order, with postAttach suppressed because this command does not attach.")
 	fmt.Fprintf(p.options.Diagnostics, "Original container recovery name: %s; original full ID: %s.\n", p.retainedPrimaryName(), p.primaryObservation.ID)
