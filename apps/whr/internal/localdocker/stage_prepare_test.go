@@ -222,3 +222,17 @@ func TestLocalStageFixtureSocketIgnoresLongTMPDIR(t *testing.T) {
 	})
 	t.Run("health_notification", TestLocalStageReviewInterruptDuringHealthWaitFlow)
 }
+
+func TestLocalStageGitFixtureCanonicalSourceUnderAlias(t *testing.T) {
+	parent := t.TempDir()
+	physical := filepath.Join(parent, "physical")
+	if err := os.Mkdir(physical, 0700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(parent, "temporary-alias")
+	if err := os.Symlink(physical, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", alias)
+	t.Run("native_capture_selection", TestLocalStageGitStatusPredicateRejectsCorruptIndexWithoutExecutingConfig)
+}
