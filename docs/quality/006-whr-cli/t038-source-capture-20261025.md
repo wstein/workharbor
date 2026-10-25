@@ -204,3 +204,35 @@ The published-limit regression still pins the accepted working, object, byte and
 submodule limits. CI inventory replaces only two IDs introduced by this unmerged
 PR; no main-baseline test ID is dropped. All seven N4 control regressions remain.
 The PR body records final affected-package and verification results for this round.
+
+## N7 and N8: withdrawn F8 bound and accepted profile provenance
+
+F8's administration-entry and store-count ceilings are withdrawn because the
+owner-accepted execution profile specifies neither. The audit-once cache,
+physical-store identity rechecks, symlink/file-type refusals and cycle detection
+remain; the entry-bound part of F8 is not closed by those other controls. Earlier
+F8 quota evidence is historical and must not be read as current protection.
+
+Residual: filepath.WalkDir reads and sorts an entire directory before its next
+context callback. The administrative walk has no entry-count admission refusal;
+the capture's 120-second context is the remaining time bound, and expiration may
+produce deadline exit 71 rather than a quota refusal 68. It is not a memory cap
+or a guarantee against exhausting process memory before that callback. The Opus
+review of 8f6efe18 measured about 221 MB allocated for one directory containing
+1,000,000 empty entries, approximately 220 bytes per entry on that fixture. This
+is measured review evidence, not a universal allocation constant or admission
+limit. Source: PR 265 review 5644485623; capture_git_objects_unix.go performs the
+walk, capture_git_modules_unix.go and capture_git_unix.go set the capture deadline,
+and internal/exitcode maps context.DeadlineExceeded to 71.
+
+OPEN owner question F8: accept this deadline-only administration-walk residual
+for the interactive owner-workspace use case, or approve an explicit profile
+bound in a separate amendment. Recommendation: use a separately reviewed profile
+amendment to define the desired admission/memory bound and its implementation;
+retain only accepted limits until that decision. No numerical bound, residual
+acceptance or new owner approval is invented here.
+
+N8 restores the accepted profile byte-for-byte from main e186036, including the
+original paragraph spacing. The proposal paragraph and its leftover blank line
+are both absent. No behavior, test, CI inventory or accepted decision changes
+in this wording-only follow-up. Final docs/check outcomes belong in the PR body.
