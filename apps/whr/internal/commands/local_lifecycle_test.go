@@ -120,6 +120,14 @@ func TestLocalStageDryRunAndExactTrustConsent(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalStagePreservesLiteralExplicitSourcePath(t *testing.T) {
+	f := lifecycleFixtureFor("stage")
+	g := run(t, lifecycleHandlers(f), "workspace", "stage", "--local", "--source=   ", "--dry-run", "primary", "--json")
+	if g.code != 0 || f.stage.Source != "   " || f.applies != 0 || f.closes != 1 {
+		t.Fatalf("literal explicit path was rewritten/refused: %+v", g)
+	}
+}
 func TestLocalStageUnattendedTrustAndConsentAreIndependent(t *testing.T) {
 	digest := "sha256:" + strings.Repeat("a", 64)
 	for _, tc := range []struct {

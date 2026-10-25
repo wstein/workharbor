@@ -92,7 +92,7 @@ func localLifecycleHandler(kind string, prepare func(context.Context, localLifec
 			return res, exitcode.Errorf(exitcode.PathBadArguments, "%s --local requires an exact container name or full 64-hex id", kind)
 		}
 		if kind == "stage" {
-			if strings.TrimSpace(v.source) == "" {
+			if v.source == "" {
 				return res, exitcode.Errorf(exitcode.PathBadArguments, "stage --local requires explicit --source <dir>")
 			}
 			if v.trust != "" && !lifecycleDigest(v.trust) {
