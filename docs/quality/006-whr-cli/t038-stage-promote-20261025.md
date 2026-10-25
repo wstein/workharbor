@@ -384,3 +384,112 @@ The final source-only repository/bootstrap, formatting and diff checks passed.
 Full make check remains incomplete as recorded above. Required hosted CI,
 exact-head independent executed review and owner native acceptance are open;
 this record does not claim them as passing or mark task/feature completion.
+
+
+## Independent review correction: executable inputs
+
+The executed review at `9eb6d589` found a High: `sh scripts/setup.sh` could
+consume a file outside the original fixed roots, and an arbitrary
+`git rev-parse HEAD` hook incorrectly inherited the exit-only status predicate.
+Both candidate and original script changes were accepted. Semantic RED commit
+`cd7e1314` reproduces these failures (7.952 s). `eaacea26` adds the actual official
+0.89 plural merged lifecycle shape: image/Feature `postCreateCommands` were
+ignored at preview, and a late unsupported command incorrectly reached verified
+success (both RED, 5.848 s). The production correction is `23434b43`.
+
+Admission now supports an explicit non-expanding literal command language and
+recursively named literal shell files. Dynamic expansion, evaluation, pipelines,
+unadmitted interpreters and opaque unknown bodies refuse with capability 68.
+Directly named file bytes join the persisted execution manifest for both A and W;
+this does not hash every project file or prohibit unrelated result-only edits.
+Source, image and Feature origin arrays all undergo admission, without rewriting
+the official execution order or parallel groups. An unsupported contribution
+first revealed after `up` returns partial 73 with observed candidate/home
+inventory, before any container hook. Post-attach remains skipped.
+
+A bounded catalogue supports the inspected Anchorage greeting profile: 17 full
+body digests, repository/path and immutable revision, plus recursive helper
+inventory. The recorded Anchorage revision is
+`0f72d7226b6921e7d0c2642aca034ef44fe26c56`; BundleDock is
+`9f16cb790c108cf7165fc8bfb1ede2180717dd3b`. These hashes were derived only after
+comparing inspected bytes with their immutable tracked blobs. Names alone confer
+no exemption. Unknown changed opaque bodies refuse; all source bytes still need
+the owner's exact trust fingerprint. Tests use checked-in bounded exact-byte
+fixtures, never a live umbrella checkout, and never execute these scripts.
+Immutable image/tool programs and declared network behavior remain trusted
+runtime dependencies: this is not arbitrary shell dependency inference.
+
+Known greeting/smoke actually consumes HEAD, the selected branch/upstream and
+computed ahead/behind counts, and porcelain status. Its receipt records this
+predicate instead of claiming exit-only Git consumption. A changed consumed HEAD
+requires fresh staging; an unrelated candidate result branch remains eligible.
+Arbitrary Git commands remain unsupported. The literal standalone status form
+records only its admitted success predicate and config bindings. Unsupported
+active config dependencies, extra status rules, replacements or grafts refuse
+rather than silently using a different context. The preview discloses this
+capability boundary and the known profile's Git staleness behavior.
+
+The required focused group passed (48.934 s), including named candidate/original
+drift, opaque forms, recursive exact catalogue bodies, actual known
+classification→receipt→HEAD refusal, plural preflight/late-origin admission,
+Anchorage facts stage→promote→fresh stage and legitimate result transfer. The
+selected-upstream/counts plus unrelated-ref positive refinement passed (7.029 s).
+Compiled overlays then failed for semantic reasons: removing named paths admitted
+both changed scripts (8.126 s); swapping the candidate reason preserved exit 68
+but failed the specific reason assertion (4.329 s); bypassing the known Git
+predicate accepted the changed HEAD (6.653 s). Overlay recipes replace only the
+named path assignments, candidate reason, or known predicate case; no mutant is
+retained in product code. Seven additional literal critical IDs are appended to
+the acceptance inventory (109 new T038 IDs total). These are fake-tool/temporary
+Git proofs, not real-host lifecycle acceptance.
+
+
+The complete affected run at `23434b43` qualified commands green (36.401 s;
+138 top-level / 314 leaf / 340 passing events; zero skips). Localdocker completed
+in 249.713 s, within the unchanged 300-second native command budget, but failed
+one existing smoke-quota leaf: new grammar admission ran before the existing
+256-KiB check, returning capability 68 instead of the quota-specific reason.
+The other 519 leaves completed successfully; this run is **not** reported green.
+`9b10eb4d` restores the original quota-first order. Its focused quota/unsupported/
+merged-origin group passed (3.677 s). A justified complete localdocker rerun
+qualifies that correction separately; no timeout or scheduling change was made.
+
+Affected vet, Darwin/arm64 test compilation, repository bootstrap and formatting
+checks passed after the dependency correction. Default `typos` reported only
+two occurrences of the valid POSIX shell flag `"-ue"`. A rerun with the narrowly
+scoped temporary configuration below passed; no repository spelling rule was
+weakened and all other words were checked:
+
+```toml
+[default]
+extend-ignore-re = ['"-ue"']
+```
+
+
+Final qualification at source head `9b10eb4d`, still based on `79f19ada`:
+
+| Package/check | Actual outcome | Top-level / leaf / passing events | Skips |
+| --- | --- | --- | --- |
+| complete localdocker rerun | GREEN, 261.612 s | 162 / 520 / 563 | 0 |
+| complete commands at broad binding fix `23434b43` | GREEN, 36.401 s | 138 / 314 / 340 | 0 |
+| actual DefaultHandlers after quota-order correction | GREEN, 17.081 s | focused native fake-tool dispatch | 0 |
+
+Commands were `go -C apps/whr test -json ./internal/localdocker -count=1
+-timeout=10m` and the earlier combined affected-package command; the final
+constructor-order correction also ran
+`go -C apps/whr test ./internal/commands -run
+'^TestLocalLifecycleDefaultHandlers' -count=1 -timeout=90s`. The native harness
+300-second budget remains unchanged; both measured complete localdocker runs
+finished within it. No scheduling change or omitted assertion was needed.
+All 109 new literal T038 critical IDs have genuine passing events across these
+runs and the recorded unchanged workspacecfg qualification. Existing inventory
+IDs remain intact. Affected vet and repository bootstrap passed again after the
+quota correction; formatting and diff checks are clean.
+
+Upstream merged W1 while these checks ran: `origin/main` became `3dd1a167`.
+These measurements deliberately qualify the fixed author source on old base
+`79f19ada`; they are not described as checks on a future rebase or rewritten SHA.
+The coordinator owns fresh-main integration preserving W1 changes/critical IDs,
+commit-message repair preserving product trees, and exact-head independent
+review before publication. Hosted native CI, full make-check completion and
+owner real-host acceptance remain open as previously recorded.
