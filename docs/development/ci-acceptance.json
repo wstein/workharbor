@@ -1297,7 +1297,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageSourceMetadataOriginRequiresActualBakeBranch",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageStateModesAndNoFollow",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageTrustMatchesCapturedInputs",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestDecodeDevcontainerDataReusesStrictJSONC"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestDecodeDevcontainerDataReusesStrictJSONC",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStagePinsOfficialHostShellInsteadOfAmbientSh"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

@@ -84,6 +84,14 @@ func nativeStagePreparationPorts(c Client) (stagePreparationPorts, error) {
 		if name == "docker" {
 			path = c.Executable
 		}
+		if name == "sh" {
+			// Official CLI v0.89 string initialize commands execute /bin/sh,
+			// independently of ambient PATH. Bind that actual physical tool.
+			path, e = filepath.EvalSymlinks("/bin/sh")
+			if e != nil {
+				return p, stageConflict("installed official host shell capability unavailable")
+			}
+		}
 		if path == "" {
 			path, e = exec.LookPath(name)
 		}
