@@ -384,6 +384,9 @@ func TestInitNetworkCandidateBoundsDoNotFallback(t *testing.T) {
 	}{
 		{"overflow", "printf '%s\\n' 'unshare: Operation not permitted'; printf '%040960d' 0; exit 1", 3 * time.Second},
 		{"timeout", "printf '%s\\n' 'unshare: Operation not permitted'; exec /bin/sleep 60", 500 * time.Millisecond},
+		// The direct shell exits successfully while its owned grandchild keeps
+		// stdout open. WaitDelay, rather than the context deadline, ends copying.
+		{"wait-delay", "printf '%s\\n' 'unshare: Operation not permitted'; /bin/sleep 60 & exit 0", 5 * time.Second},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			text, err := runInitNetworkCandidateBudget([]string{"/bin/sh", "-c", tc.script}, []string{"PATH=/nonexistent", "LANG=C"}, tc.budget)
@@ -393,6 +396,21 @@ func TestInitNetworkCandidateBoundsDoNotFallback(t *testing.T) {
 			if initNetworkCandidateUnavailable(text, err) {
 				t.Fatalf("%s bound failure was treated as native unavailability: %v", tc.name, err)
 			}
+			if tc.name == "wait-delay" && !strings.Contains(err.Error(), exec.ErrWaitDelay.Error()) {
+				t.Fatalf("fixture did not reach exec.ErrWaitDelay: %v", err)
+			}
 		})
+	}
+}
+
+func TestInitNetworkStartedChildDoesNotFallback(t *testing.T) {
+	// A native-looking prefix alone is not proof of a launcher refusal once
+	// the owned child has started. Exercise classification with a real child.
+	text, err := runInitNetworkCandidate([]string{"/bin/sh", "-c", "printf '%s\\n' 'unshare: Operation not permitted' 'owned init namespace child started'; exit 1"}, []string{"PATH=/nonexistent", "LANG=C"})
+	if err == nil || !strings.Contains(text, "owned init namespace child started") {
+		t.Fatalf("started-child fixture did not fail as intended: %v; %s", err, text)
+	}
+	if initNetworkCandidateUnavailable(text, err) {
+		t.Fatalf("started child failure was treated as native unavailability: %v; %s", err, text)
 	}
 }
