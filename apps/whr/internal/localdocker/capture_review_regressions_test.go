@@ -168,7 +168,7 @@ func TestLocalStageGitReftableRefusalNamesStorage(t *testing.T) {
 	requireCaptureConflict(t, err, "Git reftable reference storage unsupported")
 }
 func TestLocalStageGitUnsafeRemoteFormsRefused(t *testing.T) {
-	for _, value := range []string{"ext::sh -c touch% /tmp/x", "evil::x", "fd::17", "-oProxyCommand=x:y", "ssh://u:password@host/path"} {
+	for _, value := range []string{"ext::sh -c touch% /tmp/x", "evil::x", "fd::17", "-oProxyCommand=x:y", "ssh://u:password@host/path", "ssh://-oProxyCommand=x/y", "git@-oProxyCommand=x:y", "ssh://-user@host/path", "-user@host:path"} {
 		if stageCredentialFreeURL(value) {
 			t.Errorf("unsafe remote retained: %q", value)
 		}
