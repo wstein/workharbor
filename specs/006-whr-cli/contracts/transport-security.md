@@ -36,8 +36,9 @@ use another adapter, contain duplicate HTTPS keys, or contain HTTPS keys outside
 `ip`, `port`, `certfile`, `keyfile`, `http_1_options`, `http_2_options`,
 `websocket_options`. The #264 security follow-up adds the narrow required value
 `websocket_options: [max_fragmented_message_size: 65_536]`; missing, duplicated,
-malformed, enlarged or extra options refuse activation. This separately reviewed
-extension bounds aggregate fragmented messages on both authenticated WebSockets.
+malformed, enlarged or extra options refuse activation. This profile extension
+bounds aggregate fragmented messages on both authenticated WebSockets and requires
+exact-head security review before Ready.
 It is not a generic Bandit option pass-through or a listener activation approval.
 The existing secret/debug/reloader/plaintext/origin/private-key checks remain.
 The production port remains 1..65535; port 0 is exclusively a test adapter fixture.
