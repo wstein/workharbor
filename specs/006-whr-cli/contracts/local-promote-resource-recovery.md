@@ -56,8 +56,9 @@ native action. Recheck the bound Unix endpoint, daemon, private receipt, current
 configuration and inputs, exact original/replacement IDs and bindings, name
 occupancy and shared primary mounts between actions. Refuse an occupied retention
 name or a foreign mount of the primary home. Resolve both sides of a foreign
-read-write bind comparison and refuse equal, ancestor or descendant overlap with
-the original workspace. An unresolved foreign read-write bind source refuses
+bind comparison when writability is true or unknown and refuse equal, ancestor
+or descendant overlap with
+the original workspace. An unresolved foreign potentially writable bind source refuses
 recovery. Read-only binds and nonoverlapping siblings do not match this
 read-write path-overlap refusal.
 Both the temporary and persisted promotion configuration are rechecked between
