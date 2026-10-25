@@ -16,8 +16,12 @@ import (
 )
 
 func fixtureStagePreparation(t *testing.T) (Client, StageOptions, stagePreparationPorts) {
+	return fixtureStagePreparationNamed(t, "Anchorage")
+}
+
+func fixtureStagePreparationNamed(t *testing.T, basename string) (Client, StageOptions, stagePreparationPorts) {
 	t.Helper()
-	source := filepath.Join(t.TempDir(), "Anchorage")
+	source := filepath.Join(t.TempDir(), basename)
 	if e := os.Mkdir(source, 0700); e != nil {
 		t.Fatal(e)
 	}
@@ -67,6 +71,22 @@ func fixtureStagePreparation(t *testing.T) (Client, StageOptions, stagePreparati
 	return Client{Executable: docker}, StageOptions{Source: source, Target: "primary"}, p
 }
 
+func TestLocalStageSourceBasenameCannotCollideWithPrivateNamespaces(t *testing.T) {
+	for _, name := range []string{"phase", "candidate", "configuration", " "} {
+		t.Run(name, func(t *testing.T) {
+			c, opts, p := fixtureStagePreparationNamed(t, name)
+			s, e := c.prepareStage(context.Background(), opts, p)
+			if e != nil {
+				t.Fatalf("valid source basename refused: %v", e)
+			}
+			defer s.Close()
+			if filepath.Base(s.capture.Path) != name || s.capture.Path == s.git.Clone {
+				t.Fatalf("execution/clone routing: %s %s", s.capture.Path, s.git.Clone)
+			}
+		})
+	}
+}
+
 func TestLocalStageIndependentPreviewsHaveStableTrustAndNoPersistentEffects(t *testing.T) {
 	c, opts, p := fixtureStagePreparation(t)
 	var diagnostics bytes.Buffer
@@ -111,5 +131,46 @@ func TestLocalStageIndependentPreviewsHaveStableTrustAndNoPersistentEffects(t *t
 	defer third.Close()
 	if *third.Preview().Fingerprint == *a.Fingerprint {
 		t.Fatal("executable source change retained trust fingerprint")
+	}
+}
+
+func TestLocalStagePreviewBindsToolBytesAndAllowedSubstitution(t *testing.T) {
+	c, opts, p := fixtureStagePreparation(t)
+	first, e := c.prepareStage(context.Background(), opts, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	fingerprint := *first.Preview().Fingerprint
+	if e = first.Close(); e != nil {
+		t.Fatal(e)
+	}
+	t.Setenv("ANCHORAGE_HOST_LABEL", "changed admitted label")
+	second, e := c.prepareStage(context.Background(), opts, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if *second.Preview().Fingerprint == fingerprint {
+		t.Fatal("changed admitted substitution retained trust")
+	}
+	fingerprint = *second.Preview().Fingerprint
+	if e = second.Close(); e != nil {
+		t.Fatal(e)
+	}
+	file, e := os.OpenFile(p.Tools["node"], os.O_APPEND|os.O_WRONLY, 0)
+	if e != nil {
+		t.Fatal(e)
+	}
+	_, e = file.WriteString("\n# tool content changed\n")
+	file.Close()
+	if e != nil {
+		t.Fatal(e)
+	}
+	third, e := c.prepareStage(context.Background(), opts, p)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer third.Close()
+	if *third.Preview().Fingerprint == fingerprint {
+		t.Fatal("changed installed tool retained trust")
 	}
 }
