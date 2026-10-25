@@ -231,8 +231,10 @@ never removed merely because hook text matches. See upstream
 [metadata serialization](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/imageMetadata.ts)
 and [config resolution](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/configContainer.ts).
 
-Meaningful backend RED/GREEN checkpoints (rebased equivalents are reachable in
-this branch; recorded outcomes preceded the patch-identical pure rebase):
+Meaningful backend RED/GREEN checkpoints use prepublication authoring IDs.
+Their source-equivalent published counterparts are recorded in the
+[publication history](t038-publication-history-20261025.json); the measurements
+preceded the fresh-main rebase and message normalization:
 
 | Test / guard | RED | GREEN |
 | --- | --- | --- |
@@ -282,8 +284,8 @@ recipe; no mutant is retained in source.
 
 Final integrated check results are recorded after execution below. This record
 claims no independent CLEAR verdict, hosted CI result or live operation evidence.
-The CI acceptance manifest appends 102 new critical literal Go test IDs, retaining
-all baseline entries; fake re-execution entrypoints are harness helpers, not
+The initial integrated CI manifest appended 102 new critical literal Go test IDs;
+the review correction below extends that total to 109, retaining all baseline entries; fake re-execution entrypoints are harness helpers, not
 standalone acceptance IDs.
 
 Delivered scope: canonical stage/promote commands, source trust and consent,
@@ -493,3 +495,28 @@ The coordinator owns fresh-main integration preserving W1 changes/critical IDs,
 commit-message repair preserving product trees, and exact-head independent
 review before publication. Hosted native CI, full make-check completion and
 owner real-host acceptance remain open as previously recorded.
+
+## Publication history and fresh-main integration
+
+Before publication, main had advanced through the owner merge of W1 #251 as
+`3dd1a1675f27fa3e15c6acc34b8fe8cfd78cf894`. The T038 branch was rebased onto
+that exact fresh main: all 85 patches were equal in `git range-diff`, with no
+changed or dropped patch. Every existing main acceptance ID, including the W1
+IDs, is retained. The `apps/whr` and root `contracts` trees match each paired
+authoring commit, so the Go measurements above retain their actual source
+meaning; they are not represented as new test runs on the rewritten SHAs.
+
+Commit messages were then normalized before the first publication: meaningful
+why-bodies, `Refs: #142`, canonical Codex coauthor trailers and subjects no longer
+than 72 characters. All 85 corresponding whole trees remained identical during
+that message-only rewrite. The linked machine-readable publication history gives
+each original authoring ID, fresh-base ID, published ID and common tree identity.
+Component helper checkpoints explicitly labeled historical above remain
+authoring evidence; the mapping covers the integrated branch commits.
+
+This final documentation change adds only this explanation and the mapping.
+No owner checkout, published branch, accepted history, task checkbox, product
+behavior or dependency was changed by message normalization. At this normalization checkpoint the branch was unpublished, so no owner-side
+branch resynchronization was needed. Final
+exact-head delta review and native CI remain pending. Full `make check` and
+real-host acceptance remain incomplete as recorded above.
