@@ -1,0 +1,89 @@
+// SPDX-License-Identifier: EUPL-1.2
+package localdocker
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestLocalStageDurableIntentAndMonotonicRecovery(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "state")
+	s, err := openStageStore(root, "daemon", "unix:///tmp/docker.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	op := strings.Repeat("1", 32)
+	if err := s.Begin(op, "sha256:"+strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Advance("allocating", "create_volume", "attempted"); err != nil {
+		t.Fatal(err)
+	}
+	records, err := s.Records()
+	if err != nil || len(records) != 2 {
+		t.Fatalf("records=%v err=%v", records, err)
+	}
+	if records[1].Sequence != 2 || records[1].PreviousHash != records[0].Hash || records[1].State != "allocating" {
+		t.Fatalf("bad chain: %+v", records)
+	}
+	if err := s.Begin(strings.Repeat("2", 32), records[0].Fingerprint); err == nil || !strings.Contains(err.Error(), "retained attempt") {
+		t.Fatalf("retained attempt admitted: %v", err)
+	}
+	if err := s.Advance("complete", "remove_home", "observed"); err == nil || !strings.Contains(err.Error(), "state transition") {
+		t.Fatalf("skipped state: %v", err)
+	}
+	path := filepath.Join(s.path, "journal.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rows []map[string]any
+	if err = json.Unmarshal(b, &rows); err != nil {
+		t.Fatal(err)
+	}
+	rows[0]["fingerprint"] = "sha256:" + strings.Repeat("b", 64)
+	b, _ = json.Marshal(rows)
+	if err = os.WriteFile(path, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = s.Records(); err == nil || !strings.Contains(err.Error(), "journal integrity") {
+		t.Fatalf("corruption admitted: %v", err)
+	}
+}
+
+func TestLocalStageStateModesAndNoFollow(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "state")
+	s, err := openStageStore(root, "daemon", "unix:///tmp/docker.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Begin(strings.Repeat("1", 32), "sha256:"+strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{root, s.path} {
+		st, e := os.Stat(p)
+		if e != nil || st.Mode().Perm() != 0700 {
+			t.Fatalf("private directory %q: %v %v", p, st, e)
+		}
+	}
+	st, err := os.Stat(filepath.Join(s.path, "journal.json"))
+	if err != nil || st.Mode().Perm() != 0600 {
+		t.Fatalf("private journal: %v %v", st, err)
+	}
+	if _, err = openStageStore(root, "daemon", "unix:///tmp/docker.sock"); err == nil || !strings.Contains(err.Error(), "operation lock") {
+		t.Fatalf("concurrent lock admitted: %v", err)
+	}
+	s.Close()
+	target := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	if err = os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = openStageStore(filepath.Join(link, "state"), "daemon", "unix:///tmp/docker.sock"); err == nil || !strings.Contains(err.Error(), "state path") {
+		t.Fatalf("symlink admitted: %v", err)
+	}
+}
