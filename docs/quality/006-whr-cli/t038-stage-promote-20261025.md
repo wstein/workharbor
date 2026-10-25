@@ -301,11 +301,11 @@ identical mount namespace. Maximum-size stress allocations are not claimed.
 
 For a separately authorized native run, the owner should first record installed
 CLI 0.89.0 and pinned tool identities, pause writers, and run `whr workspace stage
---source /absolute/source --smoke --dry-run --json`. Inspect the reported trust
+--local --source /absolute/source --smoke --dry-run PRIMARY --json`. Inspect the reported trust
 fingerprint and human stderr disclosures, then apply with the exact `--trust`
 digest and explicit confirmation. Inspect that the original primary/home/source
 are preserved and the candidate uses the independent clone/fresh home. Preview
-`whr workspace promote --dry-run --json`, then explicitly consent with both
+`whr workspace promote --local --dry-run PRIMARY --json`, then explicitly consent with both
 `--volumes --force`; verify immutable replacement and hooks/smoke before candidate
 cleanup. Preserve the receipt and clone, and independently inspect all failure
 inventory before any retry. These are an owner runbook, not executed evidence.
@@ -314,3 +314,22 @@ No standalone product build, installation, real Docker/Dev Container lifecycle,
 provider invocation, remote Git operation or actual source hook/smoke execution
 was performed by this author. Temporary real-Git fixtures and test-owned fake
 executables are the measured scope.
+
+The fresh-main rebase onto `79f19ada10c53467074e17a8db42dcc2d55c5776`
+compared all 74 authoring commits with `git range-diff`: 74 equal patch rows,
+no changed or dropped patch. Rebased code checkpoint was
+`ddd4efabb05b4258931b28a4f06a6a03ce736405`.
+The first complete affected run exposed the existing table-level unavailable
+command diagnostic oracle: new stage/promote handlers returned usage 64 but
+omitted `workspace.stage/promote is not available`. `eebcbbe6` preserves that
+unavailable wording while explaining the required `--local` capability. Both
+`TestMutatingHostCommandsRefuseUnsupportedPlatform` and
+`TestLocalLifecycleInvalidArgumentsRefuseBeforeBackend` then passed (0.215 s).
+
+Darwin/arm64 test compilation passed for `internal/localdocker` and
+`internal/commands` using `GOOS=darwin GOARCH=arm64 go test -c -o TEMPFILE`.
+These binaries were not run. `go vet` passed for localdocker, commands and
+workspacecfg. Formatting and repository bootstrap checks passed; bootstrap checks
+explicitly do not evaluate product runtime. Final full-suite/harness measurements
+follow after execution; the first affected run's command-package failure above
+is not hidden or counted as green.
