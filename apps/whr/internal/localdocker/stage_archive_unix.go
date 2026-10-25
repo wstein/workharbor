@@ -1,7 +1,6 @@
 //go:build unix
 
 // SPDX-License-Identifier: EUPL-1.2
-//
 package localdocker
 
 import (
@@ -10,8 +9,9 @@ import (
 )
 
 // At most 256 admitted effects each have an intent and observation/uncertainty
-// row. State-only transitions are additional rows, not hidden quota losses.
-const stageMaxJournalRecords = 2*256 + 16 + 1
+// row and each payload has its own append-only receipt binding. State-only
+// transitions likewise have a transition and binding row.
+const stageMaxJournalRecords = 4*256 + 2*16 + 1
 
 func decodeStageJournal(data []byte) ([]stageRecord, error) {
 	var rows []stageRecord
@@ -65,7 +65,7 @@ func (s *stageStore) checkCompletedArchive(op string) error {
 		return e
 	}
 	var receipt stageReceipt
-	if decodeStageClosed(b, &receipt) != nil || receipt.Version != 1 || receipt.OperationID != op || receipt.Sequence != last.Sequence || receipt.PreviousHash != last.PreviousHash || receipt.State != "complete" || receipt.UnverifiedReason != nil {
+	if decodeStageClosed(b, &receipt) != nil || receipt.Version != 1 || receipt.OperationID != op || receipt.Sequence != last.Sequence || receipt.PreviousHash != last.PreviousHash || receipt.State != "complete" || receipt.UnverifiedReason != nil || last.ReceiptDigest != stageReceiptDigest(receipt) {
 		return stageConflict("completed receipt binding changed")
 	}
 	return nil

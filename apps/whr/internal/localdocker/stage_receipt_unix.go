@@ -126,9 +126,14 @@ func (s *stageStore) saveReceipt(receipt *stageReceipt, exclusive bool) error {
 	}
 	last := rows[len(rows)-1]
 	receipt.Version = 1
-	receipt.Sequence = last.Sequence
-	receipt.PreviousHash = last.PreviousHash
 	receipt.State = last.State
+	// Bind the replacement receipt with a new append-only journal row first.
+	// Interrupted publication produces a mismatch requiring reconciliation.
+	if len(rows) >= stageMaxJournalRecords {
+		return stageConflict("journal record quota")
+	}
+	receipt.Sequence = last.Sequence + 1
+	receipt.PreviousHash = last.Hash
 	b, e := json.Marshal(receipt)
 	if e != nil {
 		return stageConflict("receipt target encoding invalid")
@@ -136,6 +141,10 @@ func (s *stageStore) saveReceipt(receipt *stageReceipt, exclusive bool) error {
 	var check stageReceipt
 	if e = decodeStageClosed(b, &check); e != nil {
 		return stageConflict("receipt closed fields invalid")
+	}
+	rows = append(rows, stageRecord{Version: 1, OperationID: last.OperationID, Sequence: receipt.Sequence, PreviousHash: last.Hash, State: last.State, Fingerprint: last.Fingerprint, Action: last.Action, Observation: last.Observation, ReceiptDigest: stageReceiptDigest(*receipt)})
+	if e = s.write(rows, false); e != nil {
+		return e
 	}
 	return s.writeArtifact(receipt.OperationID, "receipt.json", append(b, '\n'), exclusive)
 }
@@ -156,6 +165,9 @@ func (s *stageStore) loadReceipt(op string) (stageReceipt, error) {
 	if receipt.Version != 1 || receipt.OperationID != op || receipt.OperationID != last.OperationID || receipt.Sequence != last.Sequence || receipt.PreviousHash != last.PreviousHash || receipt.State != last.State {
 		return receipt, stageConflict("receipt journal binding changed")
 	}
+	if last.ReceiptDigest == "" || last.ReceiptDigest != stageReceiptDigest(receipt) {
+		return receipt, stageConflict("receipt hash-chain binding changed")
+	}
 	if receipt.State == "staged_unverified" {
 		if receipt.UnverifiedReason == nil {
 			return receipt, stageConflict("receipt unverified reason missing")
@@ -169,4 +181,10 @@ func (s *stageStore) loadReceipt(op string) (stageReceipt, error) {
 		return receipt, stageConflict("receipt unexpected unverified reason")
 	}
 	return receipt, nil
+}
+
+func stageReceiptDigest(receipt stageReceipt) string {
+	receipt.Sequence = 0
+	receipt.PreviousHash = ""
+	return stageDigest(receipt)
 }
