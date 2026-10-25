@@ -283,6 +283,27 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 			t.Fatalf("escaped line break: %v", err)
 		}
 	})
+	t.Run("scalar_path_substitution", func(t *testing.T) {
+		execution := t.TempDir()
+		if err := os.WriteFile(filepath.Join(execution, "simple.sh"), []byte("true\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		original := filepath.Join(t.TempDir(), "original with space")
+		_, _, err := admitStageDependencies(context.Background(), execution, original, "/workspaces/test", map[string]any{"postCreateCommand": "sh ${localWorkspaceFolder}/simple.sh"}, false, ".devcontainer/devcontainer.json")
+		if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), "workspace path substitution dependency capability unsupported") {
+			t.Fatalf("scalar phase path: %v", err)
+		}
+		spaced := filepath.Join(t.TempDir(), "execution with space")
+		if err = os.Mkdir(spaced, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(spaced, "simple.sh"), []byte("true\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err = admitStageDependencies(context.Background(), spaced, original, "/workspaces/test", map[string]any{"postCreateCommand": []any{"sh", "${localWorkspaceFolder}/simple.sh"}}, false, ".devcontainer/devcontainer.json"); err != nil {
+			t.Fatalf("literal argv path: %v", err)
+		}
+	})
 	t.Run("plain_interpreter", func(t *testing.T) {
 		root := t.TempDir()
 		if err := os.WriteFile(filepath.Join(root, "simple.sh"), []byte("#!/bin/sh\ntrue\n"), 0700); err != nil {
