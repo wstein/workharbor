@@ -14,14 +14,25 @@ defmodule WorkHarborWeb.OwnerSocket do
       %Phoenix.Socket.Message{topic: "phoenix", event: "heartbeat"} ->
         super(message, transport)
 
-      %Phoenix.Socket.Message{topic: "lv:" <> id, event: event}
-      when id != "" and event in ["phx_join", "phx_leave"] ->
+      %Phoenix.Socket.Message{topic: "lv:" <> id, event: "phx_join", payload: payload}
+      when id != "" ->
+        if valid_join?(payload), do: super(message, transport), else: {:ok, transport}
+
+      %Phoenix.Socket.Message{topic: "lv:" <> id, event: "phx_leave"} when id != "" ->
         super(message, transport)
 
       _ ->
         {:ok, transport}
     end
   end
+
+  defp valid_join?(%{"session" => session} = payload) when is_binary(session) do
+    Enum.all?(["static", "url", "redirect"], fn key ->
+      not Map.has_key?(payload, key) or is_binary(payload[key])
+    end) and (not Map.has_key?(payload, "params") or is_map(payload["params"]))
+  end
+
+  defp valid_join?(_payload), do: false
 
   def connect(_params, socket, info) do
     with %{"credential" => token} <- info[:session],
