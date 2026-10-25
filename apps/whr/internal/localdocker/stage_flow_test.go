@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -247,5 +248,65 @@ func TestLocalStageRejectsChangedToolsAndSubstitutionsBeforeEffects(t *testing.T
 				t.Fatal("changed trusted input caused allocation")
 			}
 		})
+	}
+}
+
+func TestLocalStageFreshAfterRemovedUnverifiedPreservesCloneAndConsent(t *testing.T) {
+	c, opts, ports, path := fixtureStageLifecycle(t, false)
+	first, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := first.Apply(context.Background(), LifecycleConsent{TrustDigest: *first.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if exitcode.FromError(err) != exitcode.PartialFailure || result.Status != "staged_unverified" {
+		t.Fatalf("first stage: %+v %v", result, err)
+	}
+	oldClone, oldHome, oldOperation := first.clonePath, *result.Home.Name, first.operationID
+	journalPath := filepath.Join(first.store.path, "journal.json")
+	if err = first.Close(); err != nil {
+		t.Fatal(err)
+	}
+	// Models separately completed guarded removal. No lifecycle retry/adoption is performed.
+	state := readFakeStageState(t, path)
+	state.Candidate = nil
+	state.Volume = nil
+	data, _ := json.Marshal(state)
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(journalPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts.Smoke = true
+	preview, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after, err := os.ReadFile(journalPath); err != nil || !bytes.Equal(before, after) {
+		t.Fatal("recovery preview changed persistent journal")
+	}
+	_, err = preview.Apply(context.Background(), LifecycleConsent{})
+	if exitcode.FromError(err) != exitcode.NeedsHuman || err == nil || !strings.Contains(err.Error(), "source trust and confirmation required") {
+		t.Fatalf("missing fresh consent: %v", err)
+	}
+	if after, err := os.ReadFile(journalPath); err != nil || !bytes.Equal(before, after) {
+		t.Fatal("unconfirmed recovery changed persistent journal")
+	}
+	preview.Close()
+	next, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer next.Close()
+	result, err = next.Apply(context.Background(), LifecycleConsent{TrustDigest: *next.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if err != nil || result.Status != "staged_verified" {
+		t.Fatalf("fresh stage after removal: %+v %v", result, err)
+	}
+	if next.operationID == oldOperation || *result.Home.Name == oldHome || next.clonePath == oldClone {
+		t.Fatal("recovered operation reused old allocation")
+	}
+	if _, err = os.Stat(oldClone); err != nil {
+		t.Fatalf("old writable clone was not retained: %v", err)
 	}
 }
