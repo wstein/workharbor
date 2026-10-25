@@ -9,7 +9,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -222,7 +221,7 @@ func TestLocalStageReviewAnonymousImageVolumeRefused(t *testing.T) {
 
 func TestLocalStageReviewInterruptDuringHealthWaitFlow(t *testing.T) {
 	c, opts, p, path := fixtureStageLifecycle(t, true)
-	socket := filepath.Join(t.TempDir(), "health.sock")
+	socket := fixtureStageSocketPath(t)
 	listener, err := net.Listen("unix", socket)
 	if err != nil {
 		t.Fatal(err)
