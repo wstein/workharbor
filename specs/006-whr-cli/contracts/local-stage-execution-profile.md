@@ -692,3 +692,14 @@ remaining cleanup units and native host evidence remain separate work. No T038,
 T039 or T040 checkbox or dependency changes here. FR-067 and its entire protected
 Anchorage-home guard remain unchanged. No Docker, build, hook, install, runtime
 activation, deployment or merge operation is authorized by this status record.
+
+## Promotion resource recovery amendment (2026-10-25)
+
+The owner's subsequent direction to implement promotion with rollback supersedes
+only the blanket prohibition on automatically restoring the old primary in the
+accepted cleanup paragraph above. The accepted historical body remains intact.
+The bounded implementation contract is
+[local promote resource recovery](local-promote-resource-recovery.md). It preserves
+FR-067, D1/D2, explicit deletion consent, immutable-image admission and the
+no-Anchorage-adoption rule. This records the later direction; independent review,
+required CI and owner-host acceptance remain separate gates.
