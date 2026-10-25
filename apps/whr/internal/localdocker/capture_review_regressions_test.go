@@ -179,3 +179,19 @@ func TestLocalStageGitUnsafeRemoteFormsRefused(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalStageGitPreservesDetectedPlatformCoreValues(t *testing.T) {
+	clone := captureRegressionRepo(t)
+	want := map[string]string{"core.filemode": "false", "core.ignorecase": "true", "core.precomposeunicode": "true", "core.symlinks": "false"}
+	for key, value := range want {
+		fixtureGit(t, clone, "config", key, value)
+	}
+	if err := writeStageSafeConfig(context.Background(), capturePhysicalTemp(t), stageGitSnapshot{ObjectFormat: "sha1"}, clone, map[string][]string{}); err != nil {
+		t.Fatal(err)
+	}
+	for key, value := range want {
+		if got := fixtureGit(t, clone, "config", "--bool", "--get", key); got != value {
+			t.Errorf("detected %s=%s lost: %s", key, value, got)
+		}
+	}
+}
