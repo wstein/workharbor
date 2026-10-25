@@ -172,3 +172,37 @@ The capture parent is now 8f6efe18. The 36 stage patches from published ed29ea7c
 replay unchanged onto it with equal range-diff. No stage source, fixture or CI ID
 changes in this follow-up; only this record clarifies the withdrawn parent caps.
 The previous native result and current-head acceptance gates remain separate.
+
+## Ready capture parent and native macOS physical paths
+
+This follow-up uses Ready capture parent 0feaa033. The owner accepted the F8
+administration-walk residual on 2026-10-25, recorded in PR 265's body without
+changing its branch. No capture admission limit is added here. All 37 previously
+published stage patches from 6f7b792e replay unchanged on this parent; the later
+macOS corrections below are appended, so this round is not a pure rebase.
+
+Run 40217019624 on 6f7b792e passed bootstrap but failed macos-pty in
+TestLocalStageGitStatusPredicateRejectsCorruptIndexWithoutExecutingConfig:
+configuration outside admitted source. After resolving the earlier socket limit,
+macOS's logical temporary prefix exposed mismatched physical source/config facts.
+TestLocalStageGitFixtureCanonicalSourceUnderAlias reproduces that exact refusal
+on Linux by running the native test below a symlinked temporary root.
+
+The fixture now resolves its created source before writing Docker label/mount
+facts. That alone still left the regression RED with execution dependency path
+outside workspace: the product's private preparation root remained logical while
+its dependency resolved physically. Preparation now resolves that root only after
+recording its identity, then requires the same inode before using the physical
+path. Administrative and source confinement rules are not relaxed. Existing
+private context injection exposes the identity checkpoint; the negative race
+redirects the temporary alias and checks the original/replacement are retained,
+foreign bytes stay intact and no phase directory is written in the replacement.
+Both literal regressions are included in the CI inventory and macOS Git selection.
+
+The alias regression is assertion-RED before the corrections. The negative test
+first lacked its injection point; that wiring failure is not semantic evidence
+that the already-present identity guard was wrong. Its characterization is
+qualified by a compiled guard-removal probe that detects the foreign-root write.
+The PR body records actual current-head package, mutation, format/compiler and
+script/check results. No native macOS PASS for the new head is claimed before CI;
+no real Docker lifecycle, task completion or full T038/T039 acceptance is claimed.
