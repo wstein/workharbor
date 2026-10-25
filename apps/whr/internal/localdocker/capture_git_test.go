@@ -101,6 +101,7 @@ func TestLocalStageGitFormatsRefsAndSafeConfig(t *testing.T) {
 			fixtureGit(t, src, "config", "branch.main.remote", "upstream")
 			fixtureGit(t, src, "config", "branch.main.merge", "refs/heads/main")
 			fixtureGit(t, src, "remote", "add", "secret", "https://token:password@example.invalid/project")
+			fixtureGit(t, src, "remote", "add", "scpsecret", "user:scpcredential@host:path")
 			sentinel := filepath.Join(t.TempDir(), "executed")
 			config, e := os.OpenFile(filepath.Join(src, ".git", "config"), os.O_APPEND|os.O_WRONLY, 0)
 			if e != nil {
@@ -139,7 +140,7 @@ func TestLocalStageGitFormatsRefsAndSafeConfig(t *testing.T) {
 			if e != nil {
 				t.Fatal(e)
 			}
-			for _, forbidden := range []string{"password", "token:", "packObjectsHook", "fsmonitor", "untrusted-include", "git-capture-"} {
+			for _, forbidden := range []string{"password", "token:", "scpcredential", "packObjectsHook", "fsmonitor", "untrusted-include", "git-capture-"} {
 				if strings.Contains(string(cfg), forbidden) {
 					t.Fatalf("unsafe initial config retained %q", forbidden)
 				}
