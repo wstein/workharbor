@@ -3,9 +3,11 @@ package localdocker
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -16,12 +18,15 @@ func TestLocalStagePhaseEnvironmentAndPinnedTool(t *testing.T) {
 	t.Setenv("LANG", "C.UTF-8")
 	t.Setenv("ANCHORAGE_HOST_LABEL", "host label")
 	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	tool := filepath.Join(t.TempDir(), "tool")
 	script := "#!/bin/sh\nprintf '%s\\n' \"$DOCKER_HOST\" \"$LANG\" \"$ANCHORAGE_HOST_LABEL\"\ntest -z \"${AWS_SECRET_ACCESS_KEY+x}\" || exit 8\ntest -z \"${GIT_SSH_COMMAND+x}\" || exit 9\ntest \"$HOME\" != \"\" || exit 10\ncat\n"
 	if e := os.WriteFile(tool, []byte(script), 0700); e != nil {
 		t.Fatal(e)
 	}
-	runner, e := newStageRunner(root, "unix:///tmp/fixed.sock", map[string]string{"docker": tool})
+	runner, e := newStageRunner(context.Background(), root, "unix:///tmp/fixed.sock", map[string]string{"docker": tool})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -41,11 +46,14 @@ func TestLocalStagePhaseEnvironmentAndPinnedTool(t *testing.T) {
 }
 func TestLocalStagePhaseOutputBoundAndCancellation(t *testing.T) {
 	root := t.TempDir()
+	if err := os.Chmod(root, 0700); err != nil {
+		t.Fatal(err)
+	}
 	tool := filepath.Join(t.TempDir(), "tool")
 	if e := os.WriteFile(tool, []byte("#!/bin/sh\nwhile :; do printf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'; done\n"), 0700); e != nil {
 		t.Fatal(e)
 	}
-	runner, e := newStageRunner(root, "unix:///tmp/fixed.sock", map[string]string{"docker": tool})
+	runner, e := newStageRunner(context.Background(), root, "unix:///tmp/fixed.sock", map[string]string{"docker": tool})
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -56,5 +64,23 @@ func TestLocalStagePhaseOutputBoundAndCancellation(t *testing.T) {
 	cancel()
 	if _, e = runner.Run(ctx, "smoke", "docker", nil, nil, time.Second); e != context.Canceled {
 		t.Fatalf("cancel: %v", e)
+	}
+}
+
+func TestLocalStagePhaseNeverSignalsReleasedLeader(t *testing.T) {
+	signals := 0
+	g := &stageProcessGroup{owned: true, signal: func(_ syscall.Signal) error { signals++; return nil }}
+	if err := g.terminate(); err != nil {
+		t.Fatal(err)
+	}
+	g.releaseBeforeReap(true)
+	if signals != 2 {
+		t.Fatalf("before release signals=%d want TERM then cleanup KILL", signals)
+	}
+	if err := g.terminate(); !errors.Is(err, os.ErrProcessDone) {
+		t.Fatalf("released signal accepted: %v", err)
+	}
+	if signals != 2 {
+		t.Fatalf("signaled after release: %d", signals)
 	}
 }
