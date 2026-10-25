@@ -144,8 +144,17 @@ func TestLocalStageReviewCompletedSmokeFailureFlow(t *testing.T) {
 func TestLocalStageReviewInterruptedHealthIsPartial(t *testing.T) {
 	for _, deadline := range []bool{false, true} {
 		t.Run(map[bool]string{false: "interrupt", true: "deadline"}[deadline], func(t *testing.T) {
-			stage := fixtureStageReviewAttempt(t, "verifying", "")
-			stage.receipt.ActionInventory = nil
+			stage := fixtureStageReviewAttempt(t, "candidate_hooks", "container_hooks")
+			stage.receipt.ActionInventory[0].State = "observed"
+			if err := stage.store.Advance("candidate_hooks", "container_hooks", "observed"); err != nil {
+				t.Fatal(err)
+			}
+			if err := stage.store.Advance("verifying", "", "observed"); err != nil {
+				t.Fatal(err)
+			}
+			if err := stage.store.saveReceipt(stage.receipt, false); err != nil {
+				t.Fatal(err)
+			}
 			var ctx context.Context
 			var cancel context.CancelFunc
 			if deadline {
