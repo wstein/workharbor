@@ -77,7 +77,7 @@ func (p *LocalPromotion) restoreOriginalResource() error {
 				if m.Type == "volume" && m.Name == p.primaryConfig.Home {
 					return stageConflict("resource recovery shared primary mount")
 				}
-				if m.Type == "bind" && m.RW {
+				if m.Type == "bind" && (m.RW || m.readOnlyUnknown) {
 					overlap, err := promotionRecoveryPathsOverlap(p.receipt.OriginalSource, m.Source)
 					if err != nil {
 						return err

@@ -146,3 +146,8 @@ The inherited accepted profile body is unchanged by this correction. The source
 remains frozen while broad author checks and the required exact-head rewrite
 review run; final outcomes belong in the PR body. Native CI and the owner's F6
 budget decision remain blockers. No independent Ready verdict is claimed here.
+
+The independent rewrite review also exposed missing/null mount writability.
+Both added cases failed by assertion before the conservative overlap guard;
+explicitly read-only mounts retain their positive control. Unknown writability
+is treated as potentially writable, never as evidence of read-only access.
