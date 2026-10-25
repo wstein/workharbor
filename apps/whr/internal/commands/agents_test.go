@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
 )
@@ -43,30 +44,33 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 		action, warning string
 		written         []byte
 		refused         bool
+		mode            os.FileMode
 	}{
-		{"absent", nil, "create", "", current, false},
-		{"empty", []byte{}, "append_block", "missing", append([]byte("\n"), current...), false},
-		{"missing", []byte("owner"), "append_block", "missing", append([]byte("owner\n\n"), current...), false},
-		{"CRLF BOM missing", []byte("\xef\xbb\xbfowner\r\n"), "append_block", "missing", append([]byte("\xef\xbb\xbfowner\r\n\n"), current...), false},
-		{"current", wrap(current), "skip_existing", "", wrap(current), false},
-		{"lower intact", wrap(block(shippedVersion - 1)), "replace_block", "different_template", wrap(current), false},
-		{"same version foreign intact", wrap(block(shippedVersion)), "replace_block", "different_template", wrap(current), false},
-		{"higher intact", wrap(block(shippedVersion + 1)), "replace_block", "different_template", wrap(current), false},
-		{"modified", wrap(bytes.Replace(current, []byte("## Agent workflow"), []byte("## Owner workflow"), 1)), "replace_block", "modified", wrap(current), false},
-		{"lower modified", wrap(bytes.Replace(block(shippedVersion-1), []byte("foreign workflow"), []byte("owner workflow"), 1)), "replace_block", "modified", wrap(current), false},
-		{"higher modified", wrap(bytes.Replace(block(shippedVersion+1), []byte("foreign workflow"), []byte("owner workflow"), 1)), "replace_block", "modified", wrap(current), false},
-		{"oversized", bytes.Repeat([]byte("x"), 64*1024+1), "", "too_large", nil, true},
-		{"oversized malformed", bytes.Repeat([]byte("<!-- whr:agents-block end -->\n"), 3000), "", "too_large", nil, true},
-		{"result oversized", bytes.Repeat([]byte("x"), 64*1024-1), "", "too_large", nil, true},
-		{"duplicate", bytes.Join([][]byte{current, current}, nil), "", "malformed", nil, true},
-		{"unclosed", begin, "", "malformed", nil, true},
-		{"orphan", []byte("<!-- whr:agents-block end -->\n"), "", "malformed", nil, true},
-		{"nested", bytes.Join([][]byte{begin, current}, nil), "", "malformed", nil, true},
-		{"end before begin", bytes.Join([][]byte{[]byte("<!-- whr:agents-block end -->\n"), current}, nil), "", "malformed", nil, true},
-		{"CRLF markers", bytes.ReplaceAll(current, []byte("\n"), []byte("\r\n")), "", "malformed", nil, true},
-		{"indented marker", append([]byte("  "), current...), "", "malformed", nil, true},
-		{"BOM marker", append([]byte("\xef\xbb\xbf"), current...), "", "malformed", nil, true},
-		{"fenced marker", []byte("```\n\t<!-- whr:agents-block unknown -->\n```\n"), "", "malformed", nil, true},
+		{"absent", nil, "create", "", current, false, 0644},
+		{"empty", []byte{}, "append_block", "missing", append([]byte("\n"), current...), false, 0644},
+		{"missing", []byte("owner"), "append_block", "missing", append([]byte("owner\n\n"), current...), false, 0644},
+		{"CRLF BOM missing", []byte("\xef\xbb\xbfowner\r\n"), "append_block", "missing", append([]byte("\xef\xbb\xbfowner\r\n\n"), current...), false, 0644},
+		{"current", wrap(current), "skip_existing", "", wrap(current), false, 0644},
+		{"lower intact", wrap(block(shippedVersion - 1)), "replace_block", "different_template", wrap(current), false, 0644},
+		{"same version foreign intact", wrap(block(shippedVersion)), "replace_block", "different_template", wrap(current), false, 0644},
+		{"higher intact", wrap(block(shippedVersion + 1)), "replace_block", "different_template", wrap(current), false, 0644},
+		{"modified", wrap(bytes.Replace(current, []byte("## Agent workflow"), []byte("## Owner workflow"), 1)), "replace_block", "modified", wrap(current), false, 0644},
+		{"lower modified", wrap(bytes.Replace(block(shippedVersion-1), []byte("foreign workflow"), []byte("owner workflow"), 1)), "replace_block", "modified", wrap(current), false, 0644},
+		{"higher modified", wrap(bytes.Replace(block(shippedVersion+1), []byte("foreign workflow"), []byte("owner workflow"), 1)), "replace_block", "modified", wrap(current), false, 0644},
+		{"oversized", bytes.Repeat([]byte("x"), 64*1024+1), "", "too_large", nil, true, 0644},
+		{"oversized malformed", bytes.Repeat([]byte("<!-- whr:agents-block end -->\n"), 3000), "", "too_large", nil, true, 0644},
+		{"result oversized", bytes.Repeat([]byte("x"), 64*1024-1), "", "too_large", nil, true, 0644},
+		{"duplicate", bytes.Join([][]byte{current, current}, nil), "", "malformed", nil, true, 0644},
+		{"unclosed", begin, "", "malformed", nil, true, 0644},
+		{"orphan", []byte("<!-- whr:agents-block end -->\n"), "", "malformed", nil, true, 0644},
+		{"nested", bytes.Join([][]byte{begin, current}, nil), "", "malformed", nil, true, 0644},
+		{"end before begin", bytes.Join([][]byte{[]byte("<!-- whr:agents-block end -->\n"), current}, nil), "", "malformed", nil, true, 0644},
+		{"CRLF markers", bytes.ReplaceAll(current, []byte("\n"), []byte("\r\n")), "", "malformed", nil, true, 0644},
+		{"indented marker", append([]byte("  "), current...), "", "malformed", nil, true, 0644},
+		{"BOM marker", append([]byte("\xef\xbb\xbf"), current...), "", "malformed", nil, true, 0644},
+		{"fenced marker", []byte("```\n\t<!-- whr:agents-block unknown -->\n```\n"), "", "malformed", nil, true, 0644},
+		{"private missing", []byte("private owner\n"), "append_block", "missing", append([]byte("private owner\n\n"), current...), false, 0600},
+		{"private foreign", wrap(block(shippedVersion + 1)), "replace_block", "different_template", wrap(current), false, 0600},
 	}
 	for _, tt := range cases {
 		for _, edit := range []bool{false, true} {
@@ -74,7 +78,18 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 				dir := initFixture(t)
 				target := filepath.Join(dir, "AGENTS.md")
 				if tt.data != nil {
-					if err := os.WriteFile(target, tt.data, 0644); err != nil {
+					if err := os.WriteFile(target, tt.data, tt.mode); err != nil {
+						t.Fatal(err)
+					}
+				}
+				var originalInfo os.FileInfo
+				if tt.data != nil {
+					stamp := time.Unix(1700000000, 0)
+					if err := os.Chtimes(target, stamp, stamp); err != nil {
+						t.Fatal(err)
+					}
+					originalInfo, err = os.Stat(target)
+					if err != nil {
 						t.Fatal(err)
 					}
 				}
@@ -103,6 +118,18 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 						t.Fatalf("invalid current output contract: %v", err)
 					}
 					if wantCode != 0 {
+						envelope := decodeEnvelope(t, got.stdout)
+						body := envelope["error"].(map[string]any)
+						reason := "is " + tt.warning + ";"
+						if envelope["ok"] != false || envelope["exit_code"] != float64(68) || body["code"] != "conflict" || !strings.Contains(body["message"].(string), reason) || !strings.Contains(got.err, reason) {
+							t.Fatalf("refusal reason/envelope mismatch: %v / %s", envelope, got.err)
+						}
+						result := envelope["result"].(map[string]any)
+						for _, key := range []string{"actions", "agents_block_warnings"} {
+							if values, ok := result[key].([]any); !ok || len(values) != 0 {
+								t.Fatalf("refusal %s must be an empty array: %v", key, result[key])
+							}
+						}
 						return nil
 					}
 					result := decodeEnvelope(t, got.stdout)["result"].(map[string]any)
@@ -144,8 +171,14 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 						if !os.IsNotExist(err) {
 							t.Fatalf("absent AGENTS.md changed: %v", err)
 						}
-					} else if err != nil || !bytes.Equal(data, tt.data) {
-						t.Fatalf("original AGENTS.md changed: %v", err)
+					} else {
+						if err != nil || !bytes.Equal(data, tt.data) {
+							t.Fatalf("original AGENTS.md changed: %v", err)
+						}
+						info, err := os.Stat(target)
+						if err != nil || !os.SameFile(originalInfo, info) || !originalInfo.ModTime().Equal(info.ModTime()) || originalInfo.Mode() != info.Mode() {
+							t.Fatalf("untouched AGENTS.md identity, time or mode changed: %v", err)
+						}
 					}
 					if _, err := os.Stat(filepath.Join(dir, "workharbor.json")); !os.IsNotExist(err) {
 						t.Fatalf("dry run/refusal wrote manifest: %v", err)
@@ -166,8 +199,20 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 				if err != nil || !bytes.Equal(data, wantData) {
 					t.Fatalf("written bytes differ from specified outcome: %v", err)
 				}
+				info, err := os.Stat(target)
+				if err != nil || info.Mode().Perm() != tt.mode {
+					t.Fatalf("AGENTS.md mode must remain %04o: %v / %v", tt.mode, info, err)
+				}
 				if mutates {
 					wantAction = "skip_existing"
+				}
+				stamp := time.Unix(1700000000, 0)
+				if err := os.Chtimes(target, stamp, stamp); err != nil {
+					t.Fatal(err)
+				}
+				fileBefore, err := os.Stat(target)
+				if err != nil {
+					t.Fatal(err)
 				}
 				before, err := os.Stat(dir)
 				if err != nil {
@@ -177,6 +222,10 @@ func TestInitPublicAgentsActionsAndWarningsValidate(t *testing.T) {
 				after, err := os.Stat(dir)
 				if err != nil || before.ModTime() != after.ModTime() {
 					t.Fatalf("no-op rerun changed directory: %v", err)
+				}
+				fileAfter, err := os.Stat(target)
+				if err != nil || !os.SameFile(fileBefore, fileAfter) || !fileBefore.ModTime().Equal(fileAfter.ModTime()) || fileBefore.Mode() != fileAfter.Mode() {
+					t.Fatalf("rerun changed AGENTS.md identity, time or mode: %v", err)
 				}
 				data, err = os.ReadFile(target)
 				if err != nil || !bytes.Equal(data, wantData) {
