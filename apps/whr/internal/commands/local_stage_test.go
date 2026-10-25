@@ -191,6 +191,7 @@ func TestLocalStageCLIInteractiveTrustAndConfirmation(t *testing.T) {
 		{"supplied-trust", "yes\n", "", 0, true},
 		{"padded-digest", " MATCH\nyes\n", "source fingerprint trust declined", 70, false},
 		{"changed-digest-case", "SHA256:" + strings.Repeat("a", 64) + "\nyes\n", "source fingerprint trust declined", 70, false},
+		{"over-bound-with-newline", strings.Repeat("x", 1024) + "\n", "confirmation declined: a complete bounded answer is required", 70, false},
 		{"oversized", strings.Repeat("x", 1100) + "\n", "confirmation declined: a complete bounded answer is required", 70, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
