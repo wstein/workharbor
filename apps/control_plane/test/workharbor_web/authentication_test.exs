@@ -266,6 +266,7 @@ defmodule WorkHarborWeb.AuthenticationTest do
         certfile: cert,
         keyfile: key,
         http_1_options: [enabled: true],
+        websocket_options: [max_fragmented_message_size: 65_536],
         http_2_options: [enabled: false]
       ]
     ]
