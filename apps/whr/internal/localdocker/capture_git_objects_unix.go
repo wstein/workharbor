@@ -26,7 +26,7 @@ func stageSnapshotDigest(s stageGitSnapshot) string {
 			}
 		}
 	}
-	b, _ := json.Marshal(map[string]any{"source": s.Source, "git_dir": s.GitDir, "common_dir": s.CommonDir, "objects": s.ObjectDir, "format": s.ObjectFormat, "head": s.Head, "head_ref": s.HeadRef, "refs": s.Refs, "index": s.IndexDigest, "config": s.ConfigDigest, "alternates": s.AlternatesDigest, "identities": identities})
+	b, _ := json.Marshal(map[string]any{"source": s.Source, "git_dir": s.GitDir, "common_dir": s.CommonDir, "objects": s.ObjectDir, "format": s.ObjectFormat, "head": s.Head, "head_ref": s.HeadRef, "refs": s.Refs, "index": s.IndexDigest, "config": s.ConfigDigest, "exclude": s.Exclude, "alternates": s.AlternatesDigest, "identities": identities})
 	sum := sha256.Sum256(append(b, '\n'))
 	return "sha256:" + hex.EncodeToString(sum[:])
 }

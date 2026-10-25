@@ -90,12 +90,26 @@ func stageCredentialFreeURL(value string) bool {
 }
 func writeStageSafeConfig(ctx context.Context, home string, s stageGitSnapshot, clone string, values map[string][]string) error {
 	gitdir := filepath.Join(clone, ".git")
+	platform, _, err := stageConfigEntries(ctx, home, stageGitSnapshot{CommonDir: gitdir})
+	if err != nil {
+		return captureIOError(err, "private Git platform configuration unavailable")
+	}
 	config := "[core]\n\trepositoryformatversion = 0\n\tbare = false\n\tfilemode = true\n\tlogallrefupdates = true\n"
 	if s.ObjectFormat == "sha256" {
 		config = strings.Replace(config, "version = 0", "version = 1", 1) + "[extensions]\n\tobjectformat = sha256\n"
 	}
 	if err := os.WriteFile(filepath.Join(gitdir, "config"), []byte(config), 0600); err != nil {
 		return stageConflict("private Git safe configuration publication failed")
+	}
+	for _, key := range []string{"core.filemode", "core.ignorecase", "core.precomposeunicode", "core.symlinks"} {
+		if values := platform[key]; len(values) > 0 {
+			if len(values) != 1 || (values[0] != "true" && values[0] != "false") {
+				return stageConflict("private Git platform configuration malformed")
+			}
+			if _, err := stageGitRead(ctx, home, gitdir, "", "", nil, "config", "--file", filepath.Join(gitdir, "config"), "--replace-all", key, values[0]); err != nil {
+				return err
+			}
+		}
 	}
 	remotes := map[string]bool{}
 	keys := make([]string, 0, len(values))
