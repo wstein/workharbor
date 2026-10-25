@@ -4,6 +4,7 @@ package wizard_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/wizard"
@@ -37,13 +38,30 @@ func TestWizardClaudeSettingsOnlyFlagPreconfirms(t *testing.T) {
 			for _, a := range p.Preview().Actions {
 				if a.Path == ".claude/settings.json" {
 					found++
-					if a.Action != want {
+					if a.Action != want || a.Applied {
 						t.Fatalf("action=%+v", a)
 					}
 				}
 			}
 			if found != 1 {
 				t.Fatalf("rows=%d", found)
+			}
+			steps := 0
+			for _, step := range p.Preview().NextSteps {
+				if strings.Contains(step, "attribution.sessionUrl: false") && strings.Contains(step, "--overwrite .claude/settings.json") && strings.Contains(step, "whole file") {
+					steps++
+				}
+			}
+			wantSteps := 1
+			if flag {
+				wantSteps = 0
+				const authored = "{\n  \"attribution\": {\n    \"sessionUrl\": false\n  }\n}\n"
+				if string(p.Files()[".claude/settings.json"]) != authored {
+					t.Fatal("preconfirmed replacement did not retain exact authored bytes")
+				}
+			}
+			if steps != wantSteps || !bytes.Equal(s.Entries[".claude/settings.json"].Data, []byte("invalid json")) {
+				t.Fatal("wrong remediation count or modified input snapshot")
 			}
 		})
 	}
@@ -52,8 +70,9 @@ func TestClaudeSettingsUnattendedOverwriteNeedsYes(t *testing.T) {
 	s := existing()
 	s.Entries[".claude/settings.json"] = scaffold.Entry{Kind: "file", Data: []byte("owner")}
 	_, err := scaffold.Build(s, scaffold.Options{NonInteractive: true, Overwrite: []string{".claude/settings.json"}})
-	if int(exitcode.FromError(err)) != 70 {
-		t.Fatalf("unattended consent=%v", err)
+	var typed *exitcode.Error
+	if !errors.As(err, &typed) || exitcode.FromError(err) != exitcode.NeedsHuman || typed.Path != exitcode.PathHumanDecisionMissing || typed.Message != "--non-interactive requires --yes (or --dry-run)" {
+		t.Fatalf("wrong unattended consent refusal: %v", err)
 	}
 }
 
@@ -62,8 +81,9 @@ func TestWizardClaudeSettingsFlaggedSpecialRefusedBeforePrompts(t *testing.T) {
 	s.Entries[".claude"] = scaffold.Entry{Kind: "special"}
 	var diag bytes.Buffer
 	_, err := wizard.Run(context.Background(), s, scaffold.Options{Overwrite: []string{".claude/settings.json"}}, strings.NewReader(""), &diag)
-	if int(exitcode.FromError(err)) != 68 {
-		t.Fatalf("flagged special=%v", err)
+	var typed *exitcode.Error
+	if !errors.As(err, &typed) || exitcode.FromError(err) != exitcode.Conflict || typed.Path != exitcode.PathConflict || typed.Message != "Claude settings target must be a regular file under a real .claude directory" {
+		t.Fatalf("wrong flagged-special refusal: %v", err)
 	}
 	if strings.Contains(diag.String(), "Workspace name") {
 		t.Fatal("refused edit prompted")

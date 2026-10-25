@@ -4,6 +4,7 @@ package scaffold
 import (
 	"bytes"
 	"context"
+	"errors"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"os"
 	"path/filepath"
@@ -11,6 +12,18 @@ import (
 	"testing"
 	"time"
 )
+
+func assertClaudeRefusal(t *testing.T, err error, code exitcode.Code, reason string) {
+	t.Helper()
+	var typed *exitcode.Error
+	path := exitcode.PathConflict
+	if code == exitcode.Interrupted {
+		path = exitcode.PathUserInterrupt
+	}
+	if !errors.As(err, &typed) || exitcode.FromError(err) != code || typed.Path != path || !strings.Contains(typed.Message, reason) {
+		t.Fatalf("wrong Claude settings refusal, want %d %s %q: %v", code, path, reason, err)
+	}
+}
 
 func TestInitClaudeSettingsExactDefault(t *testing.T) {
 	s, err := Discover(context.Background(), fixture(t))
@@ -196,8 +209,17 @@ func TestInitClaudeSettingsDryRunAndStale(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unchanged rechecked: %v", err)
 				}
-			} else if int(exitcode.FromError(err)) != 68 {
-				t.Fatalf("stale accepted: %v", err)
+			} else {
+				reason := "init target changed since preview or is unsafe"
+				if strings.HasPrefix(mode, "exclusive_create") {
+					reason = "cannot create init target .claude/settings.json:"
+				}
+				assertClaudeRefusal(t, err, exitcode.Conflict, reason)
+			}
+			if mode != "dry_run" {
+				if data, readErr := os.ReadFile(target); readErr != nil || string(data) != "concurrent\n" {
+					t.Fatalf("concurrent settings changed: %q / %v", data, readErr)
+				}
 			}
 		})
 	}
@@ -235,9 +257,7 @@ func TestInitClaudeSettingsLargeOverwriteAndRollback(t *testing.T) {
 			}
 			_, err = p.apply(context.Background(), hook)
 			if rollback {
-				if int(exitcode.FromError(err)) != 72 {
-					t.Fatalf("rollback=%v", err)
-				}
+				assertClaudeRefusal(t, err, exitcode.Interrupted, "init interrupted")
 			} else if err != nil {
 				t.Fatal(err)
 			}
@@ -292,9 +312,7 @@ func TestInitClaudeSettingsTailChangeWithRestoredMtime(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = p.Apply(context.Background())
-	if int(exitcode.FromError(err)) != 68 {
-		t.Fatalf("tail mutation accepted: %v", err)
-	}
+	assertClaudeRefusal(t, err, exitcode.Conflict, "init target changed since preview or is unsafe")
 }
 
 func TestInitClaudeSettingsOverwritePreviewShowsOldContent(t *testing.T) {
@@ -367,9 +385,7 @@ func TestInitClaudeSettingsLargeTailChangeNewMtime(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = p.Apply(context.Background())
-	if int(exitcode.FromError(err)) != 68 {
-		t.Fatalf("large tail change accepted: %v", err)
-	}
+	assertClaudeRefusal(t, err, exitcode.Conflict, "init target changed since preview or is unsafe")
 	if got, _ := os.ReadFile(target); !bytes.Equal(got, old) {
 		t.Fatal("file modified")
 	}
@@ -399,9 +415,7 @@ func TestInitClaudeSettingsRefusesOverwriteBeyondRestoreBound(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = p.Apply(context.Background())
-	if int(exitcode.FromError(err)) != 68 {
-		t.Fatalf("unrestorable overwrite accepted: %v", err)
-	}
+	assertClaudeRefusal(t, err, exitcode.Conflict, "init target changed since preview or is unsafe")
 	if info, err := os.Stat(target); err != nil || info.Size() != maxClaudeRestore+1 {
 		t.Fatalf("file changed: %v %v", info, err)
 	}
