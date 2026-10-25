@@ -44,7 +44,8 @@ defmodule WorkHarborWeb.Security do
     case WorkHarborWeb.Authority.origin(origin) do
       {:ok, {host, port}} ->
         authority = if String.contains?(host, ":"), do: "[" <> host <> "]", else: host
-        authority = if port == 443, do: authority, else: authority <> ":" <> Integer.to_string(port)
+        authority =
+          if port == 443, do: authority, else: authority <> ":" <> Integer.to_string(port)
 
         csp =
           "default-src 'none'; script-src 'self'; style-src 'self'; " <>

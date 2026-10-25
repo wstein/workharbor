@@ -211,6 +211,9 @@ defmodule WorkHarborWeb.OwnerShellTest do
     page = get(conn, "https://localhost/owner")
     html = html_response(page, 200)
     assert html =~ "data-phx-session", "owner page must become a LiveView before connecting"
+    [_, signed] = Regex.run(~r/data-phx-session="([^"]+)"/, html)
+    assert {:ok, %{session: signed_session}} = Phoenix.LiveView.Static.verify_token(Endpoint, signed)
+    refute Map.has_key?(signed_session, "credential")
     assert {:ok, view, connected_html} = live(page)
     {view, connected_html}
   end
