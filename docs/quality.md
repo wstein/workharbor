@@ -295,6 +295,15 @@ ratios, not computed browser styles or a full accessibility audit.
 | Error text | 7.94 | 7.73 | 4.5 |
 | Focus outline | 7.23 | 8.80 | 3.0 |
 | Control/surface borders | 4.55 | 3.08 | 3.0 |
+| Opaque dismiss X / button background | 16.27 | 13.40 | 3.0 |
+
+Independent static QA found that the dismiss X's former `opacity-40` reduced its
+light-mode contrast to 2.45:1 despite the palette's compliant opaque colors.
+The icon now renders at full opacity, inheriting the button's base-content color
+on its base-200 background in both themes. The existing icon test renders a flash,
+requires the dismiss SVG and rejects opacity utilities or inline styling on that
+control. A source calculation reproduced the former failing alpha blend and the
+new opaque ratios above. These results do not replace browser measurements.
 
 Actual local `python3 scripts/check_repo.py`, scoped `typos`, `git diff --check`,
 the 18-identity inventory comparison and read-only source-boundary checks passed.

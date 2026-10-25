@@ -174,7 +174,17 @@ defmodule WorkHarborWeb.OwnerShellTest do
     {view, html} = mount_shell(c.conn)
     theme = render_component(&Layouts.theme_toggle/1, %{})
 
-    for markup <- [html, theme] do
+    flash =
+      render_component(&CoreComponents.flash/1, kind: :info, flash: %{"info" => "Contrast check"})
+
+    [dismiss] =
+      Regex.run(~r/<button\b[^>]*class="notice-dismiss"[^>]*>.*?<\/button>/s, flash)
+
+    assert dismiss =~ "<svg"
+    refute dismiss =~ ~r/\bopacity-/
+    refute dismiss =~ ~r/\sstyle\s*=/i
+
+    for markup <- [html, theme, flash] do
       refute markup =~ "data:image"
       refute markup =~ ~r/class="[^"]*\bhero-/
     end
