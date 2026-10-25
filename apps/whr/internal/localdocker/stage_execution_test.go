@@ -76,7 +76,7 @@ func TestLocalStageGitStatusPredicateRejectsCorruptIndexWithoutExecutingConfig(t
 		t.Fatal(e)
 	}
 	e = stageCheckExecutionGit(context.Background(), []stageExecutionGitInput{input}, s.git.Repositories)
-	if exitcode.FromError(e) != exitcode.Conflict || !strings.Contains(e.Error(), "executed Git status predicate failed") {
+	if exitcode.FromError(e) != exitcode.Conflict || !strings.Contains(e.Error(), "Git index header unsupported") {
 		t.Fatalf("corrupt status admitted: %v", e)
 	}
 	if _, e = os.Stat(sentinel); !os.IsNotExist(e) {
