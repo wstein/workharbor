@@ -17,6 +17,8 @@ import (
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/terminal"
 )
 
+var promotionUnhealthy = stageConflict("promotion primary healthcheck failed")
+
 func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent) (LifecycleResult, error) {
 	if p.applied || p.closed {
 		return p.Preview(), stageConflict("promotion transaction already used")
@@ -29,17 +31,18 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	if consent.TrustDigest != "" && consent.TrustDigest != p.receipt.TrustDigest {
 		return refuse(stageConflict("promotion source trust differs from verified receipt"))
 	}
-	ctx := parent
+	ctx, cancel := context.WithTimeout(parent, 1800*time.Second)
+	defer cancel()
 	if err := p.checkBeforePhase(ctx, true); err != nil {
 		return refuse(promotionPhaseError(ctx, "preflight", err))
 	}
 	if err := p.results.Check(ctx); err != nil {
-		return refuse(err)
+		return refuse(promotionPhaseError(ctx, "preflight", err))
 	}
 	if err := p.requireDistinctPromotionLookup(ctx); err != nil {
 		return refuse(promotionPhaseError(ctx, "preflight", err))
 	}
-	if len(p.receipt.ActionInventory)+len(p.result.Effects) > 256 {
+	if len(p.receipt.ActionInventory)+len(p.result.Effects)+4 > 256 {
 		return refuse(stageConflict("promotion effect inventory quota"))
 	}
 	p.stageEffects = append([]StageEffect{}, p.receipt.ActionInventory...)
@@ -198,6 +201,9 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 		}
 		if err = p.awaitHealth(ctx, actual.ID); err != nil {
 			verification.Status = "failed"
+			if errors.Is(err, promotionUnhealthy) {
+				p.rollbackEligible = true
+			}
 			return p.partial("primary health verification failed", err)
 		}
 	} else if !p.settings.SmokeRequested {
@@ -247,6 +253,9 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 		return p.partial("verified replacement retained; original primary removal failed or uncertain", err)
 	}
 	p.originalRemoved = true
+	if err = p.checkBeforePhase(ctx, false); err != nil {
+		return p.partial("candidate cleanup recheck failed", err)
+	}
 	if err = p.resourceEffect(ctx, "remove_candidate", p.receipt.Candidate, 30*time.Second, []string{"container", "rm", "--force", "--", p.candidateObservation.ID}, func() error { return p.requireContainerAbsent(ctx, p.candidateObservation.ID) }); err != nil {
 		return p.partial("candidate removal failed or uncertain", err)
 	}
@@ -352,7 +361,19 @@ func (p *LocalPromotion) resourceEffect(ctx context.Context, action string, targ
 	return p.recordEffect(action, StageTarget{Resource: target}, "observed")
 }
 func (p *LocalPromotion) effectFailure(action string, target *StageResource, reason string, err error) (LifecycleResult, error) {
-	_ = p.recordEffect(action, StageTarget{Resource: target}, "uncertain")
+	var failed *stageCommandFailure
+	if (action == "container_hooks" || action == "smoke") && errors.As(err, &failed) && failed.Exit > 0 && (action != "smoke" || failed.Exit < 125) && p.newPrimary != nil {
+		if e := p.recordEffect(action, StageTarget{Resource: target}, "observed"); e == nil {
+			p.rollbackEligible = true
+			if p.result.Verification != nil {
+				p.result.Verification.Status = "failed"
+			}
+		} else {
+			err = errors.Join(err, e)
+		}
+	} else {
+		_ = p.recordEffect(action, StageTarget{Resource: target}, "uncertain")
+	}
 	return p.partial(reason, err)
 }
 func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, error) {
@@ -369,6 +390,10 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 		}
 		return p.Preview(), err
 	}
+	if p.rollbackEligible {
+		p.rollbackEligible = false
+		p.rollbackFailure = p.restoreOriginalResource()
+	}
 	p.result.Status = "partial"
 	for i := range p.result.Effects {
 		if p.result.Effects[i].State == "planned" {
@@ -382,16 +407,21 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 			p.result.ResultRefs[i].State = "remaining"
 		}
 	}
-	recovery := fmt.Sprintf("Inspect operation %s and retained configuration %s/promote/devcontainer.json. Original primary full ID %s, original name %s, recovery name %s. Inspect attempted/uncertain effects by full ID; hooks may have modified shared workspace/home. No automatic rollback or retry; retain clone, imported objects and refs.", p.receipt.OperationID, terminal.Escape(p.store.operationPath(p.receipt.OperationID)), p.primaryObservation.ID, terminal.Escape(p.primaryConfig.Name), p.retainedPrimaryName())
+	recovery := fmt.Sprintf("Inspect operation %s and retained configuration %s/promote/devcontainer.json. Original primary full ID %s, original name %s, recovery name %s. Inspect attempted/uncertain effects by full ID; hooks may have modified shared workspace/home. No further automatic recovery or retry; retain clone, imported objects and refs.", p.receipt.OperationID, terminal.Escape(p.store.operationPath(p.receipt.OperationID)), p.primaryObservation.ID, terminal.Escape(p.primaryConfig.Name), p.retainedPrimaryName())
 	if p.originalRemoved {
 		recovery += " The replacement passed verification before the original container was removed. Preserve and inspect the replacement; the removed original writable layer cannot be restored by this operation."
-	} else {
+	} else if !p.rollbackRestored {
 		recovery += " The original container has not been intentionally removed. Inspect its stopped/renamed state and any replacement first. Before the owner renames/starts that exact original, stop any replacement using its home and release the original name. An unconfirmed remove result still requires inspection; do not assume rollback."
+	}
+	if p.rollbackRestored {
+		recovery += " Bounded resource recovery: original container restored under its original name and observed running; failed replacement retained stopped as " + p.failedPrimaryName() + ". Shared workspace/home writes, imported objects/refs and terminated sessions were not restored."
+	} else if p.rollbackFailure != nil {
+		recovery += " Resource recovery stopped: " + terminal.Escape(p.rollbackFailure.Error()) + ". Inspect both full IDs before any manual action."
 	}
 	p.result.Recovery = []StageRecoveryStep{{Action: "owner_reconcile", Instruction: recovery}}
 
 	_ = p.save()
-	err := exitcode.Errorf(exitcode.PathPartialFailure, "local promote %s: %s; retained inventory requires owner reconciliation", reason, terminal.Escape(promotionCause(cause)))
+	err := exitcode.Errorf(exitcode.PathPartialFailure, "local promote %s: %s; retained inventory requires owner reconciliation", reason, terminal.Escape(promotionCause(errors.Join(cause, p.rollbackFailure))))
 	err.Result = p.Preview()
 	return p.Preview(), err
 }
@@ -462,7 +492,7 @@ func (p *LocalPromotion) awaitHealth(parent context.Context, id string) error {
 				return nil
 			}
 			if *d.Health == "unhealthy" {
-				return stageConflict("promotion primary healthcheck failed")
+				return promotionUnhealthy
 			}
 		}
 		select {
@@ -486,12 +516,6 @@ func (p *LocalPromotion) retainedPrimaryName() string {
 }
 
 func promotionCause(err error) string {
-	if errors.Is(err, context.DeadlineExceeded) || exitcode.FromError(err) == exitcode.Timeout {
-		return "deadline exceeded"
-	}
-	if errors.Is(err, context.Canceled) || exitcode.FromError(err) == exitcode.Interrupted {
-		return "interrupted"
-	}
 	if err == nil {
 		return "unknown cause"
 	}
