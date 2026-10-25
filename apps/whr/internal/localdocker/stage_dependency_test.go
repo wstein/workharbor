@@ -275,3 +275,42 @@ func TestLocalStageLateMergedOpaqueHookRetainsPartialBeforeHooks(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T) {
+	for _, form := range []string{"quoted_escape", "shebang_arguments"} {
+		t.Run(form, func(t *testing.T) {
+			c, opts, ports, statePath := fixtureStageLifecycle(t, false)
+			if err := os.Mkdir(filepath.Join(opts.Source, "scripts"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			command := `sh "scripts/policy\name.sh"`
+			files := map[string]string{"scripts/policyname.sh": "true\n", "scripts/policy\\name.sh": "true\n"}
+			reason := "quoted command escape dependency capability unsupported"
+			if form == "shebang_arguments" {
+				command = "./scripts/entry"
+				files = map[string]string{"scripts/entry": "#!/usr/bin/env -S sh scripts/child.sh\ntrue\n", "scripts/child.sh": "true\n"}
+				reason = "script interpreter dependency capability unsupported"
+			}
+			for name, data := range files {
+				if err := os.WriteFile(filepath.Join(opts.Source, name), []byte(data), 0700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			setStageFixtureHook(t, opts.Source, command)
+			stage, err := c.prepareStage(context.Background(), opts, ports)
+			if stage != nil {
+				stage.Close()
+			}
+			if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), reason) {
+				t.Fatalf("%s ambiguous dependency: %v", form, err)
+			}
+			state := readFakeStageState(t, statePath)
+			if state.Candidate != nil || state.Volume != nil {
+				t.Fatal("unsupported dependency allocated lifecycle resources")
+			}
+			if _, err = os.Lstat(ports.StateRoot); !os.IsNotExist(err) {
+				t.Fatal("unsupported dependency wrote retained state")
+			}
+		})
+	}
+}
