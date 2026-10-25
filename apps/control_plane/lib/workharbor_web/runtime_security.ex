@@ -8,7 +8,7 @@ defmodule WorkHarborWeb.RuntimeSecurity do
     "9kwSZZ3zqgPLCQHHHC7Q9KYXXSVttc/mmuUT4ZmFiV1BGre/cOXzP7jNrsMeH4N4",
     "4XBsLMaWd4lPmLPEtg7KgIs8803lJErmCoNVLqsywrCNiiRCgTgMU4U5WdOI+TAl"
   ]
-  @https_keys ~w(ip port certfile keyfile http_1_options http_2_options)a
+  @https_keys ~w(ip port certfile keyfile http_1_options http_2_options websocket_options)a
   @peer_keys ~w(cacerts verify fail_if_no_peer_cert verify_fun)a
 
   def identity_config(config, nil), do: {:ok, config}
@@ -81,7 +81,8 @@ defmodule WorkHarborWeb.RuntimeSecurity do
   defp http1_profile?(config, tls) do
     config[:adapter] == Bandit.PhoenixAdapter and Keyword.keyword?(tls) and
       tls_keys?(tls) and
-      tls[:http_1_options] == [enabled: true] and tls[:http_2_options] == [enabled: false]
+      tls[:http_1_options] == [enabled: true] and tls[:http_2_options] == [enabled: false] and
+      tls[:websocket_options] == [max_fragmented_message_size: 65_536]
   end
 
   defp tls_keys?(tls) do
