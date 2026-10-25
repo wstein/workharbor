@@ -211,3 +211,41 @@ func TestLocalStageBindsRawOverrideMetadataOrigin(t *testing.T) {
 		t.Fatal("source origin is not transitively receipt bound")
 	}
 }
+
+func TestLocalStageRejectsChangedToolsAndSubstitutionsBeforeEffects(t *testing.T) {
+	for _, kind := range []string{"environment", "tool"} {
+		t.Run(kind, func(t *testing.T) {
+			c, opts, p, path := fixtureStageLifecycle(t, false)
+			s, err := c.prepareStage(context.Background(), opts, p)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			reason := "admitted environment changed since preview"
+			if kind == "environment" {
+				t.Setenv("ANCHORAGE_HOST_LABEL", "changed-after-preview")
+			} else {
+				reason = "admitted tool changed since preview"
+				f, err := os.OpenFile(p.Tools["devcontainer"], os.O_APPEND|os.O_WRONLY, 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if _, err = f.WriteString("\n// substituted after preview\n"); err != nil {
+					t.Fatal(err)
+				}
+				f.Close()
+			}
+			result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+			if exitcode.FromError(err) != exitcode.Conflict || err == nil || !strings.Contains(err.Error(), reason) || result.Status != "refused" {
+				t.Fatalf("changed %s: %+v %v", kind, result, err)
+			}
+			if _, err = os.Lstat(p.StateRoot); !os.IsNotExist(err) {
+				t.Fatal("changed trusted input created persistent state")
+			}
+			state := readFakeStageState(t, path)
+			if state.Candidate != nil || state.Volume != nil {
+				t.Fatal("changed trusted input caused allocation")
+			}
+		})
+	}
+}
