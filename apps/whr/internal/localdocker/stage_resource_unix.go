@@ -290,7 +290,7 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 		if e = s.store.saveReceipt(s.receipt, false); e != nil {
 			return fail("smoke intent publication failed", e)
 		}
-		smoke, e := readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), stageMaxFileBytes)
+		smoke, e := readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10)
 		if e != nil {
 			return s.stageUnverified("failed_smoke", candidate.ImageID, before, e)
 		}

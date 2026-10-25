@@ -173,10 +173,29 @@ func admitStageConfig(config map[string]any, omitted []string) error {
 		}
 	}
 	if args, ok := config["runArgs"].([]any); ok {
-		for _, arg := range args {
+		for i, arg := range args {
 			value, _ := arg.(string)
 			if value == "--env-file" || strings.HasPrefix(value, "--env-file=") {
 				return stageConflict("omitted credential env-file executable input required")
+			}
+			env := ""
+			if value == "-e" || value == "--env" {
+				if i+1 < len(args) {
+					env, _ = args[i+1].(string)
+				}
+				if !stageLiteralEnv(env) {
+					return stageConflict("unbound host environment copy unsupported")
+				}
+			}
+			if strings.HasPrefix(value, "--env=") {
+				if !stageLiteralEnv(strings.TrimPrefix(value, "--env=")) {
+					return stageConflict("unbound host environment copy unsupported")
+				}
+			}
+			if strings.HasPrefix(value, "-e") && !strings.HasPrefix(value, "--") && value != "-e" {
+				if !stageLiteralEnv(value[2:]) {
+					return stageConflict("unbound host environment copy unsupported")
+				}
 			}
 		}
 	}
@@ -189,6 +208,10 @@ func admitStageConfig(config map[string]any, omitted []string) error {
 	}
 	_ = omitted
 	return nil
+}
+func stageLiteralEnv(value string) bool {
+	name, _, ok := strings.Cut(value, "=")
+	return ok && name != "" && !strings.ContainsRune(value, '\x00')
 }
 func stageAnchorageHostInitializer(config map[string]any) bool {
 	b, _ := json.Marshal(config["initializeCommand"])

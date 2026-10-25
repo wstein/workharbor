@@ -188,9 +188,9 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	if err != nil || s.configRelative == ".." || strings.HasPrefix(s.configRelative, ".."+string(filepath.Separator)) || filepath.IsAbs(s.configRelative) {
 		return nil, stageConflict("configuration outside admitted source")
 	}
-	configBytes, e := readStageInput(filepath.Join(s.capture.Path, s.configRelative), stageMaxFileBytes)
+	configBytes, e := readStageInput(filepath.Join(s.capture.Path, s.configRelative), 256<<10)
 	if e != nil {
-		return nil, e
+		return nil, stageConflict("configuration input exceeds 256 KiB or is unavailable")
 	}
 	s.config, err = workspacecfg.DecodeDevcontainerData(configBytes)
 	if err != nil {
@@ -198,6 +198,11 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	}
 	if err = admitStageConfig(s.config, s.capture.Omitted); err != nil {
 		return nil, err
+	}
+	if options.Smoke {
+		if _, e = readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10); e != nil {
+			return nil, stageConflict("smoke input exceeds 256 KiB or is unavailable")
+		}
 	}
 	// Git construction is local and private even during preview. No persistent
 	// clone or source ref is created before the explicit trust decision.
