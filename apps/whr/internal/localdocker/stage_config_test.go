@@ -2,7 +2,6 @@
 package localdocker
 
 import (
-	"reflect"
 	"strings"
 	"testing"
 )
@@ -24,45 +23,10 @@ func TestLocalStageOfficialPhaseArguments(t *testing.T) {
 			t.Errorf("stage replaced official behavior: %v", stage)
 		}
 	}
-	v.Promote = true
-	stage, e = v.Arguments("up")
-	if e != nil || !strings.Contains(strings.Join(stage, " "), "--update-remote-user-uid-default never") {
-		t.Fatalf("promote UID extension not suppressed: %v %v", stage, e)
-	}
 	v.ContainerID = strings.Repeat("a", 64)
 	hooks, e := v.Arguments("run-user-commands")
 	if e != nil || strings.Contains(strings.Join(hooks, " "), "--skip-post-create") {
 		t.Fatalf("hooks suppressed: %v %v", hooks, e)
-	}
-}
-func TestLocalPromoteCompleteImageConfigPreservesHookOrigins(t *testing.T) {
-	hook := map[string]any{"a": []any{"sh", "first"}, "b": "sh second"}
-	source := map[string]any{"build": map[string]any{"dockerfile": "Dockerfile"}, "features": map[string]any{"example": "1"}, "initializeCommand": "MUST_NOT_RUN", "postCreateCommand": hook, "postStartCommand": "start", "postAttachCommand": "attach", "remoteUser": "vscode", "containerEnv": map[string]any{"ROLE": ""}}
-	primary := stagePrimaryConfiguration{Source: "/original/repo", Workspace: "/workspaces/repo", Home: "anchorage-home-primary", HomeDestination: "/home/vscode", Name: "original", RemoteUser: "vscode", ContainerUser: "vscode", Mounts: []any{"type=volume,source=anchorage-home-primary,target=/home/vscode"}, ContainerEnv: map[string]any{"ROLE": ""}, RemoteEnv: map[string]any{"PATH": "/bin"}}
-	image := "sha256:" + strings.Repeat("a", 64)
-	p, e := stagePromoteConfig(source, primary, image, false)
-	if e != nil {
-		t.Fatal(e)
-	}
-	for _, key := range []string{"build", "dockerFile", "dockerComposeFile", "service", "features", "additionalFeatures", "initializeCommand"} {
-		if _, ok := p[key]; ok {
-			t.Fatalf("promote retained %s", key)
-		}
-	}
-	if p["image"] != image || p["updateRemoteUserUID"] != false || !reflect.DeepEqual(p["postCreateCommand"], hook) {
-		t.Fatalf("full config lost identity/hooks: %#v", p)
-	}
-	baked, e := stagePromoteConfig(source, primary, image, true)
-	if e != nil {
-		t.Fatal(e)
-	}
-	for _, key := range stageLifecycleHooks {
-		if _, ok := baked[key]; ok {
-			t.Fatalf("baked source hook duplicated: %s", key)
-		}
-	}
-	if !reflect.DeepEqual(source["postCreateCommand"], hook) || source["initializeCommand"] != "MUST_NOT_RUN" {
-		t.Fatal("source config mutated")
 	}
 }
 func TestLocalStageSourceMetadataOriginIsNotStringDedup(t *testing.T) {
@@ -78,21 +42,6 @@ func TestLocalStageSourceMetadataOriginIsNotStringDedup(t *testing.T) {
 	bad := []map[string]any{{"postCreateCommand": "same"}}
 	if e := stageCheckBakedSourceMetadata(source, bad); e == nil || !strings.Contains(e.Error(), "source metadata origin") {
 		t.Fatalf("string-only origin admitted: %v", e)
-	}
-}
-
-func TestLocalPromoteMountCSVRetainsPathBytes(t *testing.T) {
-	source := "/original/comma, space and \"quote\""
-	target := "/workspaces/comma, space and \"quote\""
-	raw := renderStageMount("type=bind", "source="+source, "target="+target)
-	parsed, err := stageNativeMount(raw)
-	if err != nil || parsed["source"] != source || parsed["target"] != target {
-		t.Fatalf("mount altered path bytes: %q %#v %v", raw, parsed, err)
-	}
-	primary := stagePrimaryConfiguration{Source: source, Workspace: target, Home: "home", HomeDestination: "/home/vscode", Name: "primary", RemoteUser: "vscode", ContainerUser: "vscode", Mounts: []any{}, ContainerEnv: map[string]any{}, RemoteEnv: map[string]any{}}
-	config, err := stagePromoteConfig(map[string]any{}, primary, "sha256:"+strings.Repeat("a", 64), false)
-	if err != nil || config["workspaceMount"] != raw {
-		t.Fatalf("override mount rendering diverged: %#v %v", config, err)
 	}
 }
 

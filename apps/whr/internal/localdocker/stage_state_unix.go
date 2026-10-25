@@ -36,7 +36,7 @@ type stageRecord struct {
 	ReceiptDigest string `json:"receipt_digest"`
 }
 
-var stageStates = []string{"planned", "allocating", "candidate_resources", "candidate_hooks", "verifying", "staged_verified", "exporting_results", "importing_results", "promoting", "primary_resources", "primary_verified", "candidate_removed", "home_removed", "complete"}
+var stageStates = []string{"planned", "allocating", "candidate_resources", "candidate_hooks", "verifying", "staged_verified"}
 
 func openStageStore(root, daemon, endpoint string) (*stageStore, error) {
 	if !filepath.IsAbs(root) || daemon == "" || !strings.HasPrefix(endpoint, "unix:///") {
@@ -157,12 +157,7 @@ func (s *stageStore) Begin(op, digest string) error {
 		return e
 	}
 	if len(rows) != 0 {
-		if rows[len(rows)-1].State != "complete" || rows[len(rows)-1].Observation != "observed" {
-			return stageConflict("retained attempt requires owner reconciliation")
-		}
-		if e = s.archiveComplete(rows); e != nil {
-			return e
-		}
+		return stageConflict("retained attempt requires owner reconciliation")
 	}
 	fd, e := unix.Openat(int(s.dir.Fd()), ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if e != nil {
@@ -213,7 +208,7 @@ func (s *stageStore) Advance(state, action, observation string) error {
 	if last.State == "verifying" && state == "staged_unverified" {
 		valid = true
 	}
-	if !valid || last.State == "staged_unverified" || last.State == "complete" || last.Observation == "uncertain" {
+	if !valid || last.State == "staged_unverified" || last.Observation == "uncertain" {
 		return stageConflict("state transition requires owner reconciliation")
 	}
 	if observation != "attempted" && observation != "observed" && observation != "uncertain" {

@@ -11,45 +11,6 @@ import (
 	"time"
 )
 
-func TestLocalStageDriverPinsEndpointAndPromoteImage(t *testing.T) {
-	root := t.TempDir()
-	if e := os.Chmod(root, 0700); e != nil {
-		t.Fatal(e)
-	}
-	native := filepath.Join(t.TempDir(), "docker")
-	if e := os.WriteFile(native, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0700); e != nil {
-		t.Fatal(e)
-	}
-	runner, e := newStageRunner(context.Background(), root, "unix:///tmp/fixed.sock", map[string]string{"docker": native, "sh": "/bin/sh"})
-	if e != nil {
-		t.Fatal(e)
-	}
-	runner.Policy = &stageDriverPolicy{PrimaryID: strings.Repeat("b", 64), PrimaryName: "primary", PrimaryHome: "home", OperationID: strings.Repeat("c", 32), WorkspaceSource: "/original", WorkspaceDestination: "/workspaces/repo", Home: "home", HomeDestination: "/home/vscode"}
-	image := "sha256:" + strings.Repeat("a", 64)
-	driver, e := runner.DockerDriver("promote", image)
-	if e != nil {
-		t.Fatal(e)
-	}
-	runner.Tools["docker_driver"] = stageToolIdentity{Path: driver, Digest: mustStageToolDigest(t, driver)}
-	out, e := runner.Run(context.Background(), "native_run", "docker_driver", []string{"run", "--name", "primary", "--mount", "type=bind,source=/original,target=/workspaces/repo", "--mount", "type=volume,source=home,target=/home/vscode", image, "/bin/sh"}, nil, time.Second)
-	if e != nil || !strings.HasPrefix(string(out.Stdout), "--host\nunix:///tmp/fixed.sock\nrun\n--pull\nnever\n") {
-		t.Fatalf("driver output %q %v", out.Stdout, e)
-	}
-
-	base := []string{"run", "--name", "primary", "--mount", "type=bind,source=/original,target=/workspaces/repo", "--mount", "type=volume,source=home,target=/home/vscode"}
-	cases := []struct {
-		args   []string
-		reason string
-	}{
-		{[]string{"pull", image}, "pull_phase"}, {[]string{"build", "."}, "promote_build"}, {append(append([]string(nil), base...), "sha256:"+strings.Repeat("b", 64)), "promote_image_identity"}, {[]string{"--host", "unix:///tmp/foreign.sock", "info"}, "routing_override"}, {append([]string{"run", "--pull=always"}, append(base[1:], image)...), "native_pull_override"},
-	}
-	for _, c := range cases {
-		if _, err := runner.Run(context.Background(), "native_run", "docker_driver", c.args, nil, time.Second); exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), c.reason) {
-			t.Fatalf("wrong driver refusal for %v: %v", c.args, err)
-		}
-	}
-
-}
 func mustStageToolDigest(t *testing.T, path string) string {
 	t.Helper()
 	v, e := stageFileDigest(context.Background(), path)
@@ -80,7 +41,7 @@ func TestLocalStageDriverNeverForwardsPrimaryOrVolumeMutation(t *testing.T) {
 	volume := "bundledock-toolbox-" + strings.Repeat("d", 64)
 	ref := "quay.io/bundledock/toolbox@sha256:" + strings.Repeat("d", 64)
 	runner.Policy = &stageDriverPolicy{PrimaryID: primary, PrimaryName: "primary", PrimaryHome: "anchorage-home-primary", OperationID: strings.Repeat("e", 32), WorkspaceSource: "/private/clone", WorkspaceDestination: "/workspaces/repo", Home: home, HomeDestination: "/home/vscode", InitializerVolumes: map[string]string{volume: ref}}
-	driver, e := runner.DockerDriver("stage", "")
+	driver, e := runner.DockerDriver("stage")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -134,9 +95,51 @@ func TestLocalStageDriverRejectsDeclaredPrimaryAtAnyDestination(t *testing.T) {
 				t.Fatal(e)
 			}
 			r.Policy = &stageDriverPolicy{PrimaryID: strings.Repeat("a", 64), PrimaryName: "primary", PrimaryHome: "anchorage-home-primary", OperationID: strings.Repeat("b", 32), WorkspaceSource: "/private/clone", WorkspaceDestination: "/workspaces/repo", Home: "whr-stage-home-" + strings.Repeat("c", 32), HomeDestination: "/home/vscode", AllowedMounts: []string{mount}}
-			if _, e = r.DockerDriver("stage", ""); exitcode.FromError(e) != exitcode.Conflict || !strings.Contains(e.Error(), "candidate primary home exposure") {
+			if _, e = r.DockerDriver("stage"); exitcode.FromError(e) != exitcode.Conflict || !strings.Contains(e.Error(), "candidate primary home exposure") {
 				t.Fatalf("declared exposure admitted: %v", e)
 			}
 		})
 	}
+}
+func TestLocalStageDriverPinsEndpoint(t *testing.T) {
+	root := t.TempDir()
+	if e := os.Chmod(root, 0700); e != nil {
+		t.Fatal(e)
+	}
+	native := filepath.Join(t.TempDir(), "docker")
+	if e := os.WriteFile(native, []byte("#!/bin/sh\nprintf '%s\\n' \"$@\"\n"), 0700); e != nil {
+		t.Fatal(e)
+	}
+	runner, e := newStageRunner(context.Background(), root, "unix:///tmp/fixed.sock", map[string]string{"docker": native, "sh": "/bin/sh"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	runner.Policy = &stageDriverPolicy{PrimaryID: strings.Repeat("b", 64), PrimaryName: "primary", PrimaryHome: "candidate-home", OperationID: strings.Repeat("c", 32), WorkspaceSource: "/original", WorkspaceDestination: "/workspaces/repo", Home: "candidate-home", HomeDestination: "/home/vscode"}
+	image := "sha256:" + strings.Repeat("a", 64)
+	driver, e := runner.DockerDriver("stage")
+	if e != nil {
+		t.Fatal(e)
+	}
+	runner.Tools["docker_driver"] = stageToolIdentity{Path: driver, Digest: mustStageToolDigest(t, driver)}
+	out, e := runner.Run(context.Background(), "native_run", "docker_driver", []string{"run", "--name", "whr-anchorage-staging", "--mount", "type=bind,source=/original,target=/workspaces/repo", "--mount", "type=volume,source=candidate-home,target=/home/vscode", image, "/bin/sh"}, nil, time.Second)
+	if e != nil || !strings.HasPrefix(string(out.Stdout), "--host\nunix:///tmp/fixed.sock\nrun\n") {
+		t.Fatalf("driver output %q %v", out.Stdout, e)
+	}
+
+	if _, err := runner.DockerDriver("promote"); exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "Docker driver phase unsupported") {
+		t.Fatalf("promote mode carried in stage: %v", err)
+	}
+	base := []string{"run", "--name", "whr-anchorage-staging", "--mount", "type=bind,source=/original,target=/workspaces/repo", "--mount", "type=volume,source=candidate-home,target=/home/vscode"}
+	cases := []struct {
+		args   []string
+		reason string
+	}{
+		{[]string{"pull", image}, "undeclared_pull_reference"}, {[]string{"--host", "unix:///tmp/foreign.sock", "info"}, "routing_override"}, {append([]string{"run", "--pull=always"}, append(base[1:], image)...), "native_pull_override"},
+	}
+	for _, c := range cases {
+		if _, err := runner.Run(context.Background(), "native_run", "docker_driver", c.args, nil, time.Second); exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), c.reason) {
+			t.Fatalf("wrong driver refusal for %v: %v", c.args, err)
+		}
+	}
+
 }

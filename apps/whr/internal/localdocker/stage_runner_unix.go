@@ -290,7 +290,7 @@ func (w stagePhaseWriter) Write(p []byte) (int, error) {
 }
 
 func stageDriverRefusal(data []byte) string {
-	for _, reason := range []string{"empty_vector", "routing_override", "unsupported_native_command", "protected_resource_mutation", "metadata_vector", "image_mutation", "context_mutation", "volume_mutation", "undeclared_initializer_volume", "pull_phase", "undeclared_pull_reference", "promote_build", "builder_mutation", "preview_mutation", "old_primary_target", "container_identity", "foreign_container_target", "exec_option", "exec_vector", "start_vector", "initializer_image_binding", "native_pull_override", "native_name", "native_mount", "native_run_option", "unsupported_native_run_option", "native_mount_binding", "native_image", "promote_image_identity", "undeclared_native_mount", "unbound_env_copy", "native_env_file"} {
+	for _, reason := range []string{"empty_vector", "routing_override", "unsupported_native_command", "protected_resource_mutation", "metadata_vector", "image_mutation", "context_mutation", "volume_mutation", "undeclared_initializer_volume", "pull_phase", "undeclared_pull_reference", "build_phase", "builder_mutation", "preview_mutation", "old_primary_target", "container_identity", "foreign_container_target", "exec_option", "exec_vector", "start_vector", "initializer_image_binding", "native_pull_override", "native_name", "native_mount", "native_run_option", "unsupported_native_run_option", "native_mount_binding", "native_image", "undeclared_native_mount", "unbound_env_copy", "native_env_file"} {
 		if bytes.Contains(data, []byte("whr-driver:"+reason+"\n")) {
 			return reason
 		}
