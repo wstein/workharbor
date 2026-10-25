@@ -72,7 +72,7 @@ func LocalStageHandler(prepare func(context.Context, localdocker.StageOptions) (
 			return Result{}, exitcode.Errorf(exitcode.PathConflict, "stage preview has no source fingerprint")
 		}
 		if v.interactive {
-			if _, err = io.WriteString(v.diagnostics, lifecycleHuman(preview)+"Pause input writers for capture and every execution phase; trusted hooks may write their previewed workspace.\n"); err != nil {
+			if _, err = io.WriteString(v.diagnostics, lifecycleHuman(preview)); err != nil {
 				return Result{}, err
 			}
 		}
@@ -101,6 +101,7 @@ func LocalStageHandler(prepare func(context.Context, localdocker.StageOptions) (
 			if e != nil {
 				return Result{}, e
 			}
+			answer = strings.ToLower(strings.TrimSpace(answer))
 			if answer != "y" && answer != "yes" {
 				return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionRefused, "stage confirmation declined")
 			}
@@ -136,6 +137,9 @@ func lifecycleAnswer(ctx context.Context, reader *bufio.Reader) (string, error) 
 
 func lifecycleHuman(r localdocker.LifecycleResult) string {
 	var b strings.Builder
+	if r.Status == "preview" {
+		b.WriteString("Pause input writers for capture and every execution phase; trusted hooks may write their previewed workspace.\nHashes cannot detect a writer that changes and restores bytes during a phase.\n")
+	}
 	fmt.Fprintf(&b, "status: %s\nphase: %s\n", terminal.Escape(r.Status), terminal.Escape(r.Phase))
 	if r.Fingerprint != nil {
 		fmt.Fprintf(&b, "fingerprint: %s\n", terminal.Escape(*r.Fingerprint))
