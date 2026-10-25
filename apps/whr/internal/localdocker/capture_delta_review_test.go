@@ -42,6 +42,9 @@ func TestLocalStageGitObjectAuditRejectsUnsafeNodes(t *testing.T) {
 	for _, kind := range []string{"symlink", "fifo"} {
 		t.Run(kind, func(t *testing.T) {
 			root := capturePhysicalTemp(t)
+			if err := os.Mkdir(filepath.Join(root, "info"), 0700); err != nil {
+				t.Fatal(err)
+			}
 			path := filepath.Join(root, "foreign")
 			reason := "Git object administration is symlinked"
 			var err error
