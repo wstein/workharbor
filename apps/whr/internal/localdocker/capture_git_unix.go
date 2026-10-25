@@ -669,7 +669,7 @@ func stageSameRefs(a, b map[string]string) bool {
 func copyStageWorkingSkip(ctx context.Context, source, destination string, skip map[string]bool) error {
 	limits := stageCaptureLimitsFor(ctx)
 	var total int64
-	count := 0
+	count := 1
 	type directoryMode struct {
 		path string
 		mode fs.FileMode

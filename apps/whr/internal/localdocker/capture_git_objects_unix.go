@@ -31,6 +31,13 @@ func stageSnapshotDigest(s stageGitSnapshot) string {
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
 func stageObjectStoreBinding(ctx context.Context, root string) (string, error) {
+	limits := stageCaptureLimitsFor(ctx)
+	audit, _ := ctx.Value(stageObjectAuditKey{}).(*stageObjectAudit)
+	if audit == nil {
+		audit = &stageObjectAudit{checked: map[string]bool{}}
+	}
+	audit.mu.Lock()
+	defer audit.mu.Unlock()
 	visited := map[string]bool{}
 	records := []string{}
 	var visit func(string) error
@@ -46,6 +53,9 @@ func stageObjectStoreBinding(ctx context.Context, root string) (string, error) {
 			return nil
 		}
 		visited[physical] = true
+		if len(visited) > limits.ObjectStores {
+			return stageConflict("Git object store count quota exceeded")
+		}
 		identity := ""
 		if st, e := os.Stat(physical); e == nil {
 			if raw, ok := st.Sys().(*syscall.Stat_t); ok {
@@ -54,23 +64,31 @@ func stageObjectStoreBinding(ctx context.Context, root string) (string, error) {
 			}
 		}
 		records = append(records, physical+"\x00"+identity)
-		err = filepath.WalkDir(physical, func(name string, d fs.DirEntry, walkErr error) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
+		cacheKey := physical + "\x00" + identity
+		if !audit.checked[cacheKey] {
+			err = filepath.WalkDir(physical, func(name string, d fs.DirEntry, walkErr error) error {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				audit.entries++
+				if audit.entries > limits.ObjectEntries {
+					return stageConflict("Git object administration entry quota exceeded")
+				}
+				if walkErr != nil {
+					return stageConflict("Git object administration unavailable")
+				}
+				if d.Type()&os.ModeSymlink != 0 {
+					return stageConflict("Git object administration is symlinked")
+				}
+				if !d.IsDir() && !d.Type().IsRegular() {
+					return stageConflict("Git object administration file type unsupported")
+				}
+				return nil
+			})
+			if err != nil {
+				return err
 			}
-			if walkErr != nil {
-				return stageConflict("Git object administration unavailable")
-			}
-			if d.Type()&os.ModeSymlink != 0 {
-				return stageConflict("Git object administration is symlinked")
-			}
-			if !d.IsDir() && !d.Type().IsRegular() {
-				return stageConflict("Git object administration file type unsupported")
-			}
-			return nil
-		})
-		if err != nil {
-			return err
+			audit.checked[cacheKey] = true
 		}
 		data, err := stageAdminFile(physical, filepath.Join("info", "alternates"), 4<<20)
 		if os.IsNotExist(err) {
