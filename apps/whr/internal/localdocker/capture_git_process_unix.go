@@ -97,9 +97,6 @@ func stageGitToolDigest(ctx context.Context, name string) (string, error) {
 		return "", stageConflict("Git tool identity unavailable")
 	}
 	f := os.NewFile(uintptr(fd), name)
-	if err != nil {
-		return "", stageConflict("Git tool identity unavailable")
-	}
 	defer f.Close()
 	st, err := f.Stat()
 	if err != nil || !st.Mode().IsRegular() {
