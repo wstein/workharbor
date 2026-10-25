@@ -27,13 +27,13 @@ unit tests also cover lower/same/higher intact templates and path consent.
 
 ## Additional public acceptance evidence
 
-`TestInitPublicAgentsActionsAndWarningsValidate` now runs 23 regular-file cases,
-each with and without `--overwrite AGENTS.md` (46 cases): absent and empty files;
+`TestInitPublicAgentsActionsAndWarningsValidate` now runs 25 regular-file cases,
+each with and without `--overwrite AGENTS.md` (50 cases): absent and empty files;
 missing blocks, including BOM/CRLF outside bytes; current; lower/same/higher intact
 templates; modified bodies at current/lower/higher versions; oversized input;
 oversized malformed input; an oversized append result; duplicate, unclosed,
 orphan, nested and out-of-order markers; CRLF-converted, indented, BOM-prefixed
-and fenced marker-like lines.
+and fenced marker-like lines; and private 0600 files requiring append or replacement.
 
 Each successful case checks public dry-run, apply and rerun: schema-valid JSON,
 exactly one AGENTS.md action, correct `applied`, the always-present warning array
@@ -46,8 +46,11 @@ checks byte preservation and no action/warning, and retains the conflicting-flag
 usage error 64. The marker-like unit table also checks edit refusal 68 for every
 row and rejects empty, signed, fractional and nonnumeric template versions.
 
-No new top-level Go tests were added, so the explicit CI inventory is unchanged.
-Task/progress checkboxes are reserved for the last wave PR and remain untouched.
+The initial candidate added no new top-level Go tests. The correction below adds
+one Unix test ID, whose explicit CI inventory binding remains deferred to the
+coordinator's final-wave/T034 follow-up after both parallel PRs land. Ordinary
+`go test ./...` discovers it on Linux and macOS; no literal inventory pin is
+claimed here. Task/progress checkboxes remain reserved for the last wave PR.
 
 ## Executed checks and mutation proof
 
@@ -76,6 +79,50 @@ mutations, kept outside the repository, each produced the intended test failure:
 The unmodified production sources then passed the focused checks above. These are
 behavioral failures after successful compilation, not setup failures. No mutation
 was applied to a tracked product file.
+
+## Public-review corrections (2026-10-25 UTC)
+
+[Review 5640721815](https://github.com/wstein/workharbor/pull/256#pullrequestreview-5640721815)
+on `166fefbba025f2025443c27fc4a49d6e96ced9ae` found that refusal reasons,
+private-file permissions and untouched-file metadata needed stronger assertions.
+The correction is test/evidence-only and retains the shipped implementation.
+
+- Every refused regular-file row now requires `ok: false`, `exit_code: 68`,
+  `error.code: conflict`, the class-specific `is malformed;` or `is too_large;`
+  message on JSON and stderr, and empty `actions`/`agents_block_warnings` arrays.
+  Scaffold classification and marker tables likewise assert refusal text.
+- The absent public row requires 0644. Two new private-file rows require 0600
+  after both append and replacement, including no-consent preservation.
+- Dry runs/refusals and reruns compare `os.SameFile`, `ModTime.Equal` and mode,
+  as well as bytes. Fixed historical mtimes make same-byte rewrite probes
+  deterministic; directory-mtime checks remain additional evidence.
+- New Linux/macOS `TestInitPublicAgentsUnsafeTargets` covers symlink/FIFO targets
+  with and without overwrite and with dry-run/apply (eight cases). It asserts
+  the specific unsafe-target conflict envelope/diagnostic and empty action and
+  warning arrays, unchanged `Lstat` identity/mode/mtime, unchanged symlink
+  destination and outside regular-file bytes/identity/mode/mtime, no sentinel
+  disclosure, and no manifest/directory mutation. The FIFO is never read.
+
+Correction checks, run against the restored production sources (exit 0):
+
+```sh
+go test ./internal/commands -run '^TestInitPublic(AgentsActionsAndWarningsValidate|NoAgentsBlockConflictAndNoEntry|AgentsUnsafeTargets)$' -count=1 -timeout=60s
+go test ./internal/scaffold -run '^TestAgentsBlock(ClassificationAndActions|RejectsMarkerLikeLines)$' -count=1
+```
+
+Five additional compiled overlays failed for their intended behavioral assertions:
+
+| Mutation | Observed failure (exit 1) |
+| --- | --- |
+| Hard-code refusal class to `malformed` | Three oversized public rows reject the wrong JSON/stderr reason |
+| Create new files with 0600 | Absent AGENTS.md rejects the wrong mode |
+| Force replacement temp and its verification to 0644 | Both private append/replace rows reject widened permissions |
+| Rewrite existing bytes in-place during dry-run | Original-file metadata assertion fails |
+| Rewrite existing bytes in-place during a no-op rerun | Rerun-file metadata assertion fails |
+
+All overlays remain outside the repository. No full package suite, standalone
+build or runtime operation was repeated for this correction. The coordinator owns
+independent delta review, separate QA and the single publication round.
 
 ## Remaining gates
 
