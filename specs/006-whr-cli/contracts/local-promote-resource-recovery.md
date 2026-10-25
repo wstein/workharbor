@@ -58,7 +58,8 @@ occupancy and shared primary mounts between actions. Refuse an occupied retentio
 name or a foreign mount of the primary home. Resolve both sides of a foreign
 read-write bind comparison and refuse equal, ancestor or descendant overlap with
 the original workspace. An unresolved foreign read-write bind source refuses
-recovery; read-only binds and nonoverlapping siblings do not introduce a writer.
+recovery. Read-only binds and nonoverlapping siblings do not match this
+read-write path-overlap refusal.
 Both the temporary and persisted promotion configuration are rechecked between
 recovery actions.
 
