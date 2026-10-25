@@ -152,11 +152,12 @@ The accepted working-entry ceiling is restored to 100,000. The read-only sizing
 measurement of 83,769 Anchorage entries did not authorize the former 500,000
 increase; that increase is withdrawn. A larger working-entry ceiling needs a
 separate owner-accepted profile amendment. No measurement is an owner decision.
-The profile now explicitly marks the existing implementation-only administration
-ceilings as proposed tightening awaiting owner sign-off: 1,000,000 audited entries
-per capture operation and 32 stores per resolved alternate-store graph. The latter
-is not a shared store count over all populated submodules. This approval remains
-a named gate; the author does not claim it settled.
+The initially proposed administration ceilings are withdrawn from both code and
+the accepted profile. Neither a separate audited-entry ceiling nor an alternate
+store-count ceiling changes admission. The accepted reachable-object/byte budgets
+and cancellation/deadline checks remain. Additional ceilings require a separate
+owner decision before implementation; historical cap evidence above does not
+describe current behavior.
 
 Per-repository Git scratch now lives outside the recursive clone tree, and the
 working directory modes are applied deepest-first only after all populated
@@ -186,3 +187,20 @@ head. That run's bootstrap/check failed the stale synthetic-merge-parent guard;
 the branch is now rebased onto fresh main e186036 with a new event required.
 The PR body records the current script/make-check outcomes and exact native gates.
 No Docker/owner-host lifecycle evidence or task completion is claimed.
+
+## N1 completion: remove unapproved caps from implementation
+
+Merely marking the two new administration caps proposed did not meet the review's
+instruction to keep accepted values in code. They are now removed, including the
+unused limit fields and quota-only tests. The accepted profile paragraph is
+restored; no new numerical limit is added to it.
+
+TestLocalStageGitAlternatesBeyondUnapprovedStoreCap was assertion-RED with 33
+ordinary local alternate stores before the correction. It passes afterward.
+TestLocalStageGitObjectAdministrationSingleAudit replaces the withdrawn quota test:
+the same physical store is audited once within an operation, while a fresh
+operation refuses an introduced unsafe node with exit 68 and the specific reason.
+The published-limit regression still pins the accepted working, object, byte and
+submodule limits. CI inventory replaces only two IDs introduced by this unmerged
+PR; no main-baseline test ID is dropped. All seven N4 control regressions remain.
+The PR body records final affected-package and verification results for this round.
