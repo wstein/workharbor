@@ -140,3 +140,41 @@ func TestLocalStageReviewFailedSmokeIsUncertain(t *testing.T) {
 		})
 	}
 }
+
+func TestLocalStageReviewKnownHealthFailureRetainsReason(t *testing.T) {
+	stage := fixtureStageReviewAttempt(t, "candidate_hooks", "container_hooks")
+	stage.receipt.ActionInventory[0].State = "observed"
+	if err := stage.store.Advance("candidate_hooks", "container_hooks", "observed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := stage.store.Advance("verifying", "", "observed"); err != nil {
+		t.Fatal(err)
+	}
+	if err := stage.store.saveReceipt(stage.receipt, false); err != nil {
+		t.Fatal(err)
+	}
+	result, err := stage.stageUnverified(context.Background(), "failed_health", "sha256:"+strings.Repeat("d", 64), "sha256:"+strings.Repeat("b", 64), stageConflict("candidate healthcheck failed"))
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate healthcheck failed") || result.Status != "staged_unverified" || result.UnverifiedReason == nil || *result.UnverifiedReason != "failed_health" {
+		t.Fatalf("known health failure lost precise outcome: %+v %v", result, err)
+	}
+	if result.Effects[0].State != "observed" {
+		t.Fatalf("known completed hook became uncertain: %+v", result.Effects)
+	}
+	receipt, err := stage.store.loadReceipt(stage.operationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if receipt.State != "staged_unverified" || receipt.UnverifiedReason == nil || *receipt.UnverifiedReason != "failed_health" {
+		t.Fatalf("health failure not durable: %+v", receipt)
+	}
+}
+
+func TestLocalStageReviewCanceledUnverifiedWithoutCauseIsUncertain(t *testing.T) {
+	stage := fixtureStageReviewAttempt(t, "verifying", "smoke")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result, err := stage.stageUnverified(ctx, "failed_smoke", "sha256:"+strings.Repeat("d", 64), "sha256:"+strings.Repeat("b", 64), nil)
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "interrupted") || result.Effects[0].State != "uncertain" {
+		t.Fatalf("context cancellation invented successful smoke: %+v %v", result, err)
+	}
+}
