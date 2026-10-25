@@ -85,7 +85,7 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	s.result.RecoveryID = stageString(filepath.Base(store.path) + "/" + s.operationID)
 	s.receipt = s.initialStageReceipt(consent)
 	plan := s.homeIntent.Plan()
-	s.settings = stageSettings{HomePlanDigest: stageDigest(plan), ExecutionPaths: []string{}}
+	s.settings = stageSettings{HomePlanDigest: stageDigest(plan), SmokeDigest: s.smokeDigest, ExecutionPaths: []string{}}
 	s.execution = stageExecutionBinding{SettingsDigest: stageDigest(s.settings), GitInputs: []stageExecutionGitInput{}}
 	s.receipt.ExecutionManifestDigest = stageDigest(s.execution)
 	for name, value := range map[string]any{"candidate-home.json": plan, "stage-settings.json": s.settings, "execution-binding.json": s.execution} {

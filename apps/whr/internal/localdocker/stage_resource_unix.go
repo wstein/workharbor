@@ -288,16 +288,16 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 		return s.stageUnverified(ctx, "missing_smoke", candidate.ImageID, before, nil)
 	}
 	if s.options.Smoke {
+		smoke, e := readStageTrustedSmoke(s.capture.Path, s.smokeDigest)
+		if e != nil {
+			return s.stageUnverified(ctx, "failed_smoke", candidate.ImageID, before, e)
+		}
 		s.receipt.ActionInventory = append(s.receipt.ActionInventory, StageEffect{Action: "smoke", Target: StageTarget{Resource: s.result.Candidate}, State: "attempted"})
 		if e = s.store.Advance("verifying", "smoke", "attempted"); e != nil {
 			return fail("smoke intent failed", e)
 		}
 		if e = s.store.saveReceipt(s.receipt, false); e != nil {
 			return fail("smoke intent publication failed", e)
-		}
-		smoke, e := readStageInput(filepath.Join(s.capture.Path, ".devcontainer", "smoke-container.sh"), 256<<10)
-		if e != nil {
-			return s.stageUnverified(ctx, "failed_smoke", candidate.ImageID, before, e)
 		}
 		out, e = s.runner.Run(ctx, "smoke", "docker", []string{"exec", "--interactive", "--user", up.RemoteUser, "--workdir", s.workspace, candidate.ID, "bash", "-s", "--", s.workspace}, bytes.NewReader(smoke), 600*time.Second)
 		if s.options.Diagnostics != nil {
@@ -408,7 +408,6 @@ func (s *LocalStage) stageUnverified(ctx context.Context, reason, image, digest 
 	s.result.UnverifiedReason = stageString(reason)
 	s.result.Phase = "staged_unverified"
 	s.receipt.UnverifiedReason = s.result.UnverifiedReason
-	s.receipt.Verification = s.result.Verification
 	rows, e := s.store.Records()
 	if e == nil && len(rows) > 0 {
 		last := rows[len(rows)-1]
@@ -473,7 +472,7 @@ func (s *LocalStage) persistStageVerification(ctx context.Context, candidate sta
 	for i := range persistedSnapshots {
 		persistedSnapshots[i].Index = nil
 	}
-	s.settings = stageSettings{SourceMetadataDigest: stageDigest(s.sourceMetadata), ConfigRelativePath: s.configRelative, PrimaryConfigDigest: stageDigest(primary), GitSnapshotsDigest: stageDigest(persistedSnapshots), HomePlanDigest: stageDigest(s.homeIntent.Plan()), HomeObservationDigest: stageDigest(home), PrimaryObservationDigest: stageDigest(s.primaryObserved), CandidateObservationDigest: stageDigest(candidate), AnchorageFacts: stageAnchorageHostInitializer(s.config), SmokeRequested: s.options.Smoke, ExecutionPaths: paths}
+	s.settings = stageSettings{SourceMetadataDigest: stageDigest(s.sourceMetadata), ConfigRelativePath: s.configRelative, PrimaryConfigDigest: stageDigest(primary), GitSnapshotsDigest: stageDigest(persistedSnapshots), HomePlanDigest: stageDigest(s.homeIntent.Plan()), HomeObservationDigest: stageDigest(home), PrimaryObservationDigest: stageDigest(s.primaryObserved), CandidateObservationDigest: stageDigest(candidate), AnchorageFacts: stageAnchorageHostInitializer(s.config), SmokeRequested: s.options.Smoke, SmokeDigest: s.smokeDigest, ExecutionPaths: paths}
 	original, e := stageExecutionDigest(ctx, s.capture.Source, paths)
 	if e != nil {
 		return e
