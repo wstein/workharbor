@@ -167,6 +167,13 @@ func TestLocalStageCLIPartialEnvelopePreservesRecovery(t *testing.T) {
 	}
 }
 
+type countingStageReader struct{ reads int }
+
+func (r *countingStageReader) Read(p []byte) (int, error) {
+	r.reads++
+	return strings.NewReader("yes\n").Read(p)
+}
+
 type cancelStageReader struct {
 	cancel context.CancelFunc
 	text   string
@@ -226,6 +233,22 @@ func TestLocalStageCLIInteractiveTrustAndConfirmation(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("canceled-before-answer", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		p := stageCLIResult()
+		f := &stageTransactionFixture{preview: p, result: p}
+		n := 0
+		var o localdocker.StageOptions
+		var out, diag bytes.Buffer
+		input := &countingStageReader{}
+		env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: input, InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
+		code := commands.Execute(ctx, []string{"workspace", "stage", "--local", "--source", "/src", "primary", "--no-color", "--trust", *p.Fingerprint}, env, stageCLIHandlers(f, &n, &o))
+		if code != 72 || !strings.Contains(diag.String(), "interrupted") || input.reads != 0 || f.applies != 0 || f.closes != 1 {
+			t.Fatalf("code=%d reads=%d diag=%q fixture=%+v", code, input.reads, diag.String(), f)
+		}
+	})
 	t.Run("canceled-during-answer", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
