@@ -145,8 +145,9 @@ func TestLocalStageReviewCompletedSmokeFailureFlow(t *testing.T) {
 	}
 }
 func TestLocalStageReviewInterruptedHealthIsPartial(t *testing.T) {
-	for _, deadline := range []bool{false, true} {
-		t.Run(map[bool]string{false: "interrupt", true: "deadline"}[deadline], func(t *testing.T) {
+	for _, mode := range []string{"interrupt", "deadline", "health_subdeadline"} {
+		t.Run(mode, func(t *testing.T) {
+			deadline := mode != "interrupt"
 			stage := fixtureStageReviewAttempt(t, "candidate_hooks", "container_hooks")
 			stage.receipt.ActionInventory[0].State = "observed"
 			if err := stage.store.Advance("candidate_hooks", "container_hooks", "observed"); err != nil {
@@ -160,14 +161,21 @@ func TestLocalStageReviewInterruptedHealthIsPartial(t *testing.T) {
 			}
 			var ctx context.Context
 			var cancel context.CancelFunc
-			if deadline {
+			if mode == "health_subdeadline" {
+				ctx = context.Background()
+				cancel = func() {}
+			} else if deadline {
 				ctx, cancel = context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
 			} else {
 				ctx, cancel = context.WithCancel(context.Background())
 				cancel()
 			}
 			defer cancel()
-			result, err := stage.stageUnverified(ctx, "failed_health", "sha256:"+strings.Repeat("d", 64), "sha256:"+strings.Repeat("b", 64), ctx.Err())
+			cause := ctx.Err()
+			if mode == "health_subdeadline" {
+				cause = context.DeadlineExceeded
+			}
+			result, err := stage.stageUnverified(ctx, "failed_health", "sha256:"+strings.Repeat("d", 64), "sha256:"+strings.Repeat("b", 64), cause)
 			if exitcode.FromError(err) != exitcode.PartialFailure || result.Status != "partial" || result.UnverifiedReason != nil || !strings.Contains(err.Error(), map[bool]string{false: "interrupt", true: "deadline"}[deadline]) {
 				t.Fatalf("interrupted health recorded as terminal failure: %+v %v", result, err)
 			}
