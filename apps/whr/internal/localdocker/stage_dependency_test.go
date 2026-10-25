@@ -302,7 +302,7 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 			}
 		}
 	})
-	for _, form := range []string{"quoted_escape", "shebang_arguments", "shebang_python", "direct_without_interpreter", "carriage_return", "literal_marker", "literal_marker_argv", "literal_marker_script"} {
+	for _, form := range []string{"quoted_escape", "shebang_arguments", "shebang_python", "direct_without_interpreter", "direct_after_explicit_shell", "carriage_return", "literal_marker", "literal_marker_argv", "literal_marker_script"} {
 		t.Run(form, func(t *testing.T) {
 			c, opts, ports, statePath := fixtureStageLifecycle(t, false)
 			if err := os.Mkdir(filepath.Join(opts.Source, "scripts"), 0700); err != nil {
@@ -323,6 +323,11 @@ func TestLocalStageAmbiguousLiteralDependenciesRefuseBeforeEffects(t *testing.T)
 			}
 			if form == "direct_without_interpreter" {
 				command = "./scripts/entry"
+				files = map[string]string{"scripts/entry": "true\n"}
+				reason = "script interpreter dependency capability unsupported"
+			}
+			if form == "direct_after_explicit_shell" {
+				command = map[string]any{"a": "sh scripts/entry", "b": "./scripts/entry"}
 				files = map[string]string{"scripts/entry": "true\n"}
 				reason = "script interpreter dependency capability unsupported"
 			}
