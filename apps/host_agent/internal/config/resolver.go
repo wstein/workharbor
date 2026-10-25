@@ -176,21 +176,9 @@ func (r Resolver) Resolve(ctx context.Context, d Descriptor) (result *Resolved, 
 	if e != nil {
 		return nil, e
 	}
-	manifest, ok := v.(map[string]any)
-	if !ok || !fields(manifest, []string{"schema_version", "devcontainer_path", "projects_path", "bundles"}) || manifest["schema_version"] != json.Number("1") {
-		return nil, invalidConfiguration()
-	}
-	bundles, ok := manifest["bundles"].([]any)
-	if !ok || len(bundles) != 0 {
-		return nil, unsupportedConfiguration()
-	}
-	dc, e := CanonicalPath(manifest["devcontainer_path"])
+	dc, projects, e := resolverManifestPaths(v)
 	if e != nil {
-		return nil, invalidConfiguration()
-	}
-	projects, e := CanonicalPath(manifest["projects_path"])
-	if e != nil {
-		return nil, invalidConfiguration()
+		return nil, e
 	}
 	dcPath, e := ContainedPath(root, dc, false)
 	if e != nil {
@@ -390,4 +378,35 @@ func readModules(git func(string, ...string) ([]byte, error), dir, commit string
 	}
 	sort.Slice(modules, func(i, j int) bool { return modules[i].path < modules[j].path })
 	return modules, nil
+}
+
+// resolverManifestPaths validates only provider manifest inputs. Runtime session
+// preferences are not part of its return value.
+func resolverManifestPaths(value any) (string, string, error) {
+	manifest, ok := value.(map[string]any)
+	if !ok || !fields(manifest, []string{"schema_version", "devcontainer_path", "projects_path", "bundles"}) || manifest["schema_version"] != json.Number("1") {
+		return "", "", invalidConfiguration()
+	}
+	bundles, ok := manifest["bundles"].([]any)
+	if !ok || len(bundles) != 0 {
+		return "", "", unsupportedConfiguration()
+	}
+	dc, e := CanonicalPath(manifest["devcontainer_path"])
+	if e != nil {
+		return "", "", invalidConfiguration()
+	}
+	projects, e := CanonicalPath(manifest["projects_path"])
+	if e != nil {
+		return "", "", invalidConfiguration()
+	}
+	return dc, projects, nil
+}
+func decodeResolverManifest(raw []byte) (string, string, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if decoder.Decode(&value) != nil || decoder.Decode(new(any)) != io.EOF {
+		return "", "", invalidConfiguration()
+	}
+	return resolverManifestPaths(value)
 }

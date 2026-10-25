@@ -242,3 +242,66 @@ func TestResolverRelativeSourceSymlinkUsesConfigurationDiagnostic(t *testing.T) 
 	}
 	code(t, e, "invalid_configuration")
 }
+
+func resolverManifest(version, extra string) []byte {
+	return []byte(`{"schema_version":` + version + `,"devcontainer_path":".devcontainer/devcontainer.json","projects_path":"projects","bundles":[]` + extra + `}`)
+}
+
+func TestResolverVersion1StillExactFields(t *testing.T) {
+	for _, extra := range []string{`,"name":"suggested"`, `,"start_dir":"."`, `,"human_shell":"fish"`, `,"console_mode":"plain"`, `,"shortcuts":"on"`, `,"project":{"url":"https://example.test/org/app.git","path":"projects/app"}`, `,"agent_shell":"bash"`} {
+		t.Run(extra, func(t *testing.T) {
+			_, _, e := decodeResolverManifest(resolverManifest("1", extra))
+			resolverManifestError(t, e, "invalid_configuration")
+		})
+	}
+}
+func TestResolverVersion2Accepted(t *testing.T) {
+	for _, extra := range []string{"", `,"name":"suggested","start_dir":".","human_shell":"nu","console_mode":"plain","shortcuts":"off","project":{"url":"ssh://git@example.test/org/app.git","path":"projects/app"}`} {
+		t.Run(extra, func(t *testing.T) {
+			dc, projects, e := decodeResolverManifest(resolverManifest("2", extra))
+			if e != nil {
+				t.Fatal(e)
+			}
+			if projects != "projects" || dc != ".devcontainer/devcontainer.json" {
+				t.Fatal("version changed declared resolver paths")
+			}
+		})
+	}
+}
+func TestResolverRejectsVersionTrueAndFloat(t *testing.T) {
+	for _, version := range []string{"true", "false", "1.0", "1e0", "1E0", "2.0", "2e0", `"2"`, "null"} {
+		t.Run(version, func(t *testing.T) {
+			_, _, e := decodeResolverManifest(resolverManifest(version, ""))
+			resolverManifestError(t, e, "invalid_configuration")
+		})
+	}
+}
+func TestResolverIgnoresRuntimeSettings(t *testing.T) {
+	for _, extra := range []string{"", `,"name":"suggested","start_dir":"projects/missing","human_shell":"zsh","console_mode":"herdr","shortcuts":"off","project":{"url":"https://unreachable.example.test/org/unfetched.git","path":"projects/unfetched"}`} {
+		dc, projects, e := decodeResolverManifest(resolverManifest("2", extra))
+		if e != nil {
+			t.Fatal(e)
+		}
+		if dc != ".devcontainer/devcontainer.json" || projects != "projects" {
+			t.Fatal("runtime settings altered provider inputs")
+		}
+	}
+}
+func TestResolverVersion2IntegrationSettingsIgnored(t *testing.T) {
+	r, d := resolverFixture(t, func(repo string) {
+		writeResolverManifest(t, repo, resolverManifest("2", `,"name":"suggested","start_dir":"projects/missing","human_shell":"zsh","console_mode":"herdr","shortcuts":"off","project":{"url":"https://unreachable.example.test/org/unfetched.git","path":"projects/unfetched"}`))
+	})
+	result, e := r.Resolve(context.Background(), d)
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer result.Close()
+	if len(result.Source) != 1 || result.Source["image"] != "ubuntu@sha256:"+strings.Repeat("a", 64) || len(result.Bases) != 1 || result.Bases[0] != result.Source["image"] || result.Descriptor.Commit != d.Commit {
+		t.Fatalf("runtime settings altered resolution: %#v", result)
+	}
+	for _, name := range []string{"missing", "unfetched"} {
+		if _, e = os.Stat(filepath.Join(result.ProjectsPath, name)); !os.IsNotExist(e) {
+			t.Fatal("manifest setting materialized a runtime resource")
+		}
+	}
+}
