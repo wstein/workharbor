@@ -67,8 +67,23 @@ func stageCredentialFreeURL(value string) bool {
 			return false
 		}
 	}
-	// SCP-style SSH usernames and local paths carry no password/token fields.
-	return !strings.ContainsAny(value, "?#") && !strings.Contains(value, "://")
+	// An explicit local path is not an scp authority, even with @ or : in it.
+	if strings.ContainsAny(value, "?#") {
+		return false
+	}
+	if filepath.IsAbs(value) || strings.HasPrefix(value, "./") || strings.HasPrefix(value, "../") {
+		return true
+	}
+	// In scp syntax, reject colon-bearing user information before @. A bare
+	// SSH username remains admissible, including bracketed IPv6 hosts.
+	if at := strings.IndexByte(value, '@'); at >= 0 {
+		authority := value[:at]
+		if strings.Contains(authority, "/") {
+			return true
+		}
+		return authority != "" && !strings.Contains(authority, ":") && !strings.Contains(value[at+1:], "@")
+	}
+	return true
 }
 func writeStageSafeConfig(ctx context.Context, home string, s stageGitSnapshot, clone string, values map[string][]string) error {
 	gitdir := filepath.Join(clone, ".git")
