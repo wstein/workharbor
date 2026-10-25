@@ -154,6 +154,31 @@ jobs:
           if grep -q -- '^[[:space:]]*--- SKIP:' <<< "$output"; then
             exit 1
           fi
+      - name: Verify native Git capture and wait-without-reap
+        shell: bash
+        working-directory: apps/whr
+        env:
+          GOTOOLCHAIN: local
+        run: |
+          set -euo pipefail
+          selection='^TestLocalStage(Git|Capture|Trust)'
+          expected=()
+          while IFS= read -r name; do
+            [[ "$name" == TestLocalStage* ]] && expected+=("$name")
+          done < <(go test -list "$selection" ./internal/localdocker)
+          test "${#expected[@]}" -gt 0
+          if output=$(go test -v -count=1 -timeout=240s -run "$selection" ./internal/localdocker 2>&1); then
+            printf '%s\n' "$output"
+          else
+            printf '%s\n' "$output"
+            exit 1
+          fi
+          for name in "${expected[@]}"; do
+            grep -Eq -- "^--- PASS: ${name} \(" <<< "$output"
+          done
+          if grep -q -- '^[[:space:]]*--- SKIP:' <<< "$output"; then
+            exit 1
+          fi
   macos-hostsetup:
     needs: changes
     if: ${{ !cancelled() && needs.changes.outputs.docs_only != 'true' }}

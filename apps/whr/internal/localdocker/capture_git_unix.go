@@ -173,6 +173,14 @@ func stageGitPaths(source string) (stageGitSnapshot, error) {
 	return s, nil
 }
 func readStageGitSnapshotContext(ctx context.Context, source string, strict bool) (stageGitSnapshot, error) {
+	physical, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		return stageGitSnapshot{}, stageConflict("Git source path unavailable")
+	}
+	source, err = filepath.Abs(physical)
+	if err != nil {
+		return stageGitSnapshot{}, stageConflict("Git source path unavailable")
+	}
 	ctx, tool, e := pinStageGit(ctx)
 	if e != nil {
 		return stageGitSnapshot{}, e
