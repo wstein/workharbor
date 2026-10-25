@@ -18,10 +18,7 @@ import (
 
 // Execution inventory deliberately visits only admitted dependency roots. An
 // ordinary candidate result file cannot become a new executed-input dependency.
-func scanStageFilesSelected(ctx context.Context, source, destination string, selected []string) ([]map[string]any, []string, error) {
-	if destination != "" {
-		return nil, nil, stageConflict("execution inventory cannot publish files")
-	}
+func scanStageExecutionFiles(ctx context.Context, source string, selected []string) ([]map[string]any, []string, error) {
 	root, err := os.OpenRoot(source)
 	if err != nil {
 		return nil, nil, stageConflict("execution inventory root unavailable")
