@@ -122,7 +122,12 @@ func (p *LocalPromotion) checkHomeCleanup(ctx context.Context) error {
 	return nil
 }
 
-func (p *LocalPromotion) checkFinalBindings(ctx context.Context) error {
+func (p *LocalPromotion) checkFinalBindings(ctx context.Context) (failure error) {
+	defer func() {
+		if failure != nil {
+			p.invalidatePublicVerification()
+		}
+	}()
 	if err := p.checkConfiguration(); err != nil {
 		return err
 	}

@@ -376,6 +376,9 @@ func TestLocalPromoteRechecksInputsAfterHomeCleanup(t *testing.T) {
 	if exitcode.FromError(err) != exitcode.PartialFailure || err == nil || !strings.Contains(err.Error(), "final promotion binding changed") || result.Status != "partial" {
 		t.Fatalf("post-cleanup drift: status=%s error=%v", result.Status, err)
 	}
+	if result.Verification == nil || result.Verification.Status != "stale" {
+		t.Fatalf("drift retained a passing verification: %+v", result.Verification)
+	}
 	s = readFakePromotionState(t, path)
 	if s.Primary == nil || s.Candidate != nil || s.Volume != nil {
 		t.Fatal("completed effects missing from inventory")

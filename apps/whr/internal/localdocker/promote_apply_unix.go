@@ -351,7 +351,12 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 	_ = cause
 	return p.Preview(), err
 }
-func (p *LocalPromotion) checkBeforePhase(ctx context.Context, original bool) error {
+func (p *LocalPromotion) checkBeforePhase(ctx context.Context, original bool) (failure error) {
+	defer func() {
+		if failure != nil {
+			p.invalidatePublicVerification()
+		}
+	}()
 	if err := p.checkConfiguration(); err != nil {
 		return err
 	}
@@ -408,5 +413,13 @@ func (p *LocalPromotion) awaitHealth(parent context.Context, id string) error {
 			return ctx.Err()
 		case <-time.After(250 * time.Millisecond):
 		}
+	}
+}
+
+func (p *LocalPromotion) invalidatePublicVerification() {
+	if p.result.Verification != nil {
+		copy := *p.result.Verification
+		copy.Status = "stale"
+		p.result.Verification = &copy
 	}
 }
