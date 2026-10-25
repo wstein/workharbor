@@ -5,11 +5,12 @@ package localdocker
 
 import (
 	"context"
+	"io/fs"
 	"os/exec"
 	"sync"
 )
 
-const stageMaxWorkingEntries = 500000
+const stageMaxWorkingEntries = 100000
 const stageMaxObjectEntries = 1000000
 
 type stageCaptureLimits struct {
@@ -49,3 +50,13 @@ type stageObjectAudit struct {
 	entries int
 }
 type stageObjectAuditKey struct{}
+
+type stageDirectoryMode struct {
+	path string
+	mode fs.FileMode
+}
+type stageCaptureOperation struct {
+	scratchParent string
+	directories   []stageDirectoryMode
+}
+type stageCaptureOperationKey struct{}

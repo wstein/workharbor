@@ -70,6 +70,13 @@ Proposed fixed capture bounds: 100,000 filesystem entries, 2 GiB working bytes,
 64 MiB/file, 32 populated submodules, depth 8, configuration/smoke 256 KiB, pathname 4096 B;
 full Git object graph additionally 1,000,000 objects/8 GiB per operation (including all required local alternate objects). Exceeding
 bounds refuses 68 before hooks; it never silently truncates or makes a shallow clone.
+Implementation-internal tightening proposed for explicit owner acceptance: audit
+at most 1,000,000 object-administration entries and 32 local object stores per
+operation. These fail-closed implementation ceilings do not raise the accepted
+100,000 working-entry bound. They are not an owner-approved profile decision;
+owner sign-off remains a named gate before this tightening is accepted. Any
+increase in the working-entry bound requires a separate accepted amendment.
+
 Normal clone full history means all ancestors reachable from admitted heads/tags/
 remote-tracking/notes refs and detached HEAD, plus index objects; source reflogs and
 unreachable garbage are not ordinary clone history. Reject shallow/partial source
