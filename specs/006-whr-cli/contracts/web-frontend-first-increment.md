@@ -123,6 +123,19 @@ payload, calling authorization/read/write functions, crashing or changing DB/aud
 Theme selection uses client-only `JS.dispatch`; pagination uses plain GET links.
 Existing controller authentication forms above are the explicit separate exception.
 
+Owner decision (2026-10-25): the forged-event guarantee also covers reserved
+`lv:*` names, including `lv:clear-flash`; there is no framework-reserved exception.
+Because LiveView 1.2.12 consumes those names before page hooks, W1 filters at
+`OwnerSocket.handle_in/2`: decode with the negotiated serializer, then discard
+every decoded outer `event` envelope, regardless of topic or nested event,
+type, value, component or upload metadata. Return the unchanged transport state
+without a reply, logging or channel dispatch; do not fabricate a successful
+mutation acknowledgement. Heartbeat, join, leave and other protocol control
+frames retain Phoenix handling. Undecodable wire frames retain the stock decoder
+behavior; the guarantee covers valid decoded forged application envelopes.
+Keep separate page catch-all tests and required serialized transport-entry tests,
+including mounted flash/audit/log canaries and ordinary protocol controls.
+
 ## Shared authorized reads
 
 Views never call Repo, SQL, provider adapters or Docker. No new storage. Every

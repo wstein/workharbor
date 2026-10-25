@@ -334,3 +334,55 @@ origin, then check:
 No server, browser, host workspace, relay, local daemon or provider operation was
 activated for this handoff. No W1, T012, feature or browser acceptance completion
 is claimed by these source changes or historical CI evidence.
+
+### W1 reserved-event ingress decision and test-first boundary
+
+The owner decided on 2026-10-25 that the accepted forged-event guarantee includes
+reserved `lv:*` names. There is no exception for `lv:clear-flash`: a forged event
+must not clear flash, crash the page or log its name/payload. The stock pinned
+[LiveView 1.2.12 dispatcher](https://github.com/phoenixframework/phoenix_live_view/blob/v1.2.12/lib/phoenix_live_view/channel.ex#L550)
+handles clear-flash and raises for unknown reserved names before page hooks, so
+client-only `JS.hide` alone could not meet that guarantee.
+
+The prepared implementation was preserved at local archive ref
+`archive/w1-pre-ingress-f9ee51f5` (`f9ee51f57372c4acf38ee98df9c44700649d278b`).
+Published owner head `9db261f55bd6ccb11c32153ec1c56180f382a3cc`, including its
+owner-authored main merge, was retained as an ancestor. The seven prepared own
+commits were appended as new commits; their complete range-diff was seven `=`
+entries. No owner or published commit was rewritten, and the owner's checkout
+was untouched.
+
+Test-first commits `b9824830a581ca64c3ab8f4665cfce865e9ceedc` and
+`c89115932faf2776926797e8c4f8efd217aecfbd` precede the ingress implementation.
+Two additional required ExUnit identities bind transport-entry coverage; the
+original 18 identities are retained. One oracle feeds serialized application
+envelopes to the actual `OwnerSocket.handle_in/2` callback and requires unchanged
+transport state, no channel delivery, no reply, no DB/audit changes and no event
+name/payload canaries in debug logs. Cases include reserved/ordinary names,
+missing inner fields, component/upload metadata, arbitrary decoded payloads,
+multiple topics and a stock V2 binary push frame. A second oracle admits an
+HTTPS owner page, connects the actual OwnerSocket, joins its signed LiveView
+session through serialized transport frames, checks heartbeat replies, preserves
+a test-installed flash canary under forged frames, and permits ordinary leave.
+Direct application-event page catch-all coverage remains separate because
+LiveViewTest event helpers bypass transport ingress.
+
+The scoped command `MIX_ENV=test mix test test/workharbor_web/owner_shell_test.exs
+--warnings-as-errors --seed 0` exited **127**, `mix: command not found`, before
+the filter was written. No executed native RED or green is claimed for these new
+tests. Source inspection proves the predecessor dispatch path reaches the pinned
+reserved-event mutation/raise; that evidence is distinct from executed tests.
+Native formatting, compilation, generated assets and the full required ExUnit
+results still require CI on the final candidate.
+
+The filter uses the supported
+[Phoenix 1.8.15 transport callback](https://github.com/phoenixframework/phoenix/blob/v1.8.15/lib/phoenix/socket.ex#L323)
+and [negotiated serializer dispatch](https://github.com/phoenixframework/phoenix/blob/v1.8.15/lib/phoenix/socket.ex#L553).
+It discards all valid decoded outer application `event` envelopes before the
+channel sees them, returning unchanged state without acknowledgement or logging.
+It delegates other protocol frames to Phoenix; dashboard and agent transports
+remain unchanged. Stock decode failures for undecodable wire frames remain
+protocol behavior, not a fallback that forwards forged application events.
+The native test protocol join is not a browser or real-WSS claim; the existing
+TLS/WSS suite, owner browser walkthrough and exact-head independent review gates
+remain separate and unverified on this new candidate.
