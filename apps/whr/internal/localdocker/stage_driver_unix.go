@@ -24,7 +24,17 @@ type stageDriverPolicy struct {
 
 // DockerDriver routes only phase-specific fixed protocols. It is cooperative
 // routing, not a sandbox for trusted host code or another Docker-owner client.
-func (r *stageRunner) DockerDriver(mode string) (string, error) {
+func (r *stageRunner) DockerDriver(mode string, images ...string) (string, error) {
+	if len(images) > 1 {
+		return "", stageConflict("Docker driver image selection ambiguous")
+	}
+	if mode == "promote" && len(images) == 0 {
+		return "", stageConflict("Docker driver phase unsupported without promotion image intent")
+	}
+	image := ""
+	if len(images) > 0 {
+		image = images[0]
+	}
 	docker, ok := r.Tools["docker"]
 	if !ok {
 		return "", stageConflict("Docker driver tool missing")
@@ -33,12 +43,15 @@ func (r *stageRunner) DockerDriver(mode string) (string, error) {
 	if !ok {
 		return "", stageConflict("Docker driver shell missing")
 	}
-	if mode != "preview" && mode != "stage" {
+	if mode != "preview" && mode != "stage" && mode != "promote" {
 		return "", stageConflict("Docker driver phase unsupported")
 	}
 	p := r.Policy
 	if mode != "preview" && (p == nil || !fullID(p.PrimaryID) || p.PrimaryName == "" || !lowerHex32(p.OperationID) || !filepath.IsAbs(p.WorkspaceSource) || !filepath.IsAbs(p.WorkspaceDestination) || !volumeName(p.PrimaryHome) || !volumeName(p.Home) || (p.HomeDestination != "/home/vscode" && p.HomeDestination != "/home/captain")) {
 		return "", stageConflict("Docker driver declared resource intent missing")
+	}
+	if mode == "promote" && (len(image) != 71 || !strings.HasPrefix(image, "sha256:") || !fullID(strings.TrimPrefix(image, "sha256:"))) {
+		return "", stageConflict("Docker driver immutable image missing")
 	}
 	if p == nil {
 		p = &stageDriverPolicy{}
@@ -57,7 +70,10 @@ func (r *stageRunner) DockerDriver(mode string) (string, error) {
 	}
 
 	expectedName := "whr-anchorage-staging"
-	script := "#!" + shell.Path + "\nset -eu\n" + "native=" + stageShellLiteral(docker.Path) + "\nendpoint=" + stageShellLiteral(r.Endpoint) + "\nmode=" + stageShellLiteral(mode) + "\nprimary_id=" + stageShellLiteral(p.PrimaryID) + "\nexpected_name=" + stageShellLiteral(expectedName) + "\noperation=" + stageShellLiteral(p.OperationID) + "\nworkspace_mount=" + stageShellLiteral(renderStageMount("type=bind", "source="+p.WorkspaceSource, "target="+p.WorkspaceDestination)) + "\nhome_mount=" + stageShellLiteral(renderStageMount("type=volume", "source="+p.Home, "target="+p.HomeDestination)) + "\n"
+	if mode == "promote" {
+		expectedName = p.PrimaryName
+	}
+	script := "#!" + shell.Path + "\nset -eu\n" + "native=" + stageShellLiteral(docker.Path) + "\nendpoint=" + stageShellLiteral(r.Endpoint) + "\nmode=" + stageShellLiteral(mode) + "\nimage=" + stageShellLiteral(image) + "\nprimary_id=" + stageShellLiteral(p.PrimaryID) + "\nexpected_name=" + stageShellLiteral(expectedName) + "\noperation=" + stageShellLiteral(p.OperationID) + "\nworkspace_mount=" + stageShellLiteral(renderStageMount("type=bind", "source="+p.WorkspaceSource, "target="+p.WorkspaceDestination)) + "\nhome_mount=" + stageShellLiteral(renderStageMount("type=volume", "source="+p.Home, "target="+p.HomeDestination)) + "\n"
 	script += `refuse() { printf 'whr-driver:%s\n' "$1" >&2; exit 68; }
 [ "$#" -gt 0 ] || refuse empty_vector
 command=$1
@@ -188,8 +204,10 @@ if [ "$command" = run ]; then
   [ "$name" = "$expected_name" ] || refuse native_name
   [ "$workspace_seen" -eq 1 ] && [ "$home_seen" -eq 1 ] || refuse native_mount_binding
   [ "$#" -gt 0 ] || refuse native_image
+  if [ "$mode" = promote ]; then [ "$1" = "$image" ] || refuse promote_image_identity; fi
  }
  validate_run "$@"
+ if [ "$mode" = promote ]; then exec "$native" --host "$endpoint" run --pull never "$@"; fi
  exec "$native" --host "$endpoint" run "$@"
 fi
 exec "$native" --host "$endpoint" "$@"

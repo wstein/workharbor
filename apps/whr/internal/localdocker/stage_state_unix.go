@@ -21,6 +21,7 @@ import (
 // attempts or interprets Docker labels as a substitute for the private journal.
 type stageStore struct {
 	path      string
+	promotion bool
 	dir, lock *os.File
 }
 type stageRecord struct {
@@ -157,7 +158,12 @@ func (s *stageStore) Begin(op, digest string) error {
 		return e
 	}
 	if len(rows) != 0 {
-		return stageConflict("retained attempt requires owner reconciliation")
+		if rows[len(rows)-1].State != "complete" || rows[len(rows)-1].Observation != "observed" {
+			return stageConflict("retained attempt requires owner reconciliation")
+		}
+		if e = s.archiveComplete(rows); e != nil {
+			return e
+		}
 	}
 	fd, e := unix.Openat(int(s.dir.Fd()), ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if e != nil {
@@ -200,15 +206,19 @@ func (s *stageStore) Advance(state, action, observation string) error {
 		return stageConflict("state transition after unobserved effect")
 	}
 	valid := state == last.State
-	for i, v := range stageStates {
-		if v == last.State && i+1 < len(stageStates) && stageStates[i+1] == state {
+	states := stageStates
+	if s.promotion {
+		states = append(append([]string{}, stageStates...), "exporting_results", "importing_results", "promoting", "primary_resources", "primary_verified", "candidate_removed", "home_removed", "complete")
+	}
+	for i, v := range states {
+		if v == last.State && i+1 < len(states) && states[i+1] == state {
 			valid = true
 		}
 	}
 	if last.State == "verifying" && state == "staged_unverified" {
 		valid = true
 	}
-	if !valid || last.State == "staged_unverified" || last.Observation == "uncertain" {
+	if !valid || last.State == "staged_unverified" || last.State == "complete" || last.Observation == "uncertain" {
 		return stageConflict("state transition requires owner reconciliation")
 	}
 	if observation != "attempted" && observation != "observed" && observation != "uncertain" {
