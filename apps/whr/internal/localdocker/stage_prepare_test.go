@@ -25,6 +25,11 @@ func fixtureStagePreparationNamed(t *testing.T, basename string) (Client, StageO
 	if e := os.Mkdir(source, 0700); e != nil {
 		t.Fatal(e)
 	}
+	physicalSource, err := filepath.EvalSymlinks(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source = physicalSource
 	fixtureGit(t, source, "init", "--template=", "--initial-branch=main")
 	if e := os.Mkdir(filepath.Join(source, ".devcontainer"), 0700); e != nil {
 		t.Fatal(e)
