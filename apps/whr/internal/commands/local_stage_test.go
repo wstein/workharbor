@@ -116,7 +116,7 @@ func TestLocalStageCLIPreviewAndConsent(t *testing.T) {
 			} else {
 				args = append(args, "--trust", *p.Fingerprint, "--yes")
 				f.result.Status = "staged_verified"
-				f.result.Phase = "verified"
+				f.result.Phase = "staged_verified"
 			}
 			g := run(t, stageCLIHandlers(f, &n, &o), args...)
 			if g.code != 0 || n != 1 || f.closes != 1 || o.Target != "primary" || o.Source != "/source with spaces" || !o.Smoke {
@@ -144,7 +144,7 @@ func TestLocalStageCLIPartialEnvelopePreservesRecovery(t *testing.T) {
 	p := stageCLIResult()
 	r := p
 	r.Status = "staged_unverified"
-	r.Phase = "candidate_running"
+	r.Phase = "staged_unverified"
 	reason := "missing_smoke"
 	rid := "daemon/attempt"
 	r.UnverifiedReason = &reason
@@ -185,6 +185,49 @@ func TestLocalStageCLIInteractiveTrustAndConfirmation(t *testing.T) {
 			}
 			if strings.ContainsAny(out.String(), "\x1b\r") || strings.Contains(out.String(), "\nforged") {
 				t.Fatalf("unsafe output %q", out.String())
+			}
+		})
+	}
+}
+
+func TestLocalStageJSONClosedResultSchema(t *testing.T) {
+	p := stageCLIResult()
+	n := 0
+	var o localdocker.StageOptions
+	f := &stageTransactionFixture{preview: p, result: p}
+	g := run(t, stageCLIHandlers(f, &n, &o), "workspace", "stage", "--local", "--source", "/src", "--dry-run", "primary", "--json")
+	envelope, err := jsonUnmarshal(g.stdout)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := compileSchema(t)
+	if err = schema.Validate(envelope); err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range []string{"unknown-result-field", "invalid-status", "missing-nullable", "null-array", "local-operation-id", "invalid-resource"} {
+		t.Run(kind, func(t *testing.T) {
+			env, e := jsonUnmarshal(g.stdout)
+			if e != nil {
+				t.Fatal(e)
+			}
+			m := env.(map[string]any)
+			r := m["result"].(map[string]any)
+			switch kind {
+			case "unknown-result-field":
+				r["script_body"] = "not public"
+			case "invalid-status":
+				r["status"] = "done"
+			case "missing-nullable":
+				delete(r, "verification")
+			case "null-array":
+				r["effects"] = nil
+			case "local-operation-id":
+				m["operation_id"] = "fictional"
+			case "invalid-resource":
+				r["primary"].(map[string]any)["kind"] = "workspace"
+			}
+			if schema.Validate(env) == nil {
+				t.Fatalf("open stage schema admits %s", kind)
 			}
 		})
 	}
