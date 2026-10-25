@@ -395,7 +395,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	}
 	defer os.RemoveAll(private)
 	if e = os.Chmod(private, 0700); e != nil {
-		return result, e
+		return result, stageConflict("private Git capture mode unavailable")
 	}
 	reader := filepath.Join(private, "reader.git")
 	export := filepath.Join(private, "export.git")
@@ -422,7 +422,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 		return result, e
 	}
 	if e = os.WriteFile(filepath.Join(reader, "HEAD"), []byte(s.Head+"\n"), 0600); e != nil {
-		return result, e
+		return result, stageConflict("private Git reader HEAD publication failed")
 	}
 	index, rawIndexPath, e := prepareStageIndex(ctx, private, reader, s)
 	if e != nil {
@@ -483,7 +483,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	s.ObjectManifestDigest = "sha256:" + hex.EncodeToString(manifestSum[:])
 	pack, e := os.OpenFile(filepath.Join(private, "objects.pack"), os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 	if e != nil {
-		return result, e
+		return result, stageConflict("private Git pack publication failed")
 	}
 	defer pack.Close()
 	packCmd := stageGitCommand(ctx, private, reader, s.ObjectDir, "", false, "pack-objects", "--stdout", "--revs")
@@ -497,7 +497,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 		return result, stageConflict("Git verified object export failed")
 	}
 	if _, e = pack.Seek(0, 0); e != nil {
-		return result, e
+		return result, stageConflict("private Git pack seek failed")
 	}
 	unpack := stageGitCommand(ctx, private, export, "", "", false, "index-pack", "--strict", "--stdin")
 	unpack.Stdin = pack
@@ -510,7 +510,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 		return result, e
 	}
 	if e = os.WriteFile(filepath.Join(export, "HEAD"), []byte(s.Head+"\n"), 0600); e != nil {
-		return result, e
+		return result, stageConflict("private Git export HEAD publication failed")
 	}
 	cloneCmd := stageGitCommand(ctx, private, "", "", "", true, "clone", "--no-local", "--no-hardlinks", "--no-checkout", "--template=", "--", export, clone)
 	cloneCmd.Stdout = io.Discard
@@ -521,7 +521,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	// Clone transports only advertised refs; staged orphan blobs have no ref.
 	// Import the already verified complete pack into the independent clone too.
 	if _, e = pack.Seek(0, 0); e != nil {
-		return result, e
+		return result, stageConflict("private Git pack seek failed")
 	}
 	importAll := stageGitCommand(ctx, private, filepath.Join(clone, ".git"), "", "", false, "index-pack", "--strict", "--stdin")
 	importAll.Stdin, importAll.Stdout, importAll.Stderr = pack, io.Discard, io.Discard
@@ -570,13 +570,13 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	}
 	// Drop only clone-generated refs/config in this newly allocated private clone.
 	if e = os.RemoveAll(filepath.Join(clone, ".git", "refs")); e != nil {
-		return result, e
+		return result, stageConflict("private Git clone ref cleanup failed")
 	}
 	if e = os.Mkdir(filepath.Join(clone, ".git", "refs"), 0700); e != nil {
-		return result, e
+		return result, stageConflict("private Git clone ref directory publication failed")
 	}
 	if e = os.Remove(filepath.Join(clone, ".git", "packed-refs")); e != nil && !os.IsNotExist(e) {
-		return result, e
+		return result, stageConflict("private Git clone packed ref cleanup failed")
 	}
 	if _, e = stageGitRead(ctx, private, filepath.Join(clone, ".git"), "", "", []byte(refs.String()), "update-ref", "--no-deref", "--stdin"); e != nil {
 		return result, e
@@ -586,7 +586,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 		head = "ref: " + s.HeadRef + "\n"
 	}
 	if e = os.WriteFile(filepath.Join(clone, ".git", "HEAD"), []byte(head), 0600); e != nil {
-		return result, e
+		return result, stageConflict("private Git clone HEAD publication failed")
 	}
 	if e = writeStageSafeConfig(ctx, private, s, clone, values); e != nil {
 		return result, e
@@ -607,7 +607,7 @@ func captureStageGitOne(ctx context.Context, source, captured, clone string) (st
 	s.UncommittedRetained = s.Dirty
 	s.ClonePath = clone
 	if e = os.Chmod(clone, 0700); e != nil {
-		return result, e
+		return result, stageConflict("private Git clone mode publication failed")
 	}
 	result = stageGitCapture{stageGitSnapshot: s, Clone: clone, Repositories: []stageGitSnapshot{s}}
 	return result, nil

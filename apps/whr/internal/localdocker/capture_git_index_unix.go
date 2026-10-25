@@ -158,7 +158,7 @@ func stageReadIndex(ctx context.Context, root, name, format, destination string)
 	if destination != "" {
 		copied, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0600)
 		if err != nil {
-			return "", "", err
+			return "", "", stageConflict("private Git index publication failed")
 		}
 		defer copied.Close()
 		output = io.MultiWriter(hash, copied)
