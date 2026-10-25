@@ -234,8 +234,8 @@ func TestLocalStageCLIInteractiveTrustAndConfirmation(t *testing.T) {
 		n := 0
 		var o localdocker.StageOptions
 		var out, diag bytes.Buffer
-		env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: &cancelStageReader{cancel: cancel, text: *p.Fingerprint + "\nyes\n"}, InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
-		code := commands.Execute(ctx, []string{"workspace", "stage", "--local", "--source", "/src", "primary", "--no-color"}, env, stageCLIHandlers(f, &n, &o))
+		env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: &cancelStageReader{cancel: cancel, text: "yes\n"}, InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
+		code := commands.Execute(ctx, []string{"workspace", "stage", "--local", "--source", "/src", "primary", "--no-color", "--trust", *p.Fingerprint}, env, stageCLIHandlers(f, &n, &o))
 		if code != 72 || !strings.Contains(diag.String(), "interrupted") || f.applies != 0 || f.closes != 1 {
 			t.Fatalf("code=%d diag=%q fixture=%+v", code, diag.String(), f)
 		}
