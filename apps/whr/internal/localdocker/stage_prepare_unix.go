@@ -244,7 +244,7 @@ func (c Client) prepareStage(parent context.Context, options StageOptions, ports
 	}
 	if s.gitInputMode != "none" {
 		for _, repo := range s.git.Repositories {
-			current, e := readStageGitSnapshotContext(ctx, repo.ClonePath, true)
+			current, e := readStageCandidateGitSnapshot(ctx, repo.ClonePath)
 			if e != nil {
 				return nil, e
 			}

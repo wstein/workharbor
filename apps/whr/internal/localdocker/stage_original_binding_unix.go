@@ -13,7 +13,7 @@ import (
 // checkStageOriginalBinding accounts for this operation's exact additive refs
 // without replacing the captured source baseline with a later trust version.
 func checkStageOriginalBinding(ctx context.Context, baseline stageGitSnapshot, created []StageResultRef) error {
-	current, err := readStageGitSnapshotContext(ctx, baseline.Source, false)
+	current, err := readStageGitSnapshotContext(ctx, baseline.Source)
 	if err != nil {
 		return err
 	}

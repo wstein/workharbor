@@ -214,10 +214,10 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 	e = cmd.Start()
 	if e == nil {
 		waitErr = stageWaitLeader(cmd.Process.Pid)
-		group.releaseBeforeReap(waitErr == nil)
+		group.releaseBeforeReap()
 		e = cmd.Wait()
 	} else {
-		group.releaseBeforeReap(false)
+		group.releaseBeforeReap()
 	}
 	var progressErr error
 	if progress != nil {

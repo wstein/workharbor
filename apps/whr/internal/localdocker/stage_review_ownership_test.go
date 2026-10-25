@@ -40,7 +40,7 @@ func TestLocalStageReviewObservationFailureKillsGroup(t *testing.T) {
 	if err := group.terminate(); err != nil {
 		t.Fatal(err)
 	}
-	group.releaseBeforeReap(false)
+	group.releaseBeforeReap()
 	if len(signals) != 2 || signals[0] != syscall.SIGTERM || signals[1] != syscall.SIGKILL {
 		t.Fatalf("observation failure released surviving group: %v", signals)
 	}
@@ -96,7 +96,7 @@ func TestLocalStageReviewToolManifestExcludesDriverAfterApply(t *testing.T) {
 func TestLocalStageReviewObservationFailureKillsWithoutTimer(t *testing.T) {
 	var signals []syscall.Signal
 	group := &stageProcessGroup{owned: true, signal: func(sig syscall.Signal) error { signals = append(signals, sig); return nil }}
-	group.releaseBeforeReap(false)
+	group.releaseBeforeReap()
 	if len(signals) != 1 || signals[0] != syscall.SIGKILL {
 		t.Fatalf("leader observation failure leaked descendants: %v", signals)
 	}
