@@ -119,7 +119,11 @@ func stageClosedEnvironment(root, endpoint string) ([]string, error) {
 }
 func (r *stageRunner) Run(parent context.Context, phase, tool string, args []string, stdin io.Reader, budget time.Duration) (stagePhaseOutput, error) {
 	var result stagePhaseOutput
-	ctx, cancel := context.WithTimeout(parent, budget)
+	totalBudget := budget
+	if phase == "candidate_resources" && len(r.InitializationLabels) > 0 {
+		totalBudget += r.InitializationBudget
+	}
+	ctx, cancel := context.WithTimeout(parent, totalBudget)
 	defer cancel()
 	if e := ctx.Err(); e != nil {
 		return result, e
@@ -186,6 +190,15 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 	output := &stagePhaseBuffers{cancel: cancelChild, limit: limit}
 	cmd.Stdout = stagePhaseWriter{output: output}
 	cmd.Stderr = stagePhaseWriter{output: output, stderr: true}
+	var progress *stageInitializeProgress
+	if phase == "candidate_resources" && len(r.InitializationLabels) > 0 {
+		host := r.InitializationBudget
+		if host <= 0 {
+			host = 600 * time.Second
+		}
+		progress = newStageInitializeProgress(r.InitializationLabels, host, budget, cancelChild)
+		output.observeStderr = progress.write
+	}
 	e = cmd.Start()
 	if e == nil {
 		waitErr := stageWaitLeader(cmd.Process.Pid)
@@ -196,6 +209,11 @@ func (r *stageRunner) Run(parent context.Context, phase, tool string, args []str
 		}
 	} else {
 		group.releaseBeforeReap(false)
+	}
+	if progress != nil {
+		if err := progress.close(); err != nil {
+			return result, err
+		}
 	}
 	result.Stdout = output.stdout.Bytes()
 	result.Stderr = output.stderr.Bytes()
@@ -231,6 +249,7 @@ type stagePhaseBuffers struct {
 	used           int
 	exceeded       bool
 	cancel         context.CancelFunc
+	observeStderr  func([]byte)
 }
 type stagePhaseWriter struct {
 	output *stagePhaseBuffers
@@ -248,6 +267,9 @@ func (w stagePhaseWriter) Write(p []byte) (int, error) {
 	}
 	b.used += len(p)
 	if w.stderr {
+		if b.observeStderr != nil {
+			b.observeStderr(p)
+		}
 		return b.stderr.Write(p)
 	}
 	return b.stdout.Write(p)

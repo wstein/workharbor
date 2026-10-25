@@ -61,6 +61,7 @@ type LocalStage struct {
 	execution                                        stageExecutionBinding
 	effectiveConfig                                  map[string]any
 	sourceMetadata                                   map[string]any
+	initializeLabels                                 []string
 	artifacts                                        map[string]string
 }
 

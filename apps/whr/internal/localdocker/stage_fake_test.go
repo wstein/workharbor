@@ -125,7 +125,15 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 		args = args[2:]
 		switch phase {
 		case "read-configuration":
-			emit(map[string]any{"configuration": map[string]any{"image": "example:local", "remoteUser": "vscode"}, "mergedConfiguration": map[string]any{"image": "example:local", "remoteUser": "vscode"}})
+			data, e := os.ReadFile(argValue(args, "--override-config"))
+			if e != nil {
+				os.Exit(117)
+			}
+			var cfg map[string]any
+			if json.Unmarshal(data, &cfg) != nil {
+				os.Exit(118)
+			}
+			emit(map[string]any{"configuration": cfg, "mergedConfiguration": cfg})
 		case "up":
 			data, e := os.ReadFile(argValue(args, "--override-config"))
 			if e != nil {
@@ -135,11 +143,20 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			if json.Unmarshal(data, &cfg) != nil {
 				os.Exit(96)
 			}
+			labels, _ := stageInitializeLabels(cfg["initializeCommand"])
+			for i, label := range labels {
+				data, _ := json.Marshal(map[string]any{"type": "start", "timestamp": i + 1, "text": label})
+				fmt.Fprintln(os.Stderr, string(data))
+			}
 			if stageAnchorageHostInitializer(cfg) {
 				facts := strings.Replace(string(stageFactsFixture()), "HOST_NAME='captain'", "HOST_NAME='fresh-execution'", 1)
 				if e = os.WriteFile(filepath.Join(argValue(args, "--workspace-folder"), ".devcontainer", "host.env"), []byte(facts), 0600); e != nil {
 					os.Exit(113)
 				}
+			}
+			for i, label := range labels {
+				data, _ := json.Marshal(map[string]any{"type": "stop", "timestamp": i + 2, "startTimestamp": i + 1, "text": label})
+				fmt.Fprintln(os.Stderr, string(data))
 			}
 			vector := []string{"run", "--sig-proxy=false", "-a", "STDOUT", "-a", "STDERR", "--mount", cfg["workspaceMount"].(string)}
 			for _, value := range cfg["mounts"].([]any) {

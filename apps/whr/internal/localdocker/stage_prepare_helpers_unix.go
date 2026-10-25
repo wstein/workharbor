@@ -315,7 +315,8 @@ func (s *LocalStage) prepareCLIConfiguration(ctx context.Context) error {
 	if e = decodeDockerRecord(d, &response); e != nil || d.Decode(new(any)) != io.EOF || response.Configuration == nil || response.MergedConfiguration == nil {
 		return stageConflict("official merged configuration capability unavailable")
 	}
-	return nil
+	s.initializeLabels, e = stageInitializeLabels(response.Configuration["initializeCommand"])
+	return e
 }
 
 func stageTrustTools(tools map[string]stageToolIdentity) map[string]stageToolIdentity {

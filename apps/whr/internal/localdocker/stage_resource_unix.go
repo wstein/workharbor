@@ -146,6 +146,8 @@ func (s *LocalStage) executeStage(ctx context.Context, homeObservation stageVolu
 	if e != nil {
 		return fail("resource phase arguments failed", e)
 	}
+	s.runner.InitializationLabels = s.initializeLabels
+	s.runner.InitializationBudget = 600 * time.Second
 	out, e := s.runner.Run(ctx, "candidate_resources", "devcontainer", argv, nil, 1800*time.Second)
 	if e != nil {
 		return fail("candidate resource phase failed", e)
