@@ -77,7 +77,7 @@ func TestLocalStageGitHostEnvironmentAndCommandIsolation(t *testing.T) {
 }
 func TestLocalStageCapturePublishedLimits(t *testing.T) {
 	limits := defaultStageCaptureLimits()
-	if limits.WorkingEntries != 500000 || limits.ObjectEntries != 1000000 || limits.Objects != 1000000 || limits.FileBytes != 64<<20 || limits.WorkingBytes != 2<<30 || limits.ObjectBytes != 8<<30 || limits.SubmoduleDepth != 8 || limits.SubmoduleCount != 32 || limits.ObjectStores != 32 {
+	if limits.WorkingEntries != 100000 || limits.ObjectEntries != 1000000 || limits.Objects != 1000000 || limits.FileBytes != 64<<20 || limits.WorkingBytes != 2<<30 || limits.ObjectBytes != 8<<30 || limits.SubmoduleDepth != 8 || limits.SubmoduleCount != 32 || limits.ObjectStores != 32 {
 		t.Fatal("published capture resource ceilings changed without contract reconciliation")
 	}
 }
