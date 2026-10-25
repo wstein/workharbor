@@ -37,9 +37,7 @@ defmodule WorkHarborWeb.Layouts do
         id="client-error"
         kind={:error}
         title="Connection lost"
-        phx-disconnected={
-          JS.remove_attribute("hidden", to: ".phx-client-error #client-error")
-        }
+        phx-disconnected={JS.remove_attribute("hidden", to: ".phx-client-error #client-error")}
         phx-connected={JS.set_attribute({"hidden", ""})}
         hidden
       >
@@ -49,9 +47,7 @@ defmodule WorkHarborWeb.Layouts do
         id="server-error"
         kind={:error}
         title="Page unavailable"
-        phx-disconnected={
-          JS.remove_attribute("hidden", to: ".phx-server-error #server-error")
-        }
+        phx-disconnected={JS.remove_attribute("hidden", to: ".phx-server-error #server-error")}
         phx-connected={JS.set_attribute({"hidden", ""})}
         hidden
       >
