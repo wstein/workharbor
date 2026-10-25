@@ -103,7 +103,11 @@ func TestLocalPromoteCLIRefusesBadArgumentsBeforePrepare(t *testing.T) {
 		n := 0
 		var o localdocker.PromoteOptions
 		g := run(t, promoteCLIHandlers(f, &n, &o), append([]string{"workspace", "promote"}, args...)...)
-		if g.code != 64 || g.err == "" || n != 0 || f.applies != 0 {
+		reason := "use workspace promote --local"
+		if strings.Contains(strings.Join(args, " "), "--trust") {
+			reason = "unknown flag: --trust"
+		}
+		if g.code != 64 || !strings.Contains(g.err, reason) || n != 0 || f.applies != 0 {
 			t.Fatalf("bad selector/flag reached backend: %+v prepare=%d", g, n)
 		}
 	}
@@ -117,7 +121,7 @@ func TestLocalPromoteCLIInteractivePaneWarningAndDecline(t *testing.T) {
 			var o localdocker.PromoteOptions
 			var out, diag bytes.Buffer
 			env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(answer), InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
-			code := commands.Execute(context.Background(), []string{"ws", "promote", "--local", "--volumes", "--force", "primary"}, env, promoteCLIHandlers(f, &n, &o))
+			code := commands.Execute(context.Background(), []string{"ws", "promote", "--local", "--volumes", "--force", "--no-color", "primary"}, env, promoteCLIHandlers(f, &n, &o))
 			want := 70
 			if answer == "yes\n" {
 				want = 0

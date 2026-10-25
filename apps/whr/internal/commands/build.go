@@ -89,6 +89,9 @@ func (a *app) build() {
 		e := e
 		runE := func(c *cobra.Command, args []string) error {
 			ctx := c.Context()
+			if e.ID == "workspace.promote" {
+				ctx = context.WithValue(ctx, localPromoteKey{}, a.localPromoteOptions(c))
+			}
 			if e.ID == "workspace.stage" {
 				ctx = context.WithValue(ctx, localStageKey{}, a.localStageOptions(c))
 			}
@@ -138,6 +141,12 @@ func (a *app) build() {
 			}
 			if e.ID == "workspace.init" {
 				addInitFlags(c, e)
+			} else if e.ID == "workspace.promote" {
+				c.Flags().Bool("local", false, "use the local Docker daemon and the verified candidate receipt")
+				c.Flags().Bool("dry-run", false, "preview replacement and cleanup with no mutation")
+				c.Flags().Bool("volumes", false, "delete the exact candidate home after verification (requires --force)")
+				c.Flags().Bool("force", false, "authorize candidate home deletion with --volumes; preserve primary home")
+				c.Flags().Bool("yes", false, "confirm replacement, ended exec sessions, cleanup and pause-writers condition")
 			} else if e.ID == "workspace.stage" {
 				c.Flags().Bool("local", false, "use the local Docker daemon; no control plane")
 				c.Flags().String("source", "", "explicit source directory matching the selected primary")
