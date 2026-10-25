@@ -414,9 +414,13 @@ func TestExpectConsumesThroughTheMatch(t *testing.T) {
 
 func TestExpectRegexpSubmatches(t *testing.T) {
 	s := emit(t, "id=ab-end\n", ptytest.Options{})
+	s.ExpectExit(0) // Make the exact unconsumed suffix independent of PTY reads.
 	got := s.ExpectRegexp(`id=(a)(x)?(b)`)
 	if len(got) != 4 || got[0] != "id=ab" || got[1] != "a" || got[2] != "" || got[3] != "b" {
 		t.Fatalf("submatches = %q", got)
+	}
+	if pending := s.Pending(); pending != len("-end\n") {
+		t.Fatalf("regexp did not consume through match end: %d pending bytes, want %d", pending, len("-end\n"))
 	}
 	s.Expect("-end") // consumed exactly through the match
 	s.ExpectExit(0)
@@ -429,25 +433,26 @@ func TestExpectHandlesSplitSequencesAndRunes(t *testing.T) {
 }
 
 // TestLargeOutputIsMatchedLinearly checks the work done, not the wall clock:
-// every byte is projected once, drawn once and searched a bounded number of
-// times, so work stays within a constant factor of the output size.
+// drain before measuring so reader wake-ups cannot change the work count.
+// TestIncrementalMatcherWorkIsLinear separately exercises repeated searches
+// while output grows in controlled chunks.
 func TestLargeOutputIsMatchedLinearly(t *testing.T) {
 	for _, mib := range []int{1, 4, 10} {
 		size := mib << 20
 		s := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(size)}, Timeout: 120 * time.Second})
-		s.Expect("END")
 		s.ExpectExit(0)
+		s.Expect("END")
 		out := len(s.Transcript())
 		if out < size {
 			t.Fatalf("transcript has %d bytes, want >= %d", out, size)
 		}
-		if w := s.Work(); w > uint64(6*out) {
+		if w := s.Work(); w > uint64(3*out) {
 			t.Fatalf("%d MiB: work %d bytes for %d bytes of output: not linear", mib, w, out)
 		}
 		r := ptytest.StartFunc(t, "flood", ptytest.Options{Args: []string{strconv.Itoa(size)}, Timeout: 120 * time.Second})
-		r.ExpectScreen("END")
 		r.ExpectExit(0)
-		if w := r.Work(); w > uint64(6*len(r.Transcript())) {
+		r.ExpectScreen("END")
+		if w := r.Work(); w > uint64(2*len(r.Transcript())) {
 			t.Fatalf("%d MiB ExpectScreen: work %d for %d bytes", mib, w, len(r.Transcript()))
 		}
 	}
@@ -461,14 +466,15 @@ func TestUnterminatedSequenceFloodIsMatchedLinearly(t *testing.T) {
 	for _, seq := range []string{"\x1b]0;", "\x1bP", "\x1b_", "\x1b[1;", "\x1b[?"} {
 		s := ptytest.StartFunc(t, "floodseq", ptytest.Options{
 			Args: []string{hex.EncodeToString([]byte(seq)), strconv.Itoa(4 << 20)}, Timeout: 120 * time.Second})
+		s.ExpectExit(0)
 		if strings.HasPrefix(seq, "\x1b[") {
 			// Simplification of the model: a newline ends a CSI as malformed (see doc.go).
 			s.ExpectRegexp(`\A\nEND`)
-		} else if s.ExpectExit(0); s.Screen() != "" {
+		} else if s.Screen() != "" {
 			t.Fatalf("%q: text visible after an unterminated string sequence: %.40q", seq, s.Screen())
 		}
 		s.ExpectExit(0)
-		if w, out := s.Work(), len(s.Transcript()); w > uint64(6*out) {
+		if w, out := s.Work(), len(s.Transcript()); w > uint64(3*out) {
 			t.Fatalf("%q: work %d bytes for %d bytes of output: not linear", seq, w, out)
 		}
 	}
@@ -486,9 +492,10 @@ func TestTerminatedSequenceFloodAcrossReads(t *testing.T) {
 		s := ptytest.StartFunc(t, "floodseq", ptytest.Options{
 			Args:    []string{hex.EncodeToString([]byte(c.seq)), strconv.Itoa(4 << 20), hex.EncodeToString([]byte(c.end))},
 			Timeout: 120 * time.Second})
+		s.ExpectExit(0)
 		s.ExpectRegexp(`\A\nEND`) // fails if any filler became visible
 		s.ExpectExit(0)
-		if w, out := s.Work(), len(s.Transcript()); w > uint64(6*out) {
+		if w, out := s.Work(), len(s.Transcript()); w > uint64(3*out) {
 			t.Fatalf("%q+%q: work %d for %d bytes: not linear", c.seq, c.end, w, out)
 		}
 	}
