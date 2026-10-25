@@ -206,3 +206,27 @@ qualified by a compiled guard-removal probe that detects the foreign-root write.
 The PR body records actual current-head package, mutation, format/compiler and
 script/check results. No native macOS PASS for the new head is claimed before CI;
 no real Docker lifecycle, task completion or full T038/T039 acceptance is claimed.
+
+## Lexical-label and mount review correction
+
+The exact-head review of `6d32ee79376f23553088db9cfeb469289b507227`
+([review](https://github.com/wstein/workharbor/pull/266#pullrequestreview-5644720441))
+kept three findings open. Canonicalizing fixture labels had concealed two product
+path comparisons. The fixture again preserves the CLI's as-given workspace/config
+labels and bind source. Configuration paths are now relative to the original
+workspace label; capture remains bound to the admitted physical source.
+Persisting promotion configuration compares the workspace bind's physical source
+and omits that bind from the extra-mount list.
+
+The existing aliased corrupt-index selection was assertion-RED with the real
+lexical label. After configuration routing was fixed, the new full alias flow
+was assertion-RED because the persisted configuration duplicated the workspace
+bind. Fixture setup failures (a TempDir scope error and an intentionally forbidden
+symlinked state root) are not RED evidence. The corrected fixture keeps its state
+root physical and workspace labels lexical.
+
+`TestLocalStageCandidateVolumeNamesMustMatchDeclaredPlan` characterizes the exact
+volume-name guard for home and extra volumes, asserting both exit 68 and the
+specific refusal reason. Removing the name comparison must fail both cases.
+No fixture-only correction is presented as a product path fix. The accepted
+profile, consent and all protected-home gates remain unchanged.

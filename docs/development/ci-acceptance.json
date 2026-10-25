@@ -1316,7 +1316,9 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg/TestDecodeDevcontainerDataReusesStrictJSONC",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageRejectsUnresolvedLabel",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageRejectsChangedInputs",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageHealthAndSmoke"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageHealthAndSmoke",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageGitAliasedWorkspaceLabelsAndPromotionMount",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageCandidateVolumeNamesMustMatchDeclaredPlan"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
