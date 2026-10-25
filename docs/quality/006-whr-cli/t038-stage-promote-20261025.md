@@ -573,3 +573,50 @@ their recorded source trees; they are not claimed as complete reruns of this
 new raw-boundary delta. No real Docker, source hook or smoke was executed.
 Exact-head independent review, hosted native CI, complete make-check acceptance
 and owner real-host evidence remain separate open gates.
+
+
+## Execution-phase root correction
+
+The executed review at `8cc5050d` found that a literal original-source A script
+in `initializeCommand` passed admission while the actual override and observed
+initializer label still named A. Internal dependency normalization to E did not
+change what the official CLI would execute. No hook was run by that review.
+`b5e37f99` preserves six semantic RED cases (3.604 s): direct/nested original
+paths in host/container commands, container paths in host initialization, and a
+host proof incorrectly reused by a container phase. `6bc474c0` adds RED for a
+nested script's `sh -c` payload being wrongly treated as configuration
+substitution (0.002 s).
+
+Source correction `ad7f1220` admits host initialization file tokens only within
+captured E, and container file tokens only within the actual container workspace.
+Relative script paths retain their phase's working-directory meaning. Nested
+scripts inherit that phase, and dependency/direct-interpreter proof caches are
+phase-qualified. Original literal commands are never rewritten to claim a
+captured equivalent: unsupported roots return named capability 68 before
+retained-state or resource effects. Nested shell payloads are parsed as raw
+shell input without repeating DevContainer configuration substitution.
+
+The positive preview test inspects the actual private override: the legitimate
+`${localWorkspaceFolder}` initializer remains a configuration variable, and the
+observed official-CLI response label resolves to E. The synthetic CLI fixture
+models only this documented initializer data resolution; it does not execute
+scripts. Exact array argv with spaces supports captured host and container
+workspace paths. Known catalogue bodies and their transitive dependencies remain
+admitted.
+
+The final nine-top-level focused group passed (35.068 s), including all previous
+raw boundaries, catalogue, named candidate/original drift, known Git predicates,
+merged origins and the Anchorage stage→promote→fresh-stage sequence. The new
+phase-root guard has nine negative/positive leaves. Actual DefaultHandlers
+passed (10.755 s); affected vet and Darwin/arm64 test compilation passed.
+Compiled overlays failed semantically when phase admission was removed
+(4.445 s) or phase refusal reasons were changed while preserving exit 68
+(1.275 s). One new critical ID brings the appended T038 count to 111; all prior
+W1 and lifecycle inventory entries remain unchanged.
+
+Earlier complete-suite results remain tied to their recorded source trees;
+no complete-suite rerun is claimed for this focused phase-root delta. Real
+Docker/hooks were not executed. Exact-head independent review, hosted native
+CI, full make-check completion and owner real-host acceptance remain open.
+The author freezes here for the owner's updated task priority; nothing is
+pushed or published by this handoff.
