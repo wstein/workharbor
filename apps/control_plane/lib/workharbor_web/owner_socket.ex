@@ -3,6 +3,9 @@
 defmodule WorkHarborWeb.OwnerSocket do
   use Phoenix.LiveView.Socket
 
+  @impl Phoenix.Socket
+  defdelegate id(socket), to: Phoenix.LiveView.Socket
+
   defoverridable handle_in: 2
 
   @impl Phoenix.Socket.Transport
