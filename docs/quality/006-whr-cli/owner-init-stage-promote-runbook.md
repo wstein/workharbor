@@ -105,8 +105,7 @@ trusted project hooks may write the original workspace, as previewed.
 ## Failure and incomplete-disposal records
 
 Record the original cause, exit status, effects, residual inventory and recovery
-instructions for failed stage and failed promote. Exercise failure injection
-only through an explicitly approved disposable host scenario; hermetic fault
+instructions for failed stage and failed promote. Exercise failures in the owner-selected disposable scope; hermetic fault
 fixtures remain source evidence. A verified rollback must restore the original
 and dispose of the failed replacement/candidate artifacts. Uncertain recovery
 must report its actual retained inventory rather than imply successful rollback.
