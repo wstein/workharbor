@@ -352,3 +352,33 @@ func TestLocalStageGitAliasedWorkspaceLabelsAndPromotionMount(t *testing.T) {
 		}
 	})
 }
+
+func TestLocalStageFixtureStateRootUsesPhysicalAncestors(t *testing.T) {
+	physical, err := os.MkdirTemp("", "whr-state-fixture-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(physical) })
+	physical, err = filepath.EvalSymlinks(physical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(physical, "alias")
+	if err = os.Symlink(physical, alias); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("TMPDIR", alias)
+	_, _, ports := fixtureStagePreparation(t)
+	parent, err := filepath.EvalSymlinks(filepath.Dir(ports.StateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ports.StateRoot != filepath.Join(parent, filepath.Base(ports.StateRoot)) {
+		t.Fatalf("fixture gives forbidden aliased state path: %s", ports.StateRoot)
+	}
+	store, err := openStageStore(ports.StateRoot, "fixture-daemon", "unix:///tmp/docker.sock")
+	if err != nil {
+		t.Fatalf("fixture state root is not admitted: %v", err)
+	}
+	store.Close()
+}
