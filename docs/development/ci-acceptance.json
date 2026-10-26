@@ -1385,7 +1385,20 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteCLIRefusesBadArgumentsBeforePrepare",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteCLIInteractivePaneWarningAndDecline",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteCLIPartialResultAndErrorReason",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteJSONSchemaClosed"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteJSONSchemaClosed",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayPromoteNeedsOnlyNormalConfirmation",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayPromoteRollbackDisposesCandidate",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayFailedStageDisposesArtifacts",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayRemoveDisposesBoundCandidateWithoutVolumeFlags",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayRemoveFinishesResidualAfterContainerDeletion",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayTreeCleanupHandlesReadOnlyCloneAndSymlink",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayRemovalFailureKeepsRecordsAndReportsAttempts",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayStageFailureBeforeCandidateCanBeRemoved",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayRemovalResumesAcrossFinalRecordDeletion",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmCandidateDisposalUsesNormalConsent",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmClosesPreparedTransactionOnBackendFailure",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmThrowawayHelp",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmCandidateDisposalJSONInventory"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

@@ -161,13 +161,13 @@ jobs:
           GOTOOLCHAIN: local
         run: |
           set -euo pipefail
-          selection='^TestLocalStage(Git|Capture|Trust)'
+          selection='^Test(LocalStage(Git|Capture|Trust)|Throwaway)'
           expected=()
           while IFS= read -r name; do
-            [[ "$name" == TestLocalStage* ]] && expected+=("$name")
+            [[ "$name" == TestLocalStage* || "$name" == TestThrowaway* ]] && expected+=("$name")
           done < <(go test -list "$selection" ./internal/localdocker)
           test "${#expected[@]}" -gt 0
-          if output=$(go test -v -count=1 -timeout=240s -run "$selection" ./internal/localdocker 2>&1); then
+          if output=$(go test -v -count=1 -timeout=360s -run "$selection" ./internal/localdocker 2>&1); then
             printf '%s\n' "$output"
           else
             printf '%s\n' "$output"
