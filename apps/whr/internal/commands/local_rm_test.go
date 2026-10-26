@@ -319,3 +319,33 @@ func TestLocalRmThrowawayHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalRmCandidateDisposalJSONInventory(t *testing.T) {
+	r := removalResult()
+	r.Actions = append(r.Actions, localdocker.RemovalAction{Kind: "candidate_tree", Target: "/private/attempt", Applied: true, Attempted: true}, localdocker.RemovalAction{Kind: "candidate_records", Target: "/private/records", Attempted: true})
+	f := &removalFixture{result: r, err: exitcode.Errorf(exitcode.PathPartialFailure, "candidate records remain")}
+	n := 0
+	var options localdocker.RemovalOptions
+	g := run(t, removalHandlers(f, &n, &options), "rm", "--local", "candidate", "--yes", "--json")
+	if g.code != 73 || !strings.Contains(g.err, "candidate records remain") {
+		t.Fatalf("lost cleanup cause: %+v", g)
+	}
+	env := decodeEnvelope(t, g.stdout)
+	if err := compileSchema(t).Validate(env); err != nil {
+		t.Fatal(err)
+	}
+	actions := env["result"].(map[string]any)["actions"].([]any)
+	if len(actions) != 3 || actions[1].(map[string]any)["kind"] != "candidate_tree" || actions[1].(map[string]any)["applied"] != true || actions[2].(map[string]any)["kind"] != "candidate_records" || actions[2].(map[string]any)["applied"] != false {
+		t.Fatalf("cleanup inventory lost: %v", actions)
+	}
+	bad := actions[2].(map[string]any)
+	bad["kind"] = "arbitrary_cleanup"
+	if compileSchema(t).Validate(env) == nil {
+		t.Fatal("accepted unknown cleanup kind")
+	}
+	bad["kind"] = "candidate_records"
+	bad["private_contents"] = "secret"
+	if compileSchema(t).Validate(env) == nil {
+		t.Fatal("accepted extra cleanup field")
+	}
+}
