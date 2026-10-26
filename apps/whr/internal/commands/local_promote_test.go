@@ -302,3 +302,29 @@ func TestLocalPromoteThrowawayHelpAndFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalPromoteRollbackEffectSchema(t *testing.T) {
+	for _, action := range []string{"rename_primary", "stop_failed_primary", "retain_failed_primary", "restore_primary_name", "restart_original_primary", "unknown_rollback_action"} {
+		t.Run(action, func(t *testing.T) {
+			r := stageCLIResult()
+			r.Status = "partial"
+			r.Phase = "promoting"
+			r.Effects = []localdocker.StageEffect{{Action: action, Target: localdocker.StageTarget{Resource: r.Primary}, State: "observed"}}
+			f := &stageTransactionFixture{preview: r, result: r, err: exitcode.Errorf(exitcode.PathPartialFailure, "hook failure; original recovered")}
+			n := 0
+			var options localdocker.PromoteOptions
+			g := run(t, promoteCLIHandlers(f, &n, &options), "workspace", "promote", "--local", "primary", "--yes", "--json")
+			if g.code != 73 {
+				t.Fatalf("lost partial exit: %+v", g)
+			}
+			err := compileSchema(t).Validate(decodeEnvelope(t, g.stdout))
+			if action == "unknown_rollback_action" {
+				if err == nil {
+					t.Fatal("unknown action admitted")
+				}
+			} else if err != nil {
+				t.Fatalf("rollback effect %s: %v", action, err)
+			}
+		})
+	}
+}
