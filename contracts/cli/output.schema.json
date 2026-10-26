@@ -2247,7 +2247,12 @@
             "remove_primary",
             "create_primary",
             "remove_candidate",
-            "remove_home"
+            "remove_home",
+            "rename_primary",
+            "stop_failed_primary",
+            "retain_failed_primary",
+            "restore_primary_name",
+            "restart_original_primary"
           ]
         },
         "target": {
