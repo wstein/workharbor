@@ -74,7 +74,19 @@ Require exit 0. After removal, promotion and each failure scenario, run the same
 Also compare the primary mount listing and protected-home list with their
 before-stage files. The original home name and marker checksum must be unchanged.
 The primary container ID may change after promotion; its name/home binding must
-still match. Inspect raw data only with appropriate terminal escaping.
+still match. For example, after promotion (use another label for other scenarios):
+
+```sh
+record after-promote.marker docker exec "$WHR_PRIMARY" sh -c \
+  'cksum "$1/.whr-acceptance-marker"' sh "$WHR_HOME_PATH"
+cmp "$WHR_EVIDENCE/before-stage.home-marker" "$WHR_EVIDENCE/after-promote.marker.stdout"
+diff "$WHR_EVIDENCE/before-stage.protected-homes" "$WHR_EVIDENCE/after-promote.protected-homes"
+diff "$WHR_EVIDENCE/before-stage.primary-mounts" "$WHR_EVIDENCE/after-promote.primary-mounts"
+```
+
+Require the checksum command and comparisons to exit 0. Confirm the volume at
+`WHR_HOME_PATH` is still `WHR_PRIMARY_HOME`. Inspect raw data only with appropriate
+terminal escaping.
 
 ## 2. Check targets before confirmed mutations
 
@@ -210,22 +222,35 @@ schema for the reviewed binary, not invented sample output.
 | Doctor | Record actual exit/diagnostics; platform-specific SC-019 evidence passes only when its required checks pass. |
 
 Before a candidate exists, run these refusal cases with inventories before and
-after **each** command. `WRONG_FINGERPRINT` is a valid-length lowercase hexadecimal digest different
+after **each** command. This helper records those inventories; compare resource
+identities afterward (elapsed time in Docker's status text may change):
+
+```sh
+negative() {
+  negative_label=$1
+  shift
+  inventory "$negative_label.before"
+  record "$negative_label" "$@"
+  inventory "$negative_label.after"
+}
+```
+
+ `WRONG_FINGERPRINT` is a valid-length lowercase hexadecimal digest different
 from the fresh preview, not the actual digest:
 
 ```sh
-record no-init-consent whr workspace init "$WHR_SOURCE" --non-interactive --json
-record no-stage-trust whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --yes --json
-record no-stage-consent whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --trust "$WHR_FINGERPRINT" --json
-record wrong-stage-trust whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --trust "$WRONG_FINGERPRINT" --yes --json
+negative no-init-consent whr workspace init "$WHR_SOURCE" --non-interactive --json
+negative no-stage-trust whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --yes --json
+negative no-stage-consent whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --trust "$WHR_FINGERPRINT" --json
+negative wrong-stage-trust whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --trust "$WRONG_FINGERPRINT" --yes --json
 ```
 
 Use the chosen `--smoke` flag consistently for stage refusals too. While a verified
 candidate exists, run missing-consent checks (expect 70 and unchanged inventory):
 
 ```sh
-record no-promote-consent whr workspace promote --local "$WHR_PRIMARY" --json
-record no-remove-consent whr rm --local "$WHR_CANDIDATE" --json
+negative no-promote-consent whr workspace promote --local "$WHR_PRIMARY" --json
+negative no-remove-consent whr rm --local "$WHR_CANDIDATE" --json
 ```
 
 Also decline the terminal confirmation (`n`) for stage/remove/promote: expect 70,
