@@ -49,12 +49,13 @@ type RemovalAction struct {
 // a copy, and Apply consumes the transaction once, including on failed attempts.
 // Labels are usability guards, not an authorization boundary against Docker users.
 type Removal struct {
-	mu       sync.Mutex
-	used     bool
-	client   Client
-	endpoint string
-	options  RemovalOptions
-	plan     removalPlan
+	mu        sync.Mutex
+	used      bool
+	client    Client
+	endpoint  string
+	options   RemovalOptions
+	plan      removalPlan
+	candidate *candidateRemoval
 }
 
 func (c Client) PrepareRemoval(parent context.Context, ports doctor.Ports, options RemovalOptions) (*Removal, error) {
@@ -67,31 +68,59 @@ func (c Client) PrepareRemoval(parent context.Context, ports doctor.Ports, optio
 	if err != nil {
 		return nil, err
 	}
+	return c.prepareRemovalAtEndpoint(ctx, endpoint, options, "")
+}
+
+func (c Client) prepareRemovalAtEndpoint(ctx context.Context, endpoint string, options RemovalOptions, stateRoot string) (*Removal, error) {
 	all, err := c.removalSnapshot(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
-	plan, err := planRemoval(all, options)
+	candidate, err := c.prepareCandidateRemoval(ctx, endpoint, all, options, stateRoot)
 	if err != nil {
 		return nil, err
 	}
-	return &Removal{client: c, endpoint: endpoint, options: options, plan: plan}, nil
+	var plan removalPlan
+	if candidate != nil {
+		plan, err = candidate.removalPlan(ctx, all, options)
+	} else {
+		plan, err = planRemoval(all, options)
+	}
+	if err != nil {
+		if candidate != nil {
+			candidate.Close()
+		}
+		return nil, err
+	}
+	return &Removal{client: c, endpoint: endpoint, options: options, plan: plan, candidate: candidate}, nil
 }
 
 func (r *Removal) Preview() RemovalResult {
-	return removalResult(r.plan)
+	result := removalResult(r.plan)
+	if r.candidate != nil {
+		if r.candidate.failed != nil {
+			result.Actions = append([]RemovalAction{{Kind: "container", Target: r.candidate.failed.ID}}, result.Actions...)
+			result.Containers = append(result.Containers, RemovalContainer{ID: r.candidate.failed.ID, Name: strings.TrimPrefix(r.candidate.failed.Name, "/"), Role: "primary"})
+		}
+		result.Actions = append(result.Actions, RemovalAction{Kind: "candidate_tree", Target: r.candidate.store.operationPath(r.candidate.plan.OperationID)}, RemovalAction{Kind: "candidate_records", Target: r.candidate.plan.OperationID})
+	}
+	return result
 }
 
 func removalResult(plan removalPlan) RemovalResult {
 	result := RemovalResult{DryRun: true, PreserveHomeVolume: plan.PreserveHomeVolume, Containers: []RemovalContainer{}, Volumes: []RemovalVolume{}, PreservedHomeVolumes: []string{}, Actions: []RemovalAction{}}
 	preserved := map[string]bool{}
+	deletedVolumes := map[string]bool{}
+	for _, v := range plan.Volumes {
+		deletedVolumes[v.Name] = true
+	}
 	for _, c := range plan.Containers {
 		role, _ := workspaceRole(c.Labels)
 		result.Containers = append(result.Containers, RemovalContainer{ID: c.ID, Name: strings.TrimPrefix(c.Name, "/"), Role: role})
 		result.Actions = append(result.Actions, RemovalAction{Kind: "container", Target: c.ID})
-		if plan.PreserveHomeVolume {
+		{
 			for _, m := range c.Mounts {
-				if homeMount(m) {
+				if homeMount(m) && !deletedVolumes[m.Name] {
 					preserved[m.Name] = true
 				}
 			}
@@ -113,6 +142,7 @@ func removalResult(plan removalPlan) RemovalResult {
 		result.PreservedHomeVolumes = append(result.PreservedHomeVolumes, v)
 	}
 	sort.Strings(result.PreservedHomeVolumes)
+	result.PreserveHomeVolume = plan.PreserveHomeVolume || len(result.PreservedHomeVolumes) > 0
 	return result
 }
 
@@ -138,6 +168,9 @@ func (r *Removal) Apply(parent context.Context) (RemovalResult, error) {
 		return result, exitcode.Errorf(exitcode.PathConflict, "removal transaction already consumed; prepare a new preview")
 	}
 	r.used = true
+	if r.candidate != nil {
+		return r.applyCandidate(parent, result)
+	}
 	fail := func(cause error) (RemovalResult, error) {
 		for _, action := range result.Actions {
 			if action.Attempted {
@@ -254,4 +287,12 @@ func (c Client) mutate(ctx context.Context, endpoint string, args ...string) (re
 
 func sameRemovalContainer(a, b inspection) bool {
 	return a.ID == b.ID && a.Name == b.Name && reflect.DeepEqual(a.Labels, b.Labels) && reflect.DeepEqual(a.Mounts, b.Mounts)
+}
+
+// Close releases the candidate daemon lock on dry-run, refusal, or completion.
+func (r *Removal) Close() error {
+	if r.candidate != nil {
+		return r.candidate.Close()
+	}
+	return nil
 }

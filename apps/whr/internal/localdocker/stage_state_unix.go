@@ -25,16 +25,17 @@ type stageStore struct {
 	dir, lock *os.File
 }
 type stageRecord struct {
-	Version       int    `json:"version"`
-	OperationID   string `json:"operation_id"`
-	Sequence      int    `json:"sequence"`
-	PreviousHash  string `json:"previous_hash"`
-	Hash          string `json:"hash"`
-	State         string `json:"state"`
-	Fingerprint   string `json:"fingerprint"`
-	Action        string `json:"action"`
-	Observation   string `json:"observation"`
-	ReceiptDigest string `json:"receipt_digest"`
+	Version       int                      `json:"version"`
+	OperationID   string                   `json:"operation_id"`
+	Sequence      int                      `json:"sequence"`
+	PreviousHash  string                   `json:"previous_hash"`
+	Hash          string                   `json:"hash"`
+	State         string                   `json:"state"`
+	Fingerprint   string                   `json:"fingerprint"`
+	Action        string                   `json:"action"`
+	Observation   string                   `json:"observation"`
+	ReceiptDigest string                   `json:"receipt_digest"`
+	Cleanup       *candidateCleanupBinding `json:"cleanup,omitempty"`
 }
 
 var stageStates = []string{"planned", "allocating", "candidate_resources", "candidate_hooks", "verifying", "staged_verified"}
