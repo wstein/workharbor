@@ -58,7 +58,7 @@ func TestLocalStageReviewApplyAdmissionPreservesContext(t *testing.T) {
 }
 func fixtureStageReviewAttempt(t *testing.T, phase, action string) *LocalStage {
 	t.Helper()
-	store, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	store, err := openStageStore(filepath.Join(fixtureStageStateParent(t), "state"), "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
 	}

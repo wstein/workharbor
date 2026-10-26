@@ -15,7 +15,7 @@ import (
 )
 
 func TestLocalStageReviewSocketAliasesShareLock(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "state")
+	root := filepath.Join(fixtureStageStateParent(t), "state")
 	first, err := openStageStore(root, "daemon", "unix:///tmp/first.sock")
 	if err != nil {
 		t.Fatal(err)
