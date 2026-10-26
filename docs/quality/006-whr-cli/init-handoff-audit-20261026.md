@@ -17,9 +17,9 @@ per-path overwrite consent and selected devcontainer are handled in scaffold.
 The audited source has init/wizard/devcontainer-reuse implementations. This
 audit identifies remaining acceptance evidence, rather than inventing missing
 commands or changing settled selection/default behavior. Stage CLI is on main
-through #271. Promote CLI remains in #272 until owner merge; the owner has
-assigned throwaway cleanup to a separate Claude-authored branch. Host acceptance
-requires both implementations to be accepted and merged.
+through #271. Promote CLI remains in #272 until owner merge. Its branch now includes the
+throwaway cleanup from #274; host acceptance requires that combined #272
+implementation to be accepted and merged.
 
 ## T030 literal test index
 
