@@ -58,7 +58,7 @@ func fixtureVerifiedPromotionPolicy(t *testing.T, health, smoke bool, edit func(
 func TestLocalPromoteUsesVerifiedImage(t *testing.T) {
 	p, path, _ := fixtureVerifiedPromotion(t)
 	before := readFakePromotionState(t, path)
-	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true})
 	if err != nil || result.Status != "promoted" {
 		t.Fatalf("promote: %+v %v", result, err)
 	}
@@ -117,7 +117,7 @@ func TestLocalPromoteNeedsNoSeparateHomeDeletionConsent(t *testing.T) {
 	for _, missing := range []string{"volumes", "force"} {
 		t.Run(missing, func(t *testing.T) {
 			p, path, ports := fixtureVerifiedPromotion(t)
-			c := LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}
+			c := LifecycleConsent{Confirmed: true, Quiescence: true}
 			if missing == "volumes" {
 				c.Volumes = false
 			} else {
@@ -139,7 +139,7 @@ func TestLocalPromoteConfirmsPaneInterruption(t *testing.T) {
 	for _, missing := range []string{"confirmation", "quiescence"} {
 		t.Run(missing, func(t *testing.T) {
 			p, path, _ := fixtureVerifiedPromotion(t)
-			c := LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}
+			c := LifecycleConsent{Confirmed: true, Quiescence: true}
 			if missing == "confirmation" {
 				c.Confirmed = false
 			} else {
@@ -159,14 +159,14 @@ func TestLocalPromoteNeverBypassesProtectedHome(t *testing.T) {
 		}
 	}
 	writeFakePromotionState(t, path, state)
-	assertPromotionRefusal(t, p, path, LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}, exitcode.Conflict, "staging or temp cleanup would touch a primary home volume")
+	assertPromotionRefusal(t, p, path, LifecycleConsent{Confirmed: true, Quiescence: true}, exitcode.Conflict, "staging or temp cleanup would touch a primary home volume")
 }
 func TestLocalPromoteStaleReceiptRefuses(t *testing.T) {
 	for _, which := range []string{"original_execution", "candidate_execution", "artifact", "wrong_trust", "git_owner_ref", "candidate_native"} {
 		t.Run(which, func(t *testing.T) {
 			p, path, _ := fixtureVerifiedPromotion(t)
 			reason := ""
-			consent := LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}
+			consent := LifecycleConsent{Confirmed: true, Quiescence: true}
 			switch which {
 			case "original_execution":
 				if err := os.WriteFile(filepath.Join(p.receipt.OriginalSource, ".devcontainer/setup.sh"), []byte("changed original\n"), 0600); err != nil {
@@ -216,7 +216,7 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 			state := readFakePromotionState(t, path)
 			state.Failure = tc.failure
 			writeFakePromotionState(t, path, state)
-			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true})
 			if exitcode.FromError(err) != exitcode.PartialFailure || err == nil || !strings.Contains(err.Error(), tc.reason) || result.Status != "partial" || len(result.Recovery) == 0 {
 				t.Fatalf("partial: %+v %v", result, err)
 			}
@@ -257,7 +257,7 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 			} else if cloneErr != nil || result.RecoveryID == nil {
 				t.Fatalf("uncertain cleanup lost residual clone or receipt: %v result=%+v", cloneErr, result)
 			}
-			if _, err = p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}); exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "promotion transaction already used") {
+			if _, err = p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true}); exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "promotion transaction already used") {
 				t.Fatalf("retry: %v", err)
 			}
 		})
@@ -265,7 +265,7 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 }
 func TestLocalPromotePreservesPrimaryHome(t *testing.T) {
 	p, path, _ := fixtureVerifiedPromotion(t)
-	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +324,7 @@ func TestLocalPromoteTransfersResultsBeforeReplacingPrimary(t *testing.T) {
 			state := readFakePromotionState(t, path)
 			state.Failure = failure
 			writeFakePromotionState(t, path, state)
-			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true})
 			if failure == "" && err != nil {
 				t.Fatal(err)
 			}
@@ -422,7 +422,7 @@ func TestLocalPromoteRechecksInputsAfterHomeCleanup(t *testing.T) {
 	s := readFakePromotionState(t, path)
 	s.Failure = "cleanup_input_drift"
 	writeFakePromotionState(t, path, s)
-	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true})
 	if exitcode.FromError(err) != exitcode.PartialFailure || err == nil || !strings.Contains(err.Error(), "final promotion binding changed") || result.Status != "partial" {
 		t.Fatalf("post-cleanup drift: status=%s error=%v", result.Status, err)
 	}
@@ -472,14 +472,14 @@ func TestLocalPromoteOriginalMustMatchVerifiedExecution(t *testing.T) {
 	if err = p.store.saveReceipt(&p.receipt, false); err != nil {
 		t.Fatal(err)
 	}
-	assertPromotionRefusal(t, p, path, LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}, exitcode.Conflict, "promotion original execution inputs differ from verified candidate")
+	assertPromotionRefusal(t, p, path, LifecycleConsent{Confirmed: true, Quiescence: true}, exitcode.Conflict, "promotion original execution inputs differ from verified candidate")
 }
 
 func TestLocalPromoteHonorsVerifiedHealthAndSmokePolicy(t *testing.T) {
 	for _, smoke := range []bool{false, true} {
 		t.Run(map[bool]string{false: "health_only", true: "health_and_smoke"}[smoke], func(t *testing.T) {
 			p, path, _ := fixtureVerifiedPromotionPolicy(t, true, smoke, nil)
-			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true})
 			if err != nil || result.Status != "promoted" {
 				t.Fatalf("health promotion: %s %v", result.Status, err)
 			}

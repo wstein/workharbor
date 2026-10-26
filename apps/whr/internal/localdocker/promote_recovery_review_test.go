@@ -15,7 +15,7 @@ import (
 )
 
 func reviewPromotionConsent() LifecycleConsent {
-	return LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}
+	return LifecycleConsent{Confirmed: true, Quiescence: true}
 }
 
 func requireRecoveryStopped(t *testing.T, p *LocalPromotion, path string, result LifecycleResult, err error, reason string) {
