@@ -98,7 +98,7 @@ func (c Client) prepareRemovalAtEndpoint(ctx context.Context, endpoint string, o
 func (r *Removal) Preview() RemovalResult {
 	result := removalResult(r.plan)
 	if r.candidate != nil {
-		if r.candidate.failed != nil {
+		if r.candidate.failed != nil && r.candidate.failedPresent {
 			result.Actions = append([]RemovalAction{{Kind: "container", Target: r.candidate.failed.ID}}, result.Actions...)
 			result.Containers = append(result.Containers, RemovalContainer{ID: r.candidate.failed.ID, Name: strings.TrimPrefix(r.candidate.failed.Name, "/"), Role: "primary"})
 		}
