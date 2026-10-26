@@ -4,6 +4,7 @@ package commands_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/commands"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker"
@@ -13,11 +14,14 @@ import (
 )
 
 type removalFixture struct {
-	result  localdocker.RemovalResult
-	applies int
-	err     error
+	result   localdocker.RemovalResult
+	applies  int
+	closes   int
+	err      error
+	closeErr error
 }
 
+func (f *removalFixture) Close() error                       { f.closes++; return f.closeErr }
 func (f *removalFixture) Preview() localdocker.RemovalResult { return f.result }
 func (f *removalFixture) Apply(context.Context) (localdocker.RemovalResult, error) {
 	f.applies++
@@ -235,5 +239,83 @@ func TestLocalRmConfirmationCancellationAndDeadline(t *testing.T) {
 				t.Fatalf("code %d, want %d; prepares=%d applies=%d: %s", code, tc.code, n, f.applies, diag.String())
 			}
 		})
+	}
+}
+
+func TestLocalRmCandidateDisposalUsesNormalConsent(t *testing.T) {
+	for _, mode := range []string{"preview", "yes", "prompt", "decline", "volumes-without-force"} {
+		t.Run(mode, func(t *testing.T) {
+			r := removalResult()
+			r.PreserveHomeVolume = false
+			r.PreservedHomeVolumes = []string{}
+			r.Containers[0].Role = "staging"
+			r.Volumes = []localdocker.RemovalVolume{{Name: "candidate-home", Mounts: []localdocker.RemovalMount{}}}
+			r.Actions = append(r.Actions, localdocker.RemovalAction{Kind: "volume", Target: "candidate-home"}, localdocker.RemovalAction{Kind: "candidate_tree", Target: "/private/attempt\x1b\nforged"}, localdocker.RemovalAction{Kind: "candidate_records", Target: "/private/records"})
+			f := &removalFixture{result: r}
+			n := 0
+			var options localdocker.RemovalOptions
+			var out, diag bytes.Buffer
+			args := []string{"rm", "--local", "candidate", "--no-color"}
+			answer := "yes\n"
+			interactive := mode == "prompt" || mode == "decline"
+			switch mode {
+			case "preview":
+				args = append(args, "--dry-run")
+			case "yes":
+				args = append(args, "--yes")
+			case "decline":
+				answer = "no\n"
+			case "volumes-without-force":
+				args = append(args, "--volumes", "--yes")
+			}
+			code := commands.Execute(context.Background(), args, commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(answer), InputTerminal: interactive, IsTerminal: func(io.Writer) bool { return true }}, removalHandlers(f, &n, &options))
+			want, applies := 0, 1
+			if mode == "preview" {
+				applies = 0
+			}
+			if mode == "decline" {
+				want, applies = 70, 0
+			}
+			if code != want || f.applies != applies || n != 1 || f.closes != 1 {
+				t.Fatalf("code=%d prepare=%d fixture=%+v stdout=%q stderr=%q", code, n, f, out.String(), diag.String())
+			}
+			if options.Force || options.Volumes != (mode == "volumes-without-force") {
+				t.Fatalf("manufactured deletion flags: %+v", options)
+			}
+			preview := out.String()
+			if interactive {
+				preview = diag.String()
+			}
+			for _, part := range []string{"candidate container", "candidate home", "clone/result tree", "receipts, journals and private metadata", "unfetched commits", "uncommitted clone work", "/private/attempt<U+001B><U+000A>forged"} {
+				if !strings.Contains(preview, part) {
+					t.Fatalf("preview lacks %q: %q", part, preview)
+				}
+			}
+			if interactive && strings.Count(diag.String(), "[y/N]") != 1 {
+				t.Fatal("expected exactly one confirmation")
+			}
+			if mode == "decline" && !strings.Contains(diag.String(), "removal was not confirmed") {
+				t.Fatalf("missing refusal reason: %q", diag.String())
+			}
+		})
+	}
+}
+
+func TestLocalRmClosesPreparedTransactionOnBackendFailure(t *testing.T) {
+	f := &removalFixture{result: removalResult(), err: exitcode.Errorf(exitcode.PathPartialFailure, "volume remains"), closeErr: fmt.Errorf("lock cleanup\x1b")}
+	n := 0
+	var options localdocker.RemovalOptions
+	g := run(t, removalHandlers(f, &n, &options), "rm", "--local", "candidate", "--yes")
+	if g.code != 73 || f.closes != 1 || !strings.Contains(g.err, "volume remains") || !strings.Contains(g.err, "preparation cleanup: lock cleanup<U+001B>") || strings.Contains(g.err, "\x1b") {
+		t.Fatalf("cleanup/cause lost: %+v closes=%d", g, f.closes)
+	}
+}
+
+func TestLocalRmThrowawayHelp(t *testing.T) {
+	g := run(t, nil, "rm", "--help")
+	for _, part := range []string{"--volumes", "--force", "candidate container", "candidate home", "clone/result tree", "receipts, journals and private metadata", "uncommitted clone work", "unfetched commits"} {
+		if g.code != 0 || !strings.Contains(g.stdout, part) {
+			t.Fatalf("help lacks %q: %+v", part, g)
+		}
 	}
 }

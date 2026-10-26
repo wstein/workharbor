@@ -61,7 +61,7 @@ func TestLocalPromoteCLIConsentAndPreview(t *testing.T) {
 		var o localdocker.PromoteOptions
 		var out, diag bytes.Buffer
 		env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader("yes\n"), InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
-		code := commands.Execute(context.Background(), []string{"workspace", "promote", "--local", "--volumes", "--force", "--json", "primary"}, env, promoteCLIHandlers(f, &n, &o))
+		code := commands.Execute(context.Background(), []string{"workspace", "promote", "--local", "--json", "primary"}, env, promoteCLIHandlers(f, &n, &o))
 		if code != 70 || !strings.Contains(diag.String(), "--yes") || strings.Contains(diag.String(), "[y/N]") || n != 0 || f.applies != 0 {
 			t.Fatalf("code=%d diag=%q prepare=%d", code, diag.String(), n)
 		}
@@ -81,7 +81,7 @@ func TestLocalPromoteCLIConsentAndPreview(t *testing.T) {
 			if mode == "preview" {
 				args = append(args, "--dry-run")
 			} else {
-				args = append(args, "--volumes", "--force", "--yes")
+				args = append(args, "--yes")
 			}
 			if mode == "partial" {
 				f.result.Status = "partial"
@@ -102,12 +102,12 @@ func TestLocalPromoteCLIConsentAndPreview(t *testing.T) {
 			if !strings.Contains(diag.String(), "backend diagnostic") || strings.Contains(out.String(), "backend diagnostic") {
 				t.Fatal("diagnostic stream lost")
 			}
-			for _, part := range []string{"status: ", "exec sessions", "The original primary home is never a cleanup target", "Trusted container hooks may write the original workspace"} {
+			for _, part := range []string{"status: ", "exec sessions", "The original primary home is never a cleanup target", "Trusted container hooks may write the original workspace", "candidate container", "candidate home", "clone/result tree", "receipts, journals and private metadata", "uncommitted clone work", "unfetched commits"} {
 				if !strings.Contains(out.String(), part) {
 					t.Fatalf("missing %q: %q", part, out.String())
 				}
 			}
-			if mode == "preview" && (!strings.Contains(out.String(), "Apply requires explicit --volumes and --force, plus confirmation or --yes") || f.applies != 0) {
+			if mode == "preview" && (!strings.Contains(out.String(), "Apply requires confirmation or --yes") || f.applies != 0) {
 				t.Fatal(out.String())
 			}
 			if mode != "preview" && (f.applies != 1 || strings.Contains(diag.String(), "[y/N]")) {
@@ -127,13 +127,12 @@ func TestLocalPromoteCLIConsentAndPreview(t *testing.T) {
 		prepare, apply bool
 	}{
 		{"preview", []string{"--dry-run"}, 0, "", true, false},
-		{"preview-force-alone", []string{"--dry-run", "--force"}, 0, "", true, false},
-		{"preview-full-flags", []string{"--dry-run", "--volumes", "--force"}, 0, "", true, false},
-		{"preview-volumes-alone", []string{"--dry-run", "--volumes"}, 70, "--force", false, false},
-		{"yes-not-volumes", []string{"--yes"}, 70, "--volumes", false, false},
-		{"yes-not-force", []string{"--yes", "--volumes"}, 70, "--force", false, false},
-		{"missing-confirmation", []string{"--volumes", "--force"}, 70, "--yes", false, false},
-		{"apply", []string{"--volumes", "--force", "--yes"}, 0, "", true, true},
+		{"obsolete-force", []string{"--dry-run", "--force"}, 64, "unknown flag: --force", false, false},
+		{"obsolete-volumes", []string{"--dry-run", "--volumes"}, 64, "unknown flag: --volumes", false, false},
+		{"obsolete-apply-force", []string{"--yes", "--force"}, 64, "unknown flag: --force", false, false},
+		{"obsolete-apply-volumes", []string{"--yes", "--volumes"}, 64, "unknown flag: --volumes", false, false},
+		{"missing-confirmation", nil, 70, "--yes", false, false},
+		{"apply", []string{"--yes"}, 0, "", true, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := stageCLIResult()
@@ -154,7 +153,7 @@ func TestLocalPromoteCLIConsentAndPreview(t *testing.T) {
 			if g.code != tc.code || !strings.Contains(g.err, tc.reason) || n != wantCount(tc.prepare) || f.applies != wantCount(tc.apply) || f.closes != wantCount(tc.prepare) {
 				t.Fatalf("wrong consent/preview/reason: %+v prepare=%d fixture=%+v", g, n, f)
 			}
-			if tc.apply && (!f.consent.Volumes || !f.consent.Force || !f.consent.Confirmed || !f.consent.Quiescence || f.consent.TrustDigest != "") {
+			if tc.apply && (f.consent.Volumes || f.consent.Force || !f.consent.Confirmed || !f.consent.Quiescence || f.consent.TrustDigest != "") {
 				t.Fatalf("wrong deletion consent: %+v", f.consent)
 			}
 			if tc.prepare && o.Target != "primary" {
@@ -187,7 +186,7 @@ func TestLocalPromoteCLIInteractivePaneWarningAndDecline(t *testing.T) {
 			var o localdocker.PromoteOptions
 			var out, diag bytes.Buffer
 			env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(answer), InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
-			code := commands.Execute(context.Background(), []string{"ws", "promote", "--local", "--volumes", "--force", "--no-color", "primary"}, env, promoteCLIHandlers(f, &n, &o))
+			code := commands.Execute(context.Background(), []string{"ws", "promote", "--local", "--no-color", "primary"}, env, promoteCLIHandlers(f, &n, &o))
 			want := 70
 			if strings.ToLower(strings.TrimSpace(answer)) == "yes" && strings.HasSuffix(answer, "\n") || strings.TrimSpace(answer) == "Y" {
 				want = 0
@@ -195,10 +194,16 @@ func TestLocalPromoteCLIInteractivePaneWarningAndDecline(t *testing.T) {
 			if code != want || f.closes != 1 || f.applies != map[bool]int{true: 1, false: 0}[want == 0] {
 				t.Fatalf("code=%d diag=%q applies=%d", code, diag.String(), f.applies)
 			}
-			for _, part := range []string{"shell", "exec sessions", "The original primary home is never a cleanup target", "Trusted container hooks may write the original workspace", "Pause input writers"} {
+			for _, part := range []string{"shell", "exec sessions", "The original primary home is never a cleanup target", "Trusted container hooks may write the original workspace", "Pause input writers", "candidate container", "candidate home", "clone/result tree", "receipts, journals and private metadata", "uncommitted clone work", "unfetched commits"} {
 				if !strings.Contains(diag.String(), part) {
 					t.Fatalf("missing preview warning %q: %q", part, diag.String())
 				}
+			}
+			if strings.Count(diag.String(), "[y/N]") != 1 {
+				t.Fatalf("expected one normal confirmation: %q", diag.String())
+			}
+			if code == 70 && !strings.Contains(diag.String(), "confirmation") {
+				t.Fatalf("missing refusal reason: %q", diag.String())
 			}
 			if strings.ContainsAny(diag.String()+out.String(), "\x1b\r") || strings.Contains(diag.String(), "\nforged") {
 				t.Fatal("unescaped metadata")
@@ -219,7 +224,7 @@ func TestLocalPromoteCLIPartialResultAndErrorReason(t *testing.T) {
 	f := &stageTransactionFixture{preview: p, result: r, err: exitcode.Errorf(exitcode.PathPartialFailure, "replacement failed; original recovered").WithRemediation("inspect retained candidate")}
 	n := 0
 	var o localdocker.PromoteOptions
-	g := run(t, promoteCLIHandlers(f, &n, &o), "workspace", "promote", "--local", "--volumes", "--force", "--yes", "primary", "--json")
+	g := run(t, promoteCLIHandlers(f, &n, &o), "workspace", "promote", "--local", "--yes", "primary", "--json")
 	env := decodeEnvelope(t, g.stdout)
 	failure := env["error"].(map[string]any)
 	result, present := env["result"].(map[string]any)
@@ -276,5 +281,24 @@ func TestLocalPromoteJSONSchemaClosed(t *testing.T) {
 				t.Fatal("open promote schema", kind)
 			}
 		})
+	}
+}
+
+func TestLocalPromoteThrowawayHelpAndFlags(t *testing.T) {
+	for _, entry := range commands.Table() {
+		if entry.ID == "workspace.promote" && strings.Join(entry.Flags, ",") != "--local,--dry-run,--yes,--json" {
+			t.Fatalf("obsolete promote flags: %+v", entry)
+		}
+	}
+	for _, group := range []string{"workspace", "ws"} {
+		got := run(t, nil, group, "promote", "--help")
+		if got.code != 0 || strings.Contains(got.stdout, "--volumes") || strings.Contains(got.stdout, "--force") {
+			t.Fatalf("promote help: %+v", got)
+		}
+		for _, part := range []string{"--local", "--dry-run", "--yes", "candidate container", "candidate home", "clone/result tree", "receipts, journals and private metadata", "uncommitted clone work", "unfetched commits"} {
+			if !strings.Contains(got.stdout, part) {
+				t.Fatalf("help lacks %q: %q", part, got.stdout)
+			}
+		}
 	}
 }
