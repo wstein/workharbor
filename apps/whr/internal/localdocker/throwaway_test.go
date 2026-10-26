@@ -435,3 +435,54 @@ func TestThrowawayRemovalResumesAcrossFinalRecordDeletion(t *testing.T) {
 		})
 	}
 }
+
+func TestThrowawayEarlyCreatedCandidateResidual(t *testing.T) {
+	c, opts, ports, path := fixtureStageLifecycle(t, false)
+	opts.Smoke = true
+	state := readFakeStageState(t, path)
+	state.UpReturnsPrimary = true
+	state.CleanupFailure = "container"
+	data, err := stageArtifactBytes(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if exitcode.FromError(err) != exitcode.PartialFailure || result.Candidate.ID != nil {
+		t.Fatalf("want failed up before ID binding: result=%+v err=%v", result, err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	state = readFakeStageState(t, path)
+	if state.Candidate == nil {
+		t.Fatal("probe did not leave the created candidate")
+	}
+	state.CleanupFailure = ""
+	data, err = stageArtifactBytes(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := ports.Endpoint(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: "whr-anchorage-staging"}, ports.StateRoot)
+	if err != nil {
+		t.Fatalf("normal confirmed removal cannot resume receipt-bound created candidate: %v", err)
+	}
+	defer tx.Close()
+	if _, err = tx.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	assertNoCandidateRecords(t, ports.StateRoot)
+}
