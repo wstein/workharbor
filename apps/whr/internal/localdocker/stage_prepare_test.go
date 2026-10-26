@@ -69,7 +69,11 @@ func fixtureStagePreparationNamed(t *testing.T, basename string) (Client, StageO
 	if e != nil {
 		t.Fatal(e)
 	}
-	p := stagePreparationPorts{Endpoint: func(context.Context) (string, error) { return "unix://" + socket, nil }, Tools: map[string]string{"docker": docker, "node": node, "devcontainer": cli, "git": git, "sh": sh, "bash": bash}, StateRoot: filepath.Join(t.TempDir(), "absent-state"), MountAdmission: func(context.Context, stageDaemonInfo, inspection, string) error { return nil }}
+	stateParent, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := stagePreparationPorts{Endpoint: func(context.Context) (string, error) { return "unix://" + socket, nil }, Tools: map[string]string{"docker": docker, "node": node, "devcontainer": cli, "git": git, "sh": sh, "bash": bash}, StateRoot: filepath.Join(stateParent, "absent-state"), MountAdmission: func(context.Context, stageDaemonInfo, inspection, string) error { return nil }}
 	return Client{Executable: docker}, StageOptions{Source: source, Target: "primary"}, p
 }
 
