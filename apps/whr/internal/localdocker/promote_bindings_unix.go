@@ -83,7 +83,7 @@ func (p *LocalPromotion) checkArtifactsAndBindings(ctx context.Context, metadata
 	}
 	// The complete FR-067 plan is inspected even when preview supplies no deletion
 	// flags. It authorizes no mutation; Apply separately requires explicit consent.
-	plan, err := planRemoval(metadata.Containers, RemovalOptions{Target: *p.receipt.Candidate.ID, Volumes: true, Force: true})
+	plan, err := planRemovalWithCandidate(metadata.Containers, RemovalOptions{Target: *p.receipt.Candidate.ID}, p.homePlan.Mount.Name)
 	if err != nil {
 		return err
 	}

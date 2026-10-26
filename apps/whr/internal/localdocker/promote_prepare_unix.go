@@ -54,6 +54,8 @@ type LocalPromotion struct {
 	originalRetained, originalRemoved        bool
 	rollbackEligible, rollbackRestored       bool
 	rollbackFailure                          error
+	candidateDisposed                        bool
+	disposalStarted                          bool
 }
 
 func (c Client) PreparePromotion(ctx context.Context, options PromoteOptions) (LifecycleTransaction, error) {
@@ -325,11 +327,11 @@ func (p *LocalPromotion) disclose() {
 	if p.options.Diagnostics == nil {
 		return
 	}
-	fmt.Fprintln(p.options.Diagnostics, "Promotion stops and renames the original primary, terminating all its exec sessions including shell panes. Its writable layer is retained until the replacement passes verification; a known hook/smoke failure permits bounded resource recovery only after fresh safety checks; uncertain effects require owner recovery. Failed replacement writable layers are retained. The original primary home is preserved; candidate home cleanup retains the writable project clone.")
+	fmt.Fprintln(p.options.Diagnostics, "Promotion stops and renames the original primary, terminating all its exec sessions including shell panes. Its writable layer is retained until the replacement passes verification; a known hook/smoke failure permits bounded resource recovery only after fresh safety checks; uncertain effects require owner recovery. After successful rollback, remove the failed replacement and all candidate artifacts. The original primary home is preserved; successful promotion disposes of the candidate container, fresh home, clone/results and records last.")
 	fmt.Fprintf(p.options.Diagnostics, "Pause ordinary input writers throughout every phase. Trusted container hooks have read-write access to original workspace %s, admitted mounts and container network; hashes do not freeze paths or inventory all hook writes.\n", terminal.Escape(p.receipt.OriginalSource))
 	fmt.Fprintln(p.options.Diagnostics, "Promotion runs no host initialization and uses only the verified immutable image; source container hooks retain their original origins/order, with postAttach suppressed because this command does not attach.")
 	fmt.Fprintf(p.options.Diagnostics, "Original container recovery name: %s; original full ID: %s.\n", p.retainedPrimaryName(), p.primaryObservation.ID)
-	fmt.Fprintln(p.options.Diagnostics, "Apply requires explicit --volumes --force and fresh confirmation/--yes. Frozen Git results are available for owner integration, not automatically active original working-tree code.")
+	fmt.Fprintln(p.options.Diagnostics, "Apply requires fresh confirmation/--yes. Result refs are fetched into the original before clone disposal, for owner integration rather than automatic working-tree activation.")
 	for _, key := range stageLifecycleHooks {
 		if _, ok := p.sourceConfig[key]; ok {
 			fmt.Fprintf(p.options.Diagnostics, "container hook %s: trusted source origin; contents remain private.\n", key)

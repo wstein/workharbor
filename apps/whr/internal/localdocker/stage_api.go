@@ -19,8 +19,9 @@ type PromoteOptions struct {
 }
 
 // LifecycleConsent contains explicit caller decisions. Confirmed acknowledges
-// the disclosed pause-writers condition; neither it nor TrustDigest supplies
-// the independent home-deletion flags.
+// the disclosed pause-writers condition. TrustDigest remains independent of
+// confirmation. Volumes and Force are legacy fields, ignored by new-candidate
+// disposal; they are never synthesized as consent.
 type LifecycleConsent struct {
 	TrustDigest                           string
 	Confirmed, Volumes, Force, Quiescence bool

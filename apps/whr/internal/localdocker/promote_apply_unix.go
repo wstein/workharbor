@@ -25,8 +25,8 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	}
 	p.applied = true
 	refuse := func(err error) (LifecycleResult, error) { p.result.Status = "refused"; return p.Preview(), err }
-	if !consent.Confirmed || !consent.Volumes || !consent.Force || !consent.Quiescence {
-		return refuse(exitcode.Errorf(exitcode.PathHumanDecisionMissing, "local promote requires explicit home deletion consent, force, pane interruption confirmation and quiescence acknowledgement"))
+	if !consent.Confirmed || !consent.Quiescence {
+		return refuse(exitcode.Errorf(exitcode.PathHumanDecisionMissing, "local promote requires pane interruption confirmation and quiescence acknowledgement"))
 	}
 	if consent.TrustDigest != "" && consent.TrustDigest != p.receipt.TrustDigest {
 		return refuse(stageConflict("promotion source trust differs from verified receipt"))
@@ -46,8 +46,8 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 		return refuse(stageConflict("promotion effect inventory quota"))
 	}
 	p.stageEffects = append([]StageEffect{}, p.receipt.ActionInventory...)
-	p.receipt.ConsentFlags.Volumes = true
-	p.receipt.ConsentFlags.Force = true
+	p.receipt.ConsentFlags.Volumes = false
+	p.receipt.ConsentFlags.Force = false
 	p.receipt.ConsentFlags.Confirmation = true
 	p.receipt.ConsentFlags.Quiescence = true
 	p.receipt.ExportedRefs = p.result.ResultRefs
@@ -256,7 +256,7 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	if err = p.checkBeforePhase(ctx, false); err != nil {
 		return p.partial("candidate cleanup recheck failed", err)
 	}
-	if err = p.resourceEffect(ctx, "remove_candidate", p.receipt.Candidate, 30*time.Second, []string{"container", "rm", "--force", "--", p.candidateObservation.ID}, func() error { return p.requireContainerAbsent(ctx, p.candidateObservation.ID) }); err != nil {
+	if err = p.resourceEffect(ctx, "remove_candidate", p.receipt.Candidate, 30*time.Second, []string{"container", "rm", "--force", "--volumes", "--", p.candidateObservation.ID}, func() error { return p.requireContainerAbsent(ctx, p.candidateObservation.ID) }); err != nil {
 		return p.partial("candidate removal failed or uncertain", err)
 	}
 	if err = p.transition("candidate_removed"); err != nil {
@@ -290,6 +290,16 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	if err = p.transition("complete"); err != nil {
 		return p.partial("promotion completion publication failed", err)
 	}
+	disposal := candidateDisposal{store: p.store, runner: p.runner, endpoint: p.endpoint, receipt: &p.receipt, plan: p.homePlan}
+	p.disposalStarted = true
+	if err = disposal.begin(); err != nil {
+		return p.partial("candidate cleanup record binding failed", err)
+	}
+	if err = p.store.discardCandidateFiles(p.receipt.OperationID); err != nil {
+		return p.partial("candidate clone/results or records cleanup incomplete", err)
+	}
+	p.candidateDisposed = true
+	p.result.RecoveryID = nil
 	p.result.Status = "promoted"
 	p.result.Phase = "complete"
 	return p.Preview(), nil
@@ -406,6 +416,9 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 	if p.rollbackEligible {
 		p.rollbackEligible = false
 		p.rollbackFailure = p.restoreOriginalResource()
+		if p.rollbackFailure == nil && p.rollbackRestored {
+			p.rollbackFailure = p.disposeAfterRollback()
+		}
 	}
 	p.result.Status = "partial"
 	for i := range p.result.Effects {
@@ -426,14 +439,20 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 	} else if !p.rollbackRestored {
 		recovery += " The original container has not been intentionally removed. Inspect its stopped/renamed state and any replacement first. Before the owner renames/starts that exact original, stop any replacement using its home and release the original name. An unconfirmed remove result still requires inspection; do not assume rollback."
 	}
-	if p.rollbackRestored {
+	if p.rollbackRestored && !p.candidateDisposed {
 		recovery += " Bounded resource recovery: original container restored under its original name and observed running; failed replacement retained stopped as " + p.failedPrimaryName() + ". Shared workspace/home writes, imported objects/refs and terminated sessions were not restored."
 	} else if p.rollbackFailure != nil {
 		recovery += " Resource recovery stopped: " + terminal.Escape(p.rollbackFailure.Error()) + ". Inspect both full IDs before any manual action."
 	}
+	if p.candidateDisposed {
+		recovery = "Bounded resource recovery: original container restored under its original name and observed running. Failed replacement, candidate container, fresh home, clone/results and candidate records were removed. Shared workspace/home hook writes, imported objects/refs and terminated sessions were not restored."
+		p.result.RecoveryID = nil
+	}
 	p.result.Recovery = []StageRecoveryStep{{Action: "owner_reconcile", Instruction: recovery}}
 
-	_ = p.save()
+	if !p.candidateDisposed && !p.disposalStarted {
+		_ = p.save()
+	}
 	err := exitcode.Errorf(exitcode.PathPartialFailure, "local promote %s: %s; retained inventory requires owner reconciliation", reason, terminal.Escape(promotionCause(errors.Join(cause, p.rollbackFailure))))
 	err.Result = p.Preview()
 	return p.Preview(), err

@@ -26,7 +26,30 @@ func (c Client) PrepareStage(ctx context.Context, options StageOptions) (Lifecyc
 	return c.prepareStage(ctx, options, p)
 }
 
-func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (LifecycleResult, error) {
+func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (result LifecycleResult, failure error) {
+	ownedAttempt := false
+	defer func() {
+		if !ownedAttempt || failure == nil || s.store == nil || s.receipt == nil {
+			return
+		}
+		cleanup, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		defer cancel()
+		disposal := candidateDisposal{store: s.store, runner: s.runner, endpoint: s.endpoint, receipt: s.receipt, plan: s.homeIntent.Plan(), observe: func(action string, target *StageResource, state string) {
+			recordCleanupEffect(&s.result.Effects, action, target, state)
+		}}
+		if err := disposal.dispose(cleanup); err != nil {
+			s.result.Recovery = append(s.result.Recovery, StageRecoveryStep{Action: "owner_reconcile", Instruction: disposal.residual(err)})
+		} else {
+			s.result.RecoveryID = nil
+			s.result.Recovery = []StageRecoveryStep{{Action: "restage_after_cleanup", Instruction: "Candidate container, fresh home, clone/results and operation records were removed. The execution failure remains; hooks may have effects outside these artifacts."}}
+		}
+		result = s.Preview()
+		var coded *exitcode.Error
+		if errors.As(failure, &coded) {
+			coded.Result = result
+		}
+	}()
+
 	if s.applied || s.closed {
 		return s.Preview(), stageConflict("transaction already used")
 	}
@@ -84,6 +107,7 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (Li
 	}
 	s.result.RecoveryID = stageString(filepath.Base(store.path) + "/" + s.operationID)
 	s.receipt = s.initialStageReceipt(consent)
+	ownedAttempt = true
 	plan := s.homeIntent.Plan()
 	s.settings = stageSettings{HomePlanDigest: stageDigest(plan), SmokeDigest: s.smokeDigest, ExecutionPaths: []string{}}
 	s.execution = stageExecutionBinding{SettingsDigest: stageDigest(s.settings), GitInputs: []stageExecutionGitInput{}}
