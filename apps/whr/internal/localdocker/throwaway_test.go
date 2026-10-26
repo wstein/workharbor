@@ -109,3 +109,41 @@ func TestThrowawayFailedStageDisposesArtifacts(t *testing.T) {
 		})
 	}
 }
+
+func TestThrowawayRemoveDisposesBoundCandidateWithoutVolumeFlags(t *testing.T) {
+	c, opts, ports, path := fixtureStageLifecycle(t, false)
+	opts.Smoke = true
+	s, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := ports.Endpoint(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: *staged.Candidate.ID}, ports.StateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Close()
+	preview := tx.Preview()
+	if preview.PreserveHomeVolume || len(preview.Volumes) != 1 || len(preview.Actions) != 4 {
+		t.Fatalf("disposal preview: %+v", preview)
+	}
+	result, err := tx.Apply(context.Background())
+	if err != nil {
+		t.Fatalf("remove: %+v %v", result, err)
+	}
+	state := readFakeStageState(t, path)
+	if state.Candidate != nil || state.Volume != nil || state.Primary["Running"] != true {
+		t.Fatalf("remove did not isolate candidate resources")
+	}
+	assertNoCandidateRecords(t, ports.StateRoot)
+}
