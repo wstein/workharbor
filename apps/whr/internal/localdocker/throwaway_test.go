@@ -147,3 +147,44 @@ func TestThrowawayRemoveDisposesBoundCandidateWithoutVolumeFlags(t *testing.T) {
 	}
 	assertNoCandidateRecords(t, ports.StateRoot)
 }
+
+func TestThrowawayRemoveFinishesResidualAfterContainerDeletion(t *testing.T) {
+	c, opts, ports, path := fixtureStageLifecycle(t, false)
+	opts.Smoke = true
+	s, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	state := readFakeStageState(t, path)
+	state.Candidate = nil
+	data, err := stageArtifactBytes(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := ports.Endpoint(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: *result.Candidate.ID}, ports.StateRoot)
+	if err != nil {
+		t.Fatalf("receipt-bound residual removal: %v", err)
+	}
+	defer tx.Close()
+	if _, err = tx.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if state = readFakeStageState(t, path); state.Volume != nil || state.Primary["Running"] != true {
+		t.Fatal("residual cleanup did not isolate the candidate")
+	}
+	assertNoCandidateRecords(t, ports.StateRoot)
+}
