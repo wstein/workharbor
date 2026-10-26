@@ -388,20 +388,65 @@ defmodule WorkHarborWeb.OwnerShellTest do
   end
 
   test "read only page source excludes domain persistence raw HTML and event pushes" do
-    for name <- ["owner_auth.ex", "overview_live.ex"] do
+    for name <- ["owner_auth.ex", "overview_live.ex", "hosts_live.ex"] do
       path = Path.expand("../../lib/workharbor_web/live/" <> name, __DIR__)
       assert File.regular?(path), "the read-only shell requires #{name}"
-      source = File.read!(path)
-      # Domain module references are forbidden; visible headings such as "Hosts" are text.
-      refute source =~ ~r/\b(Repo|Hosts|Foundation|ConfigTrust|HostConnections)\s*\./
-
-      refute source =~
-               ~r/\b(alias|import|use)\s+WorkHarbor\.(\{[^}]*\b)?(Repo|Hosts|Foundation|ConfigTrust|HostConnections)\b/
-
-      refute source =~ ~r/\braw\s*\(|\|>\s*raw\b|\{\s*:safe\s*,/
-      refute source =~ ~r/Accounts\.(revoke|deny|bootstrap|login|issue_dashboard)\s*\(/
-      refute source =~ ~r/\b(push_event|JS\.push)\s*\(/
+      assert_read_only_source(File.read!(path), name)
     end
+  end
+
+  test "hosts page source guard rejects every nonallowlisted context call" do
+    source = File.read!(Path.expand("../../lib/workharbor_web/live/hosts_live.ex", __DIR__))
+
+    for call <- [
+          "Hosts.revoke",
+          "Hosts.status",
+          "Accounts.authorize",
+          "Accounts.revoke",
+          "Repo.query!",
+          "Foundation.accept",
+          "ConfigTrust.approve",
+          "HostConnections.host_state"
+        ] do
+      changed = String.replace(source, "Hosts.list_status", call)
+
+      assert_raise ExUnit.AssertionError, fn ->
+        assert_read_only_source(changed, "hosts_live.ex")
+      end
+    end
+  end
+
+  defp assert_read_only_source(source, name) do
+    context_source =
+      if name == "hosts_live.ex",
+        do: String.replace(source, "alias WorkHarbor.{Accounts, Hosts}", ""),
+        else: source
+
+    for [_, module, function] <-
+          Regex.scan(
+            ~r/\b(Repo|Hosts|Foundation|ConfigTrust|HostConnections|Accounts)\s*\.\s*([a-zA-Z_][a-zA-Z_0-9!?]*)/,
+            source
+          ) do
+      allowed =
+        case name do
+          "hosts_live.ex" -> [{"Hosts", "list_status"}, {"Accounts", "now"}]
+          "owner_auth.ex" -> [{"Accounts", "authenticate"}, {"Accounts", "authorize"}]
+          _ -> []
+        end
+
+      assert {module, function} in allowed, "#{name} forbids #{module}.#{function}"
+    end
+
+    refute context_source =~
+             ~r/\b(alias|import|use)\s+WorkHarbor\.(\{[^}]*\b)?(Repo|Hosts|Foundation|ConfigTrust|HostConnections)\b/
+
+    if name == "hosts_live.ex" do
+      refute context_source =~ ~r/\b(alias|import|use)\s+WorkHarbor\.(\{[^}]*\b)?Accounts\b/
+      refute source =~ ~r/\bapply\s*\(/
+    end
+
+    refute source =~ ~r/\braw\s*\(|\|>\s*raw\b|\{\s*:safe\s*,/
+    refute source =~ ~r/\b(push_event|JS\.push)\s*\(/
   end
 
   defp mount_shell(conn) do
