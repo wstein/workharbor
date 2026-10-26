@@ -376,7 +376,7 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 	case "container:rm":
 		id := args[len(args)-1]
 		if state.Candidate != nil && state.Candidate["Id"] == id {
-			if state.Failure == "candidate_rm" {
+			if state.Failure == "candidate_rm" || state.CleanupFailure == "container" {
 				os.Exit(104)
 			}
 			state.Candidate = nil
@@ -392,6 +392,9 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 				state.Failed = map[string]any{"Id": strings.Repeat("f", 64), "Name": "/late-sharing", "State": "exited", "Labels": map[string]string{}, "Mounts": []map[string]any{{"Type": "volume", "Name": state.Volume.Name, "Source": state.Volume.Name, "Destination": "/foreign", "RW": true}}}
 			}
 		} else if state.Failed != nil && state.Failed["Id"] == id {
+			if state.CleanupFailure == "failed" {
+				os.Exit(104)
+			}
 			state.Failed = nil
 		} else if state.Primary != nil && state.Primary["Id"] == id {
 			state.Primary = nil
