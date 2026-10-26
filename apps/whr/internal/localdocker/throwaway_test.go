@@ -454,8 +454,8 @@ func TestThrowawayEarlyCreatedCandidateResidual(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
-	if exitcode.FromError(err) != exitcode.PartialFailure || result.Candidate.ID != nil {
-		t.Fatalf("want failed up before ID binding: result=%+v err=%v", result, err)
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "official up identity or configuration response invalid") || result.Candidate == nil || result.Candidate.ID == nil || !fullID(*result.Candidate.ID) {
+		t.Fatalf("invalid creation response must retain its cause and bind the observed cleanup full ID: result=%+v err=%v", result, err)
 	}
 	if err = s.Close(); err != nil {
 		t.Fatal(err)
@@ -479,6 +479,54 @@ func TestThrowawayEarlyCreatedCandidateResidual(t *testing.T) {
 	tx, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: "whr-anchorage-staging"}, ports.StateRoot)
 	if err != nil {
 		t.Fatalf("normal confirmed removal cannot resume receipt-bound created candidate: %v", err)
+	}
+	defer tx.Close()
+	if _, err = tx.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	assertNoCandidateRecords(t, ports.StateRoot)
+}
+
+func TestThrowawayPromotionCleanupIntentFailureStaysResumable(t *testing.T) {
+	p, _, ports := fixtureVerifiedPromotion(t)
+	injected := false
+	ctx := context.WithValue(context.Background(), stageCaptureControlKey{}, stageCaptureControl{Phase: func(phase, path string) {
+		if phase == "candidate-cleanup-intent" {
+			injected = true
+			if err := os.Chmod(path, 0500); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}})
+	t.Cleanup(func() { _ = os.Chmod(p.store.path, 0700) })
+	result, err := p.Apply(ctx, LifecycleConsent{Confirmed: true, Quiescence: true})
+	if !injected || exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate cleanup record binding failed") {
+		t.Fatalf("cleanup-intent storage failure: %+v %v injected=%t", result, err, injected)
+	}
+	rows, err := p.store.Records()
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("cleanup journal lost: %v", err)
+	}
+	if err = p.store.Begin(strings.Repeat("f", 32), "sha256:"+strings.Repeat("a", 64)); exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "retained attempt requires owner reconciliation") {
+		t.Fatalf("fresh stage adopted unfinished disposal: %v", err)
+	}
+	rows, err = p.store.Records()
+	if err != nil || len(rows) == 0 {
+		t.Fatalf("fresh stage removed cleanup journal: %v", err)
+	}
+	if err = os.Chmod(p.store.path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := ports.Endpoint(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := (Client{Executable: ports.Tools["docker"]}).prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: p.candidateObservation.ID}, ports.StateRoot)
+	if err != nil {
+		t.Fatal(err)
 	}
 	defer tx.Close()
 	if _, err = tx.Apply(context.Background()); err != nil {
