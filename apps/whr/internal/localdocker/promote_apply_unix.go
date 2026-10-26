@@ -45,6 +45,9 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	if len(p.receipt.ActionInventory)+len(p.result.Effects)+4 > 256 {
 		return refuse(stageConflict("promotion effect inventory quota"))
 	}
+	if err := p.bindResultStorage(); err != nil {
+		return p.partial("candidate result storage publication failed", err)
+	}
 	p.stageEffects = append([]StageEffect{}, p.receipt.ActionInventory...)
 	p.receipt.ConsentFlags.Volumes = false
 	p.receipt.ConsentFlags.Force = false
