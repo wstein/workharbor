@@ -16,7 +16,9 @@ func (p *LocalPromotion) failedPrimaryName() string {
 
 // Only a reaped, known nonzero hook/smoke exit or observed unhealthy replacement
 // reaches this routine. Resource
-// recovery preserves both writable layers. It cannot reverse shared data writes.
+// recovery preserves both writable layers until original restart is verified.
+// Successful recovery then disposes of the failed replacement and candidate.
+// It cannot reverse shared data writes.
 func (p *LocalPromotion) restoreOriginalResource() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
