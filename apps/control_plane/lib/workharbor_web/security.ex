@@ -145,6 +145,12 @@ defmodule WorkHarborWeb.Security do
           _ -> {:error, :invalid_request}
         end
 
+      conn.request_path == "/owner/hosts" ->
+        case owner_list_params(conn.query_string) do
+          {:ok, _} -> :ok
+          _ -> {:error, :invalid_request}
+        end
+
       conn.query_string == "" ->
         :ok
 
@@ -152,6 +158,31 @@ defmodule WorkHarborWeb.Security do
         {:error, :invalid_request}
     end
   end
+
+  @doc "Closed pagination admission shared by the transport and host page."
+  def owner_list_params(""), do: {:ok, %{page: 1, size: 25}}
+
+  def owner_list_params(raw) when is_binary(raw) and byte_size(raw) <= 128 do
+    pairs = String.split(raw, "&")
+
+    with true <- length(pairs) <= 2,
+         true <- Enum.all?(pairs, &Regex.match?(~r/^(page|size)=[0-9]+$/, &1)),
+         values <-
+           Enum.map(pairs, fn pair ->
+             [key, value] = String.split(pair, "=")
+             {key, String.to_integer(value)}
+           end),
+         true <- length(Enum.uniq_by(values, &elem(&1, 0))) == length(values),
+         page <- Map.get(Map.new(values), "page", 1),
+         size <- Map.get(Map.new(values), "size", 25),
+         true <- page in 1..1000 and size in 1..50 do
+      {:ok, %{page: page, size: size}}
+    else
+      _ -> {:error, :invalid_request}
+    end
+  end
+
+  def owner_list_params(_), do: {:error, :invalid_request}
 
   # The stock adapter reports malformed upgrade header values in its exception.
   # Admit only known header shapes so those diagnostics cannot echo credentials.

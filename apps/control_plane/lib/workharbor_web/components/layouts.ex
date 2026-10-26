@@ -13,7 +13,8 @@ defmodule WorkHarborWeb.Layouts do
     <header class="site-header">
       <a class="wordmark" href="/owner">WorkHarbor</a>
       <nav aria-label="Owner navigation">
-        <a href="/owner" aria-current="page">Overview</a>
+        <a href="/owner">Overview</a>
+        <a href="/owner/hosts">Hosts</a>
         <a href="/owner/auth">Access settings</a>
       </nav>
       <.theme_toggle />

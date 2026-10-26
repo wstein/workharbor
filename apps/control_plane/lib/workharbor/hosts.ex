@@ -293,6 +293,83 @@ defmodule WorkHarbor.Hosts do
     end)
   end
 
+  @doc "Owner-bound, secret-free host metadata with one total one-second read budget."
+  def list_status(principal, page \\ 1, size \\ 25) do
+    with :ok <- Accounts.authorize(principal, :host_status),
+         true <- is_integer(page) and page in 1..1000 and is_integer(size) and size in 1..50 do
+      repo = Repo.get_dynamic_repo()
+      deadline = System.monotonic_time(:millisecond) + 1000
+
+      task =
+        Task.async(fn ->
+          try do
+            Repo.put_dynamic_repo(repo)
+
+            rows =
+              sql(
+                "SELECT h.id,h.capabilities,h.last_seen,EXISTS(SELECT 1 FROM host_security s WHERE s.host_id=h.id AND s.owner_id=h.owner_id AND s.revoked_at IS NOT NULL) AS revoked FROM hosts h WHERE h.owner_id=? ORDER BY h.id LIMIT ? OFFSET ?",
+                [principal.owner_id, size + 1, (page - 1) * size]
+              ).rows
+
+            has_next = length(rows) > size
+
+            rows =
+              Enum.map(Enum.take(rows, size), fn [id, capabilities, last_seen, revoked] ->
+                connection = if revoked == 1, do: "revoked", else: connection_status(id, deadline)
+
+                %{
+                  id: id,
+                  capabilities: Jason.decode!(capabilities),
+                  last_seen: last_seen,
+                  revoked: revoked == 1,
+                  connection: connection
+                }
+              end)
+
+            %{
+              rows: Enum.take(rows, size),
+              has_next: has_next,
+              page: page,
+              size: size,
+              observed_at: Accounts.now()
+            }
+          rescue
+            _ -> :unavailable
+          catch
+            :exit, _ -> :unavailable
+          end
+        end)
+
+      case Task.yield(task, max(0, deadline - System.monotonic_time(:millisecond))) ||
+             Task.shutdown(task, :brutal_kill) do
+        {:ok, result} when is_map(result) -> {:ok, result}
+        _ -> {:error, :unavailable}
+      end
+    else
+      false -> {:error, :invalid_pagination}
+      error -> error
+    end
+  rescue
+    _ -> {:error, :unavailable}
+  catch
+    :exit, _ -> {:error, :unavailable}
+  end
+
+  defp connection_status(id, deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining <= 0 do
+      "unknown"
+    else
+      case GenServer.call(WorkHarbor.HostConnections, {:host_state, id}, remaining) do
+        {:ok, "connected"} -> "connected"
+        _ -> "unknown"
+      end
+    end
+  catch
+    :exit, _ -> "unknown"
+  end
+
   def status(principal, host_id) do
     with :ok <- Accounts.authorize(principal, :host_status) do
       transaction(fn ->
