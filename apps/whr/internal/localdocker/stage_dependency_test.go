@@ -133,10 +133,11 @@ func TestLocalStageMergedOriginsCannotHideGitConsumption(t *testing.T) {
 		t.Fatal("unknown merged hook created durable state")
 	}
 }
-func TestLocalStageLateMergedOpaqueHookRetainsPartialBeforeHooks(t *testing.T) {
+func TestLocalStageLateMergedOpaqueHookDisposesPartialBeforeHooks(t *testing.T) {
 	c, opts, ports, path := fixtureStageLifecycle(t, false)
 	opts.Smoke = true
 	state := readFakeStageState(t, path)
+	primaryBefore := stageDigest(state.Primary)
 	state.LateMergedLifecycle = map[string][]any{"postCreateCommands": {"git rev-parse HEAD"}}
 	data, _ := json.Marshal(state)
 	if err := os.WriteFile(path, data, 0600); err != nil {
@@ -148,13 +149,23 @@ func TestLocalStageLateMergedOpaqueHookRetainsPartialBeforeHooks(t *testing.T) {
 	}
 	defer s.Close()
 	result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
-	if exitcode.FromError(err) != exitcode.PartialFailure || err == nil || !strings.Contains(err.Error(), "lifecycle execution dependency capability unsupported") || result.Status != "partial" {
+	if exitcode.FromError(err) != exitcode.PartialFailure || err == nil || !strings.Contains(err.Error(), "lifecycle execution dependency capability unsupported") || result.Status != "partial" || result.Phase != "candidate_resources" {
 		t.Fatalf("late unknown hook: %+v %v", result, err)
 	}
 	state = readFakeStageState(t, path)
-	if state.Candidate == nil || state.Volume == nil || result.Candidate == nil || result.Candidate.ID == nil {
-		t.Fatal("late capability refusal lost observed resource inventory")
+	if state.Candidate != nil || state.Volume != nil || result.Candidate == nil || result.Candidate.ID == nil {
+		t.Fatal("late capability refusal did not dispose observed candidate resources")
 	}
+	if stageDigest(state.Primary) != primaryBefore {
+		t.Fatal("late refusal cleanup changed the original primary/home")
+	}
+	if result.RecoveryID != nil {
+		t.Fatal("disposed late refusal reports retained receipt")
+	}
+	if _, err := os.Stat(s.clonePath); !os.IsNotExist(err) {
+		t.Fatalf("late refusal clone remains: %v", err)
+	}
+	assertNoCandidateRecords(t, ports.StateRoot)
 	for _, call := range state.Calls {
 		if len(call) > 0 && call[0] == "exec" {
 			t.Fatal("opaque late hook or smoke ran before refusal")

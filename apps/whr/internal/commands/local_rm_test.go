@@ -243,7 +243,7 @@ func TestLocalRmConfirmationCancellationAndDeadline(t *testing.T) {
 }
 
 func TestLocalRmCandidateDisposalUsesNormalConsent(t *testing.T) {
-	for _, mode := range []string{"preview", "yes", "prompt", "decline", "volumes-without-force"} {
+	for _, mode := range []string{"preview", "yes", "prompt", "decline"} {
 		t.Run(mode, func(t *testing.T) {
 			r := removalResult()
 			r.PreserveHomeVolume = false
@@ -265,8 +265,6 @@ func TestLocalRmCandidateDisposalUsesNormalConsent(t *testing.T) {
 				args = append(args, "--yes")
 			case "decline":
 				answer = "no\n"
-			case "volumes-without-force":
-				args = append(args, "--volumes", "--yes")
 			}
 			code := commands.Execute(context.Background(), args, commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(answer), InputTerminal: interactive, IsTerminal: func(io.Writer) bool { return true }}, removalHandlers(f, &n, &options))
 			want, applies := 0, 1
@@ -279,7 +277,7 @@ func TestLocalRmCandidateDisposalUsesNormalConsent(t *testing.T) {
 			if code != want || f.applies != applies || n != 1 || f.closes != 1 {
 				t.Fatalf("code=%d prepare=%d fixture=%+v stdout=%q stderr=%q", code, n, f, out.String(), diag.String())
 			}
-			if options.Force || options.Volumes != (mode == "volumes-without-force") {
+			if options.Force || options.Volumes {
 				t.Fatalf("manufactured deletion flags: %+v", options)
 			}
 			preview := out.String()

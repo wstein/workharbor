@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -103,7 +102,7 @@ func TestLocalStageLeavesPrimaryRunning(t *testing.T) {
 	}
 }
 
-func TestLocalStageMissingSmokeRetainsUnverifiedCandidate(t *testing.T) {
+func TestLocalStageMissingSmokeDisposesUnverifiedCandidate(t *testing.T) {
 	c, opts, p, statePath := fixtureStageLifecycle(t, false)
 	s, e := c.prepareStage(context.Background(), opts, p)
 	if e != nil {
@@ -115,12 +114,16 @@ func TestLocalStageMissingSmokeRetainsUnverifiedCandidate(t *testing.T) {
 		t.Fatalf("missing smoke: %+v %v", result, e)
 	}
 	state := readFakeStageState(t, statePath)
-	if state.Candidate == nil || state.Volume == nil || state.Primary["State"] != "running" || state.SmokeStdin != "" {
+	if state.Candidate != nil || state.Volume != nil || state.Primary["State"] != "running" || state.SmokeStdin != "" {
 		t.Fatalf("unverified resources or implicit smoke: %+v", state)
 	}
-	if _, e = os.Stat(result.Repositories[0].ClonePath); e != nil {
-		t.Fatalf("retained writable clone missing: %v", e)
+	if _, e = os.Stat(result.Repositories[0].ClonePath); !os.IsNotExist(e) {
+		t.Fatalf("unverified clone remains: %v", e)
 	}
+	if result.RecoveryID != nil {
+		t.Fatal("disposed attempt reports retained receipt")
+	}
+	assertNoCandidateRecords(t, p.StateRoot)
 }
 
 func TestLocalStageSmokeUsesTrustedStdin(t *testing.T) {
@@ -252,48 +255,36 @@ func TestLocalStageRejectsChangedToolsAndSubstitutionsBeforeEffects(t *testing.T
 	}
 }
 
-func TestLocalStageFreshAfterRemovedUnverifiedPreservesCloneAndConsent(t *testing.T) {
+func TestLocalStageFreshAfterDisposedUnverifiedRequiresFreshConsent(t *testing.T) {
 	c, opts, ports, path := fixtureStageLifecycle(t, false)
 	first, err := c.prepareStage(context.Background(), opts, ports)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result, err := first.Apply(context.Background(), LifecycleConsent{TrustDigest: *first.Preview().Fingerprint, Confirmed: true, Quiescence: true})
-	if exitcode.FromError(err) != exitcode.PartialFailure || result.Status != "staged_unverified" {
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "missing_smoke") || result.Status != "staged_unverified" {
 		t.Fatalf("first stage: %+v %v", result, err)
 	}
 	oldClone, oldHome, oldOperation := first.clonePath, *result.Home.Name, first.operationID
-	journalPath := filepath.Join(first.store.path, "journal.json")
 	if err = first.Close(); err != nil {
 		t.Fatal(err)
 	}
-	// Models separately completed guarded removal. No lifecycle retry/adoption is performed.
 	state := readFakeStageState(t, path)
-	state.Candidate = nil
-	state.Volume = nil
-	data, _ := json.Marshal(state)
-	if err = os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
+	if state.Candidate != nil || state.Volume != nil || state.Primary["State"] != "running" {
+		t.Fatalf("failed stage was not disposed: %+v", state)
 	}
-	before, err := os.ReadFile(journalPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	assertNoCandidateRecords(t, ports.StateRoot)
 	opts.Smoke = true
 	preview, err := c.prepareStage(context.Background(), opts, ports)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after, err := os.ReadFile(journalPath); err != nil || !bytes.Equal(before, after) {
-		t.Fatal("recovery preview changed persistent journal")
-	}
+	assertNoCandidateRecords(t, ports.StateRoot)
 	_, err = preview.Apply(context.Background(), LifecycleConsent{})
 	if exitcode.FromError(err) != exitcode.NeedsHuman || err == nil || !strings.Contains(err.Error(), "source trust and confirmation required") {
 		t.Fatalf("missing fresh consent: %v", err)
 	}
-	if after, err := os.ReadFile(journalPath); err != nil || !bytes.Equal(before, after) {
-		t.Fatal("unconfirmed recovery changed persistent journal")
-	}
+	assertNoCandidateRecords(t, ports.StateRoot)
 	preview.Close()
 	next, err := c.prepareStage(context.Background(), opts, ports)
 	if err != nil {
@@ -302,12 +293,12 @@ func TestLocalStageFreshAfterRemovedUnverifiedPreservesCloneAndConsent(t *testin
 	defer next.Close()
 	result, err = next.Apply(context.Background(), LifecycleConsent{TrustDigest: *next.Preview().Fingerprint, Confirmed: true, Quiescence: true})
 	if err != nil || result.Status != "staged_verified" {
-		t.Fatalf("fresh stage after removal: %+v %v", result, err)
+		t.Fatalf("fresh stage after disposal: %+v %v", result, err)
 	}
 	if next.operationID == oldOperation || *result.Home.Name == oldHome || next.clonePath == oldClone {
-		t.Fatal("recovered operation reused old allocation")
+		t.Fatal("fresh operation reused old allocation")
 	}
-	if _, err = os.Stat(oldClone); err != nil {
-		t.Fatalf("old writable clone was not retained: %v", err)
+	if _, err = os.Stat(oldClone); !os.IsNotExist(err) {
+		t.Fatalf("old clone remains: %v", err)
 	}
 }
