@@ -136,3 +136,12 @@ stage/promote library acceptance and pending CLI #271/#272 do not establish this
 new disposal behavior. Follow the
 [current delivery plan](plan.md#throwaway-staging-delivery-amendment-owner-2026-10-25)
 for the code, tests and real Linux/macOS+OrbStack evidence before claiming it.
+
+## Local init, stage and promote handoff
+
+The [owner host-run procedure](../../docs/quality/006-whr-cli/owner-init-stage-promote-runbook.md)
+covers the merged throwaway decision and the combined #272 implementation after
+its acceptance/merge. It records separate Linux Docker and macOS+OrbStack results;
+it claims no host pass. The [init source audit](../../docs/quality/006-whr-cli/init-handoff-audit-20261026.md)
+maps current test definitions and remaining acceptance work. T034 and owner host
+gates stay open.
