@@ -140,8 +140,8 @@ for the code, tests and real Linux/macOS+OrbStack evidence before claiming it.
 ## Local init, stage and promote handoff
 
 The [owner host-run procedure](../../docs/quality/006-whr-cli/owner-init-stage-promote-runbook.md)
-covers the merged throwaway decision after the #272 CLI and separately authored
-cleanup implementation are accepted and merged. It records separate Linux Docker
+covers the merged throwaway decision after the combined #272 promote CLI and
+throwaway cleanup (including #274) are accepted and merged. It records separate Linux Docker
 and macOS+OrbStack results;
 it claims no host pass. The [init source audit](../../docs/quality/006-whr-cli/init-handoff-audit-20261026.md)
 maps current test definitions and remaining acceptance work. T034 and owner host
