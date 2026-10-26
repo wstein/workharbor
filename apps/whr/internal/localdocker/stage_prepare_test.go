@@ -385,4 +385,7 @@ func TestLocalStageFixtureStateRootUsesPhysicalAncestors(t *testing.T) {
 		t.Fatalf("fixture state root is not admitted: %v", err)
 	}
 	store.Close()
+	t.Run("direct-read-only-disposal", TestThrowawayTreeCleanupHandlesReadOnlyCloneAndSymlink)
+	t.Run("direct-state-journal", TestLocalStageDurableIntentAndMonotonicRecovery)
+	t.Run("direct-state-modes", TestLocalStageStateModesAndNoFollow)
 }
