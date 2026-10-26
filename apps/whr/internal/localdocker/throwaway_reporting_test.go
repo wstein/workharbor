@@ -81,6 +81,10 @@ func TestThrowawayRollbackResidualReportsObservedResources(t *testing.T) {
 				}
 			}
 			assertNoCandidateRecords(t, ports.StateRoot)
+			state = readFakePromotionState(t, path)
+			if state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Candidate != nil || state.Volume != nil || state.Failed != nil {
+				t.Fatalf("residual retry changed the original or left candidate resources: %+v", state)
+			}
 		})
 	}
 }
