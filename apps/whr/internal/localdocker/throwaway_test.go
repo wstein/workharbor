@@ -6,6 +6,7 @@ package localdocker
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -46,6 +47,9 @@ func TestThrowawayPromoteNeedsOnlyNormalConfirmation(t *testing.T) {
 		t.Fatal("replacement primary unavailable")
 	}
 	assertNoCandidateRecords(t, ports.StateRoot)
+	if _, err := os.Lstat(p.results.root); !os.IsNotExist(err) {
+		t.Fatalf("result export tree remains before Close: %v", err)
+	}
 	if _, err := os.Lstat(p.snapshots[0].ClonePath); !os.IsNotExist(err) {
 		t.Fatalf("clone remains: %v", err)
 	}
@@ -68,6 +72,9 @@ func TestThrowawayPromoteRollbackDisposesCandidate(t *testing.T) {
 		t.Fatalf("rollback retained candidate artifacts: %+v", state)
 	}
 	assertNoCandidateRecords(t, ports.StateRoot)
+	if _, err := os.Lstat(p.results.root); !os.IsNotExist(err) {
+		t.Fatalf("rollback result export tree remains before Close: %v", err)
+	}
 }
 
 func TestThrowawayFailedStageDisposesArtifacts(t *testing.T) {
@@ -532,6 +539,53 @@ func TestThrowawayPromotionCleanupIntentFailureStaysResumable(t *testing.T) {
 	defer tx.Close()
 	if _, err = tx.Apply(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+	assertNoCandidateRecords(t, ports.StateRoot)
+}
+
+func TestThrowawayUncertainImportIsInsideCandidateTree(t *testing.T) {
+	p, _, ports := fixtureVerifiedPromotionWithEdit(t, func(clone string) {
+		if err := os.WriteFile(filepath.Join(clone, "result"), []byte("candidate result\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		fixtureGit(t, clone, "add", "result")
+		fixtureGit(t, clone, "commit", "-m", "candidate result")
+	})
+	op := p.store.operationPath(p.receipt.OperationID)
+	ctx := context.WithValue(context.Background(), stageCaptureControlKey{}, stageCaptureControl{Command: func(cmd *exec.Cmd) {
+		for _, arg := range cmd.Args {
+			if arg == "fetch" {
+				cmd.Args = append(cmd.Args, "--whr-invalid-import-refspec")
+				return
+			}
+		}
+	}})
+	result, err := p.Apply(ctx, LifecycleConsent{Confirmed: true, Quiescence: true})
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "result transfer failed") || !p.results.attempted || p.results.complete {
+		t.Fatalf("uncertain import cause: %+v %v", result, err)
+	}
+	exportRoot := p.results.root
+	relative, err := filepath.Rel(op, exportRoot)
+	if err != nil || relative != "results" {
+		t.Fatalf("export residual outside candidate operation: %s %v", relative, err)
+	}
+	if err = p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := ports.Endpoint(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := (Client{Executable: ports.Tools["docker"]}).prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: p.candidateObservation.ID}, ports.StateRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Close()
+	if _, err = tx.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = os.Lstat(exportRoot); !os.IsNotExist(err) {
+		t.Fatalf("export residual remains after ordinary disposal: %v", err)
 	}
 	assertNoCandidateRecords(t, ports.StateRoot)
 }
