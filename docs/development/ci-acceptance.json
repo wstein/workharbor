@@ -1402,7 +1402,14 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayEarlyCreatedCandidateResidual",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayPromotionCleanupIntentFailureStaysResumable",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayUncertainImportIsInsideCandidateTree",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageFixtureStateRootUsesPhysicalAncestors"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageFixtureStateRootUsesPhysicalAncestors",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalPromoteRollbackEffectSchema",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayRollbackResidualReportsObservedResources",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayStageRemediationMatchesDisposalOutcome",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayDisposalBindingRefusals",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayRemovalBindingRefusals",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayRollbackBindingRefusals",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayMixedStagingRemovalKeepsHomeExceptionScoped"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
