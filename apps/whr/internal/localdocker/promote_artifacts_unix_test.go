@@ -15,7 +15,7 @@ import (
 func TestLocalPromotionPrivateArtifactsCannotRebindReceipt(t *testing.T) {
 	for _, kind := range []string{"changed_bytes", "missing_field", "unknown_field", "noncanonical", "valid"} {
 		t.Run(kind, func(t *testing.T) {
-			store, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///fixture.sock")
+			store, err := openStageStore(filepath.Join(fixtureStageStateParent(t), "state"), "daemon", "unix:///fixture.sock")
 			if err != nil {
 				t.Fatal(err)
 			}

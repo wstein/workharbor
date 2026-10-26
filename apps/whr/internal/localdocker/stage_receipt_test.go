@@ -14,7 +14,7 @@ import (
 )
 
 func TestLocalStageReceiptTargetsAreBoundToDurableHashChain(t *testing.T) {
-	s, e := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	s, e := openStageStore(filepath.Join(fixtureStageStateParent(t), "state"), "daemon", "unix:///tmp/docker.sock")
 	if e != nil {
 		t.Fatal(e)
 	}

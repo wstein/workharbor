@@ -23,7 +23,7 @@ func TestLocalPromotionMissingStateNeverRepairsPreview(t *testing.T) {
 	}
 }
 func TestLocalPromotionExistingStateLockAndNoTouch(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "state")
+	root := filepath.Join(fixtureStageStateParent(t), "state")
 	fixture, err := openStageStore(root, "daemon", "unix:///fixture.sock")
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +53,7 @@ func TestLocalPromotionExistingStateLockAndNoTouch(t *testing.T) {
 func TestLocalPromotionStateUnsafePathsRefuseBeforeRead(t *testing.T) {
 	for _, kind := range []string{"root_symlink", "daemon_symlink", "lock_symlink", "lock_fifo"} {
 		t.Run(kind, func(t *testing.T) {
-			root := filepath.Join(t.TempDir(), "state")
+			root := filepath.Join(fixtureStageStateParent(t), "state")
 			fixture, err := openStageStore(root, "daemon", "unix:///fixture.sock")
 			if err != nil {
 				t.Fatal(err)
