@@ -142,7 +142,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
     assert has_element?(view, "nav[aria-label]")
     assert has_element?(view, ~s(a[href="/owner/auth"]))
 
-    for path <- ["/owner/hosts", "/owner/workspaces", "/owner/trust"] do
+    for path <- ["/owner/workspaces", "/owner/trust"] do
       refute has_element?(view, ~s(a[href="#{path}"]))
       assert Phoenix.Router.route_info(WorkHarborWeb.Router, "GET", path, "localhost") == :error
     end
@@ -167,6 +167,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
                {"GET", "/"},
                {"GET", "/owner"},
                {"GET", "/owner/auth"},
+               {"GET", "/owner/hosts"},
                {"POST", "/owner/dashboard"},
                {"POST", "/owner/logout"}
              ])

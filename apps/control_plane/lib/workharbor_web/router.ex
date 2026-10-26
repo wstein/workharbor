@@ -153,6 +153,7 @@ defmodule WorkHarborWeb.Router do
 
     live_session :owner, on_mount: WorkHarborWeb.OwnerAuth do
       live "/owner", OverviewLive, :index
+      live "/owner/hosts", HostsLive, :index
     end
   end
 

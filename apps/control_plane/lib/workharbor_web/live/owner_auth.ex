@@ -44,8 +44,18 @@ defmodule WorkHarborWeb.OwnerAuth do
 
       true ->
         case authorize(socket) do
-          {:ok, socket} -> {:halt, schedule(socket)}
-          {:stop, socket} -> {:halt, socket}
+          {:ok, socket} ->
+            socket =
+              if function_exported?(socket.view, :owner_refresh, 1),
+                do: socket.view.owner_refresh(socket),
+                else: socket
+
+            if socket.private.owner_auth.stopped,
+              do: {:halt, socket},
+              else: {:halt, schedule(socket)}
+
+          {:stop, socket} ->
+            {:halt, socket}
         end
     end
   end
@@ -61,6 +71,12 @@ defmodule WorkHarborWeb.OwnerAuth do
       if state.timer, do: Process.cancel_timer(state.timer)
       state = %{state | stopped: true, principal: nil, timer: nil, ref: nil}
       socket = put_in(socket.private[:owner_auth], state)
+
+      socket =
+        if function_exported?(socket.view, :owner_stop, 1),
+          do: socket.view.owner_stop(socket),
+          else: socket
+
       {:stop, redirect(socket, to: "/login/owner")}
     end
   end
