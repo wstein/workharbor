@@ -4,6 +4,16 @@ Date: 2026-10-19
 Status: Proposed design and Spec 006 amendment draft (candidate FR-066, FR-067, FR-068, SC-024, and task T038).
 This document records the specification and task breakdown for owner review; it does not claim implemented CLI behavior or authorize live container mutations without explicit invocation.
 
+Historical design context: the authoritative local lifecycle contract is now
+[local-stage-promote](../../specs/006-whr-cli/contracts/local-stage-promote.md),
+with the owner-approved
+[throwaway amendment](../../specs/006-whr-cli/contracts/throwaway-staging-amendment-20261025.md)
+taking precedence. Managed candidates use fresh `whr-stage-home-<id>` homes.
+Normal confirmed remove or successful promote disposes of the candidate
+container, home, clone/results and records last, without `--volumes --force`.
+Generic removal keeps its existing flags and the whole `anchorage-home-*` guard.
+This record does not establish acceptance or reopen the selected CLI surface.
+
 ## 1. Purpose, container roles, and governance boundary
 
 In [Feature 006 (`whr` product CLI)](../../specs/006-whr-cli/spec.md) and [ADR 0014](../adr/0014-whr-command-structure.md), `workspace.ls` (`whr workspace ls` / `whr ls`) and `workspace.rm` (`whr workspace rm` / `whr rm`) are registered in [`contracts/cli/commands.json`](../../contracts/cli/commands.json) with `increment: "later"`, `needs: "control_plane"`, and `blocked_on: "owner_api"`.
@@ -83,8 +93,8 @@ Add dedicated local-only entries (`workspace.temp.ls`, `workspace.temp.rm`, `wor
     - Without `--dry-run`, running in non-interactive mode, with `--json`, or without a terminal requires `--yes`; omitting `--yes` exits `70` (`err_confirmation_required`) naming `--yes`, per [ADR 0013](../adr/0013-whr-exit-codes.md).
 
 - **FR-068 — Side-by-side staging and promotion workflow (`whr workspace stage --local` / `whr workspace promote --local`)**:
-  - **Staging (`stage --local`)**: Launches a candidate devcontainer (`--name whr-anchorage-staging`, `--hostname anchorage-staging`, `--id-label anchorage-staging=1`, `ANCHORAGE_ROLE=staging`, isolated `anchorage-home-*` volume) alongside the active primary `whr-anchorage` container without stopping or modifying the primary container. When `--smoke` is passed, runs container smoke verification against the staged container before returning.
-  - **Promotion (`promote --local`)**: Verifies that a healthy `anchorage-staging=1` container exists (or builds/replaces the primary `whr-anchorage` container from the verified workspace configuration), recreates the primary `whr-anchorage` container while preserving the primary `anchorage-home-*` volume, and then removes the `anchorage-staging=1` container and its temporary staging home volume (`--volumes` rules from `FR-067`).
+  - **Staging (`stage --local`)**: Launches a candidate devcontainer (`--name whr-anchorage-staging`, `--hostname anchorage-staging`, `--id-label anchorage-staging=1`, `ANCHORAGE_ROLE=staging`, fresh isolated `whr-stage-home-<id>` volume) alongside the active primary `whr-anchorage` container without stopping or modifying the primary container. When `--smoke` is passed, runs container smoke verification against the staged container before returning.
+  - **Promotion (`promote --local`)**: Selects the original primary by exact name/full ID and verifies the receipt-bound candidate using the declared Docker healthcheck or explicit workspace smoke. It imports the contracted result refs before clone disposal, recreates the primary with its original home, and disposes of the candidate container, fresh `whr-stage-home-<id>` volume, clone/results and records last. This uses normal confirmation; promote has no `--volumes` or `--force` flags. A verified rollback restores the original before candidate disposal; incomplete disposal reports residuals and the normal removal command.
 
 ### Success criteria
 
