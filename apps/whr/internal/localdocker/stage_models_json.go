@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"strings"
 )
 
 func (t StageTarget) MarshalJSON() ([]byte, error) {
@@ -110,19 +111,39 @@ func stageJSONShape(raw []byte, typ reflect.Type) error {
 		if json.Unmarshal(raw, &fields) != nil || fields == nil {
 			return errors.New("lifecycle object required")
 		}
-		if len(fields) != typ.NumField() {
-			return errors.New("closed lifecycle fields missing or unknown")
-		}
 		for i := 0; i < typ.NumField(); i++ {
 			f := typ.Field(i)
-			name := f.Tag.Get("json")
+			if f.PkgPath != "" {
+				continue
+			}
+			tag := strings.Split(f.Tag.Get("json"), ",")
+			name := tag[0]
+			if name == "-" {
+				continue
+			}
+			if name == "" {
+				name = f.Name
+			}
+			optional := false
+			for _, option := range tag[1:] {
+				if option == "omitempty" {
+					optional = true
+				}
+			}
 			data, ok := fields[name]
 			if !ok {
+				if optional {
+					continue
+				}
 				return errors.New("required lifecycle field missing")
 			}
 			if e := stageJSONShape(data, f.Type); e != nil {
 				return e
 			}
+			delete(fields, name)
+		}
+		if len(fields) != 0 {
+			return errors.New("closed lifecycle fields unknown")
 		}
 	case reflect.Slice:
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {

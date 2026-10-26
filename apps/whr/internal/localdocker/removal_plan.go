@@ -26,6 +26,10 @@ type removalPlan struct {
 }
 
 func planRemoval(all []inspection, o RemovalOptions) (removalPlan, error) {
+	return planRemovalWithCandidate(all, o, "")
+}
+
+func planRemovalWithCandidate(all []inspection, o RemovalOptions, candidateHome string) (removalPlan, error) {
 	fail := func(path exitcode.Path, message string) (removalPlan, error) {
 		return removalPlan{}, exitcode.Errorf(path, "%s", message)
 	}
@@ -72,7 +76,7 @@ func planRemoval(all []inspection, o RemovalOptions) (removalPlan, error) {
 			}
 		}
 	}
-	plan := removalPlan{Containers: selected, Volumes: []removalVolume{}, PreserveHomeVolume: !o.Volumes}
+	plan := removalPlan{Containers: selected, Volumes: []removalVolume{}, PreserveHomeVolume: !o.Volumes && candidateHome == ""}
 	volumes := map[string]bool{}
 	for _, c := range selected {
 		role, _ := workspaceRole(c.Labels)
@@ -83,7 +87,7 @@ func planRemoval(all []inspection, o RemovalOptions) (removalPlan, error) {
 			if role != "primary" && (strings.HasPrefix(m.Name, "anchorage-home-") || primary[m.Name]) {
 				return fail(exitcode.PathConflict, "staging or temp cleanup would touch a primary home volume")
 			}
-			if !o.Volumes {
+			if !o.Volumes && m.Name != candidateHome {
 				continue
 			}
 			if protected[m.Name] {
@@ -114,7 +118,7 @@ func homeMount(m mount) bool {
 	return m.Type == "volume" && m.Name != "" && (m.Destination == "/home/captain" || m.Destination == "/home/vscode")
 }
 
-func validateRemovalOptions(o RemovalOptions) error {
+func validateRemovalSelector(o RemovalOptions) error {
 	selectors := 0
 	for _, v := range []string{o.Target, o.Role, o.Label} {
 		if v != "" {
@@ -128,9 +132,15 @@ func validateRemovalOptions(o RemovalOptions) error {
 	if o.Label != "" && key == "" {
 		return exitcode.Errorf(exitcode.PathBadArguments, "--label requires a key or key=value")
 	}
+	return nil
+}
+
+func validateRemovalOptions(o RemovalOptions) error {
+	if err := validateRemovalSelector(o); err != nil {
+		return err
+	}
 	if o.Volumes && !o.Force {
 		return exitcode.Errorf(exitcode.PathHumanDecisionMissing, "home volume deletion requires --volumes and --force")
 	}
-
 	return nil
 }

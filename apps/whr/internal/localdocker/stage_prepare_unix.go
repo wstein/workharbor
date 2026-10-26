@@ -69,18 +69,11 @@ type LocalStage struct {
 }
 
 func nativeStagePreparationPorts(c Client) (stagePreparationPorts, error) {
-	stateBase := os.Getenv("XDG_STATE_HOME")
-	if stateBase == "" {
-		home, e := os.UserHomeDir()
-		if e != nil {
-			return stagePreparationPorts{}, stageConflict("private state home unavailable")
-		}
-		stateBase = filepath.Join(home, ".local", "state")
+	stateRoot, err := stageStateRoot()
+	if err != nil {
+		return stagePreparationPorts{}, err
 	}
-	if !filepath.IsAbs(stateBase) {
-		return stagePreparationPorts{}, stageConflict("private state home must be absolute")
-	}
-	p := stagePreparationPorts{StateRoot: filepath.Join(stateBase, "workharbor", "local-stage", "v1"), Tools: map[string]string{}, Endpoint: func(ctx context.Context) (string, error) { return ResolveEndpoint(ctx, doctor.SystemPorts(nil)) }, MountAdmission: admitStageNativeMount}
+	p := stagePreparationPorts{StateRoot: stateRoot, Tools: map[string]string{}, Endpoint: func(ctx context.Context) (string, error) { return ResolveEndpoint(ctx, doctor.SystemPorts(nil)) }, MountAdmission: admitStageNativeMount}
 	for _, name := range []string{"docker", "node", "devcontainer", "git", "sh", "bash"} {
 		path := ""
 		var e error
