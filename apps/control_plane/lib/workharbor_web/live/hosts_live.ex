@@ -14,6 +14,7 @@ defmodule WorkHarborWeb.HostsLive do
        assign(socket,
          rows: [],
          state: :loading,
+         current_page: "/owner/hosts",
          query_rejected: false,
          page: 1,
          size: 25,
