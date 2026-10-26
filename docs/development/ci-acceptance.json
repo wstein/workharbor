@@ -1398,7 +1398,9 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmCandidateDisposalUsesNormalConsent",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmClosesPreparedTransactionOnBackendFailure",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmThrowawayHelp",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmCandidateDisposalJSONInventory"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmCandidateDisposalJSONInventory",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayEarlyCreatedCandidateResidual",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayPromotionCleanupIntentFailureStaysResumable"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",
