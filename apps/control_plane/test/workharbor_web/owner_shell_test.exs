@@ -141,6 +141,7 @@ defmodule WorkHarborWeb.OwnerShellTest do
     assert has_element?(view, "h1")
     assert has_element?(view, "nav[aria-label]")
     assert has_element?(view, ~s(a[href="/owner/auth"]))
+    assert has_element?(view, ~s(article[aria-labelledby="hosts-title"] a[href="/owner/hosts"]))
 
     for path <- ["/owner/workspaces", "/owner/trust"] do
       refute has_element?(view, ~s(a[href="#{path}"]))
