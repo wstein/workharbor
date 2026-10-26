@@ -315,7 +315,7 @@ defmodule WorkHarbor.Hosts do
 
             rows =
               Enum.map(Enum.take(rows, size), fn [id, capabilities, last_seen, revoked] ->
-                connection = if revoked == 1, do: "revoked", else: connection_status(id, deadline)
+                connection = if revoked == 1, do: "revoked", else: connection_status(id)
 
                 %{
                   id: id,
@@ -327,7 +327,7 @@ defmodule WorkHarbor.Hosts do
               end)
 
             %{
-              rows: Enum.take(rows, size),
+              rows: rows,
               has_next: has_next,
               page: page,
               size: size,
@@ -355,19 +355,13 @@ defmodule WorkHarbor.Hosts do
     :exit, _ -> {:error, :unavailable}
   end
 
-  defp connection_status(id, deadline) do
-    remaining = deadline - System.monotonic_time(:millisecond)
-
-    if remaining <= 0 do
-      "unknown"
-    else
-      case GenServer.call(WorkHarbor.HostConnections, {:host_state, id}, remaining) do
-        {:ok, "connected"} -> "connected"
-        _ -> "unknown"
-      end
+  # The outer batch owns the single absolute deadline. The existing internal
+  # lookup may wait longer, but its task is terminated when that budget expires.
+  defp connection_status(id) do
+    case WorkHarbor.HostConnections.host_state(id) do
+      {:ok, "connected"} -> "connected"
+      _ -> "unknown"
     end
-  catch
-    :exit, _ -> "unknown"
   end
 
   def status(principal, host_id) do
