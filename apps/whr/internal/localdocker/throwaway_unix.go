@@ -37,7 +37,7 @@ type candidateCleanupBinding struct {
 	FailedReplacement *stageContainerDetails `json:"failed_replacement"`
 }
 
-func (d candidateDisposal) begin() error {
+func (d candidateDisposal) begin(ctx context.Context) error {
 	rows, err := d.store.Records()
 	if err != nil || len(rows) == 0 {
 		return stageConflict("candidate cleanup durable intent unavailable")
@@ -45,6 +45,15 @@ func (d candidateDisposal) begin() error {
 	last := rows[len(rows)-1]
 	if last.OperationID != d.plan.OperationID {
 		return stageConflict("candidate cleanup operation changed")
+	}
+	if last.Cleanup == nil && d.receipt.Candidate != nil && d.receipt.Candidate.ID == nil {
+		candidate, err := d.candidate(ctx)
+		if err != nil {
+			return err
+		}
+		if candidate != nil {
+			d.receipt.Candidate.ID = stageString(candidate.ID)
+		}
 	}
 	binding := candidateCleanupBinding{Receipt: *d.receipt, Plan: d.plan, FailedReplacement: d.failed}
 	if last.Cleanup != nil {
@@ -57,6 +66,7 @@ func (d candidateDisposal) begin() error {
 		return stageConflict("candidate cleanup journal quota")
 	}
 	rows = append(rows, stageRecord{Version: 1, OperationID: last.OperationID, Sequence: last.Sequence + 1, PreviousHash: last.Hash, State: last.State, Fingerprint: last.Fingerprint, Action: "dispose_candidate", Observation: "attempted", ReceiptDigest: stageReceiptDigest(*d.receipt), Cleanup: &binding})
+	stageCapturePhase(ctx, "candidate-cleanup-intent", d.store.path)
 	return d.store.write(rows, false)
 }
 
@@ -349,7 +359,7 @@ func (s *stageStore) discardCandidateFilesObserved(op string, observe func(strin
 }
 
 func (d candidateDisposal) dispose(ctx context.Context) error {
-	if err := d.begin(); err != nil {
+	if err := d.begin(ctx); err != nil {
 		return err
 	}
 	if err := d.removeResources(ctx); err != nil {

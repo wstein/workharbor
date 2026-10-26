@@ -254,7 +254,7 @@ func (r *Removal) applyCandidate(parent context.Context, result RemovalResult) (
 			}
 		}
 	}
-	err = r.candidate.begin()
+	err = r.candidate.begin(ctx)
 	if err == nil {
 		err = r.candidate.removeResources(ctx)
 	}
