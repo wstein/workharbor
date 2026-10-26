@@ -2150,7 +2150,18 @@
       "WorkHarborWeb.HostsLiveTest/test host list visibly escapes the full FR022 control set",
       "WorkHarborWeb.HostsLiveTest/test host read timeout has one batch budget and displays unavailable",
       "WorkHarborWeb.HostsLiveTest/test revocation first denial clears protected rows and queued ticks never reread",
-      "WorkHarborWeb.HostsLiveTest/test refresh replaces connected observations with unknown without keeping healthy rows"
+      "WorkHarborWeb.HostsLiveTest/test refresh replaces connected observations with unknown without keeping healthy rows",
+      "WorkHarborWeb.HostsLiveTest/test hosts admission refuses missing wrong-kind expired and revoked credentials",
+      "WorkHarborWeb.HostsLiveTest/test hosts navigation rechecks expiry and revocation before reading",
+      "WorkHarborWeb.HostsLiveTest/test real heartbeat becomes visibly unknown within five seconds including a slow read",
+      "WorkHarborWeb.HostsLiveTest/test revoked host and recorded timestamps render without a connected conclusion",
+      "WorkHarborWeb.HostsLiveTest/test host status denial after page authorization stops once and clears data",
+      "WorkHarborWeb.HostsLiveTest/test invalid join URL stays rejected across owner timer refresh",
+      "WorkHarborWeb.HostsLiveTest/test pagination links preserve size and suppress next at the page cap",
+      "WorkHarborWeb.HostsLiveTest/test host pagination rejects trailing controls without raising",
+      "WorkHarborWeb.HostsLiveTest/test owner navigation names the current page",
+      "WorkHarborWeb.HostsLiveTest/test batch timeout is deterministic when the reader wakes after inner expiry",
+      "WorkHarborWeb.OwnerShellTest/test hosts page source guard rejects every nonallowlisted context call"
     ]
   }
 }
