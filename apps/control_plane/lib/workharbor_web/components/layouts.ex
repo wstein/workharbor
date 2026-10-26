@@ -6,15 +6,18 @@ defmodule WorkHarborWeb.Layouts do
 
   attr :flash, :map, required: true
   attr :inner_content, :any, required: true
+  attr :current_page, :string, default: nil
 
   def app(assigns) do
+    assigns = assign_new(assigns, :current_page, fn -> nil end)
+
     ~H"""
     <a class="skip-link" href="#main-content">Skip to content</a>
     <header class="site-header">
       <a class="wordmark" href="/owner">WorkHarbor</a>
       <nav aria-label="Owner navigation">
-        <a href="/owner">Overview</a>
-        <a href="/owner/hosts">Hosts</a>
+        <a href="/owner" aria-current={if @current_page == "/owner", do: "page"}>Overview</a>
+        <a href="/owner/hosts" aria-current={if @current_page == "/owner/hosts", do: "page"}>Hosts</a>
         <a href="/owner/auth">Access settings</a>
       </nav>
       <.theme_toggle />

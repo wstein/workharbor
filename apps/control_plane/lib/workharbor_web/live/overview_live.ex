@@ -4,7 +4,7 @@ defmodule WorkHarborWeb.OverviewLive do
   use Phoenix.LiveView, layout: {WorkHarborWeb.Layouts, :app}, log: false
 
   @impl true
-  def mount(_params, _session, socket), do: {:ok, socket}
+  def mount(_params, _session, socket), do: {:ok, assign(socket, current_page: "/owner")}
 
   @impl true
   def handle_params(_params, _uri, socket), do: {:noreply, socket}
