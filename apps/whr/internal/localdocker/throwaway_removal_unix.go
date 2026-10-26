@@ -17,7 +17,8 @@ import (
 
 type candidateRemoval struct {
 	candidateDisposal
-	root string
+	root          string
+	failedPresent bool
 }
 
 func (r *candidateRemoval) Close() error {
@@ -44,8 +45,9 @@ func stageStateRoot() (string, error) {
 }
 
 func (c Client) prepareCandidateRemoval(ctx context.Context, endpoint string, all []inspection, options RemovalOptions, stateRoot string) (*candidateRemoval, error) {
-	// Classify the exact selector before consulting private stage state. Old or
-	// externally created staging containers keep the generic removal contract.
+	// Classify the exact selector before consulting private stage state. Containers
+	// without a managed staging-operation label keep the generic contract. A
+	// managed label without its matching private receipt is refused, not adopted.
 	selected := []inspection{}
 	matched := false
 	key, value, hasValue := strings.Cut(options.Label, "=")
@@ -190,7 +192,15 @@ func (c Client) prepareCandidateRemoval(ctx context.Context, endpoint string, al
 		return nil, stageConflict("candidate cleanup target changed")
 	}
 	keep = true
-	return &candidateRemoval{candidateDisposal: disposal, root: root}, nil
+	failedPresent := false
+	if failed != nil {
+		for _, item := range metadata.Containers {
+			if item.ID == failed.ID {
+				failedPresent = true
+			}
+		}
+	}
+	return &candidateRemoval{candidateDisposal: disposal, root: root, failedPresent: failedPresent}, nil
 }
 
 func (r *Removal) applyCandidate(parent context.Context, result RemovalResult) (RemovalResult, error) {
