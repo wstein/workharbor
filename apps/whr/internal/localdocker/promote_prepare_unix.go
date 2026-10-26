@@ -191,6 +191,11 @@ func (c Client) preparePromotion(parent context.Context, options PromoteOptions,
 	if err != nil {
 		return nil, promotionPhaseError(ctx, "preflight", err)
 	}
+	// Preview names the eventual operation-owned export targets without writing
+	// them. The temporary reader root is used only for pre-apply inspection.
+	for i := range p.results.repositories {
+		p.results.repositories[i].Objects.ExportPath = filepath.Join(p.store.operationPath(p.receipt.OperationID), "results", filepath.Base(p.results.repositories[i].Objects.ExportPath))
+	}
 	p.result = p.previewResult()
 	if err = p.prepareConfiguration(ctx); err != nil {
 		return nil, promotionPhaseError(ctx, "preflight", err)

@@ -419,3 +419,25 @@ func recordCleanupEffect(effects *[]StageEffect, action string, target *StageRes
 	}
 	*effects = append(*effects, StageEffect{Action: action, Target: StageTarget{Resource: target}, State: state})
 }
+
+// Actual exports and import readers belong to the candidate operation. Moving
+// no preview data avoids a cross-filesystem rename and keeps dry-run read-only.
+func (p *LocalPromotion) bindResultStorage() error {
+	op, err := p.store.operationDirectory(p.receipt.OperationID)
+	if err != nil {
+		return err
+	}
+	defer op.Close()
+	if err = os.Remove(p.results.root); err != nil {
+		return stageConflict("promotion temporary result reader is not empty or removable")
+	}
+	p.results.root = ""
+	if err = unix.Mkdirat(int(op.Fd()), "results", 0700); err != nil {
+		return stageConflict("promotion candidate result storage retained or unavailable")
+	}
+	p.results.root = filepath.Join(p.store.operationPath(p.receipt.OperationID), "results")
+	if err = op.Sync(); err != nil {
+		return stageConflict("promotion candidate result storage durability uncertain")
+	}
+	return nil
+}
