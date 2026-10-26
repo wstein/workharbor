@@ -14,6 +14,7 @@ defmodule WorkHarborWeb.HostsLive do
        assign(socket,
          rows: [],
          state: :loading,
+         query_rejected: false,
          page: 1,
          size: 25,
          has_next: false,
@@ -24,14 +25,24 @@ defmodule WorkHarborWeb.HostsLive do
   def handle_params(_params, uri, socket) do
     case Security.owner_list_params(URI.parse(uri).query || "") do
       {:ok, %{page: page, size: size}} ->
-        {:noreply, socket |> assign(page: page, size: size) |> owner_refresh()}
+        {:noreply,
+         socket |> assign(page: page, size: size, query_rejected: false) |> owner_refresh()}
 
       _ ->
-        {:noreply, assign(socket, rows: [], state: :error)}
+        {:noreply,
+         assign(socket,
+           rows: [],
+           state: :error,
+           query_rejected: true,
+           has_next: false,
+           observed_at: nil
+         )}
     end
   end
 
   @doc false
+  def owner_refresh(%{assigns: %{query_rejected: true}} = socket), do: socket
+
   def owner_refresh(socket) do
     case Hosts.list_status(
            socket.private.owner_auth.principal,

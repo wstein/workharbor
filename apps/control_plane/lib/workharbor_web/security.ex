@@ -166,7 +166,7 @@ defmodule WorkHarborWeb.Security do
     pairs = String.split(raw, "&")
 
     with true <- length(pairs) <= 2,
-         true <- Enum.all?(pairs, &Regex.match?(~r/^(page|size)=[0-9]+$/, &1)),
+         true <- Enum.all?(pairs, &Regex.match?(~r/\A(page|size)=[0-9]+\z/, &1)),
          values <-
            Enum.map(pairs, fn pair ->
              [key, value] = String.split(pair, "=")
