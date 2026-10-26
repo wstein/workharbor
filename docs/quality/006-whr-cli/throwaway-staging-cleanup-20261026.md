@@ -65,3 +65,18 @@ Neither is reported as passing.
 The owner still runs the native end-to-end acceptance on macOS with OrbStack or
 a Linux Docker host. Those results, the init gap audit, and the final quickstart
 and owner-host runbook follow this code package.
+
+## macOS fixture correction
+
+Native run 40255933284 failed before candidate allocation because the shared
+fixture supplied a persistent state path below macOS's `/var` symlink. The
+accepted profile requires a physical state path with no symlink components.
+The fixture now resolves its existing state parent before constructing the
+absent state root. Workspace labels keep their as-given spelling; product
+state-path validation is unchanged.
+
+`TestLocalStageFixtureStateRootUsesPhysicalAncestors` reproduces this on Linux
+by setting an aliased TMPDIR before the first test temporary directory is
+allocated. It failed before the fixture correction and passes afterward. The
+Linux acceptance inventory and macOS backend selection both require this case.
+Native macOS rerun evidence remains a readiness gate.

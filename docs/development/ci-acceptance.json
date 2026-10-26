@@ -1401,7 +1401,8 @@
       "github.com/wstein/workharbor-nxt/apps/whr/internal/commands/TestLocalRmCandidateDisposalJSONInventory",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayEarlyCreatedCandidateResidual",
       "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayPromotionCleanupIntentFailureStaysResumable",
-      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayUncertainImportIsInsideCandidateTree"
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestThrowawayUncertainImportIsInsideCandidateTree",
+      "github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker/TestLocalStageFixtureStateRootUsesPhysicalAncestors"
     ],
     "host_agent": [
       "github.com/wstein/workharbor-nxt/apps/host_agent/cmd/workharbor-agent/TestScaffoldRefusesProductCommands",

@@ -161,7 +161,7 @@ jobs:
           GOTOOLCHAIN: local
         run: |
           set -euo pipefail
-          selection='^Test(LocalStage(Git|Capture|Trust)|Throwaway)'
+          selection='^Test(LocalStage(Git|Capture|Trust|FixtureStateRootUsesPhysicalAncestors)|Throwaway)'
           expected=()
           while IFS= read -r name; do
             [[ "$name" == TestLocalStage* || "$name" == TestThrowaway* ]] && expected+=("$name")
