@@ -17,6 +17,7 @@ unchanged.
 | Early allocation and invalid creation responses remain removable. | `TestThrowawayStageFailureBeforeCandidateCanBeRemoved`; `TestThrowawayEarlyCreatedCandidateResidual` |
 | Failed cleanup-intent publication cannot become an archived completed promotion. | `TestThrowawayPromotionCleanupIntentFailureStaysResumable` |
 | Candidate-controlled directory modes and symlinks do not prevent normal disposal or redirect deletion outside the candidate tree. | `TestThrowawayTreeCleanupHandlesReadOnlyCloneAndSymlink` |
+| Promotion exports live inside the candidate operation, so uncertain transfer storage is removable before its records. | `TestThrowawayUncertainImportIsInsideCandidateTree`; successful and rollback tests check export absence before `Close`. |
 | Imported result refs precede primary replacement and survive candidate disposal. | `TestLocalPromoteTransfersResultsBeforeReplacingPrimary` checks success and an incomplete-cleanup path. |
 | Generic consent ordering and protected homes remain guarded. | `TestCandidateCleanupPreservesWholeAnchorageGuard`; `TestCandidateCleanupPrimarySharedAndProtectedRefused`; `TestLocalPromotePreservesPrimaryHome` |
 
