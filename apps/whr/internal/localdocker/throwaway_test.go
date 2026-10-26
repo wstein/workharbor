@@ -188,3 +188,45 @@ func TestThrowawayRemoveFinishesResidualAfterContainerDeletion(t *testing.T) {
 	}
 	assertNoCandidateRecords(t, ports.StateRoot)
 }
+
+func TestThrowawayTreeCleanupHandlesReadOnlyCloneAndSymlink(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "state")
+	store, err := openStageStore(root, "daemon", "unix:///tmp/docker.sock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	op := strings.Repeat("b", 32)
+	if err = store.Begin(op, "sha256:"+strings.Repeat("a", 64)); err != nil {
+		t.Fatal(err)
+	}
+	base := store.operationPath(op)
+	outside := filepath.Join(t.TempDir(), "outside")
+	if err = os.WriteFile(outside, []byte("owner data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	workspace := filepath.Join(base, "workspace")
+	if err = os.Mkdir(workspace, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(workspace, "file"), []byte("work"), 0400); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Symlink(outside, filepath.Join(workspace, "outside-link")); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Chmod(workspace, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(workspace, 0700) })
+	if err = os.WriteFile(filepath.Join(base, "receipt.json"), []byte("private receipt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.discardCandidateFiles(op); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(outside); err != nil || string(data) != "owner data" {
+		t.Fatalf("outside candidate changed: %q %v", data, err)
+	}
+	assertNoCandidateRecords(t, root)
+}
