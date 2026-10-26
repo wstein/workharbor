@@ -19,6 +19,7 @@ import (
 type fakeStageState struct {
 	Primary                  map[string]any
 	Candidate                map[string]any
+	ExtraContainers          []map[string]any
 	Volume                   *stageVolumeDetails
 	Calls                    [][]string
 	SmokeStdin               string
@@ -283,12 +284,20 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 		if state.Candidate != nil {
 			emit(map[string]string{"ID": state.Candidate["Id"].(string), "Status": "Up"})
 		}
+		for _, item := range state.ExtraContainers {
+			emit(map[string]any{"ID": item["Id"], "Status": item["State"]})
+		}
 	case "container:inspect":
 		format := argValue(args, "--format")
 		for _, id := range args[4:] {
 			item := state.Primary
 			if id != state.Primary["Id"] {
 				item = state.Candidate
+			}
+			for _, extra := range state.ExtraContainers {
+				if extra["Id"] == id {
+					item = extra
+				}
 			}
 			if item == nil || item["Id"] != id {
 				os.Exit(102)
@@ -322,6 +331,17 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 				os.Exit(103)
 			}
 		}
+	case "rm:-f":
+		id := args[len(args)-1]
+		for i, item := range state.ExtraContainers {
+			if item["Id"] == id {
+				state.ExtraContainers = append(state.ExtraContainers[:i], state.ExtraContainers[i+1:]...)
+				save()
+				fmt.Println(id)
+				os.Exit(0)
+			}
+		}
+		os.Exit(125)
 	case "container:rm":
 		if state.CleanupFailure == "container" {
 			os.Exit(17)
