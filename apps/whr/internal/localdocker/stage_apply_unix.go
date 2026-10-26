@@ -37,8 +37,10 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (re
 		disposal := candidateDisposal{store: s.store, runner: s.runner, endpoint: s.endpoint, receipt: s.receipt, plan: s.homeIntent.Plan(), observe: func(action string, target *StageResource, state string) {
 			recordCleanupEffect(&s.result.Effects, action, target, state)
 		}}
+		remediation := "Candidate artifacts were removed; start a fresh stage with fresh source trust and confirmation."
 		if err := disposal.dispose(cleanup); err != nil {
-			s.result.Recovery = append(s.result.Recovery, StageRecoveryStep{Action: "owner_reconcile", Instruction: disposal.residual(err)})
+			s.result.Recovery = []StageRecoveryStep{{Action: "owner_reconcile", Instruction: disposal.residual(err)}}
+			remediation = "Finish candidate cleanup with " + disposal.removalCommand() + " before a fresh stage."
 		} else {
 			s.result.RecoveryID = nil
 			s.result.Recovery = []StageRecoveryStep{{Action: "restage_after_cleanup", Instruction: "Candidate container, fresh home, clone/results and operation records were removed. The execution failure remains; hooks may have effects outside these artifacts."}}
@@ -47,6 +49,7 @@ func (s *LocalStage) Apply(parent context.Context, consent LifecycleConsent) (re
 		var coded *exitcode.Error
 		if errors.As(failure, &coded) {
 			coded.Result = result
+			coded.WithRemediation("%s", remediation)
 		}
 	}()
 
@@ -305,8 +308,8 @@ func (s *LocalStage) stagePartial(reason string, cause error) (LifecycleResult, 
 			}
 		}
 	}
-	s.result.Recovery = []StageRecoveryStep{{Action: "owner_reconcile", Instruction: "Inspect retained operation resources and writable clone; do not retry or adopt an uncertain operation."}}
-	e := exitcode.Errorf(exitcode.PathPartialFailure, "local stage %s", stageFailureMessage(reason, cause)).WithRemediation("Inspect the retained recovery ID and guarded cleanup plan before a fresh stage.")
+	s.result.Recovery = []StageRecoveryStep{{Action: "owner_reconcile", Instruction: "Inspect attempted/uncertain effects and the final candidate cleanup result; do not adopt an uncertain operation."}}
+	e := exitcode.Errorf(exitcode.PathPartialFailure, "local stage %s", stageFailureMessage(reason, cause)).WithRemediation("Follow the final cleanup result before starting a fresh stage.")
 	e.Result = s.Preview()
 	return s.Preview(), e
 }

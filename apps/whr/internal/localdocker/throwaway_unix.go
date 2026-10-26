@@ -369,7 +369,15 @@ func (d candidateDisposal) dispose(ctx context.Context) error {
 }
 
 func (d candidateDisposal) residual(err error) string {
-	return fmt.Sprintf("Candidate cleanup incomplete: %s. Inspect candidate/home and clone/results at %s; operation receipts/journal remain until resources and trees are absent.", terminal.Escape(err.Error()), terminal.Escape(filepath.Join(d.store.path, d.plan.OperationID)))
+	return fmt.Sprintf("Candidate cleanup incomplete: %s. Inspect remaining candidate/home and clone/results at %s and the reported effects. Remaining receipts/journal bind unfinished disposal. Finish with %s; records are deleted last.", terminal.Escape(err.Error()), terminal.Escape(filepath.Join(d.store.path, d.plan.OperationID)), d.removalCommand())
+}
+
+func (d candidateDisposal) removalCommand() string {
+	selector := "whr-anchorage-staging"
+	if d.receipt != nil && d.receipt.Candidate != nil && d.receipt.Candidate.ID != nil && fullID(*d.receipt.Candidate.ID) {
+		selector = *d.receipt.Candidate.ID
+	}
+	return "whr workspace rm --local " + selector
 }
 
 func (p *LocalPromotion) disposeAfterRollback() error {
