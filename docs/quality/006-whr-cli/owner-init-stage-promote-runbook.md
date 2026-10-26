@@ -1,8 +1,8 @@
 # Owner host run: init, stage, promote and disposal
 
 Status: planned acceptance procedure, with no host results recorded. Run after
-#272's CLI and the separately authored throwaway-cleanup implementation are
-accepted and merged. This procedure uses an already installed reviewed `whr`
+#272's promote CLI and throwaway cleanup (including #274) are accepted and
+merged. This procedure uses an already installed reviewed `whr`
 binary. Building, installing, tagging and publishing are separate owner actions.
 Repeat on Linux Docker and macOS with OrbStack; retain exact revisions.
 
@@ -12,7 +12,7 @@ Use disposable repositories and a disposable primary chosen by the owner.
 Record OS/architecture, terminal, shell, Git, Docker client/server, Dev Container
 CLI, Node and OrbStack versions, Docker endpoint and `whr --version`. Pause source
 writers during execution as the previews require. Record implementation, review
-and CI links, including the CLI and cleanup merge SHAs.
+and CI links, including the #272 merge SHA and its cleanup review.
 
 Choose owner-supplied variables:
 
@@ -21,6 +21,8 @@ Choose owner-supplied variables:
   Promotion recreates it and changes its full ID; record that new ID afterward.
 - `WHR_NAME` and `WHR_PROJECT_URL`: valid init inputs.
 - `WHR_PRIMARY_HOME`: the original primary home volume name.
+- `WHR_HOME_USER`: the normal home user, such as `vscode` for Anchorage; confirm
+  it before writing the marker. Docker exec does not apply `remoteUser`.
 - `WHR_HOME_PATH`: that volume's container mount destination, checked with
   `docker inspect "$WHR_PRIMARY"` before writing the marker below.
 
@@ -30,8 +32,9 @@ folder and helpers. They save output rather than print untrusted remote text:
 
 ```sh
 WHR_EVIDENCE=$(mktemp -d)
+WHR_RUN=run1
 record() {
-  label=$1
+  label=$WHR_RUN-$1
   shift
   if "$@" > "$WHR_EVIDENCE/$label.stdout" 2> "$WHR_EVIDENCE/$label.stderr"; then
     result=0
@@ -41,7 +44,7 @@ record() {
   printf '%s\n' "$result" > "$WHR_EVIDENCE/$label.exit"
 }
 inventory() {
-  label=$1
+  label=$WHR_RUN-$1
   docker ps -a --no-trunc --format '{{.ID}} {{.Names}} {{.Image}} {{.Status}}' \
     > "$WHR_EVIDENCE/$label.containers"
   docker volume ls --format '{{.Name}} {{.Driver}}' \
@@ -51,6 +54,13 @@ inventory() {
     > "$WHR_EVIDENCE/$label.protected-homes"
   docker inspect --format '{{range .Mounts}}{{println .Name .Destination}}{{end}}' \
     "$WHR_PRIMARY" > "$WHR_EVIDENCE/$label.primary-mounts"
+}
+negative() {
+  negative_label=$1
+  shift
+  inventory "$negative_label.before"
+  record "$negative_label" "$@"
+  inventory "$negative_label.after"
 }
 inventory before-init
 ```
@@ -64,9 +74,9 @@ sharing; do not attach credentials or tokens.
 Before stage, place a marker in the disposable original home, as its normal user:
 
 ```sh
-docker exec "$WHR_PRIMARY" sh -c \
+docker exec --user "$WHR_HOME_USER" "$WHR_PRIMARY" sh -c \
   'printf "%s\n" "whr owner acceptance marker" > "$1/.whr-acceptance-marker" && cksum "$1/.whr-acceptance-marker"' \
-  sh "$WHR_HOME_PATH" > "$WHR_EVIDENCE/before-stage.home-marker"
+  sh "$WHR_HOME_PATH" > "$WHR_EVIDENCE/run1-before-stage.home-marker"
 ```
 
 Require exit 0. After removal, promotion and each failure scenario, run the same
@@ -77,11 +87,11 @@ The primary container ID may change after promotion; its name/home binding must
 still match. For example, after promotion (use another label for other scenarios):
 
 ```sh
-record after-promote.marker docker exec "$WHR_PRIMARY" sh -c \
+record after-promote.marker docker exec --user "$WHR_HOME_USER" "$WHR_PRIMARY" sh -c \
   'cksum "$1/.whr-acceptance-marker"' sh "$WHR_HOME_PATH"
-cmp "$WHR_EVIDENCE/before-stage.home-marker" "$WHR_EVIDENCE/after-promote.marker.stdout"
-diff "$WHR_EVIDENCE/before-stage.protected-homes" "$WHR_EVIDENCE/after-promote.protected-homes"
-diff "$WHR_EVIDENCE/before-stage.primary-mounts" "$WHR_EVIDENCE/after-promote.primary-mounts"
+cmp "$WHR_EVIDENCE/run1-before-stage.home-marker" "$WHR_EVIDENCE/run2-after-promote.marker.stdout"
+diff "$WHR_EVIDENCE/run1-before-stage.protected-homes" "$WHR_EVIDENCE/run2-after-promote.protected-homes"
+diff "$WHR_EVIDENCE/run1-before-stage.primary-mounts" "$WHR_EVIDENCE/run2-after-promote.primary-mounts"
 ```
 
 Require the checksum command and comparisons to exit 0. Confirm the volume at
@@ -127,13 +137,15 @@ Dry-run preserves the tree. Validation must have no error; rerun must preserve t
 result. Existing files require explicit per-path overwrite consent; no overwrite
 flags are added automatically. Unless `--no-agents-block` is chosen consistently,
 init previews/writes the default agent workflow block in `AGENTS.md` (FR-064).
+It also proposes/writes `.claude/settings.json` by default (FR-065), leaving an
+existing settings file unchanged without explicit overwrite consent.
 
 In an equivalent disposable checkout, run `whr workspace init` on a real terminal,
 enter equivalent settings, review and confirm. Compare generated files byte for
-byte, **including `AGENTS.md`**, with the flag-driven result. Record answers and
-the comparison. Cancel a wizard run and decline its per-path overwrite prompt; record exit 72
-and unchanged files. Check selected devcontainer bytes and modes
-before/after reuse. Record any unexpected exit as a failure, not a passed case.
+byte, **including `AGENTS.md` and `.claude/settings.json`**, with the flag-driven
+result. Record answers and the comparison. Cancel a wizard run and decline its
+per-path overwrite prompt; record exit 72 and unchanged files. Check selected
+devcontainer bytes and modes before/after reuse. Record any unexpected exit as a failure, not a passed case.
 
 ## 4. Stage with identical preview/apply flags
 
@@ -154,7 +166,8 @@ record stage-preview whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_S
 
 Review hooks, mounts, image, home, pause-writers condition and fingerprint limits.
 Copy that exact preview's fingerprint into `WHR_FINGERPRINT`. Trust and mutation
-confirmation are separate. Apply with the **same flags**, including smoke choice:
+confirmation are separate. Run the section 6 stage refusal cases now, before
+stage apply, while no candidate exists. Apply with the **same flags**, including smoke choice:
 
 ```sh
 record stage-apply whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --trust "$WHR_FINGERPRINT" --yes --json
@@ -172,8 +185,9 @@ inventory after-stage
 
 Record the candidate's full ID/name as `WHR_CANDIDATE`, fresh home name, and all
 candidate-only private clone/result/receipt/journal paths from the reports.
-Successful stage retains a usable candidate. Check writable normal Git history,
-project hooks and verification status. An unverified candidate is not a verified
+Successful stage retains a usable candidate. Run the section 6 promote/remove
+missing-consent cases now, with this verified candidate, before section 5.
+Check writable normal Git history, project hooks and verification status. An unverified candidate is not a verified
 promotion result. Never reuse a fingerprint from different flags or changed source.
 
 ## 5. Remove, then freshly stage and promote
@@ -186,10 +200,18 @@ record remove-apply whr rm --local "$WHR_CANDIDATE" --yes --json
 inventory after-remove
 ```
 
-Run the residual checks below. To create the promotion candidate, repeat section
-4 in full: inventory, fresh dry-run with the chosen healthcheck/smoke flags, review,
-copy its **fresh** fingerprint, then matching apply. Record the new candidate,
+Run the residual checks below. Before creating the promotion candidate, set:
+
+```sh
+WHR_RUN=run2
+```
+
+Then repeat section 4 in full: inventory, fresh dry-run with the chosen
+healthcheck/smoke flags, review, copy its **fresh** fingerprint, then matching
+apply. Record the new candidate,
 home and private paths; do not reuse the removed candidate's receipt or fingerprint.
+The helpers prefix every output with `WHR_RUN`, preserving run 1 evidence. Always
+compare home data/mounts with the original `run1-before-stage` baseline.
 Review the candidate commits/results, then:
 
 ```sh
@@ -221,21 +243,14 @@ schema for the reviewed binary, not invented sample output.
 | Incomplete cleanup or uncertain recovery | 73; original cause, effects, residual inventory and retained records reported; never count as success. |
 | Doctor | Record actual exit/diagnostics; platform-specific SC-019 evidence passes only when its required checks pass. |
 
-Before a candidate exists, run these refusal cases with inventories before and
-after **each** command. This helper records those inventories; compare resource
-identities afterward (elapsed time in Docker's status text may change):
+Run init refusal before init apply in section 3. Run stage refusals after the
+section 4 preview and fresh fingerprint, before stage apply with no candidate.
+Run promote/remove refusals after verified stage, before section 5. Repeat at
+those same points in run 2. Do not wait until promotion has finished. The
+`negative` helper saves inventories before and after each command; compare
+resource identities (elapsed time in Docker status text may change).
 
-```sh
-negative() {
-  negative_label=$1
-  shift
-  inventory "$negative_label.before"
-  record "$negative_label" "$@"
-  inventory "$negative_label.after"
-}
-```
-
- `WRONG_FINGERPRINT` is a valid-length lowercase hexadecimal digest different
+`WRONG_FINGERPRINT` is a valid-length lowercase hexadecimal digest different
 from the fresh preview, not the actual digest:
 
 ```sh
@@ -294,7 +309,7 @@ Docker client / server / endpoint:
 OrbStack (or not applicable):
 Dev Container CLI / Node:
 whr --version / binary SHA-256 / source revision:
-CLI merge SHA / cleanup merge SHA / review links / CI links:
+#272 merge SHA (includes #274 cleanup) / review links / CI links:
 Primary name / old ID / new ID / original home / mount path:
 
 Scenario:
