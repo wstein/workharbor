@@ -10,7 +10,7 @@ import (
 )
 
 func TestLocalStageDurableIntentAndMonotonicRecovery(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "state")
+	root := filepath.Join(fixtureStageStateParent(t), "state")
 	s, err := openStageStore(root, "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestLocalStageDurableIntentAndMonotonicRecovery(t *testing.T) {
 }
 
 func TestLocalStageStateModesAndNoFollow(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "state")
+	root := filepath.Join(fixtureStageStateParent(t), "state")
 	s, err := openStageStore(root, "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
@@ -78,8 +78,8 @@ func TestLocalStageStateModesAndNoFollow(t *testing.T) {
 		t.Fatalf("concurrent lock admitted: %v", err)
 	}
 	s.Close()
-	target := t.TempDir()
-	link := filepath.Join(t.TempDir(), "link")
+	target := fixtureStageStateParent(t)
+	link := filepath.Join(fixtureStageStateParent(t), "link")
 	if err = os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestLocalStageStateModesAndNoFollow(t *testing.T) {
 }
 
 func TestLocalStageJournalNeverSkipsUnobservedEffect(t *testing.T) {
-	s, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	s, err := openStageStore(filepath.Join(fixtureStageStateParent(t), "state"), "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestLocalStageJournalNeverSkipsUnobservedEffect(t *testing.T) {
 }
 
 func TestLocalStageLostJournalBlocksFreshAttempt(t *testing.T) {
-	s, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	s, err := openStageStore(filepath.Join(fixtureStageStateParent(t), "state"), "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestLocalStageLostJournalBlocksFreshAttempt(t *testing.T) {
 }
 
 func TestLocalStageVerifiedAttemptRequiresReconciliation(t *testing.T) {
-	s, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	s, err := openStageStore(filepath.Join(fixtureStageStateParent(t), "state"), "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
 	}

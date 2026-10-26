@@ -16,7 +16,7 @@ import (
 )
 
 func TestLocalStageFIFOAdmissionNeverWaitsForWriter(t *testing.T) {
-	s, err := openStageStore(filepath.Join(t.TempDir(), "state"), "daemon", "unix:///tmp/docker.sock")
+	s, err := openStageStore(filepath.Join(fixtureStageStateParent(t), "state"), "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
 	}

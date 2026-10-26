@@ -80,3 +80,10 @@ by setting an aliased TMPDIR before the first test temporary directory is
 allocated. It failed before the fixture correction and passes afterward. The
 Linux acceptance inventory and macOS backend selection both require this case.
 Native macOS rerun evidence remains a readiness gate.
+
+The follow-up native run 40256795291 passed the shared fixture but exposed the
+same precondition in the direct read-only disposal fixture. The regression now
+executes that fixture and direct journal/mode fixtures under the aliased TMPDIR.
+All admitted state-store test constructors share a physical-parent helper;
+negative symlink tests still construct an explicit symlink beneath a physical
+parent. This changes test setup only, without normalizing product state inputs.

@@ -197,7 +197,7 @@ func TestThrowawayRemoveFinishesResidualAfterContainerDeletion(t *testing.T) {
 }
 
 func TestThrowawayTreeCleanupHandlesReadOnlyCloneAndSymlink(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "state")
+	root := filepath.Join(fixtureStageStateParent(t), "state")
 	store, err := openStageStore(root, "daemon", "unix:///tmp/docker.sock")
 	if err != nil {
 		t.Fatal(err)
