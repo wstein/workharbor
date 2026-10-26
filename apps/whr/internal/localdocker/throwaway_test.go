@@ -60,7 +60,7 @@ func TestThrowawayPromoteRollbackDisposesCandidate(t *testing.T) {
 	state := readFakePromotionState(t, path)
 	state.Failure = "hooks"
 	writeFakePromotionState(t, path, state)
-	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Quiescence: true})
 	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "primary container hooks failed") {
 		t.Fatalf("hook failure lost: %+v %v", result, err)
 	}
