@@ -75,15 +75,19 @@ func LocalRmHandler(prepare func(context.Context, localdocker.RemovalOptions) (R
 		if len(call.Args) > 1 || selectors != 1 || len(call.Args) == 1 && strings.TrimSpace(v.options.Target) == "" {
 			return Result{}, exitcode.Errorf(exitcode.PathBadArguments, "rm --local requires exactly one container id/name, --role or --label")
 		}
-		if v.options.Volumes && !v.options.Force {
-			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "home volume deletion requires --volumes and --force")
-		}
 		if !v.dryRun && !v.yes && !v.interactive {
 			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "unattended rm requires --yes (or --dry-run)")
 		}
 		tx, err := prepare(ctx, v.options)
 		if err != nil {
 			return Result{}, err
+		}
+		if closer, ok := tx.(interface{ Close() error }); ok {
+			defer func() {
+				if err := closer.Close(); err != nil && v.diagnostics != nil {
+					fmt.Fprintln(v.diagnostics, "whr: warning: preparation cleanup: "+terminal.Escape(err.Error()))
+				}
+			}()
 		}
 		preview := tx.Preview()
 		preview.DryRun = v.dryRun
@@ -122,6 +126,12 @@ func LocalRmHandler(prepare func(context.Context, localdocker.RemovalOptions) (R
 
 func removalHuman(r localdocker.RemovalResult) string {
 	var b strings.Builder
+	for _, action := range r.Actions {
+		if action.Kind == "candidate_tree" || action.Kind == "candidate_records" {
+			b.WriteString(candidateDisposalHelp)
+			break
+		}
+	}
 	fmt.Fprintf(&b, "preserve_home_volume: %t\n", r.PreserveHomeVolume)
 	for _, c := range r.Containers {
 		fmt.Fprintf(&b, "container: %s %s (role: %s)\n", terminal.Escape(c.ID), terminal.Escape(c.Name), terminal.Escape(c.Role))

@@ -1569,7 +1569,9 @@
               "kind": {
                 "enum": [
                   "container",
-                  "volume"
+                  "volume",
+                  "candidate_tree",
+                  "candidate_records"
                 ]
               },
               "target": {
