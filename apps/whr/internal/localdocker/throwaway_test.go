@@ -399,7 +399,7 @@ func TestThrowawayRemovalResumesAcrossFinalRecordDeletion(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err = tx.candidate.begin(); err != nil {
+			if err = tx.candidate.begin(context.Background()); err != nil {
 				t.Fatal(err)
 			}
 			if err = tx.candidate.removeResources(context.Background()); err != nil {
@@ -489,6 +489,7 @@ func TestThrowawayEarlyCreatedCandidateResidual(t *testing.T) {
 
 func TestThrowawayPromotionCleanupIntentFailureStaysResumable(t *testing.T) {
 	p, _, ports := fixtureVerifiedPromotion(t)
+	storePath := p.store.path
 	injected := false
 	ctx := context.WithValue(context.Background(), stageCaptureControlKey{}, stageCaptureControl{Phase: func(phase, path string) {
 		if phase == "candidate-cleanup-intent" {
@@ -498,7 +499,7 @@ func TestThrowawayPromotionCleanupIntentFailureStaysResumable(t *testing.T) {
 			}
 		}
 	}})
-	t.Cleanup(func() { _ = os.Chmod(p.store.path, 0700) })
+	t.Cleanup(func() { _ = os.Chmod(storePath, 0700) })
 	result, err := p.Apply(ctx, LifecycleConsent{Confirmed: true, Quiescence: true})
 	if !injected || exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate cleanup record binding failed") {
 		t.Fatalf("cleanup-intent storage failure: %+v %v injected=%t", result, err, injected)

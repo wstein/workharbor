@@ -255,6 +255,9 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 		}
 		os.Exit(0)
 	}
+	if len(args) > 0 && strings.HasPrefix(args[0], "--host=unix:///") {
+		args = append([]string{"--host", strings.TrimPrefix(args[0], "--host=")}, args[1:]...)
+	}
 	if kind != "docker" || len(args) < 3 || args[0] != "--host" {
 		os.Exit(100)
 	}

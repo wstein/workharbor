@@ -287,12 +287,9 @@ func (p *LocalPromotion) Apply(parent context.Context, consent LifecycleConsent)
 	}
 	p.receipt.Primary = p.result.Primary
 	p.receipt.Verification = verification
-	if err = p.transition("complete"); err != nil {
-		return p.partial("promotion completion publication failed", err)
-	}
 	disposal := candidateDisposal{store: p.store, runner: p.runner, endpoint: p.endpoint, receipt: &p.receipt, plan: p.homePlan}
 	p.disposalStarted = true
-	if err = disposal.begin(); err != nil {
+	if err = disposal.begin(ctx); err != nil {
 		return p.partial("candidate cleanup record binding failed", err)
 	}
 	if err = p.store.discardCandidateFiles(p.receipt.OperationID); err != nil {
@@ -453,7 +450,11 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 	if !p.candidateDisposed && !p.disposalStarted {
 		_ = p.save()
 	}
-	err := exitcode.Errorf(exitcode.PathPartialFailure, "local promote %s: %s; retained inventory requires owner reconciliation", reason, terminal.Escape(promotionCause(errors.Join(cause, p.rollbackFailure))))
+	suffix := "; retained inventory requires owner reconciliation"
+	if p.candidateDisposed {
+		suffix = "; original primary restored and candidate artifacts disposed"
+	}
+	err := exitcode.Errorf(exitcode.PathPartialFailure, "local promote %s: %s%s", reason, terminal.Escape(promotionCause(errors.Join(cause, p.rollbackFailure))), suffix)
 	err.Result = p.Preview()
 	return p.Preview(), err
 }
