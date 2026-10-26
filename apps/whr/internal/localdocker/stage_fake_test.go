@@ -24,6 +24,9 @@ type fakeStageState struct {
 	SmokeStdin               string
 	Health                   bool
 	StateRoot                string
+	CleanupFailure           string
+	ResourceExit             int
+	RequireCleanupRecords    bool
 	RequireDurableHomeIntent bool
 	RequireFreshFacts        bool
 	MergedLifecycle          map[string][]any
@@ -37,6 +40,7 @@ type fakeStageState struct {
 	ForeignOperation         bool
 	UpReturnsPrimary         bool
 	ImageVolumes             []string
+	AnonymousVolumes         []string
 }
 
 func readFakeStageState(t *testing.T, path string) fakeStageState {
@@ -190,6 +194,9 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			resolved["initializeCommand"] = stageFakeInitialize(cfg["initializeCommand"], argValue(args, "--workspace-folder"))
 			emit(map[string]any{"configuration": resolved, "mergedConfiguration": merged(cfg, false)})
 		case "up":
+			if state.ResourceExit != 0 {
+				os.Exit(state.ResourceExit)
+			}
 			data, e := os.ReadFile(argValue(args, "--override-config"))
 			if e != nil {
 				os.Exit(95)
@@ -252,6 +259,9 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 		}
 		os.Exit(0)
 	}
+	if len(args) > 0 && strings.HasPrefix(args[0], "--host=unix:///") {
+		args = append([]string{"--host", strings.TrimPrefix(args[0], "--host=")}, args[1:]...)
+	}
 	if kind != "docker" || len(args) < 3 || args[0] != "--host" || !strings.HasPrefix(args[1], "unix:///") {
 		os.Exit(100)
 	}
@@ -312,8 +322,42 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 				os.Exit(103)
 			}
 		}
+	case "container:rm":
+		if state.CleanupFailure == "container" {
+			os.Exit(17)
+		}
+		if state.RequireCleanupRecords {
+			assertFakeCleanupRecords(t, state)
+		}
+		if state.Candidate == nil || args[len(args)-1] != state.Candidate["Id"] {
+			os.Exit(123)
+		}
+		for _, arg := range args {
+			if arg == "--volumes" {
+				state.AnonymousVolumes = nil
+			}
+		}
+		state.Candidate = nil
+		save()
+		fmt.Println(args[len(args)-1])
+	case "volume:rm":
+		if state.CleanupFailure == "home" {
+			os.Exit(18)
+		}
+		if state.RequireCleanupRecords {
+			assertFakeCleanupRecords(t, state)
+		}
+		if state.Candidate != nil || state.Volume == nil || args[len(args)-1] != state.Volume.Name {
+			os.Exit(124)
+		}
+		state.Volume = nil
+		save()
+		fmt.Println(args[len(args)-1])
 	case "volume:ls":
 		emit("anchorage-home-owner")
+		for _, name := range state.AnonymousVolumes {
+			emit(name)
+		}
 		if state.Volume != nil {
 			emit(state.Volume.Name)
 		}
@@ -411,6 +455,7 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 					}
 				}
 				if !covered {
+					state.AnonymousVolumes = append(state.AnonymousVolumes, fmt.Sprintf("anonymous-%d", i))
 					mounts = append(mounts, map[string]any{"Type": "volume", "Name": fmt.Sprintf("anonymous-%d", i), "Source": "/var/lib/docker/volumes/anonymous/_data", "Destination": target, "RW": true})
 				}
 			}
@@ -471,4 +516,22 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 		}
 	}
 	os.Exit(0)
+}
+
+func assertFakeCleanupRecords(t *testing.T, state fakeStageState) {
+	t.Helper()
+	if state.Volume == nil {
+		t.Fatal("cleanup volume binding absent")
+	}
+	op := state.Volume.Labels["workharbor.stage.operation"]
+	daemons, err := os.ReadDir(state.StateRoot)
+	if err != nil || len(daemons) != 1 {
+		t.Fatal("cleanup daemon records absent")
+	}
+	base := filepath.Join(state.StateRoot, daemons[0].Name())
+	for _, path := range []string{filepath.Join(base, "journal.json"), filepath.Join(base, op, "receipt.json")} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("records deleted before resource disposal: %v", err)
+		}
+	}
 }
