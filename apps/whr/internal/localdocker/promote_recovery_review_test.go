@@ -198,14 +198,23 @@ func TestLocalPromoteReapedExitOneWithLiveReplacementIsConditional(t *testing.T)
 	for _, mode := range []string{"hooks_client_live", "smoke_client_live"} {
 		t.Run(mode, func(t *testing.T) {
 			t.Parallel()
-			p, path, _ := fixtureVerifiedPromotion(t)
+			p, path, ports := fixtureVerifiedPromotion(t)
 			state := readFakePromotionState(t, path)
 			state.Failure = mode
 			writeFakePromotionState(t, path, state)
 			result, err := p.Apply(context.Background(), reviewPromotionConsent())
 			state = readFakePromotionState(t, path)
-			if err == nil || exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "exit status 1") || result.Status != "partial" || state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Candidate == nil || state.Volume == nil {
+			if err == nil || exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "exit status 1") || result.Status != "partial" || state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Candidate != nil || state.Volume != nil || state.Failed != nil {
 				t.Fatalf("conditional live resource recovery: %+v %v", result, err)
+			}
+			assertNoCandidateRecords(t, ports.StateRoot)
+			for _, path := range []string{p.snapshots[0].ClonePath, p.results.root} {
+				if _, err := os.Lstat(path); !os.IsNotExist(err) {
+					t.Fatalf("conditional rollback retained candidate tree: %s %v", path, err)
+				}
+			}
+			if result.RecoveryID != nil {
+				t.Fatalf("completed disposal retained recovery ID: %s", *result.RecoveryID)
 			}
 			if len(result.Recovery) == 0 || !strings.Contains(result.Recovery[0].Instruction, "original container restored") {
 				t.Fatalf("missing limited recovery disclosure: %+v", result.Recovery)
