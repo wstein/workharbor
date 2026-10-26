@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestLocalPromoteKnownHookFailureRestoresOriginalAndRetainsReplacement(t *testing.T) {
+func TestLocalPromoteKnownHookFailureRestoresOriginalAndDisposesReplacement(t *testing.T) {
 	p, path, _ := fixtureVerifiedPromotion(t)
 	state := readFakePromotionState(t, path)
 	state.Failure = "hooks"
@@ -25,15 +25,21 @@ func TestLocalPromoteKnownHookFailureRestoresOriginalAndRetainsReplacement(t *te
 	if state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Primary["Name"] != p.primaryObservation.Name {
 		t.Fatalf("original not restored: %+v", state.Primary)
 	}
-	if state.Failed == nil || state.Failed["Id"] != strings.Repeat("e", 64) || state.Failed["Running"] != false || state.Failed["Name"] != "/whr-failed-primary-"+p.receipt.OperationID {
-		t.Fatalf("failed writable layer not retained: %+v", state.Failed)
+	if state.Failed != nil || state.Candidate != nil || state.Volume != nil {
+		t.Fatalf("rollback candidate artifacts remain: %+v", state)
 	}
-	if state.Candidate == nil || state.Volume == nil {
-		t.Fatal("rollback removed candidate resources")
+	if _, err := os.Stat(p.snapshots[0].ClonePath); !os.IsNotExist(err) {
+		t.Fatalf("rollback clone remains: %v", err)
+	}
+	if _, err := os.Stat(p.store.operationPath(p.receipt.OperationID)); !os.IsNotExist(err) {
+		t.Fatalf("rollback records remain: %v", err)
 	}
 	for _, call := range state.Calls {
-		if len(call) > 1 && call[0] == "container" && call[1] == "rm" {
-			t.Fatalf("rollback deleted writable layer: %v", call)
+		if len(call) > 1 && call[0] == "container" && call[1] == "rm" && call[len(call)-1] == p.primaryObservation.ID {
+			t.Fatalf("rollback deleted original primary: %v", call)
+		}
+		if len(call) > 1 && call[0] == "volume" && call[1] == "rm" && call[len(call)-1] == p.homePlan.PrimaryHome {
+			t.Fatalf("rollback deleted original home: %v", call)
 		}
 	}
 	if len(result.Recovery) == 0 || !strings.Contains(result.Recovery[0].Instruction, "original container restored") {
@@ -66,6 +72,15 @@ func TestLocalPromoteRollbackRefusesUncertainOrSharedResources(t *testing.T) {
 			if state.Candidate == nil || state.Volume == nil {
 				t.Fatal("refusal removed candidate resources")
 			}
+			if _, err := os.Stat(p.snapshots[0].ClonePath); err != nil {
+				t.Fatalf("uncertain recovery lost residual clone: %v", err)
+			}
+			if result.RecoveryID == nil {
+				t.Fatal("uncertain recovery omitted residual receipt")
+			}
+			if _, err := p.store.loadReceipt(p.receipt.OperationID); err != nil {
+				t.Fatalf("uncertain recovery lost durable receipt: %v", err)
+			}
 			for _, call := range state.Calls {
 				if len(call) > 1 && call[0] == "container" && call[1] == "rm" {
 					t.Fatalf("refusal deleted writable layer: %v", call)
@@ -94,8 +109,17 @@ func TestLocalPromoteKnownUnhealthyReplacementRestoresOriginal(t *testing.T) {
 		t.Fatalf("health failure: %+v %v", result, err)
 	}
 	state = readFakePromotionState(t, path)
-	if state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Failed == nil || state.Failed["Running"] != false {
+	if state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Failed != nil || state.Candidate != nil || state.Volume != nil {
 		t.Fatalf("unhealthy recovery not observed: primary=%v failed=%v", state.Primary, state.Failed)
+	}
+	if result.RecoveryID != nil {
+		t.Fatal("completed rollback reports retained receipt")
+	}
+	if _, err := os.Stat(p.snapshots[0].ClonePath); !os.IsNotExist(err) {
+		t.Fatalf("unhealthy rollback clone remains: %v", err)
+	}
+	if _, err := os.Stat(p.store.operationPath(p.receipt.OperationID)); !os.IsNotExist(err) {
+		t.Fatalf("unhealthy rollback records remain: %v", err)
 	}
 }
 

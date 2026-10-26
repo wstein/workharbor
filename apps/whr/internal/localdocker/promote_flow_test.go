@@ -85,8 +85,14 @@ func TestLocalPromoteUsesVerifiedImage(t *testing.T) {
 			t.Fatalf("C=P=O: %q", phase)
 		}
 	}
-	if _, err = os.Stat(p.snapshots[0].ClonePath); err != nil {
-		t.Fatalf("retained clone: %v", err)
+	if _, err = os.Stat(p.snapshots[0].ClonePath); !os.IsNotExist(err) {
+		t.Fatalf("promoted clone remains: %v", err)
+	}
+	if result.RecoveryID != nil {
+		t.Fatal("disposed candidate reports retained receipt")
+	}
+	if _, err = os.Stat(p.store.operationPath(p.receipt.OperationID)); !os.IsNotExist(err) {
+		t.Fatalf("promoted operation records remain: %v", err)
 	}
 }
 
@@ -107,17 +113,25 @@ func assertPromotionRefusal(t *testing.T, p *LocalPromotion, path string, c Life
 		t.Fatal("refusal mutated journal")
 	}
 }
-func TestLocalPromoteRequiresExplicitHomeDeletionConsent(t *testing.T) {
+func TestLocalPromoteNeedsNoSeparateHomeDeletionConsent(t *testing.T) {
 	for _, missing := range []string{"volumes", "force"} {
 		t.Run(missing, func(t *testing.T) {
-			p, path, _ := fixtureVerifiedPromotion(t)
+			p, path, ports := fixtureVerifiedPromotion(t)
 			c := LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}
 			if missing == "volumes" {
 				c.Volumes = false
 			} else {
 				c.Force = false
 			}
-			assertPromotionRefusal(t, p, path, c, exitcode.NeedsHuman, "explicit home deletion consent")
+			result, err := p.Apply(context.Background(), c)
+			if err != nil || result.Status != "promoted" {
+				t.Fatalf("normal consent refused: %+v %v", result, err)
+			}
+			state := readFakePromotionState(t, path)
+			if state.Candidate != nil || state.Volume != nil || state.Primary == nil || state.Primary["Running"] != true {
+				t.Fatalf("candidate artifacts remain or primary lost: %+v", state)
+			}
+			assertNoCandidateRecords(t, ports.StateRoot)
 		})
 	}
 }
@@ -192,8 +206,8 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 	}{
 		{"up", "primary resource phase failed", "create_primary", true, true},
 		{"wrong_image", "primary native binding failed", "create_primary", true, true},
-		{"hooks", "primary container hooks failed", "container_hooks", true, true},
-		{"smoke", "primary smoke verification failed", "smoke", true, true},
+		{"hooks", "primary container hooks failed", "container_hooks", false, false},
+		{"smoke", "primary smoke verification failed", "smoke", false, false},
 		{"candidate_rm", "candidate removal failed or uncertain", "remove_candidate", true, true},
 		{"home_rm", "candidate home removal failed or uncertain", "remove_home", false, true},
 	} {
@@ -232,8 +246,16 @@ func TestLocalPromotePartialFailureInventory(t *testing.T) {
 					t.Fatal("removed original primary home")
 				}
 			}
-			if _, err = os.Stat(p.snapshots[0].ClonePath); err != nil {
-				t.Fatal("lost retained clone")
+			_, cloneErr := os.Stat(p.snapshots[0].ClonePath)
+			if tc.failure == "hooks" || tc.failure == "smoke" {
+				if state.Primary == nil || state.Primary["Id"] != p.primaryObservation.ID || state.Primary["Running"] != true || state.Failed != nil || !os.IsNotExist(cloneErr) || result.RecoveryID != nil {
+					t.Fatalf("successful rollback did not dispose candidate: %+v clone=%v result=%+v", state, cloneErr, result)
+				}
+				if _, err := os.Stat(p.store.operationPath(p.receipt.OperationID)); !os.IsNotExist(err) {
+					t.Fatalf("rollback operation records remain: %v", err)
+				}
+			} else if cloneErr != nil || result.RecoveryID == nil {
+				t.Fatalf("uncertain cleanup lost residual clone or receipt: %v result=%+v", cloneErr, result)
 			}
 			if _, err = p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true}); exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "promotion transaction already used") {
 				t.Fatalf("retry: %v", err)
@@ -282,59 +304,79 @@ func TestLocalPromotePreservesPrimaryHome(t *testing.T) {
 }
 
 func TestLocalPromoteTransfersResultsBeforeReplacingPrimary(t *testing.T) {
-	var oid string
-	p, path, _ := fixtureVerifiedPromotionWithEdit(t, func(clone string) {
-		if err := os.WriteFile(filepath.Join(clone, "result"), []byte("candidate result\n"), 0600); err != nil {
-			t.Fatal(err)
-		}
-		fixtureGit(t, clone, "add", "result")
-		fixtureGit(t, clone, "commit", "-m", "candidate result")
-		oid = strings.TrimSpace(fixtureGit(t, clone, "rev-parse", "HEAD"))
-	})
-	original := p.receipt.OriginalSource
-	head := fixtureGit(t, original, "rev-parse", "HEAD")
-	index, _ := os.ReadFile(filepath.Join(original, ".git", "index"))
-	if len(p.Preview().ResultRefs) == 0 {
-		t.Fatal("missing planned results")
-	}
-	result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if fixtureGit(t, original, "rev-parse", "HEAD") != head {
-		t.Fatal("moved owner HEAD")
-	}
-	current, _ := os.ReadFile(filepath.Join(original, ".git", "index"))
-	if !bytes.Equal(index, current) {
-		t.Fatal("changed original index")
-	}
-	if _, err = os.Stat(filepath.Join(original, "result")); !os.IsNotExist(err) {
-		t.Fatal("activated result in original working tree")
-	}
-	for _, ref := range result.ResultRefs {
-		if ref.State != "created" || ref.OID != oid || strings.TrimSpace(fixtureGit(t, original, "rev-parse", ref.TargetRef)) != oid {
-			t.Fatalf("result ref: %+v", ref)
-		}
-	}
-	rows, err := p.store.Records()
-	if err != nil {
-		t.Fatal(err)
-	}
-	refsObserved, stopAttempt := 0, 0
-	for _, row := range rows {
-		if row.Action == "create_result_refs" && row.Observation == "observed" {
-			refsObserved = row.Sequence
-		}
-		if row.Action == "stop_primary" && row.Observation == "attempted" {
-			stopAttempt = row.Sequence
-		}
-	}
-	if refsObserved == 0 || stopAttempt <= refsObserved {
-		t.Fatalf("refs must precede primary stop: %d %d", refsObserved, stopAttempt)
-	}
-	state := readFakePromotionState(t, path)
-	if state.Primary == nil || state.Candidate != nil {
-		t.Fatal("promotion lifecycle incomplete")
+	for _, failure := range []string{"", "candidate_rm"} {
+		t.Run("cleanup-"+failure, func(t *testing.T) {
+			var oid string
+			p, path, _ := fixtureVerifiedPromotionWithEdit(t, func(clone string) {
+				if err := os.WriteFile(filepath.Join(clone, "result"), []byte("candidate result\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+				fixtureGit(t, clone, "add", "result")
+				fixtureGit(t, clone, "commit", "-m", "candidate result")
+				oid = strings.TrimSpace(fixtureGit(t, clone, "rev-parse", "HEAD"))
+			})
+			original := p.receipt.OriginalSource
+			head := fixtureGit(t, original, "rev-parse", "HEAD")
+			index, _ := os.ReadFile(filepath.Join(original, ".git", "index"))
+			if len(p.Preview().ResultRefs) == 0 {
+				t.Fatal("missing planned results")
+			}
+			state := readFakePromotionState(t, path)
+			state.Failure = failure
+			writeFakePromotionState(t, path, state)
+			result, err := p.Apply(context.Background(), LifecycleConsent{Confirmed: true, Volumes: true, Force: true, Quiescence: true})
+			if failure == "" && err != nil {
+				t.Fatal(err)
+			}
+			if failure != "" && (exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate removal failed or uncertain")) {
+				t.Fatalf("cleanup failure cause: %v", err)
+			}
+			if fixtureGit(t, original, "rev-parse", "HEAD") != head {
+				t.Fatal("moved owner HEAD")
+			}
+			current, _ := os.ReadFile(filepath.Join(original, ".git", "index"))
+			if !bytes.Equal(index, current) {
+				t.Fatal("changed original index")
+			}
+			if _, err = os.Stat(filepath.Join(original, "result")); !os.IsNotExist(err) {
+				t.Fatal("activated result in original working tree")
+			}
+			for _, ref := range result.ResultRefs {
+				if ref.State != "created" || ref.OID != oid || strings.TrimSpace(fixtureGit(t, original, "rev-parse", ref.TargetRef)) != oid {
+					t.Fatalf("result ref: %+v", ref)
+				}
+			}
+			if failure == "" {
+				if _, err := os.Stat(p.snapshots[0].ClonePath); !os.IsNotExist(err) {
+					t.Fatalf("transferred clone remains: %v", err)
+				}
+				if _, err := os.Stat(p.store.operationPath(p.receipt.OperationID)); !os.IsNotExist(err) {
+					t.Fatalf("transferred operation records remain: %v", err)
+				}
+			} else {
+				rows, err := p.store.Records()
+				if err != nil {
+					t.Fatal(err)
+				}
+				refsObserved, stopAttempt := 0, 0
+				for _, row := range rows {
+					if row.Action == "create_result_refs" && row.Observation == "observed" {
+						refsObserved = row.Sequence
+					}
+					if row.Action == "stop_primary" && row.Observation == "attempted" {
+						stopAttempt = row.Sequence
+					}
+				}
+				if refsObserved == 0 || stopAttempt <= refsObserved {
+					t.Fatalf("refs must precede primary stop: %d %d", refsObserved, stopAttempt)
+				}
+			}
+			state = readFakePromotionState(t, path)
+			if state.Primary == nil || (state.Candidate != nil) != (failure != "") {
+				t.Fatal("promotion lifecycle incomplete")
+			}
+
+		})
 	}
 }
 

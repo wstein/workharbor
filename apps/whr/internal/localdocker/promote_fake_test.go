@@ -388,6 +388,8 @@ func TestLocalPromotionFakeToolProcess(t *testing.T) {
 			if state.Failure == "retained_rm_late_shared" {
 				state.Failed = map[string]any{"Id": strings.Repeat("f", 64), "Name": "/late-sharing", "State": "exited", "Labels": map[string]string{}, "Mounts": []map[string]any{{"Type": "volume", "Name": state.Volume.Name, "Source": state.Volume.Name, "Destination": "/foreign", "RW": true}}}
 			}
+		} else if state.Failed != nil && state.Failed["Id"] == id {
+			state.Failed = nil
 		} else if state.Primary != nil && state.Primary["Id"] == id {
 			state.Primary = nil
 		} else {

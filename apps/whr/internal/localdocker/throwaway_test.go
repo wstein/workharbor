@@ -230,3 +230,208 @@ func TestThrowawayTreeCleanupHandlesReadOnlyCloneAndSymlink(t *testing.T) {
 	}
 	assertNoCandidateRecords(t, root)
 }
+
+func TestThrowawayRemovalFailureKeepsRecordsAndReportsAttempts(t *testing.T) {
+	for _, point := range []string{"container", "home", "records"} {
+		t.Run(point, func(t *testing.T) {
+			c, opts, ports, path := fixtureStageLifecycle(t, false)
+			opts.Smoke = true
+			s, err := c.prepareStage(context.Background(), opts, ports)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			op := s.store.operationPath(s.operationID)
+			if err = s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			state := readFakeStageState(t, path)
+			state.CleanupFailure = point
+			state.StateRoot = ports.StateRoot
+			state.RequireCleanupRecords = true
+			data, err := stageArtifactBytes(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			endpoint, err := ports.Endpoint(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tx, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: *result.Candidate.ID}, ports.StateRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if point == "records" {
+				if err = os.Chmod(op, 0500); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(op, 0700) })
+			}
+			removed, err := tx.Apply(context.Background())
+			reason := "phase command failed: remove_candidate"
+			if point == "home" {
+				reason = "phase command failed: remove_home"
+			}
+			if point == "records" {
+				reason = "receipt directory ownership or mode"
+			}
+			if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), reason) {
+				t.Fatalf("cleanup cause: %v want 73/%s", err, reason)
+			}
+			if point == "container" {
+				for _, action := range removed.Actions {
+					if action.Kind == "volume" && action.Attempted {
+						t.Fatal("home reported attempted before container was removed")
+					}
+				}
+			}
+			if _, err = os.Stat(filepath.Join(op, "receipt.json")); err != nil {
+				t.Fatalf("receipt removed before resources/tree: %v", err)
+			}
+			if _, err = os.Stat(filepath.Join(filepath.Dir(op), "journal.json")); err != nil {
+				t.Fatalf("journal lost: %v", err)
+			}
+			if err = os.Chmod(op, 0700); err != nil {
+				t.Fatal(err)
+			}
+			state = readFakeStageState(t, path)
+			state.CleanupFailure = ""
+			data, err = stageArtifactBytes(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = os.WriteFile(path, data, 0600); err != nil {
+				t.Fatal(err)
+			}
+			retry, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: *result.Candidate.ID}, ports.StateRoot)
+			if err != nil {
+				t.Fatalf("cannot finish residual: %v", err)
+			}
+			defer retry.Close()
+			if _, err = retry.Apply(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			assertNoCandidateRecords(t, ports.StateRoot)
+		})
+	}
+}
+
+func TestThrowawayStageFailureBeforeCandidateCanBeRemoved(t *testing.T) {
+	c, opts, ports, path := fixtureStageLifecycle(t, false)
+	opts.Smoke = true
+	state := readFakeStageState(t, path)
+	state.ResourceExit = 19
+	state.CleanupFailure = "home"
+	data, err := stageArtifactBytes(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.prepareStage(context.Background(), opts, ports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate resource phase failed") || result.RecoveryID == nil {
+		t.Fatalf("failed allocation: %+v %v", result, err)
+	}
+	if err = s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	state = readFakeStageState(t, path)
+	state.CleanupFailure = ""
+	data, err = stageArtifactBytes(state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	endpoint, err := ports.Endpoint(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	tx, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: "whr-anchorage-staging"}, ports.StateRoot)
+	if err != nil {
+		t.Fatalf("allocation residual by receipt name: %v", err)
+	}
+	defer tx.Close()
+	if _, err = tx.Apply(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	assertNoCandidateRecords(t, ports.StateRoot)
+	state = readFakeStageState(t, path)
+	if state.Volume != nil || state.Primary["Running"] != true {
+		t.Fatal("allocation residual remains or primary changed")
+	}
+}
+
+func TestThrowawayRemovalResumesAcrossFinalRecordDeletion(t *testing.T) {
+	for _, boundary := range []string{"binding_artifacts", "receipt", "operation_directory"} {
+		t.Run(boundary, func(t *testing.T) {
+			c, opts, ports, path := fixtureStageLifecycle(t, false)
+			opts.Smoke = true
+			s, err := c.prepareStage(context.Background(), opts, ports)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := s.Apply(context.Background(), LifecycleConsent{TrustDigest: *s.Preview().Fingerprint, Confirmed: true, Quiescence: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			op := s.store.operationPath(s.operationID)
+			if err = s.Close(); err != nil {
+				t.Fatal(err)
+			}
+			endpoint, err := ports.Endpoint(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			tx, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: *result.Candidate.ID}, ports.StateRoot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = tx.candidate.begin(); err != nil {
+				t.Fatal(err)
+			}
+			if err = tx.candidate.removeResources(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			switch boundary {
+			case "binding_artifacts":
+				err = os.Remove(filepath.Join(op, "execution-binding.json"))
+			case "receipt":
+				err = os.Remove(filepath.Join(op, "receipt.json"))
+			case "operation_directory":
+				err = os.RemoveAll(op)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = tx.Close(); err != nil {
+				t.Fatal(err)
+			}
+			resumed, err := c.prepareRemovalAtEndpoint(context.Background(), endpoint, RemovalOptions{Target: *result.Candidate.ID}, ports.StateRoot)
+			if err != nil {
+				t.Fatalf("cannot resume %s deletion: %v", boundary, err)
+			}
+			defer resumed.Close()
+			if _, err = resumed.Apply(context.Background()); err != nil {
+				t.Fatal(err)
+			}
+			assertNoCandidateRecords(t, ports.StateRoot)
+			state := readFakeStageState(t, path)
+			if state.Volume != nil || state.Candidate != nil || state.Primary["Running"] != true {
+				t.Fatal("final cleanup retained artifacts or changed primary")
+			}
+		})
+	}
+}

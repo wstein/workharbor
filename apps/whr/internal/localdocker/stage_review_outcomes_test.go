@@ -82,12 +82,13 @@ func TestLocalStageReviewUnhealthyCandidateFlow(t *testing.T) {
 	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate healthcheck failed") || result.Status != "staged_unverified" || result.UnverifiedReason == nil || *result.UnverifiedReason != "failed_health" {
 		t.Fatalf("health failure lost: %+v %v", result, err)
 	}
-	receipt, err := stage.store.loadReceipt(stage.operationID)
-	if err != nil {
-		t.Fatal(err)
+	state = readFakeStageState(t, path)
+	if state.Candidate != nil || state.Volume != nil || state.Primary["State"] != "running" || result.RecoveryID != nil {
+		t.Fatalf("health failure artifacts remain: %+v result=%+v", state, result)
 	}
-	if receipt.State != "staged_unverified" || receipt.UnverifiedReason == nil || *receipt.UnverifiedReason != "failed_health" {
-		t.Fatalf("health failure not durable: %+v", receipt)
+	assertNoCandidateRecords(t, p.StateRoot)
+	if _, err := os.Stat(stage.clonePath); !os.IsNotExist(err) {
+		t.Fatalf("health failure clone remains: %v", err)
 	}
 }
 func TestLocalStageReviewCompletedSmokeFailureFlow(t *testing.T) {
@@ -130,12 +131,13 @@ func TestLocalStageReviewCompletedSmokeFailureFlow(t *testing.T) {
 			if !seen {
 				t.Fatal("missing smoke effect")
 			}
-			receipt, err := stage.store.loadReceipt(stage.operationID)
-			if err != nil {
-				t.Fatal(err)
+			state = readFakeStageState(t, path)
+			if state.Candidate != nil || state.Volume != nil || state.Primary["State"] != "running" || result.RecoveryID != nil {
+				t.Fatalf("smoke failure artifacts remain: %+v result=%+v", state, result)
 			}
-			if code < 125 && (receipt.State != "staged_unverified" || receipt.UnverifiedReason == nil || *receipt.UnverifiedReason != "failed_smoke") {
-				t.Fatalf("smoke failure not durable: %+v", receipt)
+			assertNoCandidateRecords(t, p.StateRoot)
+			if _, err := os.Stat(stage.clonePath); !os.IsNotExist(err) {
+				t.Fatalf("smoke failure clone remains: %v", err)
 			}
 			if readFakeStageState(t, path).SmokeStdin == "" {
 				t.Fatal("failure fixture did not run smoke")
@@ -196,6 +198,7 @@ func TestLocalStageReviewAnonymousImageVolumeRefused(t *testing.T) {
 	// config does not declare it. Real Docker creates an anonymous candidate volume.
 	state.ImageVolumes = []string{"/cache"}
 	state.Primary["Mounts"] = append(state.Primary["Mounts"].([]any), map[string]any{"Type": "volume", "Name": "primary-cache", "Source": "/var/lib/docker/volumes/primary-cache/_data", "Destination": "/cache", "RW": true})
+	primaryBefore := stageDigest(state.Primary)
 	writeStageReviewState(t, path, state)
 	stage, err := c.prepareStage(context.Background(), opts, p)
 	if err != nil {
@@ -203,19 +206,24 @@ func TestLocalStageReviewAnonymousImageVolumeRefused(t *testing.T) {
 	}
 	defer stage.Close()
 	result, err := stage.Apply(context.Background(), LifecycleConsent{TrustDigest: *stage.Preview().Fingerprint, Confirmed: true, Quiescence: true})
-	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate volume mount not in declared plan") || result.Status != "partial" {
+	if exitcode.FromError(err) != exitcode.PartialFailure || !strings.Contains(err.Error(), "candidate volume mount not in declared plan") || result.Status != "partial" || result.Phase != "candidate_resources" {
 		t.Fatalf("anonymous image volume admitted: %+v %v", result, err)
 	}
 	state = readFakeStageState(t, path)
-	found := false
-	for _, raw := range state.Candidate["Mounts"].([]any) {
-		m := raw.(map[string]any)
-		if m["Name"] == "anonymous-0" {
-			found = true
-		}
+	if state.Candidate != nil || state.Volume != nil || len(state.AnonymousVolumes) != 0 || result.RecoveryID != nil {
+		t.Fatalf("refused candidate resources remain: %+v result=%+v", state, result)
 	}
-	if !found {
-		t.Fatal("fake did not model Docker anonymous volume")
+	if stageDigest(state.Primary) != primaryBefore {
+		t.Fatal("anonymous-volume refusal cleanup changed primary/cache/home mounts")
+	}
+	if _, err := os.Stat(stage.clonePath); !os.IsNotExist(err) {
+		t.Fatalf("anonymous-volume refusal clone remains: %v", err)
+	}
+	assertNoCandidateRecords(t, p.StateRoot)
+	for _, call := range state.Calls {
+		if len(call) > 0 && call[0] == "exec" {
+			t.Fatal("refused anonymous volume candidate ran hooks or smoke")
+		}
 	}
 }
 
@@ -265,11 +273,12 @@ func TestLocalStageReviewInterruptDuringHealthWaitFlow(t *testing.T) {
 	default:
 		t.Fatal("health wait was not reached")
 	}
-	receipt, err := stage.store.loadReceipt(stage.operationID)
-	if err != nil {
-		t.Fatal(err)
+	state = readFakeStageState(t, path)
+	if state.Candidate != nil || state.Volume != nil || state.Primary["State"] != "running" || result.RecoveryID != nil {
+		t.Fatalf("interrupted stage artifacts remain: %+v result=%+v", state, result)
 	}
-	if receipt.State != "verifying" || receipt.UnverifiedReason != nil {
-		t.Fatalf("interrupted health receipt became terminal: %+v", receipt)
+	assertNoCandidateRecords(t, p.StateRoot)
+	if _, err := os.Stat(stage.clonePath); !os.IsNotExist(err) {
+		t.Fatalf("interrupted stage clone remains: %v", err)
 	}
 }
