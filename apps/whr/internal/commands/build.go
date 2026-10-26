@@ -144,8 +144,6 @@ func (a *app) build() {
 			} else if e.ID == "workspace.promote" {
 				c.Flags().Bool("local", false, "use the local Docker daemon and the verified candidate receipt")
 				c.Flags().Bool("dry-run", false, "preview replacement and cleanup with no mutation")
-				c.Flags().Bool("volumes", false, "delete the exact candidate home after verification (requires --force)")
-				c.Flags().Bool("force", false, "authorize candidate home deletion with --volumes; preserve primary home")
 				c.Flags().Bool("yes", false, "confirm replacement, ended exec sessions, cleanup and pause-writers condition")
 			} else if e.ID == "workspace.stage" {
 				c.Flags().Bool("local", false, "use the local Docker daemon; no control plane")

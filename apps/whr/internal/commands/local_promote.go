@@ -16,9 +16,9 @@ import (
 
 type localPromoteKey struct{}
 type localPromoteInvocation struct {
-	local, dryRun, yes, volumes, force, interactive bool
-	input                                           io.Reader
-	diagnostics                                     io.Writer
+	local, dryRun, yes, interactive bool
+	input                           io.Reader
+	diagnostics                     io.Writer
 }
 
 func (a *app) localPromoteOptions(c *cobra.Command) localPromoteInvocation {
@@ -26,22 +26,17 @@ func (a *app) localPromoteOptions(c *cobra.Command) localPromoteInvocation {
 	v.local, _ = c.Flags().GetBool("local")
 	v.dryRun, _ = c.Flags().GetBool("dry-run")
 	v.yes, _ = c.Flags().GetBool("yes")
-	v.volumes, _ = c.Flags().GetBool("volumes")
-	v.force, _ = c.Flags().GetBool("force")
 	v.interactive = !a.jsonMode() && a.env.InputTerminal && a.env.IsTerminal(a.env.Stderr) && a.env.Stdin != nil
 	return v
 }
 
-// LocalPromoteHandler exposes the receipt-bound promotion library unchanged.
-// Explicit deletion consent is checked before preparation, never inferred.
+// LocalPromoteHandler confirms the receipt-bound replacement and complete
+// throwaway candidate disposal with one normal mutation confirmation.
 func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOptions) (localdocker.LifecycleTransaction, error)) Handler {
 	return func(ctx context.Context, call Call) (Result, error) {
 		v, _ := ctx.Value(localPromoteKey{}).(localPromoteInvocation)
 		if !v.local || len(call.Args) != 1 || strings.TrimSpace(call.Args[0]) == "" {
 			return Result{}, exitcode.Errorf(exitcode.PathBadArguments, "use workspace promote --local <exact-name|full-id>")
-		}
-		if v.volumes && !v.force || !v.dryRun && (!v.volumes || !v.force) {
-			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "candidate home deletion requires both --volumes and --force; --yes supplies neither")
 		}
 		if !v.dryRun && !v.yes && !v.interactive {
 			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "unattended promote requires --yes (or --dry-run)")
@@ -57,10 +52,10 @@ func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOption
 		}()
 		preview := tx.Preview()
 		if v.dryRun {
-			return Result{Value: preview, Human: promoteHuman(preview) + "Apply requires explicit --volumes and --force, plus confirmation or --yes.\n"}, nil
+			return Result{Value: preview, Human: promoteHuman(preview) + "Apply requires confirmation or --yes.\n"}, nil
 		}
 		if v.interactive && !v.yes {
-			if _, err = io.WriteString(v.diagnostics, promoteHuman(preview)+"Pause input writers for every execution phase. Promote and remove the exact candidate and candidate home? [y/N] "); err != nil {
+			if _, err = io.WriteString(v.diagnostics, promoteHuman(preview)+"Pause input writers for every execution phase. Promote and dispose of all previewed candidate artifacts? [y/N] "); err != nil {
 				return Result{}, err
 			}
 			answer, e := lifecycleAnswer(ctx, bufio.NewReaderSize(v.input, 1025))
@@ -72,7 +67,7 @@ func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOption
 				return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionRefused, "promote confirmation declined")
 			}
 		}
-		result, err := tx.Apply(ctx, localdocker.LifecycleConsent{Confirmed: true, Volumes: v.volumes, Force: v.force, Quiescence: true})
+		result, err := tx.Apply(ctx, localdocker.LifecycleConsent{Confirmed: true, Quiescence: true})
 		res := Result{Value: result, Human: promoteHuman(result)}
 		if err != nil {
 			failure := asError(err)
@@ -84,5 +79,5 @@ func LocalPromoteHandler(prepare func(context.Context, localdocker.PromoteOption
 	}
 }
 func promoteHuman(r localdocker.LifecycleResult) string {
-	return lifecycleHuman(r) + "Primary replacement ends all whr shell panes and other exec sessions. The original primary home is never a cleanup target. Trusted container hooks may write the original workspace.\n"
+	return lifecycleHuman(r) + candidateDisposalHelp + "Required result refs are verified in the original repository before clone disposal.\nPrimary replacement ends all whr shell panes and other exec sessions. The original primary home is never a cleanup target. Trusted container hooks may write the original workspace.\n"
 }
