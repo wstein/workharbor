@@ -46,7 +46,8 @@ defmodule WorkHarborWeb.HostsLiveTest do
     refute inspect(row) =~ foreign.id
     {:ok, _, cli} = Accounts.login(c.principal.owner_id, c.secret, "cli_owner")
     assert {:ok, %{rows: [_]}} = Hosts.list_status(cli)
-    assert {:error, _} = Hosts.list_status(%{c.principal | kind: "dashboard"})
+    {:ok, _, dashboard} = Accounts.login(c.principal.owner_id, c.secret, "dashboard")
+    assert {:error, :forbidden} = Hosts.list_status(dashboard)
   end
 
   test "host pagination is stable bounded and rejects bad query values before reads", c do
@@ -97,6 +98,105 @@ defmodule WorkHarborWeb.HostsLiveTest do
 
     refute log =~ "FORGED-HOST-CANARY"
     assert Repo.query!("SELECT COUNT(*) FROM audit_events", [], log: false).rows == before
+  end
+
+  test "host list visibly escapes the full FR022 control set", c do
+    points =
+      (Enum.to_list(0..31) -- [9]) ++
+        Enum.to_list(127..159) ++
+        [0x061C, 0x200E, 0x200F, 0x2028, 0x2029] ++
+        Enum.to_list(0x202A..0x202E) ++ Enum.to_list(0x2066..0x2069)
+
+    values = Enum.map(points, fn point -> "before" <> <<point::utf8>> <> "after" end)
+    Repo.insert!(%Host{owner_id: c.principal.owner_id, capabilities: values})
+    {:ok, _view, html} = live(get(c.conn, "https://localhost/owner/hosts"))
+
+    for point <- points do
+      marker = point |> Integer.to_string(16) |> String.upcase() |> String.pad_leading(4, "0")
+      assert html =~ "before&lt;U+#{marker}&gt;after"
+      refute html =~ "before" <> <<point::utf8>> <> "after"
+    end
+  end
+
+  test "host read timeout has one batch budget and displays unavailable", c do
+    for _ <- 1..3, do: Repo.insert!(%Host{owner_id: c.principal.owner_id})
+    start_supervised!({WorkHarbor.HostConnections, []})
+    :sys.suspend(WorkHarbor.HostConnections)
+
+    try do
+      started = System.monotonic_time(:millisecond)
+      assert {:error, :unavailable} = Hosts.list_status(c.principal)
+      assert System.monotonic_time(:millisecond) - started < 2000
+      {:ok, _view, html} = live(get(c.conn, "https://localhost/owner/hosts"))
+      assert html =~ "Host information is unavailable"
+    after
+      :sys.resume(WorkHarbor.HostConnections)
+    end
+  end
+
+  test "revocation first denial clears protected rows and queued ticks never reread", c do
+    host = Repo.insert!(%Host{owner_id: c.principal.owner_id})
+    {:ok, view, html} = live(get(c.conn, "https://localhost/owner/hosts"))
+    assert html =~ host.id
+    socket = :sys.get_state(view.pid).socket
+    assert :ok = Accounts.revoke(c.principal, c.principal.credential_id)
+    before = denied_count()
+
+    assert {:halt, stopped} =
+             Phoenix.LiveView.Lifecycle.handle_info(
+               {:owner_session, socket.private.owner_auth.ref},
+               socket
+             )
+
+    assert stopped.private.owner_auth.stopped
+    assert stopped.assigns.rows == []
+    assert stopped.private.owner_auth.principal == nil
+    assert denied_count() == before + 1
+
+    for _ <- 1..3 do
+      assert {:halt, ^stopped} =
+               Phoenix.LiveView.Lifecycle.handle_info(
+                 {:owner_session, socket.private.owner_auth.ref},
+                 stopped
+               )
+    end
+
+    assert denied_count() == before + 1
+  end
+
+  test "refresh replaces connected observations with unknown without keeping healthy rows", c do
+    Repo.insert!(%Host{owner_id: c.principal.owner_id})
+    start_supervised!({__MODULE__.StatusStub, "connected"})
+    {:ok, view, html} = live(get(c.conn, "https://localhost/owner/hosts"))
+    assert html =~ "Connected"
+    GenServer.call(WorkHarbor.HostConnections, {:set, "unknown"})
+    socket = :sys.get_state(view.pid).socket
+    send(view.pid, {:owner_session, socket.private.owner_auth.ref})
+    updated = render(view)
+    assert updated =~ "Unknown"
+    refute updated =~ ">Connected<"
+    assert is_reference(:sys.get_state(view.pid).socket.private.owner_auth.ref)
+    refute :sys.get_state(view.pid).socket.private.owner_auth.ref == socket.private.owner_auth.ref
+  end
+
+  defmodule StatusStub do
+    use GenServer
+
+    def start_link(status),
+      do: GenServer.start_link(__MODULE__, status, name: WorkHarbor.HostConnections)
+
+    def init(status), do: {:ok, status}
+    def handle_call({:host_state, _}, _, status), do: {:reply, {:ok, status}, status}
+    def handle_call({:set, status}, _, _), do: {:reply, :ok, status}
+  end
+
+  defp denied_count do
+    [[n]] =
+      Repo.query!("SELECT COUNT(*) FROM audit_events WHERE event='authorization_denied'", [],
+        log: false
+      ).rows
+
+    n
   end
 
   defp signed_in(token, principal) do

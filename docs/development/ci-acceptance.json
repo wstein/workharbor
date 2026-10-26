@@ -2141,7 +2141,16 @@
       "WorkHarborWeb.TransportSecurityTest/test owner WSS bounds actual frames while preserving heartbeat",
       "WorkHarborWeb.TransportSecurityTest/test owner WSS bounds aggregate fragmented messages before decode",
       "WorkHarborWeb.TransportSecurityTest/test active listener requires the exact aggregate websocket bound",
-      "WorkHarborWeb.OwnerShellTest/test flash extra attributes visibly escape control characters before HTML escaping"
+      "WorkHarborWeb.OwnerShellTest/test flash extra attributes visibly escape control characters before HTML escaping",
+      "WorkHarborWeb.HostsLiveTest/test hosts page visibly escapes hostile metadata and never exposes identity secrets",
+      "WorkHarborWeb.HostsLiveTest/test shared host reads bind owner and enforce the three credential kinds",
+      "WorkHarborWeb.HostsLiveTest/test host pagination is stable bounded and rejects bad query values before reads",
+      "WorkHarborWeb.HostsLiveTest/test empty page and unknown connection are explicit",
+      "WorkHarborWeb.HostsLiveTest/test forged events do not change host records audit or logs",
+      "WorkHarborWeb.HostsLiveTest/test host list visibly escapes the full FR022 control set",
+      "WorkHarborWeb.HostsLiveTest/test host read timeout has one batch budget and displays unavailable",
+      "WorkHarborWeb.HostsLiveTest/test revocation first denial clears protected rows and queued ticks never reread",
+      "WorkHarborWeb.HostsLiveTest/test refresh replaces connected observations with unknown without keeping healthy rows"
     ]
   }
 }
