@@ -25,8 +25,8 @@ defmodule WorkHarborWeb.OverviewLive do
       <div class="overview-grid">
         <article aria-labelledby="hosts-title">
           <h2 id="hosts-title">Hosts</h2>
-          <p class="status-label">Unavailable</p>
-          <p>Host information is not available here yet.</p>
+          <p><a href="/owner/hosts">View hosts</a></p>
+          <p>Check recorded metadata and connection freshness.</p>
         </article>
         <article aria-labelledby="workspaces-title">
           <h2 id="workspaces-title">Workspaces</h2>
