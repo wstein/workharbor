@@ -180,21 +180,23 @@ defmodule WorkHarborWeb.HostsLiveTest do
   end
 
   test "hosts admission refuses missing wrong-kind expired and revoked credentials", c do
-    assert_refusal(get(base_conn(), "https://localhost/owner/hosts"), 401, "unauthenticated")
+    host = Repo.insert!(%Host{owner_id: c.principal.owner_id})
+    missing = get(base_conn(), "https://localhost/owner/hosts")
+    assert_refusal(missing, 401, "unauthenticated")
+    refute missing.resp_body =~ host.id
 
     for kind <- ["dashboard", "cli_owner"] do
       {:ok, token, principal} = Accounts.login(c.principal.owner_id, c.secret, kind)
-
-      assert_refusal(
-        get(signed_in(token, principal), "https://localhost/owner/hosts"),
-        401,
-        "unauthenticated"
-      )
+      response = get(signed_in(token, principal), "https://localhost/owner/hosts")
+      assert_refusal(response, 401, "unauthenticated")
+      refute response.resp_body =~ host.id
     end
 
     for state <- [:expired, :revoked] do
       {:ok, token, principal} = Accounts.login(c.principal.owner_id, c.secret, "owner_browser")
       conn = signed_in(token, principal)
+      page = get(conn, "https://localhost/owner/hosts")
+      assert html_response(page, 200) =~ host.id
       old = Application.get_env(:workharbor, :clock)
 
       try do
@@ -203,7 +205,11 @@ defmodule WorkHarborWeb.HostsLiveTest do
           :revoked -> assert :ok = Accounts.revoke(principal, principal.credential_id)
         end
 
-        assert_refusal(get(conn, "https://localhost/owner/hosts"), 401, "unauthenticated")
+        # Revalidate the already authorized HTTP page at connected mount too.
+        assert {:error, {:redirect, %{to: "/login/owner"}}} = live(page)
+        response = get(conn, "https://localhost/owner/hosts")
+        assert_refusal(response, 401, "unauthenticated")
+        refute response.resp_body =~ host.id
       after
         restore_env(:clock, old)
       end
