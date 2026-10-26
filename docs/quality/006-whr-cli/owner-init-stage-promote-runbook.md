@@ -145,7 +145,8 @@ enter equivalent settings, review and confirm. Compare generated files byte for
 byte, **including `AGENTS.md` and `.claude/settings.json`**, with the flag-driven
 result. Record answers and the comparison. Cancel a wizard run and decline its
 per-path overwrite prompt; record exit 72 and unchanged files. Check selected
-devcontainer bytes and modes before/after reuse. Record any unexpected exit as a failure, not a passed case.
+devcontainer bytes and modes before/after reuse. Record any unexpected exit as a
+failure, not a passed case.
 
 ## 4. Stage with identical preview/apply flags
 
@@ -167,7 +168,8 @@ record stage-preview whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_S
 Review hooks, mounts, image, home, pause-writers condition and fingerprint limits.
 Copy that exact preview's fingerprint into `WHR_FINGERPRINT`. Trust and mutation
 confirmation are separate. Run the section 6 stage refusal cases now, before
-stage apply, while no candidate exists. Apply with the **same flags**, including smoke choice:
+stage apply, while no candidate exists. Apply with the **same flags**, including
+smoke choice:
 
 ```sh
 record stage-apply whr workspace stage --local "$WHR_PRIMARY" --source "$WHR_SOURCE" --trust "$WHR_FINGERPRINT" --yes --json
@@ -187,7 +189,8 @@ Record the candidate's full ID/name as `WHR_CANDIDATE`, fresh home name, and all
 candidate-only private clone/result/receipt/journal paths from the reports.
 Successful stage retains a usable candidate. Run the section 6 promote/remove
 missing-consent cases now, with this verified candidate, before section 5.
-Check writable normal Git history, project hooks and verification status. An unverified candidate is not a verified
+Check writable normal Git history, project hooks and verification status. An
+unverified candidate is not a verified
 promotion result. Never reuse a fingerprint from different flags or changed source.
 
 ## 5. Remove, then freshly stage and promote
