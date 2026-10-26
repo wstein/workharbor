@@ -386,3 +386,19 @@ protocol behavior, not a fallback that forwards forged application events.
 The native test protocol join is not a browser or real-WSS claim; the existing
 TLS/WSS suite, owner browser walkthrough and exact-head independent review gates
 remain separate and unverified on this new candidate.
+
+## W2 owner hosts page (2026-10-26)
+
+The read-only hosts package uses the accepted
+[frontend plan](../specs/006-whr-cli/contracts/web-frontend-first-increment.md)
+and shared authorized reads. Its
+[package evidence](quality/web-w2-hosts-20261026.md) distinguishes executable
+source tests from owner-browser acceptance. Existing W1 authentication, strict
+CSP, inline SVG and transport policy remain in force. No task completion is claimed.
+
+Owner read pages accessibility checklist: the hosts page uses a named section,
+heading, list and labeled pagination navigation, visible status words and existing
+light/dark CSS variables. Real-browser keyboard order, focus, target dimensions,
+320/768/1280-pixel reflow, computed contrast and stale/reconnect behavior remain
+unverified until an owner-authorized browser journey. Source tests do not establish
+those measurements.
