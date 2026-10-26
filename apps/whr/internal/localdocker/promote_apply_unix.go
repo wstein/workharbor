@@ -433,16 +433,34 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 			p.result.ResultRefs[i].State = "remaining"
 		}
 	}
-	recovery := fmt.Sprintf("Inspect operation %s and retained configuration %s/promote/devcontainer.json. Original primary full ID %s, original name %s, recovery name %s. Inspect attempted/uncertain effects by full ID; hooks may have modified shared workspace/home. No further automatic recovery or retry; retain clone, imported objects and refs.", p.receipt.OperationID, terminal.Escape(p.store.operationPath(p.receipt.OperationID)), p.primaryObservation.ID, terminal.Escape(p.primaryConfig.Name), p.retainedPrimaryName())
+	recovery := fmt.Sprintf("Inspect operation %s and retained configuration %s/promote/devcontainer.json. Original primary full ID %s, original name %s, recovery name %s. Inspect attempted/uncertain effects by full ID; hooks may have modified shared workspace/home. Inspect imported objects/refs and reported cleanup effects before retrying.", p.receipt.OperationID, terminal.Escape(p.store.operationPath(p.receipt.OperationID)), p.primaryObservation.ID, terminal.Escape(p.primaryConfig.Name), p.retainedPrimaryName())
 	if p.originalRemoved {
 		recovery += " The replacement passed verification before the original container was removed. Preserve and inspect the replacement; the removed original writable layer cannot be restored by this operation."
 	} else if !p.rollbackRestored {
 		recovery += " The original container has not been intentionally removed. Inspect its stopped/renamed state and any replacement first. Before the owner renames/starts that exact original, stop any replacement using its home and release the original name. An unconfirmed remove result still requires inspection; do not assume rollback."
 	}
 	if p.rollbackRestored && !p.candidateDisposed {
-		recovery += " Bounded resource recovery: original container restored under its original name and observed running; failed replacement retained stopped as " + p.failedPrimaryName() + ". Shared workspace/home writes, imported objects/refs and terminated sessions were not restored."
+		recovery += " Bounded resource recovery: original container restored under its original name and observed running. Shared workspace/home writes, imported objects/refs and terminated sessions were not restored."
+		if !p.disposalStarted {
+			recovery += " Failed replacement disposal has not started; inspect its reported full ID and recovery name " + p.failedPrimaryName() + " before disposal."
+		}
 	} else if p.rollbackFailure != nil {
 		recovery += " Resource recovery stopped: " + terminal.Escape(p.rollbackFailure.Error()) + ". Inspect both full IDs before any manual action."
+	}
+
+	if p.disposalStarted && !p.candidateDisposed {
+		disposal := candidateDisposal{store: p.store, receipt: &p.receipt, plan: p.homePlan}
+		cleanupCause := p.rollbackFailure
+		if cleanupCause == nil {
+			cleanupCause = cause
+		}
+		recovery = disposal.residual(cleanupCause)
+		if p.rollbackRestored {
+			recovery = "Original container restored under its original name and observed running. " + recovery + " Shared workspace/home writes, imported refs and terminated sessions were not restored."
+		}
+		if p.originalRemoved {
+			recovery = "Verified replacement remains primary using the original home; original container removed. " + recovery
+		}
 	}
 	if p.candidateDisposed {
 		recovery = "Bounded resource recovery: original container restored under its original name and observed running. Failed replacement, candidate container, fresh home, clone/results and candidate records were removed. Shared workspace/home hook writes, imported objects/refs and terminated sessions were not restored."
@@ -456,8 +474,13 @@ func (p *LocalPromotion) partial(reason string, cause error) (LifecycleResult, e
 	suffix := "; retained inventory requires owner reconciliation"
 	if p.candidateDisposed {
 		suffix = "; original primary restored and candidate artifacts disposed"
+	} else if p.disposalStarted {
+		suffix = "; candidate cleanup incomplete; finish with " + (candidateDisposal{receipt: &p.receipt}).removalCommand()
 	}
 	err := exitcode.Errorf(exitcode.PathPartialFailure, "local promote %s: %s%s", reason, terminal.Escape(promotionCause(errors.Join(cause, p.rollbackFailure))), suffix)
+	if p.disposalStarted && !p.candidateDisposed {
+		err.WithRemediation("Finish candidate cleanup with %s.", (candidateDisposal{receipt: &p.receipt}).removalCommand())
+	}
 	err.Result = p.Preview()
 	return p.Preview(), err
 }

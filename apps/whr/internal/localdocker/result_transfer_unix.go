@@ -61,7 +61,7 @@ func stageResultPartial(reason string, cause error) error {
 	if cause != nil {
 		reason += ": " + terminal.Escape(cause.Error())
 	}
-	return exitcode.Errorf(exitcode.PathPartialFailure, "local stage Git result transfer partial: %s; retain clone, imported objects and operation refs for owner reconciliation", reason)
+	return exitcode.Errorf(exitcode.PathPartialFailure, "local stage Git result transfer partial: %s; inspect imported objects and operation refs; follow the reported candidate cleanup outcome before retrying", reason)
 }
 func stageCandidateSnapshot(ctx context.Context, base stageGitSnapshot) (stageGitSnapshot, error) {
 	empty := stageGitSnapshot{}

@@ -453,7 +453,7 @@ func (s *LocalStage) stageUnverified(ctx context.Context, reason, image, digest 
 		return s.stagePartial("unverified transition failed", e)
 	}
 	s.result.Effects = s.receipt.ActionInventory
-	s.result.Recovery = []StageRecoveryStep{{Action: "remove_candidate_with_guarded_rm", Instruction: "Remove the candidate and its fresh home with guarded local rm; preserve the retained clone."}, {Action: "run_stage_with_smoke", Instruction: "Then start a fresh stage --smoke with fresh source trust and confirmation."}}
+	s.result.Recovery = []StageRecoveryStep{{Action: "remove_candidate_with_guarded_rm", Instruction: "Finish any reported candidate disposal with normal confirmed local rm; it removes the candidate, fresh home, clone/results and records last."}, {Action: "run_stage_with_smoke", Instruction: "Then start a fresh stage --smoke with fresh source trust and confirmation."}}
 	if e = s.store.saveReceipt(s.receipt, false); e != nil {
 		return s.stagePartial("unverified receipt publication failed", e)
 	}
