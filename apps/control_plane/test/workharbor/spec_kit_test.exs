@@ -138,6 +138,29 @@ defmodule WorkHarbor.SpecKitTest do
     assert Repo.aggregate(WorkHarbor.ConfigTrust.Approval, :count) == 0
   end
 
+  test "one second read budget includes authorization", c do
+    ref = make_ref()
+
+    :ok =
+      :telemetry.attach(
+        ref,
+        Repo.config()[:telemetry_prefix] ++ [:query],
+        fn _, _, metadata, _ ->
+          if String.contains?(metadata.query, "owner_credentials") and
+               Process.get(:authorization_delayed) != true do
+            Process.put(:authorization_delayed, true)
+            Process.sleep(1500)
+          end
+        end,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(ref) end)
+    started = System.monotonic_time(:millisecond)
+    assert {:error, :unavailable} = SpecKit.project(c.principal, c.workspace.id)
+    assert System.monotonic_time(:millisecond) - started < 1400
+  end
+
   test "expired artifact credentials cannot read source or approvals", c do
     previous = Application.get_env(:workharbor, :clock)
 

@@ -2176,7 +2176,8 @@
       "WorkHarborWeb.SpecKitLiveTest/test forged events neither mutate nor log and revoked mounted credentials stop once",
       "WorkHarborWeb.SpecKitLiveTest/test missing workspace refresh does not repeat its denial",
       "WorkHarborWeb.SpecKitLiveTest/test dashboard transport filters reserved and application events before channel dispatch",
-      "WorkHarborWeb.SpecKitLiveTest/test owner and CLI credentials cannot mount dashboard"
+      "WorkHarborWeb.SpecKitLiveTest/test owner and CLI credentials cannot mount dashboard",
+      "WorkHarbor.SpecKitTest/test one second read budget includes authorization"
     ]
   }
 }
