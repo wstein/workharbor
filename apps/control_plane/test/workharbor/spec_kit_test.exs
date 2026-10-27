@@ -104,6 +104,32 @@ defmodule WorkHarbor.SpecKitTest do
            ).rows == [[3]]
   end
 
+  test "retained approval belongs to the workspace owner", c do
+    other = Repo.insert!(%Owner{display_name: "Other owner"})
+    token = "whr1_" <> Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)
+
+    Repo.insert!(%Accounts.Credential{
+      owner_id: other.id,
+      token_hash: :crypto.hash(:sha256, "WorkHarbor credential v1\0" <> token),
+      kind: "cli_owner",
+      issued_at: Accounts.now(),
+      expires_at: Accounts.now() + 60
+    })
+
+    assert {:ok, other_principal} = Accounts.authenticate(token)
+    host = Repo.insert!(%Host{owner_id: other.id})
+    other_workspace = workspace(other.id, host.id)
+    assert {:ok, approval} = ConfigTrust.approve(c.principal, DB.config())
+
+    assert {:ok, %{approval_id: id, reason: :host_read_unavailable}} =
+             SpecKit.project(c.principal, c.workspace.id)
+
+    assert id == approval.id
+    assert {:ok, result} = SpecKit.project(other_principal, other_workspace.id)
+    assert result.reason == :trust_required
+    refute Map.has_key?(result, :approval_id)
+  end
+
   test "artifact read admits three credential kinds and rejects revoked and forged principals",
        c do
     for kind <- ["cli_owner", "owner_browser", "dashboard"] do
@@ -180,6 +206,44 @@ defmodule WorkHarbor.SpecKitTest do
     assert queries != []
     refute Enum.any?(queries, &String.contains?(&1, "requested_config"))
     refute Enum.any?(queries, &String.contains?(&1, "revision_trust_approvals"))
+  end
+
+  test "late worker result is discarded after the caller resumes", c do
+    parent = self()
+    ref = make_ref()
+
+    :ok =
+      :telemetry.attach(
+        ref,
+        Repo.config()[:telemetry_prefix] ++ [:query],
+        fn _, _, metadata, _ ->
+          if String.contains?(metadata.query, "owner_credentials") and
+               Process.get(:authorization_paused) != true do
+            Process.put(:authorization_paused, true)
+            send(parent, {ref, :reader_started})
+            Process.sleep(1100)
+          end
+        end,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(ref) end)
+    task = Task.async(fn -> SpecKit.project(c.principal, c.workspace.id) end)
+
+    try do
+      assert_receive {^ref, :reader_started}, 1000
+      :erlang.suspend_process(task.pid)
+
+      try do
+        Process.sleep(1250)
+      after
+        if Process.alive?(task.pid), do: :erlang.resume_process(task.pid)
+      end
+
+      assert {:error, :unavailable} = Task.await(task)
+    after
+      Task.shutdown(task, :brutal_kill)
+    end
   end
 
   defp workspace(owner, host),
