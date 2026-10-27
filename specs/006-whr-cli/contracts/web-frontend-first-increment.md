@@ -251,3 +251,15 @@ a read-only precursor; enrollment actions/full acceptance remain. T017 creation/
 progress and T009 lifecycle/retry controls stay deferred. Remaining 006/T009–T024
 and T035 retain all gates; frontend approval unblocks none of that backend work.
 No task/feature/product completion follows from this plan or these packages.
+
+## Proposed read-only precursor sequencing exception (2026-10-27)
+
+The [read-only precursor proposal](read-only-web-precursors.md) adds a proposed
+T020 dashboard slice after existing T006/T005, then an owner enrollment/trust slice
+after existing T005/T008 and the owner shell. It reconciles only that read-only
+portion of W4-after-W3 sequencing; the rest of W1-W4 and full task prerequisites
+remain unchanged. Unlike owner pages, the dashboard uses its read-scoped
+credential; both retain the shared authorized read-service boundary.
+This is **PROPOSED** until exact-head independent review, explicit owner acceptance
+of this PR's exact revision and merge. It grants no lifecycle actions, new storage,
+task completion or waiver of full T012/T020 and browser/owner-host acceptance.
