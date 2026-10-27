@@ -22,7 +22,7 @@ Real browser and owner-host acceptance remain separate; no precursor closes them
 
 | Precursor | Proposed prerequisites | Scope retained outside this package |
 | --- | --- | --- |
-| Spec Kit read-only | T006 authentication and existing T005 persistence; approved source contract below | T019 agent interoperation, full T020 acceptance and downstream work |
+| Spec Kit read-only | T006 authentication and existing T005 persistence; source interface below | T019 agent interoperation, full T020 acceptance and downstream work |
 | Enrollment/trust read-only | Existing T005/T008 records and the owner shell; approved summaries and page scope | T011 client, full T012 lifecycle/retry/progress journeys and downstream work |
 
 Each package would be independently reviewed and tested against its own scope.
@@ -31,36 +31,50 @@ The enrollment/trust exception would explicitly reconcile the frontend contract'
 W4-after-W3 sequencing; it would not silently change the W1-W4 package graph.
 No host-agent, provider or local CLI behavior enters these packages.
 
-## Spec Kit source: owner choice still required
+## Proposed usable Spec Kit source interface
 
-T020 requires immutable Git provenance but has no implemented projection source
-interface. A parser operating only on fixtures is groundwork, not a usable page.
-The browser must not choose arbitrary repository paths, URLs or credentials.
+Engineering recommendation: configure existing local Git objects on the server,
+with an explicit product-owner binding and immutable commit. The operator chooses
+the actual repository and commit at runtime; separate owner approval of each
+repository/commit is not required by this proposal. Remote ingestion is outside
+this first slice, rather than a second approval gate for the local read path.
 
-| Option | Proposed source boundary |
-| --- | --- |
-| A, recommended | Existing operator-authorized local Git objects, explicitly bound to the product owner and an exact immutable commit |
-| B | Defer the real source path until a separate remote-ingestion contract is reviewed and approved |
+Proposed interface: `SpecKit.project(principal, source)` receives a trusted
+server-side descriptor containing `owner_id`, `source_id`, absolute `repository`,
+full `commit_oid` and admitted artifact roots. The descriptor comes from operator
+runtime configuration, never browser input. No source registry, new storage or
+host command is introduced. The shared service authorizes
+`artifact_projection_read` for dashboard, CLI-owner and owner-browser credentials,
+checks the descriptor owner against the principal, and resolves the exact existing
+commit before reads. The dashboard page admits only its dashboard credential.
 
-For A, the owner must identify the actual source and permission to expose it.
-Do not infer the development checkout, add a source registry or choose a config
-filename, storage mechanism or host command through this proposal. No remote
-fetch, credential forwarding, repository creation or new storage is implied.
-The source must be readable by the existing control plane's authorized service;
-its concrete input mechanism remains part of the source contract, not a decision
-recorded here. A moving branch is not an immutable revision identity.
+Read blobs from the commit, not the worktree/index or a moving branch. Propose
+roots `specs/`, `docs/quality/` and `docs/exec-plans/`; recognize feature directories
+containing `spec.md`, `plan.md` and `tasks.md`, and retained Markdown evidence.
+Reject absolute/traversing paths and symlink/submodule entries. Use fixed Git argv,
+no shell or network, and isolated helper/config behavior; never run hooks, filters,
+text conversion or repository-configured helpers. No checkout, fetch or repository creation.
 
-Recommend showing repository-backed specs, plans, tasks and review evidence from
-that commit, with revision/content identity and evidence source/time. Unsupported
-layouts, absent objects and missing workspace/agent evidence remain explicitly
-unavailable; they never imply completed tasks, approval or zero active sessions.
-Recommend rendering Markdown as escaped inert text initially. Rich rendering
-would need a separately reviewed rendering policy, not an implicit dependency.
+Proposed engineering bounds: one-second total projection deadline, at most 64
+artifact blobs, 256 KiB per blob and 8 MiB total blob bytes; enumeration at most
+1,000 entries and 1 MiB of path data. Enforce limits while reading. Timeout,
+missing objects, unsupported layout/encoding or exceeded limits give explicit
+unavailable/incomplete results, never an empty-success or partial-completion claim.
+These are proposed values for this read path, not inherited owner decisions.
 
-Before production code, a precise reviewed source contract must define supported
-layouts and identities, source admission, read/size/count/deadline bounds,
-provenance and unavailable/error behavior. This proposal supplies no numerical
-bounds or source configuration and does not authorize an arbitrary implementation.
+Return source identity, commit OID, relative path, blob OID, SHA-256 of exact bytes,
+parser capability, observation time, availability and escaped inert Markdown text.
+Show specs/plans/tasks and repository-backed review evidence on a usable dashboard;
+missing workspace/agent evidence is unavailable. A checkbox is not approval and a
+repository evidence file is not an authenticated forge review. Apply FR-022 visible
+control escaping followed by HTML escaping; do not execute Markdown or fetch links.
+Retain no projection storage and expose no absolute repository path in the page.
+
+This interface and its proposed values are reviewed with this proposal; no extra
+future contract approval is required for the described source slice. Acceptance
+still requires the authoritative execution amendment below and its exact-head
+approval before implementation. Operator runtime selection grants read access
+only, not repository execution, lifecycle authority or artifact approval.
 
 ## Enrollment and trust: existing source, read-only projection
 
@@ -82,9 +96,9 @@ issue, approve, revoke, provision or dispatch, including through forged events.
 | Item | Current state |
 | --- | --- |
 | Isolated execution exceptions and sequence | PROPOSED; owner acceptance pending |
-| Actual Spec Kit source and owner binding | PROPOSED option A; actual source unspecified |
+| Server-side local source descriptor and bounds | PROPOSED engineering interface above |
 | Inert Markdown and unavailable status scope | PROPOSED; owner acceptance pending |
-| Exact source contract and implementation scope | Not yet supplied or approved |
+| Operator runtime repository/commit | Runtime configuration, not per-source owner approval |
 
 After owner acceptance, record the approved exception in [spec](../spec.md),
 [plan](../plan.md), package scope in [tasks](../tasks.md) and the frontend contract's
