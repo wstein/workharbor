@@ -19,10 +19,8 @@ defmodule WorkHarborWeb.SpecKitLive do
       raw ->
         case SpecKit.decode_query(raw) do
           {:ok, id} ->
-            {:noreply,
-             socket
-             |> assign(workspace_id: id, state: :loading, result: nil)
-             |> dashboard_refresh()}
+            socket = assign(socket, workspace_id: id, state: :loading, result: nil)
+            {:noreply, if(connected?(socket), do: dashboard_refresh(socket), else: socket)}
 
           _ ->
             {:noreply, assign(socket, workspace_id: nil, result: nil, state: :invalid_request)}
@@ -83,6 +81,7 @@ defmodule WorkHarborWeb.SpecKitLive do
       <p :if={@state == :selection} role="status">
         No workspace selected.
       </p>
+      <p :if={@state == :loading} role="status">Loading artifact availability…</p>
       <p :if={@state == :invalid_request} role="status">Invalid request.</p>
       <p :if={@state == :not_found} role="status">Workspace not found.</p>
       <section :if={@state == :unavailable} aria-labelledby="artifacts-title">

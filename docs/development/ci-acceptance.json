@@ -2179,7 +2179,11 @@
       "WorkHarborWeb.SpecKitLiveTest/test owner and CLI credentials cannot mount dashboard",
       "WorkHarbor.SpecKitTest/test one second read budget includes authorization",
       "WorkHarbor.SpecKitTest/test retained approval belongs to the workspace owner",
-      "WorkHarbor.SpecKitTest/test late worker result is discarded after the caller resumes"
+      "WorkHarbor.SpecKitTest/test late worker result is discarded after the caller resumes",
+      "WorkHarborWeb.SpecKitLiveTest/test hostile stored source identity is inert and visibly escapes controls",
+      "WorkHarborWeb.SpecKitLiveTest/test stale dashboard ticks neither read nor reschedule",
+      "WorkHarborWeb.SpecKitLiveTest/test dashboard mount itself rejects owner and CLI credentials",
+      "WorkHarborWeb.SpecKitLiveTest/test absent workspace produces one denial across render mount and refresh"
     ]
   }
 }

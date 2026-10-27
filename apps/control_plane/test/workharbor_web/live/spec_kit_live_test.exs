@@ -2,6 +2,7 @@
 
 defmodule WorkHarborWeb.SpecKitLiveTest do
   use ExUnit.Case, async: false
+  import Ecto.Query
   import Plug.Conn
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
@@ -42,6 +43,7 @@ defmodule WorkHarborWeb.SpecKitLiveTest do
     {:ok, _} = ConfigTrust.approve(c.cli, DB.config())
     page = get(c.conn, url(c.workspace.id))
     assert page.status == 200
+    assert page.resp_body =~ " · Spec Kit"
 
     assert get_resp_header(page, "content-security-policy") == [
              "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' wss://localhost; img-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
@@ -157,25 +159,29 @@ defmodule WorkHarborWeb.SpecKitLiveTest do
   end
 
   test "forged events neither mutate nor log and revoked mounted credentials stop once", c do
-    {:ok, view, _} = live(get(c.conn, url(c.workspace.id)))
-    before = Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count)
+    previous_level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: previous_level) end)
 
     log =
       ExUnit.CaptureLog.capture_log([level: :debug], fn ->
+        {:ok, view, _} = live(get(c.conn, url(c.workspace.id)))
+        before = Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count)
         render_hook(view, "approve", %{"commit" => "FORGED-PAYLOAD-CANARY"})
         assert Process.alive?(view.pid)
+        assert Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count) == before
+        assert :ok = Accounts.revoke(c.cli, c.dashboard.credential_id)
+
+        send(
+          view.pid,
+          {:dashboard_session, :sys.get_state(view.pid).socket.private.dashboard_auth.ref}
+        )
+
+        assert_redirect(view, "/login/dashboard")
       end)
 
+    refute log =~ c.token
     refute log =~ "FORGED-PAYLOAD-CANARY"
-    assert Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count) == before
-    assert :ok = Accounts.revoke(c.cli, c.dashboard.credential_id)
-
-    send(
-      view.pid,
-      {:dashboard_session, :sys.get_state(view.pid).socket.private.dashboard_auth.ref}
-    )
-
-    assert_redirect(view, "/login/dashboard")
   end
 
   test "missing workspace refresh does not repeat its denial",
@@ -260,6 +266,101 @@ defmodule WorkHarborWeb.SpecKitLiveTest do
     refute log =~ "FORGED-EVENT-CANARY"
     assert {:ok, _} = DashboardSocket.handle_in(wire.("phx_leave", %{}), transport)
     assert_receive {:DOWN, ^monitor, :process, ^pid, _}, 1000
+  end
+
+  test "hostile stored source identity is inert and visibly escapes controls", c do
+    identity = "git@example.test:<b>x</b>\u202Eevil.git"
+    descriptor = Map.put(DB.config(), "repository_identity", identity)
+
+    Repo.update_all(from(w in Workspace, where: w.id == ^c.workspace.id),
+      set: [requested_config: descriptor]
+    )
+
+    assert {:ok, _} = ConfigTrust.approve(c.cli, descriptor)
+    {:ok, view, html} = live(get(c.conn, url(c.workspace.id)))
+    assert html =~ "&lt;b&gt;x&lt;/b&gt;"
+    assert html =~ "&lt;U+202E&gt;"
+    refute html =~ "\u202E"
+    refute has_element?(view, "b")
+  end
+
+  test "stale dashboard ticks neither read nor reschedule", c do
+    {:ok, view, _} = live(get(c.conn, url(c.workspace.id)))
+    old_ref = :sys.get_state(view.pid).socket.private.dashboard_auth.ref
+    send(view.pid, {:dashboard_session, old_ref})
+    assert render(view) =~ "Artifacts unavailable"
+    current = :sys.get_state(view.pid).socket.private.dashboard_auth
+    assert current.ref != old_ref
+    Process.cancel_timer(current.timer)
+    parent = self()
+    telemetry_ref = make_ref()
+
+    :ok =
+      :telemetry.attach(
+        telemetry_ref,
+        Repo.config()[:telemetry_prefix] ++ [:query],
+        fn _, _, metadata, _ -> send(parent, {telemetry_ref, metadata.query}) end,
+        nil
+      )
+
+    try do
+      for stale <- [old_ref, make_ref()], do: send(view.pid, {:dashboard_session, stale})
+      assert render(view) =~ "Artifacts unavailable"
+      assert :sys.get_state(view.pid).socket.private.dashboard_auth.ref == current.ref
+      refute_receive {^telemetry_ref, _}, 25
+    after
+      :telemetry.detach(telemetry_ref)
+    end
+  end
+
+  test "dashboard mount itself rejects owner and CLI credentials", c do
+    socket = %Phoenix.LiveView.Socket{
+      endpoint: Endpoint,
+      view: WorkHarborWeb.SpecKitLive,
+      router: WorkHarborWeb.Router,
+      private: %{lifecycle: %Phoenix.LiveView.Lifecycle{}}
+    }
+
+    assert {:cont, admitted} =
+             WorkHarborWeb.DashboardAuth.on_mount(
+               :default,
+               %{},
+               %{"credential" => c.token},
+               socket
+             )
+
+    assert admitted.private.dashboard_auth.principal == c.dashboard
+
+    for kind <- ["owner_browser", "cli_owner"] do
+      {:ok, token, _} = Accounts.login(c.cli.owner_id, c.secret, kind)
+
+      assert {:halt, rejected} =
+               WorkHarborWeb.DashboardAuth.on_mount(
+                 :default,
+                 %{},
+                 %{"credential" => token},
+                 socket
+               )
+
+      assert {:redirect, %{to: "/login/dashboard"}} = rejected.redirected
+    end
+  end
+
+  test "absent workspace produces one denial across render mount and refresh", c do
+    before = Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count)
+    page = get(c.conn, url(Ecto.UUID.generate()))
+    assert Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count) == before
+    {:ok, view, _} = live(page)
+    assert render(view) =~ "Workspace not found"
+    assert Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count) == before + 1
+
+    send(
+      view.pid,
+      {:dashboard_session, :sys.get_state(view.pid).socket.private.dashboard_auth.ref}
+    )
+
+    assert render(view) =~ "Workspace not found"
+    assert Repo.aggregate(WorkHarbor.Foundation.AuditEvent, :count) == before + 1
   end
 
   test "owner and CLI credentials cannot mount dashboard", c do
