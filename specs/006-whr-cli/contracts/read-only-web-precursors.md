@@ -108,9 +108,12 @@ apply. No additional source-contract or per-repository approval is required for
 the source interface proposed here. Actual operator configuration remains runtime
 input. Later HTTP routes, if needed, retain the [shared owner API](owner-api.md).
 
-Each later implementation needs failing-first tests, scoped credential/owner
-checks, inert hostile-text rendering, mutation refusal without domain changes,
-correct denial audit, unchanged transport policy and honest availability states.
-Native CI and exact-head independent review remain PR gates. Actual browser
-journeys and host evidence remain required where the parent task demands them.
-Task/progress ticks, lifecycle delivery and pilot acceptance remain out of scope.
+Implementation needs a dashboard-specific mount; owner-only OwnerAuth cannot
+admit dashboard credentials. Reusing DashboardSocket requires tested ingress and
+no-write behavior; do not assume OwnerSocket's filter also protects it.
+Write failing-first scope, escaping and read-only tests, including direct calls to
+actual implemented mutation routes with dashboard credentials and denial audit.
+Do not claim absent future routes were tested. Prove hostile Origin/Host/upgrade
+refusal and inert text/attributes while retaining existing transport policy.
+Native CI and exact-head independent review remain PR gates. Browser/owner-host
+journeys, full-task ticks, lifecycle delivery and pilot acceptance remain separate.
