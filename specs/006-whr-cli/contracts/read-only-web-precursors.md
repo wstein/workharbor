@@ -2,8 +2,8 @@
 
 Status: **PROPOSED**, 2026-10-27. This document authorizes no product code, runtime
 activation, task completion or change to existing prerequisites. The sequencing and
-implementation proposal remains unapproved. O1 alone is decided by the owner as recorded
-below.
+implementation proposal remains unapproved. O1 and F8 are decided by the owner as
+recorded below; the protocol command is not implemented.
 
 ## Purpose and retained gates
 
@@ -23,14 +23,15 @@ acceptance remain separate; no precursor closes them.
 
 | Precursor | Proposed prerequisites | Scope retained outside this package |
 | --- | --- | --- |
-| Spec Kit read-only | T006 authentication, existing T005 persistence and partial T009 trust persistence; source interface below | T019 agent interoperation, full T020 acceptance and downstream work |
+| Spec Kit read-only | T006 authentication, existing T005 persistence and partial T009 trust persistence; usable artifacts also require the T007/T019 host read below | T019 agent interoperation, full T020 acceptance and downstream work |
 | Enrollment/trust read-only | Existing T005/T008 records, partial T009 ConfigTrust records and owner shell; reuse exception below | T011 client, full T012 lifecycle/retry/progress journeys and downstream work |
 
 Each package would be independently reviewed and tested against its own scope. An
 accepted precursor would not mean its parent task or prerequisite is complete. The
 enrollment/trust exception would explicitly reconcile the frontend contract's
 W4-after-W3 sequencing; it would not silently change the W1-W4 package graph. No
-host-agent, provider or local CLI behavior enters these packages.
+provider or local CLI behavior enters these packages. This docs-only proposal names
+the separate T007/T019 host-protocol dependency; it implements no host-agent behavior.
 
 ## Proposed usable Spec Kit source interface
 
@@ -56,18 +57,21 @@ exposing ownership or calling the source/Git adapter.
 
 Reuse existing revision approval records and ConfigTrust from the partial T009 subset
 below; add no source registry, repository descriptor, approval/configuration flow,
-storage or host command. Workspace has no approval-ID foreign key;
+storage. The read-only host command required by F8 is a separate dependency below.
+Workspace has no approval-ID foreign key;
 `ConfigTrust.lookup/3` requires an approval ID plus descriptor and is not already a
 workspace resolver. Propose a read helper matching existing approval owner and
 normalized immutable descriptor under existing trust semantics, not a new approval or
 permission point. This action reuses existing credentials, not a new owner grant.
 Foundation persistence alone does not prove approval: no existing matching approval
 means unavailable/`trust_required`, never auto-approval or a new approval prompt. This
-resolver behavior is planned, not already implemented. The recorded repository identity
-is not a local checkout path or locator. This proposal invents no local checkout
-locator: absent locally available objects for that recorded source and exact commit mean
-unavailable, without a different source, revision or development-checkout fallback. A
-future GitHub App grant may supply repository access; that integration is outside this
+resolver behavior is planned, not already implemented. The repository identity is not a
+control-plane checkout locator. F8 selects the existing workspace clone on its assigned
+host, resolved by the host agent from trusted workspace state, never from request paths.
+The control plane holds no clone or mirror. Until the host command below exists and is
+supported by the authenticated connection, artifacts are unavailable. Missing objects on
+the host are also unavailable; never fetch, change revision or use another source.
+A future GitHub App grant may supply repository access; that integration is outside this
 slice.
 
 Read blobs from the commit, not the worktree/index or a moving branch. Propose roots
@@ -75,8 +79,9 @@ Read blobs from the commit, not the worktree/index or a moving branch. Propose r
 containing `spec.md`, `plan.md` and `tasks.md`, and retained Markdown evidence. Project
 one admitted feature/evidence subset within that workspace source and commit, not all
 files; requests cannot replace the repository or revision. Reject absolute/traversing
-paths and symlink/submodule entries. Use plumbing-only fixed argv in a private ephemeral
-Git context isolated from source config and refs; use a helper Git directory with fixed
+paths and symlink/submodule entries. The host agent reads its existing workspace
+clone with plumbing-only fixed argv in a private ephemeral Git context isolated
+from source config and refs; use a helper Git directory with fixed
 minimal config and the admitted object format, no source config/refs/worktree. Expose
 the source object database read-only through fixed `GIT_OBJECT_DIRECTORY`, never
 alternates. This temporary helper state is discarded after the read, not persistent
@@ -90,10 +95,12 @@ formats read as data are admitted. Admit canonical lowercase full OIDs matching 
 repository object format: 40 hex for SHA-1 or 64 for SHA-256. Ref names, revision
 expressions and tags are refused; verify exact OID equality and object type commit
 before projection, without peeling. Blob OIDs must match the same format. No
-shell/network, hooks, filters, text conversion, checkout or fetch. Missing Git
+shell, Git network access, hooks, filters, text conversion, checkout or fetch.
+The existing authenticated host connection carries the bounded artifact response;
+that transport is not permission for Git network access. Missing Git
 capability is unavailable, never a fallback to unsafe or network-enabled reads.
 
-Proposed engineering bounds: one-second total projection deadline, at most 64 artifact
+Proposed host-read engineering bounds: one-second total projection deadline, at most 64 artifact
 blobs, 256 KiB per blob and 8 MiB total blob bytes; enumeration at most 1,000 entries
 and 1 MiB of path data. Enforce limits while reading. Timeout, missing objects,
 unsupported layout/encoding or exceeded limits give explicit unavailable/incomplete
@@ -133,32 +140,46 @@ configuration descriptors. No new storage is required. A retained approval recor
 not prove trust in current workspace bytes. No read-page handler may issue, approve,
 revoke, provision or dispatch, including through forged events.
 
-## Needs owner decision: F8 Git object acquisition
+## F8 decision and host-protocol dependency
 
-**F8 OPEN — 2026-10-27:** O1 decides source identity and workspace ownership;
-it does not decide how the control plane obtains the corresponding Git objects.
-The workspace record stores repository identity and commit, not a local clone.
-No existing host-agent command provides this artifact read. The choices awaiting
-an owner answer are:
+**F8 DECIDED — owner, 2026-10-27: option B.** Git objects come from the workspace
+clone held by the host agent, through a new read-only, bounded host-protocol command
+on the existing authenticated host connection and revision trust. No new approval,
+configuration, control-plane clone/mirror or fetching is introduced.
 
-| Option | Scope and consequence |
+The proposed command name is `spec_kit.read`. Its implementation is an explicit
+T007 host-protocol extension and T019 artifact-read integration dependency, not
+existing T007 capability or completion of either full task. The current closed v1
+lifecycle command/action grammar does not admit it. T007 must add reviewed versioned
+request/result forms, shared fixtures, both validators and negotiated capability
+before dispatch; never disguise the read as a lifecycle command or silently widen v1.
+Until that command and integration exist, T020 renders artifacts unavailable.
+
+The following engineering contract is proposed for that dependency; the owner's
+choice of B does not claim these numeric bounds were separately approved:
+
+| Surface | Required bound or scope |
 | --- | --- |
-| A | Report unavailable when the objects do not already exist locally; identify the existing server-side object location before claiming a usable projection. |
-| B | Read through the host agent using a new read-only protocol command; this requires separate protocol scope. |
-| C | Maintain a control-plane read-only mirror; acquisition and refresh need an explicit contract. |
+| Operation | Only `spec_kit.read`; no write verb, generic exec, Git argv, fetch, checkout, lifecycle operation or file-write handler. |
+| Authorization | Control plane first authorizes the principal and workspace owner; select the workspace's assigned host from stored state. The authenticated host peer, owner_id, host_id and workspace_id must agree on both ends, including response correlation. Recheck assignment and existing matching revision approval before reading; mismatches refuse without a Git read. No browser-supplied scope, repository, commit or path override. |
+| Source | Control plane derives the exact repository identity/commit and matching retained approval from that workspace; the host verifies that binding against its existing workspace clone and current trusted assignment. Only immutable commit blobs are read; a missing clone/object/approval or stale assignment is unavailable, never a fetch or fallback. |
+| Paths | Fixed roots specs/, docs/quality/ and docs/exec-plans/ only; no caller-selected paths. At most 1,000 enumerated entries, 1 MiB aggregate UTF-8 path data and 4,096 UTF-8 bytes per relative path. Reject absolute, traversing, symlink and submodule entries. |
+| Content | At most 64 blobs, 256 KiB decoded bytes per blob and 8 MiB decoded bytes total. Enforce while reading, not after allocation. |
+| Transport | At most 66 correlated response messages: one bounded inventory, at most one message per blob, and one completion; each encoded JSON message at most 1,048,576 bytes and aggregate encoded response at most 16 MiB. Binary blob bytes are base64 in result messages; count decoded and encoded bytes separately. This does not raise the existing host-protocol per-message ceiling. |
+| Time | One-second control-plane deadline from dispatch through final response validation, including host I/O; cancellation/disconnect stops the read. Expired or late responses cannot update the projection; no automatic retry in that budget. |
+| Result | Bind source, workspace, immutable commit and blob digests to the correlated request; verify count/size/path/OID bounds at both ends. Only an explicit complete response is successful. Missing capability, timeout, connection loss, limit or missing objects produces unavailable/incomplete, never empty success. No raw Git stderr, paths or content in logs. |
 
-No option is selected or authorized by this proposal. The no-fetch rules and
-missing-object/unavailable text above describe the proposed local reader; they
-do not settle object acquisition or prove that any local object source exists.
-Do not implement or revise the acquisition path before the owner answers F8.
-O1 remains decided; F8 introduces no new per-source approval or configuration.
+Host Git isolation and FR-022 rendering rules above still apply; only artifact bytes
+and safe provenance cross the existing connection. The control plane projects the
+result without running Git or retaining a clone. This document defines the dependency,
+not its wire-schema implementation, deployment or completion evidence.
 
 ## Proposed approval and activation
 
 | Item | Current state |
 | --- | --- |
 | Isolated execution exceptions and sequence | PROPOSED; owner acceptance pending |
-| F8: Git object acquisition | OPEN; owner answer pending, no A/B/C selection |
+| F8: host-agent object reads | DECIDED by owner, 2026-10-27, option B; spec_kit.read remains an unimplemented T007/T019 dependency |
 | Workspace-derived projection interface and bounds | PROPOSED engineering interface above |
 | Inert Markdown and unavailable status scope | PROPOSED; owner acceptance pending |
 | O1: existing workspace repository identity and immutable commit | DECIDED by owner, revised 2026-10-27; request selects workspace_id only |
@@ -166,8 +187,8 @@ O1 remains decided; F8 introduces no new per-source approval or configuration.
 This proposal includes matching exception pointers in [spec](../spec.md),
 [plan](../plan.md), [tasks](../tasks.md) and the frontend contract. Independent
 exact-head review, explicit owner acceptance of this PR's exact sequencing/reuse
-exception and merge would activate only these isolated read-only exceptions. O1 is
-decided, but it does not supply that sequencing acceptance or approve product
+exception and merge would activate only these isolated read-only exceptions. O1 and
+F8 are decided, but neither supplies sequencing acceptance or approves product
 implementation. Until then current task and product-read approval gates apply. Later
 HTTP routes retain the [shared owner API](owner-api.md).
 
@@ -183,7 +204,7 @@ proposal:
 | `request_overrides_refused` | Request, query and event fields cannot name a path, URL, repository or commit. Each extra path, url, repository, repository_identity, commit, owner, owner_id, source_id, feature or artifact key gives invalid_request before source/Git reads. |
 | `foreign_workspace_not_found` | Foreign and absent UUID both give not_found before source-field/Git reads, even with identical source fields; assert the authorization-denial audit without recording source fields. |
 | `stored_source_and_approval` | Own stored requested_config selects exact immutable descriptor; planned helper matches existing owner/normalized approval without an invented FK; unmatched approval is unavailable/trust_required with no prompt or auto-approval. |
-| `missing_objects_unavailable` | Absent local objects are unavailable, with no configuration prompt, network or alternate source/revision. |
+| `missing_objects_unavailable` | Absent host capability, clone or objects is unavailable; no control-plane Git, configuration prompt, fetch or alternate source/revision. |
 | `invalid_request_shape` | Duplicate keys and malformed workspace IDs refuse before lookup; no owner/source request override. |
 
 The override test must fail when the closed request-key check is relaxed. The
@@ -191,6 +212,13 @@ foreign-workspace test must fail when the owner predicate is removed: use two
 actually authenticated owners and their real workspace rows, not forged
 principals. Foreign and absent workspaces return identical `not_found` with zero
 Git/source reads. These are causal expectations for future tests, not results.
+
+Also require RED-first host-protocol cases for wrong peer/owner/workspace/assignment,
+changed commit/approval, unsupported command, forbidden path/write/argv fields,
+count/size/path/time bounds at N and N+1, disconnect, late or mismatched responses,
+missing clone/objects and malicious Git config. Assert refusal reasons, zero workspace/repository writes
+and no fetch; missing capability must show unavailable in the dashboard. These tests
+belong to the T007/T019 dependency and are not implemented or executed here.
 
 Also plan direct calls to actual implemented mutation routes with dashboard credentials
 and denial audit; do not claim absent future routes were tested. Cover SC-009

@@ -276,4 +276,14 @@ immutable commit from the existing owner workspace's `requested_config`; request
 only `workspace_id`. Foreign ownership and source override fields are refused. No new
 source approval/configuration/permission point is introduced. This does not accept the
 exact-revision sequencing/reuse exception or change the owner-page credential boundary.
-Missing local objects remain unavailable; no local checkout locator is invented.
+Missing host capability or host objects remains unavailable; no control-plane checkout
+locator is introduced.
+
+F8 is DECIDED by the owner on 2026-10-27: option B, artifact reads through the
+host agent's existing workspace clone and authenticated connection. The proposed
+`spec_kit.read` command and its bounded, owner/workspace-scoped read-only response
+are a T007/T019 host-protocol dependency, detailed in the
+[precursor contract](read-only-web-precursors.md#f8-decision-and-host-protocol-dependency).
+No new approval, configuration, control-plane clone/mirror or fetching is allowed.
+Until that command is implemented and supported, dashboard artifacts are unavailable.
+This decision does not complete T007/T019 or waive the sequencing/reuse gate.
