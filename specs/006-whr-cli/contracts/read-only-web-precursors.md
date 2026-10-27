@@ -153,6 +153,9 @@ existing T007 capability or completion of either full task. The current closed v
 lifecycle command/action grammar does not admit it. T007 must add reviewed versioned
 request/result forms, shared fixtures, both validators and negotiated capability
 before dispatch; never disguise the read as a lifecycle command or silently widen v1.
+AgentSocket currently accepts only hello/heartbeat messages; read-command dispatch
+and correlated chunk assembly are also new dependency work. Preserve those existing
+messages and their ingress limits.
 Until that command and integration exist, T020 renders artifacts unavailable.
 
 The following engineering contract is proposed for that dependency; the owner's
@@ -163,9 +166,9 @@ choice of B does not claim these numeric bounds were separately approved:
 | Operation | Only `spec_kit.read`; no write verb, generic exec, Git argv, fetch, checkout, lifecycle operation or file-write handler. |
 | Authorization | Control plane first authorizes the principal and workspace owner; select the workspace's assigned host from stored state. The authenticated host peer, owner_id, host_id and workspace_id must agree on both ends, including response correlation. Recheck assignment and existing matching revision approval before reading; mismatches refuse without a Git read. No browser-supplied scope, repository, commit or path override. |
 | Source | Control plane derives the exact repository identity/commit and matching retained approval from that workspace; the host verifies that binding against its existing workspace clone and current trusted assignment. Only immutable commit blobs are read; a missing clone/object/approval or stale assignment is unavailable, never a fetch or fallback. |
-| Paths | Fixed roots specs/, docs/quality/ and docs/exec-plans/ only; no caller-selected paths. At most 1,000 enumerated entries, 1 MiB aggregate UTF-8 path data and 4,096 UTF-8 bytes per relative path. Reject absolute, traversing, symlink and submodule entries. |
+| Paths | Fixed roots specs/, docs/quality/ and docs/exec-plans/ only; no caller-selected paths. At most 1,000 enumerated entries, 1 MiB aggregate UTF-8 path data and 1,024 UTF-8 bytes per relative path. Reject absolute, traversing, symlink and submodule entries. |
 | Content | At most 64 blobs, 256 KiB decoded bytes per blob and 8 MiB decoded bytes total. Enforce while reading, not after allocation. |
-| Transport | At most 66 correlated response messages: one bounded inventory, at most one message per blob, and one completion; each encoded JSON message at most 1,048,576 bytes and aggregate encoded response at most 16 MiB. Binary blob bytes are base64 in result messages; count decoded and encoded bytes separately. This does not raise the existing host-protocol per-message ceiling. |
+| Transport | Every request/result JSON message is at most 4,096 encoded bytes, preserving the existing 4,110-byte frame and 4,096-byte fragmented-message caps. Base64 content chunks carry at most 1,024 decoded bytes, at most 256 chunks per blob and 16,384 content chunks total. Inventory has at most one message per entry (1,000); allow one begin and one completion, at most 17,386 response messages total and 16 MiB aggregate encoded bytes. Count content/path/encoded bytes independently; an entry or header that cannot fit a message is unavailable/incomplete, never truncated. The pure lifecycle validator's separate 1 MiB ceiling is not a transport capability. |
 | Time | One-second control-plane deadline from dispatch through final response validation, including host I/O; cancellation/disconnect stops the read. Expired or late responses cannot update the projection; no automatic retry in that budget. |
 | Result | Bind source, workspace, immutable commit and blob digests to the correlated request; verify count/size/path/OID bounds at both ends. Only an explicit complete response is successful. Missing capability, timeout, connection loss, limit or missing objects produces unavailable/incomplete, never empty success. No raw Git stderr, paths or content in logs. |
 
