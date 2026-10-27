@@ -51,6 +51,7 @@ commit before reads. The dashboard page admits only its dashboard credential.
 Read blobs from the commit, not the worktree/index or a moving branch. Propose
 roots `specs/`, `docs/quality/` and `docs/exec-plans/`; recognize feature directories
 containing `spec.md`, `plan.md` and `tasks.md`, and retained Markdown evidence.
+Project one server-selected feature/evidence subset under these roots, not all files.
 Reject absolute/traversing paths and symlink/submodule entries. Use fixed Git argv,
 no shell or network, and isolated helper/config behavior; never run hooks, filters,
 text conversion or repository-configured helpers. No checkout, fetch or repository creation.
