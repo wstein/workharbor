@@ -1714,3 +1714,15 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   until separately reviewed T035 after T009/T028; a v2 proposal/output is labelled not creation-ready
   until then. No admitted provider input is widened; starters remain unsupported until admission.
 - The dashboard reads Spec Kit artifacts at an identified Git revision.
+
+## Proposed read-only web precursor exception (2026-10-27)
+
+The [read-only precursor proposal](contracts/read-only-web-precursors.md) proposes
+isolated T020 artifact/dashboard work after existing T006/T005, followed by T012
+enrollment/trust reads after existing T005/T008 and the owner shell. It is
+**PROPOSED**: exact-head independent review, explicit owner acceptance of this PR's
+exact revision and merge are required before this narrow exception takes effect.
+Full T020-after-T019 and T012-after-T011 prerequisites, acceptance and downstream
+dependencies remain unchanged and open. No lifecycle actions, task completion,
+browser or owner-host evidence are waived. The linked interface and bounds are
+engineering proposals; no new owner decision is claimed.
