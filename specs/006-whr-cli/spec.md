@@ -1718,16 +1718,16 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
 ## Proposed read-only web precursor exception (2026-10-27)
 
 The [read-only precursor proposal](contracts/read-only-web-precursors.md) proposes
-isolated T020 artifact/dashboard work after existing T006/T005, followed by T012
-enrollment/trust reads after existing T005/T008, partial T009 ConfigTrust records
-and the owner shell; reuse is limited to those existing T009 components, not full
-T009 completion. It is **PROPOSED**: exact-head independent review, explicit owner acceptance of this PR's
-exact revision and merge are required before this narrow exception takes effect.
-Full T020-after-T019 and T012-after-T011 prerequisites, acceptance and downstream
-dependencies remain unchanged and open. No lifecycle actions, task completion,
-browser or owner-host evidence are waived. The linked interface and bounds are
-engineering proposals. O1 is DECIDED by the owner on 2026-10-27: the source is
-one owner-bound repository descriptor plus an immutable commit, pre-configured
-once by the owner. A new source requires one-time owner configuration approval;
-no runtime repository or commit choice is allowed. The sequencing/reuse exception
-still requires acceptance at its exact revision.
+isolated T020 artifact/dashboard work after existing T006/T005 and partial T009 trust
+persistence, followed by T012 enrollment/trust reads after existing T005/T008, partial
+T009 ConfigTrust records and the owner shell; reuse is limited to those existing T009
+components, not full T009 completion. It is **PROPOSED**: exact-head independent review,
+explicit owner acceptance of this PR's exact revision and merge are required before this
+narrow exception takes effect. Full T020-after-T019 and T012-after-T011 prerequisites,
+acceptance and downstream dependencies remain unchanged and open. No lifecycle actions,
+task completion, browser or owner-host evidence are waived. The linked interface and
+bounds are engineering proposals. O1 is DECIDED by the owner, revised 2026-10-27: derive
+the repository identity and immutable commit from the existing owner workspace's
+`requested_config`; requests select only `workspace_id`, with foreign ownership refused.
+No new source approval/configuration/permission point is introduced. The
+sequencing/reuse exception still requires acceptance at its exact revision.

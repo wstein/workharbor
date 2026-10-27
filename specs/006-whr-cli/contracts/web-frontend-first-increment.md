@@ -254,24 +254,26 @@ No task/feature/product completion follows from this plan or these packages.
 
 ## Proposed read-only precursor sequencing exception (2026-10-27)
 
-The [read-only precursor proposal](read-only-web-precursors.md) adds a proposed
-T020 dashboard slice after existing T006/T005, then an owner enrollment/trust slice
-after existing T005/T008, partial T009 ConfigTrust records and the owner shell;
-reuse is limited to those existing T009 components, not full T009 completion.
-It reconciles only that read-only portion of W4-after-W3 sequencing; the rest of W1-W4 and full task prerequisites
-remain unchanged. Unlike owner pages, the dashboard uses its read-scoped
-credential; both retain the shared authorized read-service boundary.
-This is **PROPOSED** until exact-head independent review, explicit owner acceptance
-of this PR's exact revision and merge. It grants no lifecycle actions, new storage,
-task completion or waiver of full T012/T020 and browser/owner-host acceptance.
+The [read-only precursor proposal](read-only-web-precursors.md) adds a proposed T020
+dashboard slice after existing T006/T005 and partial T009 trust persistence, then an
+owner enrollment/trust slice after existing T005/T008, partial T009 ConfigTrust records
+and the owner shell; reuse is limited to those existing T009 components, not full T009
+completion. It reconciles only that read-only portion of W4-after-W3 sequencing; the
+rest of W1-W4 and full task prerequisites remain unchanged. Unlike owner pages, the
+dashboard uses its read-scoped credential; both retain the shared authorized
+read-service boundary. This is **PROPOSED** until exact-head independent review,
+explicit owner acceptance of this PR's exact revision and merge. It grants no lifecycle
+actions, new storage, task completion or waiver of full T012/T020 and browser/owner-host
+acceptance.
 
-The proposed `artifact_projection_read` action is a narrow exception to this
-contract's dashboard-denied-for-every-new-read rule: FR-033 artifact reads admit
-the read-scoped dashboard credential through the shared authorized service.
-Enrollment/trust new reads remain owner-browser/CLI-owner only, dashboard denied.
+The proposed `artifact_projection_read` action is a narrow exception to this contract's
+dashboard-denied-for-every-new-read rule: FR-033 artifact reads admit the read-scoped
+dashboard credential through the shared authorized service. Enrollment/trust new reads
+remain owner-browser/CLI-owner only, dashboard denied.
 
-O1 is DECIDED by the owner on 2026-10-27: T020 reads only one owner-bound
-repository descriptor and immutable commit, pre-configured once by the owner.
-A new source requires one-time owner configuration approval; no runtime repository
-or commit choice is allowed. This decision does not accept the exact-revision
-sequencing/reuse exception or change the owner-page credential boundary.
+O1 is DECIDED by the owner, revised 2026-10-27: T020 derives repository identity and
+immutable commit from the existing owner workspace's `requested_config`; requests select
+only `workspace_id`. Foreign ownership and source override fields are refused. No new
+source approval/configuration/permission point is introduced. This does not accept the
+exact-revision sequencing/reuse exception or change the owner-page credential boundary.
+Missing local objects remain unavailable; no local checkout locator is invented.
