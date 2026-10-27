@@ -564,16 +564,18 @@ payload verification, installation/build and live operation are outside this sli
 
 ## Proposed isolated read-only web sequence (2026-10-27)
 
-Subject to exact-head independent review, explicit owner acceptance of this PR's
-exact revision and merge, deliver the [read-only precursors](contracts/read-only-web-precursors.md):
-T020 immutable artifact/dashboard reads after existing T006/T005, then T012
-enrollment/trust reads after existing T005/T008, partial T009 ConfigTrust records
-and the owner shell; reuse is limited to those existing T009 components, not full
-T009 completion. The linked proposal supplies the server-side local Git source
-interface, provenance, engineering bounds and plain-text Markdown source display.
-O1 is DECIDED by the owner on 2026-10-27: one owner-bound repository descriptor
-and immutable commit, pre-configured once by the owner; a new source requires
-one-time owner configuration approval. No runtime repository or commit selection
-is allowed. O1 does not accept this exact proposed sequencing/reuse exception.
-This **PROPOSED** exception leaves full parent prerequisites and acceptance,
-all downstream dependencies, lifecycle work and real-browser/host gates unchanged.
+Subject to exact-head independent review, explicit owner acceptance of this PR's exact
+revision and merge, deliver the [read-only
+precursors](contracts/read-only-web-precursors.md): T020 immutable artifact/dashboard
+reads after existing T006/T005 and partial T009 trust persistence, then T012
+enrollment/trust reads after existing T005/T008, partial T009 ConfigTrust records and
+the owner shell; reuse is limited to those existing T009 components, not full T009
+completion. The linked proposal supplies the workspace-derived Git source interface,
+provenance, engineering bounds and plain-text Markdown source display. O1 is DECIDED by
+the owner, revised 2026-10-27: derive repository identity and immutable commit from the
+existing owner workspace's `requested_config`; requests select only `workspace_id`, and
+foreign ownership is refused. No new source approval/configuration/permission point or
+local checkout locator is introduced. Absent locally available objects remain
+unavailable. O1 does not accept this exact proposed sequencing/reuse exception. This
+**PROPOSED** exception leaves full parent prerequisites and acceptance, all downstream
+dependencies, lifecycle work and real-browser/host gates unchanged.

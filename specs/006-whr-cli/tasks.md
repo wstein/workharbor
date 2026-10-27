@@ -326,19 +326,20 @@ T034 is not checked by this reconciliation.
 
 ## Proposed read-only web precursor scope (2026-10-27)
 
-The [precursor proposal](contracts/read-only-web-precursors.md) describes isolated
-T020 read-only artifact/dashboard work after existing T006/T005, then isolated
-T012 enrollment/trust reads after existing T005/T008, partial T009 ConfigTrust records
-and the owner shell; reuse is limited to those existing T009 components, not full
-T009 completion.
-This is **PROPOSED**, pending exact-head independent review, explicit owner
-acceptance of this PR's exact revision and merge; until then existing gates apply.
-These are partial delivery scopes, not new task IDs or full task completion.
-The table's T020-after-T019 and T012-after-T011 edges, downstream prerequisites,
-checkboxes and full acceptance remain unchanged; no lifecycle/browser/host gate
-is waived. Each implementation PR records its exact source, scope and evidence.
+The [precursor proposal](contracts/read-only-web-precursors.md) describes isolated T020
+read-only artifact/dashboard work after existing T006/T005 and partial T009 trust
+persistence, then isolated T012 enrollment/trust reads after existing T005/T008, partial
+T009 ConfigTrust records and the owner shell; reuse is limited to those existing T009
+components, not full T009 completion. This is **PROPOSED**, pending exact-head
+independent review, explicit owner acceptance of this PR's exact revision and merge;
+until then existing gates apply. These are partial delivery scopes, not new task IDs or
+full task completion. The table's T020-after-T019 and T012-after-T011 edges, downstream
+prerequisites, checkboxes and full acceptance remain unchanged; no
+lifecycle/browser/host gate is waived. Each implementation PR records its exact source,
+scope and evidence.
 
-O1 is DECIDED by the owner on 2026-10-27: use one owner-bound repository
-descriptor and immutable commit, pre-configured once by the owner. A new source
-requires one-time owner configuration approval. Runtime repository/commit choices
-are not allowed; the exact-revision sequencing/reuse exception remains proposed.
+O1 is DECIDED by the owner, revised 2026-10-27: read repository identity and immutable
+commit from the existing owner workspace's `requested_config`. Requests select only
+`workspace_id`; refuse foreign ownership and source override fields. No new source
+approval/configuration/permission point is introduced. The exact-revision
+sequencing/reuse exception remains proposed.
