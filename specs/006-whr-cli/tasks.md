@@ -328,7 +328,9 @@ T034 is not checked by this reconciliation.
 
 The [precursor proposal](contracts/read-only-web-precursors.md) describes isolated
 T020 read-only artifact/dashboard work after existing T006/T005, then isolated
-T012 enrollment/trust reads after existing T005/T008 and the owner shell.
+T012 enrollment/trust reads after existing T005/T008, partial T009 ConfigTrust records
+and the owner shell; reuse is limited to those existing T009 components, not full
+T009 completion.
 This is **PROPOSED**, pending exact-head independent review, explicit owner
 acceptance of this PR's exact revision and merge; until then existing gates apply.
 These are partial delivery scopes, not new task IDs or full task completion.
