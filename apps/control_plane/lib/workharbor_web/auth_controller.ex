@@ -143,7 +143,8 @@ defmodule WorkHarborWeb.AuthController do
         control_form("/owner/dashboard", token, "Open read-only dashboard") <>
           control_form("/owner/logout", token, "Sign out of owner management")
       else
-        control_form("/login/dashboard/clear", token, "Clear dashboard sign-in")
+        control_form("/login/dashboard/clear", token, "Clear dashboard sign-in") <>
+          ~s(<a href="/dashboard/spec-kit">Spec Kit dashboard</a>)
       end
 
     html(

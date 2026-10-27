@@ -159,7 +159,15 @@ defmodule WorkHarborWeb.Router do
 
   scope "/", WorkHarborWeb do
     pipe_through [:session, :dashboard]
-    get "/dashboard", AuthController, :page
+    get "/dashboard", AuthController, :page, log: false
+  end
+
+  scope "/", WorkHarborWeb do
+    pipe_through [:session, :dashboard, :owner_live]
+
+    live_session :dashboard, on_mount: WorkHarborWeb.DashboardAuth do
+      live "/dashboard/spec-kit", SpecKitLive, :index
+    end
   end
 
   defp owner_headers(conn, _), do: WorkHarborWeb.Security.owner_headers(conn)

@@ -2161,7 +2161,22 @@
       "WorkHarborWeb.HostsLiveTest/test host pagination rejects trailing controls without raising",
       "WorkHarborWeb.HostsLiveTest/test owner navigation names the current page",
       "WorkHarborWeb.HostsLiveTest/test batch timeout is deterministic when the reader wakes after inner expiry",
-      "WorkHarborWeb.OwnerShellTest/test hosts page source guard rejects every nonallowlisted context call"
+      "WorkHarborWeb.OwnerShellTest/test hosts page source guard rejects every nonallowlisted context call",
+      "WorkHarbor.SpecKitTest/test workspace_only_request and request_overrides_refused",
+      "WorkHarbor.SpecKitTest/test invalid_request_shape rejects duplicate keys and malformed IDs",
+      "WorkHarbor.SpecKitTest/test stored_source_and_approval keeps artifacts unavailable without host transport",
+      "WorkHarbor.SpecKitTest/test foreign_workspace_not_found before source reads for two authenticated owners",
+      "WorkHarbor.SpecKitTest/test artifact read admits three credential kinds and rejects revoked and forged principals",
+      "WorkHarbor.SpecKitTest/test bounded source read times out without a result or persistent writes",
+      "WorkHarbor.SpecKitTest/test expired artifact credentials cannot read source or approvals",
+      "WorkHarborWeb.SpecKitLiveTest/test dashboard renders explicit unavailable provenance without artifacts or inferred status",
+      "WorkHarborWeb.SpecKitLiveTest/test missing selection trust and foreign UUID are explicit without source leaks",
+      "WorkHarborWeb.SpecKitLiveTest/test dashboard rejects query overrides duplicate keys hostile origins form posts and rebinding",
+      "WorkHarborWeb.SpecKitLiveTest/test dashboard credential cannot call implemented mutation routes and denials are audited",
+      "WorkHarborWeb.SpecKitLiveTest/test forged events neither mutate nor log and revoked mounted credentials stop once",
+      "WorkHarborWeb.SpecKitLiveTest/test missing workspace refresh does not repeat its denial",
+      "WorkHarborWeb.SpecKitLiveTest/test dashboard transport filters reserved and application events before channel dispatch",
+      "WorkHarborWeb.SpecKitLiveTest/test owner and CLI credentials cannot mount dashboard"
     ]
   }
 }
