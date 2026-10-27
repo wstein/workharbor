@@ -44,7 +44,11 @@ defmodule WorkHarborWeb.TransportSecurityTest do
 
   test "owner client selects guarded socket without longpoll or embedded credentials" do
     source = File.read!(Path.expand("../../assets/js/app.js", __DIR__))
-    assert source =~ ~r/new LiveSocket\(["']\/owner\/live["']/
+
+    assert source =~
+             ~s|const socketPath = document.querySelector("[data-dashboard]") ? "/dashboard/live" : "/owner/live"|
+
+    assert source =~ "new LiveSocket(socketPath, Socket,"
     refute source =~ "longPollFallbackMs"
     refute source =~ "localStorage.setItem(\"credential"
     refute source =~ "sessionStorage.setItem(\"credential"

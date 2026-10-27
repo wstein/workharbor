@@ -41,7 +41,8 @@ window.addEventListener("phx:page-loading-stop", () => {
 
 const csrfToken = document.querySelector("meta[name='csrf-token']")?.getAttribute("content")
 if (csrfToken) {
-  const liveSocket = new LiveSocket("/owner/live", Socket, {
+  const socketPath = document.querySelector("[data-dashboard]") ? "/dashboard/live" : "/owner/live"
+  const liveSocket = new LiveSocket(socketPath, Socket, {
     params: {_csrf_token: csrfToken},
     hooks: {...colocatedHooks},
   })

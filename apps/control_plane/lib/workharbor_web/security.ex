@@ -145,6 +145,12 @@ defmodule WorkHarborWeb.Security do
           _ -> {:error, :invalid_request}
         end
 
+      conn.request_path == "/dashboard/spec-kit" and conn.query_string != "" ->
+        case WorkHarbor.SpecKit.decode_query(conn.query_string) do
+          {:ok, _} -> :ok
+          _ -> {:error, :invalid_request}
+        end
+
       conn.request_path == "/owner/hosts" ->
         case owner_list_params(conn.query_string) do
           {:ok, _} -> :ok

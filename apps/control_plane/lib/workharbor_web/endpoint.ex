@@ -14,6 +14,7 @@ defmodule WorkHarborWeb.Endpoint do
 
   socket "/dashboard/live", WorkHarborWeb.DashboardSocket,
     websocket: [
+      max_frame_size: 65_536,
       connect_info: [session: {WorkHarborWeb.BrowserSession, :options, [:dashboard]}],
       check_csrf: true,
       check_origin: {WorkHarborWeb.Security, :socket_origin, []}

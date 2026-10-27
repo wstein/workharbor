@@ -48,6 +48,14 @@ end
 defmodule WorkHarborWeb.DashboardSocket do
   use Phoenix.LiveView.Socket
 
+  @impl Phoenix.Socket
+  defdelegate id(socket), to: Phoenix.LiveView.Socket
+
+  defoverridable handle_in: 2
+
+  @impl Phoenix.Socket.Transport
+  defdelegate handle_in(message, transport), to: WorkHarborWeb.OwnerSocket
+
   def connect(_params, socket, info) do
     with %{"credential" => token} <- info[:session],
          {:ok, p} <- WorkHarbor.Accounts.authenticate(token, "dashboard"),
