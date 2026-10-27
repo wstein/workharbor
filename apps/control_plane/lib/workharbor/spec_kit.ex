@@ -27,29 +27,29 @@ defmodule WorkHarbor.SpecKit do
   def decode_query(_), do: {:error, :invalid_request}
 
   def project(%Principal{} = principal, workspace_id) do
-    with :ok <- Accounts.authorize(principal, :artifact_projection_read),
-         {:ok, ^workspace_id} <- decode_request(%{"workspace_id" => workspace_id}) do
-      repo = Repo.get_dynamic_repo()
-      deadline = System.monotonic_time(:millisecond) + 1000
+    repo = Repo.get_dynamic_repo()
+    deadline = System.monotonic_time(:millisecond) + 1000
 
-      task =
-        Task.async(fn ->
-          Repo.put_dynamic_repo(repo)
+    task =
+      Task.async(fn ->
+        Repo.put_dynamic_repo(repo)
 
-          try do
+        try do
+          with :ok <- Accounts.authorize(principal, :artifact_projection_read),
+               {:ok, ^workspace_id} <- decode_request(%{"workspace_id" => workspace_id}) do
             project_workspace(principal, workspace_id)
-          rescue
-            _ -> {:error, :unavailable}
-          catch
-            :exit, _ -> {:error, :unavailable}
           end
-        end)
+        rescue
+          _ -> {:error, :unavailable}
+        catch
+          :exit, _ -> {:error, :unavailable}
+        end
+      end)
 
-      case Task.yield(task, max(0, deadline - System.monotonic_time(:millisecond))) ||
-             Task.shutdown(task, :brutal_kill) do
-        {:ok, result} -> result
-        _ -> {:error, :unavailable}
-      end
+    case Task.yield(task, max(0, deadline - System.monotonic_time(:millisecond))) ||
+           Task.shutdown(task, :brutal_kill) do
+      {:ok, result} -> result
+      _ -> {:error, :unavailable}
     end
   end
 
