@@ -159,8 +159,8 @@ proposal:
 | Planned test | Required case and causal assertion |
 | --- | --- |
 | `workspace_only_request` | Only a valid owner workspace_id is admitted; stored repository_identity/commit remain exact inputs. |
-| `request_overrides_refused` | Each extra path, url, repository, repository_identity, commit, owner, owner_id, source_id, feature or artifact key gives invalid_request; no source/Git call. |
-| `foreign_workspace_not_found` | Foreign and absent UUID both give not_found before source-field/Git reads, even with identical source fields. |
+| `request_overrides_refused` | Request, query and event fields cannot name a path, URL, repository or commit. Each extra path, url, repository, repository_identity, commit, owner, owner_id, source_id, feature or artifact key gives invalid_request before source/Git reads. |
+| `foreign_workspace_not_found` | Foreign and absent UUID both give not_found before source-field/Git reads, even with identical source fields; assert the authorization-denial audit without recording source fields. |
 | `stored_source_and_approval` | Own stored requested_config selects exact immutable descriptor; planned helper matches existing owner/normalized approval without an invented FK; unmatched approval is unavailable/trust_required with no prompt or auto-approval. |
 | `missing_objects_unavailable` | Absent local objects are unavailable, with no configuration prompt, network or alternate source/revision. |
 | `invalid_request_shape` | Duplicate keys and malformed workspace IDs refuse before lookup; no owner/source request override. |
