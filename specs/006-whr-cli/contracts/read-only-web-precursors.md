@@ -133,11 +133,32 @@ configuration descriptors. No new storage is required. A retained approval recor
 not prove trust in current workspace bytes. No read-page handler may issue, approve,
 revoke, provision or dispatch, including through forged events.
 
+## Needs owner decision: F8 Git object acquisition
+
+**F8 OPEN — 2026-10-27:** O1 decides source identity and workspace ownership;
+it does not decide how the control plane obtains the corresponding Git objects.
+The workspace record stores repository identity and commit, not a local clone.
+No existing host-agent command provides this artifact read. The choices awaiting
+an owner answer are:
+
+| Option | Scope and consequence |
+| --- | --- |
+| A | Report unavailable when the objects do not already exist locally; identify the existing server-side object location before claiming a usable projection. |
+| B | Read through the host agent using a new read-only protocol command; this requires separate protocol scope. |
+| C | Maintain a control-plane read-only mirror; acquisition and refresh need an explicit contract. |
+
+No option is selected or authorized by this proposal. The no-fetch rules and
+missing-object/unavailable text above describe the proposed local reader; they
+do not settle object acquisition or prove that any local object source exists.
+Do not implement or revise the acquisition path before the owner answers F8.
+O1 remains decided; F8 introduces no new per-source approval or configuration.
+
 ## Proposed approval and activation
 
 | Item | Current state |
 | --- | --- |
 | Isolated execution exceptions and sequence | PROPOSED; owner acceptance pending |
+| F8: Git object acquisition | OPEN; owner answer pending, no A/B/C selection |
 | Workspace-derived projection interface and bounds | PROPOSED engineering interface above |
 | Inert Markdown and unavailable status scope | PROPOSED; owner acceptance pending |
 | O1: existing workspace repository identity and immutable commit | DECIDED by owner, revised 2026-10-27; request selects workspace_id only |
