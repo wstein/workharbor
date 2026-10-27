@@ -337,3 +337,8 @@ These are partial delivery scopes, not new task IDs or full task completion.
 The table's T020-after-T019 and T012-after-T011 edges, downstream prerequisites,
 checkboxes and full acceptance remain unchanged; no lifecycle/browser/host gate
 is waived. Each implementation PR records its exact source, scope and evidence.
+
+O1 is DECIDED by the owner on 2026-10-27: use one owner-bound repository
+descriptor and immutable commit, pre-configured once by the owner. A new source
+requires one-time owner configuration approval. Runtime repository/commit choices
+are not allowed; the exact-revision sequencing/reuse exception remains proposed.

@@ -2,7 +2,8 @@
 
 Status: **PROPOSED**, 2026-10-27. This document authorizes no product code,
 runtime activation, task completion or change to existing prerequisites.
-All options, recommendations and approval fields below remain proposed.
+The sequencing and implementation proposal remains unapproved. O1 alone is
+decided by the owner as recorded below.
 
 ## Purpose and retained gates
 
@@ -33,17 +34,24 @@ No host-agent, provider or local CLI behavior enters these packages.
 
 ## Proposed usable Spec Kit source interface
 
-Engineering recommendation: configure existing local Git objects on the server,
-with an explicit product-owner binding and immutable commit. **O1 remains open**:
-recommend operator selection at runtime without separate per-source owner approval.
-This is proposed, not a settled authorization policy. Remote ingestion is outside
-this slice; the existing product-read approval gate remains until O1 is answered.
+**O1 DECIDED — owner, 2026-10-27:** use only one pre-configured, owner-bound
+source: one repository descriptor plus one immutable commit, set once by the owner
+in configuration. A new source requires the owner's one-time configuration
+approval, consistent with [ADR 0011](../../../docs/adr/0011-readonly-spec-dashboard.md).
+Replacing the repository, commit or owner binding is a source change and requires
+that approval. There is no runtime choice of local repository or commit, no branch
+tracking, and no request-supplied source override. Source configuration approval
+permits these reads; it does not approve artifact contents or authorize execution.
+This decision does not accept the proposed sequencing/reuse exception.
 
-Proposed interface: `SpecKit.project(principal, source)` receives a trusted
-server-side descriptor containing `owner_id`, `source_id`, absolute `repository`,
-full `commit_oid` and admitted artifact roots. The descriptor comes from operator
-runtime configuration, never browser input. No source registry, new storage or
-host command is introduced. The shared service authorizes
+Proposed interface: `SpecKit.project(principal)` loads that single approved source
+from owner-controlled configuration. Its descriptor contains `owner_id`,
+`source_id`, absolute `repository`, full `commit_oid` and admitted artifact roots.
+The page, CLI/API caller and request parameters cannot supply or replace this
+descriptor. Missing or unavailable configured sources remain unavailable; never
+infer another source from the working directory or fall back to another commit.
+No source registry, new storage or host command is introduced. The shared service
+authorizes
 `artifact_projection_read` for dashboard, CLI-owner and owner-browser credentials,
 checks the descriptor owner against the principal, and resolves the exact existing
 commit before reads. This new action proposes a narrow exception to the frontend
@@ -54,7 +62,8 @@ admits only its dashboard credential.
 Read blobs from the commit, not the worktree/index or a moving branch. Propose
 roots `specs/`, `docs/quality/` and `docs/exec-plans/`; recognize feature directories
 containing `spec.md`, `plan.md` and `tasks.md`, and retained Markdown evidence.
-Project one server-selected feature/evidence subset under these roots, not all files.
+Project one admitted feature/evidence subset within that fixed repository and
+commit, not all files. This cannot select a different repository or revision.
 Reject absolute/traversing paths and symlink/submodule entries. Use plumbing-only
 fixed argv in a private ephemeral Git context isolated from source config and refs;
 use a helper Git directory with fixed minimal config and the admitted object
@@ -92,10 +101,9 @@ not delivered here. Git stderr, argv, exceptions and absolute host/helper paths
 never reach pages or logs; report safe reasons and escaped relative artifact IDs.
 Retain no persistent projection storage.
 
-The interface and values are proposed for review here. Subject to the owner answer
-to O1 and exact-head acceptance, recommend no additional per-source approval for
-this slice. No such exception is settled. Runtime source selection would grant
-read access only, not execution, lifecycle authority or artifact approval.
+The interface and bounds remain proposed for review. The configured-source policy
+is the decided O1 constraint above, not an operator-selection recommendation.
+No source editing, approval or repository/commit selector enters the dashboard.
 
 ## Enrollment and trust: existing source, read-only projection
 
@@ -122,16 +130,15 @@ issue, approve, revoke, provision or dispatch, including through forged events.
 | Isolated execution exceptions and sequence | PROPOSED; owner acceptance pending |
 | Server-side local source descriptor and bounds | PROPOSED engineering interface above |
 | Inert Markdown and unavailable status scope | PROPOSED; owner acceptance pending |
-| O1: runtime selection without per-source approval | OPEN; recommend operator configuration, owner answer pending |
+| O1: one pre-configured owner-bound repository and immutable commit | DECIDED by owner, 2026-10-27; new sources need one-time owner configuration approval |
 
 This proposal includes matching exception pointers in [spec](../spec.md),
 [plan](../plan.md), [tasks](../tasks.md) and the frontend contract. Independent
-exact-head review, explicit owner acceptance of this PR's exact revision, merge
-and an explicit O1 answer would activate only these isolated read-only exceptions.
-Until then current task and product-read approval gates apply. Recommend accepting
-the proposed source interface here without another source-contract approval loop;
-that recommendation is not settled. Later HTTP routes retain the
-[shared owner API](owner-api.md).
+exact-head review, explicit owner acceptance of this PR's exact sequencing/reuse
+exception and merge would activate only these isolated read-only exceptions. O1
+is decided, but it does not supply that sequencing acceptance or approve product
+implementation. Until then current task and product-read approval gates apply.
+Later HTTP routes retain the [shared owner API](owner-api.md).
 
 Implementation needs a dashboard-specific mount; owner-only OwnerAuth cannot
 admit dashboard credentials. Reusing DashboardSocket requires tested ingress and
@@ -140,8 +147,9 @@ Write failing-first scope, escaping and read-only tests, including direct calls 
 actual implemented mutation routes with dashboard credentials and denial audit.
 Do not claim absent future routes were tested. Cover SC-009 cross-origin read,
 form post, DNS rebinding and streaming upgrade; hostile Host and inert attributes;
-and dashboard forged events with no mutation, crash or payload logging. Pin Git
-isolation, replace/graft, lazy-fetch, alternates and exact-OID refusals with
-failing-first tests. Retain existing transport policy.
+and dashboard forged events with no mutation, crash or payload logging. Pin
+configured-source binding and refusal of request-supplied repositories or commits.
+Pin Git isolation, replace/graft, lazy-fetch, alternates and exact-OID refusals
+with failing-first tests. Retain existing transport policy.
 Native CI and exact-head independent review remain PR gates. Browser/owner-host
 journeys, full-task ticks, lifecycle delivery and pilot acceptance remain separate.

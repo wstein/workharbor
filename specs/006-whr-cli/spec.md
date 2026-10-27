@@ -1726,4 +1726,8 @@ exact revision and merge are required before this narrow exception takes effect.
 Full T020-after-T019 and T012-after-T011 prerequisites, acceptance and downstream
 dependencies remain unchanged and open. No lifecycle actions, task completion,
 browser or owner-host evidence are waived. The linked interface and bounds are
-engineering proposals; no new owner decision is claimed.
+engineering proposals. O1 is DECIDED by the owner on 2026-10-27: the source is
+one owner-bound repository descriptor plus an immutable commit, pre-configured
+once by the owner. A new source requires one-time owner configuration approval;
+no runtime repository or commit choice is allowed. The sequencing/reuse exception
+still requires acceptance at its exact revision.

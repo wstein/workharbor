@@ -269,3 +269,9 @@ The proposed `artifact_projection_read` action is a narrow exception to this
 contract's dashboard-denied-for-every-new-read rule: FR-033 artifact reads admit
 the read-scoped dashboard credential through the shared authorized service.
 Enrollment/trust new reads remain owner-browser/CLI-owner only, dashboard denied.
+
+O1 is DECIDED by the owner on 2026-10-27: T020 reads only one owner-bound
+repository descriptor and immutable commit, pre-configured once by the owner.
+A new source requires one-time owner configuration approval; no runtime repository
+or commit choice is allowed. This decision does not accept the exact-revision
+sequencing/reuse exception or change the owner-page credential boundary.
