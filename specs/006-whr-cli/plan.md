@@ -575,7 +575,15 @@ provenance, engineering bounds and plain-text Markdown source display. O1 is DEC
 the owner, revised 2026-10-27: derive repository identity and immutable commit from the
 existing owner workspace's `requested_config`; requests select only `workspace_id`, and
 foreign ownership is refused. No new source approval/configuration/permission point or
-local checkout locator is introduced. Absent locally available objects remain
-unavailable. O1 does not accept this exact proposed sequencing/reuse exception. This
+local checkout locator is introduced. Artifacts remain unavailable until the host command below exists. O1 does not accept this exact proposed sequencing/reuse exception. This
 **PROPOSED** exception leaves full parent prerequisites and acceptance, all downstream
 dependencies, lifecycle work and real-browser/host gates unchanged.
+
+F8 is DECIDED by the owner on 2026-10-27: option B, artifact reads through the
+host agent's existing workspace clone and authenticated connection. The proposed
+`spec_kit.read` command and its bounded, owner/workspace-scoped read-only response
+are a T007/T019 host-protocol dependency, detailed in the
+[precursor contract](contracts/read-only-web-precursors.md#f8-decision-and-host-protocol-dependency).
+No new approval, configuration, control-plane clone/mirror or fetching is allowed.
+Until that command is implemented and supported, dashboard artifacts are unavailable.
+This decision does not complete T007/T019 or waive the sequencing/reuse gate.

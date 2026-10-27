@@ -1731,3 +1731,12 @@ the repository identity and immutable commit from the existing owner workspace's
 `requested_config`; requests select only `workspace_id`, with foreign ownership refused.
 No new source approval/configuration/permission point is introduced. The
 sequencing/reuse exception still requires acceptance at its exact revision.
+
+F8 is DECIDED by the owner on 2026-10-27: option B, artifact reads through the
+host agent's existing workspace clone and authenticated connection. The proposed
+`spec_kit.read` command and its bounded, owner/workspace-scoped read-only response
+are a T007/T019 host-protocol dependency, detailed in the
+[precursor contract](contracts/read-only-web-precursors.md#f8-decision-and-host-protocol-dependency).
+No new approval, configuration, control-plane clone/mirror or fetching is allowed.
+Until that command is implemented and supported, dashboard artifacts are unavailable.
+This decision does not complete T007/T019 or waive the sequencing/reuse gate.
