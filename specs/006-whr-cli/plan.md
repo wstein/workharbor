@@ -567,9 +567,11 @@ payload verification, installation/build and live operation are outside this sli
 Subject to exact-head independent review, explicit owner acceptance of this PR's
 exact revision and merge, deliver the [read-only precursors](contracts/read-only-web-precursors.md):
 T020 immutable artifact/dashboard reads after existing T006/T005, then T012
-enrollment/trust reads after existing T005/T008 and the owner shell. The linked
-proposal supplies the server-side local Git source interface, runtime operator
-selection, provenance, engineering bounds and inert rendering for review; no
-additional future source-contract approval is required for that described slice.
+enrollment/trust reads after existing T005/T008, partial T009 ConfigTrust records
+and the owner shell; reuse is limited to those existing T009 components, not full
+T009 completion. The linked proposal supplies the server-side local Git source interface, runtime operator
+selection, provenance, engineering bounds and plain-text Markdown source display.
+O1 remains OPEN: recommend runtime selection without separate per-source approval,
+subject to the owner answer and acceptance of this proposed interface.
 This **PROPOSED** exception leaves full parent prerequisites and acceptance,
 all downstream dependencies, lifecycle work and real-browser/host gates unchanged.
