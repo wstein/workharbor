@@ -81,6 +81,24 @@ defmodule WorkHarbor.ConfigTrust do
 
   def lookup(_, _, _), do: {:error, :forbidden}
 
+  @doc "Matches retained exact-revision trust for authorized artifact reads only."
+  def artifact_approval(%Principal{} = principal, descriptor) do
+    with :ok <- Accounts.authorize(principal, :artifact_projection_read),
+         {:ok, normalized, bytes, digest} <- normalize(descriptor) do
+      case Repo.get_by(Approval, [owner_id: principal.owner_id, descriptor_sha256: digest],
+             log: false
+           ) do
+        %Approval{descriptor: ^normalized, descriptor_bytes: ^bytes} = approval -> {:ok, approval}
+        _ -> {:error, :trust_required}
+      end
+    else
+      {:error, :forbidden} -> {:error, :forbidden}
+      _ -> {:error, :trust_required}
+    end
+  end
+
+  def artifact_approval(_, _), do: {:error, :forbidden}
+
   def lookup_for_host(%Hosts.Peer{} = peer, reference, descriptor) do
     if Hosts.current_peer?(peer),
       do: lookup_owner(peer.owner_id, reference, descriptor),
