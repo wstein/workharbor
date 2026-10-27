@@ -91,7 +91,7 @@ and raw configuration descriptors. No new storage is required. A retained approv
 record does not prove trust in current workspace bytes. No read-page handler may
 issue, approve, revoke, provision or dispatch, including through forged events.
 
-## Approval and follow-up artifacts
+## Proposed approval and activation
 
 | Item | Current state |
 | --- | --- |
@@ -100,12 +100,13 @@ issue, approve, revoke, provision or dispatch, including through forged events.
 | Inert Markdown and unavailable status scope | PROPOSED; owner acceptance pending |
 | Operator runtime repository/commit | Runtime configuration, not per-source owner approval |
 
-After owner acceptance, record the approved exception in [spec](../spec.md),
-[plan](../plan.md), package scope in [tasks](../tasks.md) and the frontend contract's
-sequencing section. Expand [ArtifactProjection](../data-model.md) only with the
-reviewed source shape. Amend [owner API](owner-api.md) if adding HTTP routes;
-otherwise retain the shared-service boundary for views and later controllers.
-This document alone changes none of those authoritative artifacts.
+This proposal includes matching exception pointers in [spec](../spec.md),
+[plan](../plan.md), [tasks](../tasks.md) and the frontend contract. Independent
+exact-head review, explicit owner acceptance of this PR's exact revision and merge
+activate only these isolated read-only exceptions. Until then, current task gates
+apply. No additional source-contract or per-repository approval is required for
+the source interface proposed here. Actual operator configuration remains runtime
+input. Later HTTP routes, if needed, retain the [shared owner API](owner-api.md).
 
 Each later implementation needs failing-first tests, scoped credential/owner
 checks, inert hostile-text rendering, mutation refusal without domain changes,
