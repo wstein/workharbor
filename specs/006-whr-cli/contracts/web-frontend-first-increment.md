@@ -256,10 +256,16 @@ No task/feature/product completion follows from this plan or these packages.
 
 The [read-only precursor proposal](read-only-web-precursors.md) adds a proposed
 T020 dashboard slice after existing T006/T005, then an owner enrollment/trust slice
-after existing T005/T008 and the owner shell. It reconciles only that read-only
-portion of W4-after-W3 sequencing; the rest of W1-W4 and full task prerequisites
+after existing T005/T008, partial T009 ConfigTrust records and the owner shell;
+reuse is limited to those existing T009 components, not full T009 completion.
+It reconciles only that read-only portion of W4-after-W3 sequencing; the rest of W1-W4 and full task prerequisites
 remain unchanged. Unlike owner pages, the dashboard uses its read-scoped
 credential; both retain the shared authorized read-service boundary.
 This is **PROPOSED** until exact-head independent review, explicit owner acceptance
 of this PR's exact revision and merge. It grants no lifecycle actions, new storage,
 task completion or waiver of full T012/T020 and browser/owner-host acceptance.
+
+The proposed `artifact_projection_read` action is a narrow exception to this
+contract's dashboard-denied-for-every-new-read rule: FR-033 artifact reads admit
+the read-scoped dashboard credential through the shared authorized service.
+Enrollment/trust new reads remain owner-browser/CLI-owner only, dashboard denied.
