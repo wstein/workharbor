@@ -43,7 +43,15 @@ defmodule WorkHarbor.Accounts do
     :host_revoke,
     :config_approve
   ]
-  @reads [:status, :owner_page, :dashboard_page, :credential_list, :host_status, :config_read]
+  @reads [
+    :status,
+    :owner_page,
+    :dashboard_page,
+    :credential_list,
+    :host_status,
+    :config_read,
+    :artifact_projection_read
+  ]
   def now, do: Application.get_env(:workharbor, :clock, fn -> System.system_time(:second) end).()
 
   def bootstrap(deliver, owner_id \\ nil) when is_function(deliver, 1) do
@@ -268,7 +276,10 @@ defmodule WorkHarbor.Accounts do
   defp action_allowed?(kind, :owner_page), do: kind == "owner_browser"
   defp action_allowed?(kind, :dashboard_page), do: kind == "dashboard"
   defp action_allowed?(kind, :host_status), do: kind in ["cli_owner", "owner_browser"]
-  defp action_allowed?(_, a) when a in [:status, :credential_list, :config_read], do: true
+
+  defp action_allowed?(_, a)
+       when a in [:status, :credential_list, :config_read, :artifact_projection_read], do: true
+
   defp action_allowed?(_, _), do: false
   defp safe_action(a) when a in @writes or a in @reads, do: Atom.to_string(a)
   defp safe_action(_), do: "unknown"
