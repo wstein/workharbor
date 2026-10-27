@@ -2177,7 +2177,9 @@
       "WorkHarborWeb.SpecKitLiveTest/test missing workspace refresh does not repeat its denial",
       "WorkHarborWeb.SpecKitLiveTest/test dashboard transport filters reserved and application events before channel dispatch",
       "WorkHarborWeb.SpecKitLiveTest/test owner and CLI credentials cannot mount dashboard",
-      "WorkHarbor.SpecKitTest/test one second read budget includes authorization"
+      "WorkHarbor.SpecKitTest/test one second read budget includes authorization",
+      "WorkHarbor.SpecKitTest/test retained approval belongs to the workspace owner",
+      "WorkHarbor.SpecKitTest/test late worker result is discarded after the caller resumes"
     ]
   }
 }

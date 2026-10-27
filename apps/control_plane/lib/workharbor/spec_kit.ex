@@ -48,8 +48,13 @@ defmodule WorkHarbor.SpecKit do
 
     case Task.yield(task, max(0, deadline - System.monotonic_time(:millisecond))) ||
            Task.shutdown(task, :brutal_kill) do
-      {:ok, result} -> result
-      _ -> {:error, :unavailable}
+      {:ok, result} ->
+        if System.monotonic_time(:millisecond) < deadline,
+          do: result,
+          else: {:error, :unavailable}
+
+      _ ->
+        {:error, :unavailable}
     end
   end
 
