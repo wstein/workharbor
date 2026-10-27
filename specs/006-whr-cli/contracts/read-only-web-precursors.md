@@ -57,16 +57,20 @@ containing `spec.md`, `plan.md` and `tasks.md`, and retained Markdown evidence.
 Project one server-selected feature/evidence subset under these roots, not all files.
 Reject absolute/traversing paths and symlink/submodule entries. Use plumbing-only
 fixed argv in a private ephemeral Git context isolated from source config and refs;
-read admitted objects without changing source files. This temporary helper state
+use a helper Git directory with fixed minimal config and the admitted object
+format, no source config/refs/worktree. Expose the source object database read-only
+through fixed `GIT_OBJECT_DIRECTORY`, never alternates. This temporary helper state
 is discarded after the read, not persistent projection storage. Scrub inherited
 `GIT_*` variables, then set `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL=/dev/null`,
 `GIT_NO_REPLACE_OBJECTS=1` and `GIT_NO_LAZY_FETCH=1`; pass `--no-replace-objects`,
 `--no-lazy-fetch` and `-c protocol.allow=never`. Source-local config is read only
 as data for admission, never executed or inherited. Reject grafts, file/environment/
-HTTP alternates and unsupported promisor sources; do not follow replace refs.
+HTTP alternates, partial-clone/promisor declarations and promisor markers; do not
+follow replace refs. Only known SHA-1/SHA-256 source formats read as data are admitted.
 Admit canonical lowercase full OIDs matching the repository object format: 40 hex
 for SHA-1 or 64 for SHA-256. Ref names, revision expressions and tags are refused;
 verify exact OID equality and object type commit before projection, without peeling.
+Blob OIDs must match the same format.
 No shell/network, hooks, filters, text conversion, checkout or fetch. Missing Git
 capability is unavailable, never a fallback to unsafe or network-enabled reads.
 
