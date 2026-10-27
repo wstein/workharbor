@@ -561,3 +561,15 @@ attest payloads. Offline fixtures do not establish real-host acceptance.
 This bounded delivery does not alter T039's description, prerequisites or checkbox.
 Full T038 remains required for T039 completion. Alternative bundle-pins/lock formats,
 payload verification, installation/build and live operation are outside this slice.
+
+## Proposed isolated read-only web sequence (2026-10-27)
+
+Subject to exact-head independent review, explicit owner acceptance of this PR's
+exact revision and merge, deliver the [read-only precursors](contracts/read-only-web-precursors.md):
+T020 immutable artifact/dashboard reads after existing T006/T005, then T012
+enrollment/trust reads after existing T005/T008 and the owner shell. The linked
+proposal supplies the server-side local Git source interface, runtime operator
+selection, provenance, engineering bounds and inert rendering for review; no
+additional future source-contract approval is required for that described slice.
+This **PROPOSED** exception leaves full parent prerequisites and acceptance,
+all downstream dependencies, lifecycle work and real-browser/host gates unchanged.
