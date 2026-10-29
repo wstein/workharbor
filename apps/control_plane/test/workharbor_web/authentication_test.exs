@@ -57,6 +57,31 @@ defmodule WorkHarborWeb.AuthenticationTest do
     ])
   end
 
+  test "dashboard GET suppresses route logging and credentials under primary debug logging", c do
+    signed = primary(c, "dashboard")
+    value = cookie(signed, "__Host-workharbor_dashboard")
+    credential = decode_cookie(:dashboard, value)["credential"]
+    headers = [{"cookie", jar([{"__Host-workharbor_dashboard", value}])}]
+    previous_level = Logger.level()
+    Logger.configure(level: :debug)
+    on_exit(fn -> Logger.configure(level: previous_level) end)
+
+    log =
+      ExUnit.CaptureLog.capture_log([level: :debug], fn ->
+        # This logged route proves debug router messages reach the capture.
+        control = req(:get, "/dashboard/spec-kit", "", headers)
+        assert control.status == 200
+        page = req(:get, "/dashboard", "", headers)
+        assert page.status == 200
+        assert page.resp_body =~ "Clear dashboard sign-in"
+      end)
+
+    assert log =~ "Processing with WorkHarborWeb.SpecKitLive.__live__/0"
+    refute log =~ "Processing with WorkHarborWeb.AuthController.page/2"
+    refute log =~ credential
+    refute log =~ c.secret
+  end
+
   test "actual endpoint rejects plaintext wrong host and foreign origin before login", c do
     body = Jason.encode!(%{schema_version: 1, owner_id: c.owner, owner_secret: c.secret})
 

@@ -571,6 +571,48 @@ defmodule WorkHarborWeb.TransportSecurityTest do
   end
 
   @tag :tls
+  test "dashboard WSS accepts a 65536-byte frame and closes at 65537 bytes", c do
+    {selected, csrf} = browser(c, "dashboard")
+    assert {:ok, sock} = connect(c, ["http/1.1"])
+
+    try do
+      path =
+        "/dashboard/live/websocket?" <>
+          URI.encode_query(%{"_csrf_token" => csrf, "vsn" => "2.0.0"})
+
+      wire =
+        "GET " <>
+          path <>
+          " HTTP/1.1\r\n" <>
+          "host: localhost:#{c.port}\r\norigin: #{c.origin}\r\ncookie: #{selected}\r\n" <>
+          "connection: upgrade\r\nupgrade: websocket\r\nsec-websocket-version: 13\r\n" <>
+          "sec-websocket-key: " <> Base.encode64(<<0::128>>) <> "\r\n\r\n"
+
+      assert :ok = :ssl.send(sock, wire)
+      assert response(sock).status == 101
+      heartbeat = Jason.encode!([nil, "dashboard-boundary", "phoenix", "heartbeat", %{}])
+      # Bandit counts the eight-byte masked header in this frame-size bound.
+      payload = heartbeat <> String.duplicate(" ", 65_528 - byte_size(heartbeat))
+      frame = masked_frame(payload)
+      assert byte_size(frame) == 65_536
+      assert :ok = :ssl.send(sock, frame)
+      assert {1, reply} = socket_frame(sock)
+
+      assert [nil, "dashboard-boundary", "phoenix", "phx_reply", %{"status" => "ok"}] =
+               Jason.decode!(reply)
+
+      # One extra JSON whitespace byte stays below the aggregate message cap,
+      # isolating the socket's frame cap from the listener's message cap.
+      oversize = masked_frame(payload <> " ")
+      assert byte_size(oversize) == 65_537
+      assert :ok = :ssl.send(sock, oversize)
+      assert {8, <<1009::16, _reason::binary>>} = socket_frame(sock)
+    after
+      :ssl.close(sock)
+    end
+  end
+
+  @tag :tls
   test "owner WSS bounds actual frames while preserving heartbeat", c do
     {selected, csrf} = browser(c, "owner")
     assert {:ok, sock} = connect(c, ["http/1.1"])
