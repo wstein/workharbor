@@ -90,9 +90,17 @@ def _source_context(root, event=None, base=None, head=None, checkout=None):
         # merges head into the parent PR's own merge commit, whose second
         # parent is this PR's base (the parent PR head); any depth has that shape.
         parent = parents[0]
-        if parent != base:
-            if not stacked:
-                raise ValueError('Unexpected synthetic merge parents')
+        if parent != base and not stacked:
+            # GitHub leaves pull_request.base.sha at the base seen when the PR
+            # event was created, while the merge ref is rebuilt on the advanced
+            # main tip. Accept only a parent that is an advance of the event base
+            # and lies on the fetched main; an unrelated parent stays blocked.
+            for ancestor, descendant in ((base, parent), (parent, 'refs/remotes/origin/main')):
+                try:
+                    git(root, 'merge-base', '--is-ancestor', ancestor, descendant)
+                except subprocess.CalledProcessError as error:
+                    raise ValueError('Unexpected synthetic merge parents') from error
+        elif parent != base:
             if (not re.fullmatch('[0-9a-f]{40}', parent)
                     or git(root, 'cat-file', '-t', parent) != b'commit\n'):
                 raise ValueError('Missing exact parent merge commit')
