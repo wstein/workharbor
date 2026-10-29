@@ -546,6 +546,39 @@ class SourceTests(unittest.TestCase):
             path.write_text(json.dumps(changed))
             with self.subTest(field=field), self.assertRaises(ValueError): ci.source_context(self.root, *context)
 
+    def stale_base_event(self, context, stale):
+        """GitHub keeps pull_request.base.sha at the PR-time base after main advanced."""
+        event = {'pull_request': {'base': {'sha': stale, 'ref': 'main', 'repo': {'full_name': 'wstein/workharbor'}},
+                                  'head': {'sha': context.head, 'repo': {'full_name': 'wstein/workharbor'}}}}
+        path = Path(self.temporary.name)/'event.json'; path.write_text(json.dumps(event))
+        os.environ.update(GITHUB_EVENT_NAME='pull_request', GITHUB_SHA=context.checkout, GITHUB_EVENT_PATH=str(path))
+
+    def test_stale_event_base_is_accepted_when_main_advanced_past_it(self):
+        context = self.proposal()                       # merge parent is the advanced main tip
+        self.git('update-ref', 'refs/remotes/origin/main', context.base)
+        self.stale_base_event(context, self.base)
+        self.assertEqual(ci.SourceContext('pull_request', self.base, context.head, context.checkout),
+                         ci.source_context(self.root))
+        # Main may move on again after the merge ref was built; the parent stays on main.
+        self.git('checkout', '--quiet', '--detach', context.base)
+        later = self.commit('later-main.md')
+        self.git('update-ref', 'refs/remotes/origin/main', later)
+        self.git('checkout', '--quiet', '--detach', context.checkout)
+        self.assertEqual(context.checkout, ci.source_context(self.root).checkout)
+
+    def test_stale_event_base_is_refused_unless_parent_is_on_fetched_main(self):
+        context = self.proposal()
+        self.stale_base_event(context, self.base)
+        with self.assertRaises(ValueError): ci.source_context(self.root)    # no fetched main
+        self.git('update-ref', 'refs/remotes/origin/main', self.base)       # parent not on main
+        with self.assertRaises(ValueError): ci.source_context(self.root)
+        self.git('update-ref', 'refs/remotes/origin/main', context.base)
+        self.git('checkout', '--quiet', '--detach', context.head)           # event base unrelated to parent
+        unrelated = self.commit('unrelated.md')
+        self.git('checkout', '--quiet', '--detach', context.checkout)
+        self.stale_base_event(context, unrelated)
+        with self.assertRaises(ValueError): ci.source_context(self.root)
+
     def stacked(self):
         """Parent branch tip as PR base; the head descends from it."""
         parent = self.commit('parent.md')
