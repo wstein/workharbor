@@ -95,7 +95,7 @@ Independent check: all five actions, lost send response and direct API scope neg
 
 - [ ] T019 [US5] Finalize/review provider-reachable session transport and grant verification; implement contract validators, independent conformance fixture and scoped forwarding in `apps/host_agent/internal/agentsessions/`, `apps/control_plane/lib/workharbor/agent_sessions.ex`, `apps/whr/internal/commands/agent.go`, `tests/test_agent_session_contract.py`; test every contract shape/bound/grant/version and unknown delivery without resend, plus real in-container conformance without native-agent configuration (FR-029–031).
 - [ ] T020 [US5] Implement immutable Git artifact projection and read-only pages in `apps/control_plane/lib/workharbor/spec_kit.ex`, `apps/control_plane/lib/workharbor_web/live/spec_kit_live.ex`; cover unavailable/unknown layouts, revision/evidence source, safe Markdown, every mutation endpoint called with read credential and hostile browser origins; record browser walkthrough (FR-032/033; SC-008/009).
-- [ ] T041 [US5] Host-agent `spec_kit.read` command (PROPOSED; owner decisions O1/F8 of 2026-10-27; no checkbox, prerequisite or acceptance of T007, T019 or T020 changes): add the reviewed, versioned, read-only host-protocol request/result forms, shared fixtures, both validators and a negotiated capability to `contracts/host-protocol/`, `apps/control_plane/lib/workharbor/host_protocol.ex`, `apps/control_plane/lib/workharbor/host_connections/protocol.ex`, `apps/control_plane/lib/workharbor/host_connections.ex`, `apps/control_plane/lib/workharbor_web/agent_socket.ex`, `apps/control_plane/lib/workharbor_web/agent_ingress.ex`, `apps/control_plane/lib/workharbor/spec_kit.ex`, `apps/host_agent/internal/protocol/`, `apps/host_agent/internal/connection/`; the host reads only immutable commit blobs of the workspace's own clone and returns a bounded, correlated, explicit-complete-or-unavailable response, and `SpecKit.project/2` consumes it. Contract: [read-only precursors](contracts/read-only-web-precursors.md#t041-spec_kitread-host-command-contract). Failing tests first, named in that section (`request_overrides_refused`, `foreign_workspace_not_found`, `wrong_peer_refused`, `bounds_at_n_and_n_plus_one` and the rest). Out of scope: rendering available artifacts (T020), agent sessions (T019), any write, fetch or lifecycle path.
+- [ ] T041 [US5] Host-agent `spec_kit.read` command (PROPOSED; owner decisions O1/F8 of 2026-10-27; no checkbox or acceptance of T007, T019 or T020 changes; the added T020 prerequisite T041 is PROPOSED and needs owner approval): add the reviewed, versioned, read-only host-protocol request/result forms, shared fixtures, both validators and a negotiated capability to `contracts/host-protocol/`, `apps/control_plane/lib/workharbor/host_protocol.ex`, `apps/control_plane/lib/workharbor/host_connections/protocol.ex`, `apps/control_plane/lib/workharbor/host_connections.ex`, `apps/control_plane/lib/workharbor_web/agent_socket.ex`, `apps/control_plane/lib/workharbor_web/agent_ingress.ex`, `apps/control_plane/lib/workharbor/spec_kit.ex`, `apps/host_agent/internal/protocol/`, `apps/host_agent/internal/connection/`; the host reads only immutable commit blobs of the workspace's own clone and returns a bounded, correlated, explicit-complete-or-unavailable response, and `SpecKit.project/2` consumes it. Contract: [read-only precursors](contracts/read-only-web-precursors.md#t041-spec_kitread-host-command-contract). Failing tests first, named in that section (`request_overrides_refused`, `foreign_workspace_not_found`, `wrong_peer_refused`, `bounds_at_n_and_n_plus_one` and the rest). Out of scope: rendering available artifacts (T020), agent sessions (T019), any write, fetch or lifecycle path.
 
 ## Phase 8: US6 — Isolated SSH (P3)
 
@@ -219,7 +219,7 @@ The first-increment WIs T025 to T034, T036, T037, T038 and T039 follow the depen
 control-plane WI; T035 additionally needs T009 and T028; T011 additionally depends on T025, T016 on T027 and T017 on T025. T005–T010 are unaffected. By owner decision
 (2026-10-16/17) they run on their own branches and pull requests outside the chain below. Werner's chat answer "5approved" (2026-10-17) is recorded as decision H77 (5); it is not approval of any head's text, and the edits take effect only with approval at one exact head with a tracker or PR link; until then the chain below is unchanged and authoritative.
 
-Machine-readable dependency table (the single-task guard requires exactly one, sorted, covering every task; T001 to T024 follow the chain below, T025 to T039 the graph above):
+Machine-readable dependency table (the single-task guard requires exactly one, sorted, covering every task; T001 to T024 follow the chain below, T025 to T039 the graph above, T041 depends on T008 and is a PROPOSED prerequisite of T020):
 
 | Task | Prerequisites |
 | --- | --- |
@@ -242,7 +242,7 @@ Machine-readable dependency table (the single-task guard requires exactly one, s
 | T017 | T016, T025 |
 | T018 | T017 |
 | T019 | T018 |
-| T020 | T019 |
+| T020 | T019, T041 |
 | T021 | T020 |
 | T022 | T021 |
 | T023 | T022 |
@@ -265,7 +265,7 @@ Machine-readable dependency table (the single-task guard requires exactly one, s
 | T041 | T008 |
 
 
-(The dependency table above encodes the amended graph, including T011 <- T025, T016 <- T027 and T017 <- T025; those extra edges take effect only with the owner's approval of this file at one exact head with a tracker or PR link. The chain below is the unamended order.)
+(The dependency table above encodes the amended graph, including the PROPOSED T020 <- T041 edge, T011 <- T025, T016 <- T027 and T017 <- T025; those extra edges take effect only with the owner's approval of this file at one exact head with a tracker or PR link. The chain below is the unamended order.)
 
 T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009 ->
 T010 -> T011 -> T012 -> T013 -> T014 -> T015 -> T016 -> T017 -> T018 ->
@@ -349,8 +349,9 @@ sequencing/reuse exception remains proposed.
 F8 is DECIDED by the owner on 2026-10-27: option B, artifact reads through the
 host agent's existing workspace clone and authenticated connection. The proposed
 `spec_kit.read` command and its bounded, owner/workspace-scoped read-only response
-are a T007/T019 host-protocol dependency, detailed in the
+are the proposed T041 work item (T007 and T008 are complete and did not add
+it), detailed in the
 [precursor contract](contracts/read-only-web-precursors.md#f8-decision-and-host-protocol-dependency).
 No new approval, configuration, control-plane clone/mirror or fetching is allowed.
 Until that command is implemented and supported, dashboard artifacts are unavailable.
-This decision does not complete T007/T019 or waive the sequencing/reuse gate.
+This decision does not complete T041, T007 or T019, or waive the sequencing/reuse gate.
