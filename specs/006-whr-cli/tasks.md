@@ -95,6 +95,7 @@ Independent check: all five actions, lost send response and direct API scope neg
 
 - [ ] T019 [US5] Finalize/review provider-reachable session transport and grant verification; implement contract validators, independent conformance fixture and scoped forwarding in `apps/host_agent/internal/agentsessions/`, `apps/control_plane/lib/workharbor/agent_sessions.ex`, `apps/whr/internal/commands/agent.go`, `tests/test_agent_session_contract.py`; test every contract shape/bound/grant/version and unknown delivery without resend, plus real in-container conformance without native-agent configuration (FR-029–031).
 - [ ] T020 [US5] Implement immutable Git artifact projection and read-only pages in `apps/control_plane/lib/workharbor/spec_kit.ex`, `apps/control_plane/lib/workharbor_web/live/spec_kit_live.ex`; cover unavailable/unknown layouts, revision/evidence source, safe Markdown, every mutation endpoint called with read credential and hostile browser origins; record browser walkthrough (FR-032/033; SC-008/009).
+- [ ] T041 [US5] Host-agent `spec_kit.read` command (PROPOSED; owner decisions O1/F8 of 2026-10-27; no checkbox, prerequisite or acceptance of T007, T019 or T020 changes): add the reviewed, versioned, read-only host-protocol request/result forms, shared fixtures, both validators and a negotiated capability to `contracts/host-protocol/`, `apps/control_plane/lib/workharbor/host_protocol.ex`, `apps/control_plane/lib/workharbor/host_connections/protocol.ex`, `apps/control_plane/lib/workharbor/host_connections.ex`, `apps/control_plane/lib/workharbor_web/agent_socket.ex`, `apps/control_plane/lib/workharbor_web/agent_ingress.ex`, `apps/control_plane/lib/workharbor/spec_kit.ex`, `apps/host_agent/internal/protocol/`, `apps/host_agent/internal/connection/`; the host reads only immutable commit blobs of the workspace's own clone and returns a bounded, correlated, explicit-complete-or-unavailable response, and `SpecKit.project/2` consumes it. Contract: [read-only precursors](contracts/read-only-web-precursors.md#t041-spec_kitread-host-command-contract). Failing tests first, named in that section (`request_overrides_refused`, `foreign_workspace_not_found`, `wrong_peer_refused`, `bounds_at_n_and_n_plus_one` and the rest). Out of scope: rendering available artifacts (T020), agent sessions (T019), any write, fetch or lifecycle path.
 
 ## Phase 8: US6 — Isolated SSH (P3)
 
@@ -261,6 +262,7 @@ Machine-readable dependency table (the single-task guard requires exactly one, s
 | T037 | T030, T036 |
 | T038 | T025 |
 | T039 | T025, T038 |
+| T041 | T008 |
 
 
 (The dependency table above encodes the amended graph, including T011 <- T025, T016 <- T027 and T017 <- T025; those extra edges take effect only with the owner's approval of this file at one exact head with a tracker or PR link. The chain below is the unamended order.)

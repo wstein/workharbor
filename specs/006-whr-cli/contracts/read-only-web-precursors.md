@@ -177,6 +177,114 @@ and safe provenance cross the existing connection. The control plane projects th
 result without running Git or retaining a clone. This document defines the dependency,
 not its wire-schema implementation, deployment or completion evidence.
 
+## T041: spec_kit.read host command contract
+
+Status: **PROPOSED** work item [T041](../tasks.md); it ticks nothing and changes no
+prerequisite of T007, T019 or T020. It restates the F8 table above as a testable work
+item and adds the message shapes, result forms, errors and tests. Message and reason
+names below are proposals for the reviewed T041 fixtures, not existing wire forms.
+
+### Existing code it builds on
+
+| Fact | Evidence |
+| --- | --- |
+| The page already calls `SpecKit.project(principal, workspace_id)`; the dashboard renders every `{:ok, result}` as unavailable. | `apps/control_plane/lib/workharbor/spec_kit.ex:29`, `apps/control_plane/lib/workharbor_web/live/spec_kit_live.ex:36-37` |
+| The request decoder admits exactly one key, `workspace_id`, as a lowercase UUID, in at most 256 bytes. | `spec_kit.ex:10`, `spec_kit.ex:17-19` |
+| The owner predicate runs before any source field is selected; absent and foreign rows take the same audited `not_found`. | `spec_kit.ex:66-76`, `spec_kit.ex:115-118` |
+| The read has a one-second deadline that includes authorization; late results are discarded. | `spec_kit.ex:31`, `spec_kit.ex:49-57` |
+| Exact-revision trust is matched from the workspace's own `requested_config` by owner and descriptor digest; no match is `trust_required`. | `apps/control_plane/lib/workharbor/config_trust.ex:85-98`, `spec_kit.ex:87-108` |
+| Today the success result is always `availability: :unavailable`, `reason: :host_read_unavailable`. | `spec_kit.ex:90-92` |
+| A workspace row carries `owner_id`, `host_id` and `requested_config`. | `apps/control_plane/lib/workharbor/foundation/records.ex:35-40` |
+| The host connection admits only hello, hello_ack, heartbeat and heartbeat_ack; hello capabilities are `[]` or `["docker"]`; messages are at most 4,096 bytes. | `apps/control_plane/lib/workharbor/host_connections/protocol.ex:8-26`, `apps/host_agent/internal/connection/protocol.go:13-42` |
+| `AgentSocket` accepts one text frame at a time and stops the connection on any other message; the ingress frame caps are 4,110 and 4,096 bytes. | `apps/control_plane/lib/workharbor_web/agent_socket.ex:21-36`, `apps/control_plane/lib/workharbor_web/agent_ingress.ex:130-131` |
+| The v1 lifecycle command has the closed actions create, start, stop, rebuild and remove_runtime. | `contracts/host-protocol/README.md` ("Exact command"), `apps/host_agent/internal/protocol/protocol.go:207-221` |
+
+### Request
+
+Control plane to host, one message after the connection's negotiated capability
+includes the read capability (token name to be fixed in the T041 fixtures):
+
+| Field | Rule |
+| --- | --- |
+| `schema_version`, `kind` | Integer 1; one new closed kind for the request. Separate from the lifecycle `command` kind. |
+| `request_id` | Fresh lowercase UUID, echoed by every response message; the correlation key. |
+| `owner_id`, `host_id`, `workspace_id` | Lowercase UUIDs from stored state, never from the browser. They must equal the authenticated peer on both ends. |
+| `repository_identity`, `commit` | Copied from the owner's stored `requested_config`; `commit` is a canonical lowercase full OID. |
+| `approval_id` | The matching retained approval's ID from `ConfigTrust.artifact_approval/2`. |
+
+The closed request has no path, URL, ref, argv, root list, limit or feature field; the
+roots and bounds are fixed by the F8 table. The browser-facing decoder stays
+`SpecKit.decode_request/1`, which already refuses every other key.
+
+### Response
+
+One begin message, one inventory message per admitted entry (relative path, blob OID,
+size, byte SHA-256), base64 content chunks (at most 1,024 decoded bytes each), and one
+completion message that states entry, blob and byte counts. Every message repeats
+`request_id`, `owner_id`, `host_id` and `workspace_id`, stays within the 4,096-byte
+message cap and is validated by both the Elixir and Go validators from shared fixtures.
+Counts, sizes, path lengths and totals are the F8 "Paths", "Content" and "Transport"
+rows; they are enforced while reading and again on receipt. Only a completion whose
+counts and digests match the received entries is success.
+
+Control-plane result of `SpecKit.project/2`: success carries workspace and source
+identity, commit OID, per-entry relative path, blob OID, byte SHA-256 and the
+escaped plain-text source, plus `observed_at`. Any other outcome stays
+`{:ok, %{availability: :unavailable, reason: reason}}` and never an empty success.
+
+### Error cases
+
+| Case | Result | Reads |
+| --- | --- | --- |
+| Extra, duplicate or malformed request key | `{:error, :invalid_request}` | None |
+| Credential kind or action not admitted | `{:error, :forbidden}` | None |
+| Foreign or absent workspace | `{:error, :not_found}` with the existing denial audit | No source field, no host message |
+| No retained matching approval | unavailable, `trust_required` (existing) | No host message |
+| Host not connected, capability not negotiated, assignment changed, approval changed after dispatch | unavailable, safe reason | No Git read on mismatch |
+| Clone, commit or object missing; unsupported layout; malicious Git config or alternates | unavailable, safe reason from the host | No fetch, no fallback |
+| Any bound exceeded, malformed, late, uncorrelated or duplicated response, disconnect | unavailable or incomplete, never partial success | Stops the read |
+
+Reason atoms are a closed set fixed in the T041 fixtures; Git stderr, argv, absolute
+paths and content never appear in reasons or logs.
+
+### Red-first tests
+
+Control plane (`apps/control_plane/test/workharbor/spec_kit_test.exs` and a new host
+protocol test): `request_overrides_refused` and `workspace_only_request` (both exist
+for the browser decoder at `spec_kit_test.exs:20`; extended to the host request),
+`foreign_workspace_not_found` with two authenticated owners (exists at
+`spec_kit_test.exs:70`; extended to assert zero host messages), `wrong_peer_refused`,
+`assignment_changed_refused`, `approval_changed_refused`, `capability_not_negotiated`,
+`late_response_discarded`, `uncorrelated_response_refused`,
+`incomplete_response_is_unavailable`, `bounds_at_n_and_n_plus_one` for entries, path
+bytes, blobs, blob bytes, total bytes, chunks and messages, and
+`dashboard_shows_unavailable_without_capability`.
+
+Host agent (`apps/host_agent/internal/protocol/`, `apps/host_agent/internal/connection/`):
+`unknown_command_refused`, `forbidden_path_or_argv_field_refused`,
+`missing_clone_unavailable`, `missing_object_unavailable`, `malicious_git_config_ignored`,
+`replace_graft_alternates_refused`, `no_network_no_fetch`, `symlink_submodule_refused`,
+`exact_oid_not_peeled`, `existing_hello_heartbeat_unchanged`. Each fails before its
+guard is added and its mutation probe (remove the owner predicate, relax the closed key
+check, raise a bound by one) turns it red.
+
+### Out of scope
+
+Rendering available artifacts and the Markdown view (T020), agent-session transport
+(T019), enrollment and trust reads (T012), any write, lifecycle, fetch or checkout
+operation, a control-plane clone or mirror, persistent projection storage, a new
+approval or permission point, browser or owner-host acceptance, deployment, and any
+change to the closed v1 lifecycle command grammar.
+
+### Dependencies
+
+T008 (authenticated connection, `AgentSocket`, heartbeat ingress limits) and, through
+it, T007 (closed v1 protocol and validators). It reuses the partial T009 approval
+records and `ConfigTrust.artifact_approval/2`; it needs no other T009 behavior. T020
+keeps rendering artifacts unavailable until T041 is delivered and supported by the
+authenticated connection; whether T020's prerequisites list T041 is an owner decision
+not made here.
+
 ## Proposed approval and activation
 
 | Item | Current state |
