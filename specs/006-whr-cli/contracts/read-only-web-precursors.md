@@ -121,7 +121,7 @@ rendering is not delivered here. Git stderr, argv, exceptions and absolute host/
 paths never reach pages or logs; report safe reasons and escaped relative artifact IDs.
 Retain no persistent projection storage.
 
-The interface and bounds remain proposed for review. The workspace-derived source is the
+The `SpecKit.project/2` interface is merged; the host-read bounds remain proposed for review. The workspace-derived source is the
 revised O1 decision above. No source editing, approval or repository/commit selector
 enters the dashboard.
 
@@ -271,7 +271,7 @@ protocol test): `request_overrides_refused` and `workspace_only_request` (both e
 for the browser decoder at `spec_kit_test.exs:20`; extended to the host request),
 `foreign_workspace_not_found` with two authenticated owners (exists at
 `spec_kit_test.exs:70`; extended to assert zero host messages),
-`trust_required_sends_no_host_message`, `wrong_peer_refused`,
+`trust_required_sends_no_host_message`, `reasons_and_logs_carry_no_git_stderr_paths_or_content` (hostile host reason and content strings; assert reasons, `Logger` output and audit rows contain none), `no_automatic_retry_within_deadline` (one dispatch per read, also after a failed or incomplete response), `disconnect_cancels_pending_read`, `wrong_peer_refused`,
 `assignment_changed_refused`, `approval_changed_refused`, `commit_changed_after_dispatch_discarded`,
 `expired_or_revoked_credential_sends_no_host_message` (expiry read test exists at
 `spec_kit_test.exs:190`), `capability_not_negotiated`, `late_response_discarded`
@@ -290,7 +290,7 @@ Host agent (`apps/host_agent/internal/protocol/`, `apps/host_agent/internal/conn
 `wrong_owner_host_or_workspace_refused`, `request_bound_to_clone_commit_mismatch_refused`,
 `missing_clone_unavailable`, `missing_object_unavailable`, `malicious_git_config_ignored`,
 `replace_graft_alternates_refused`, `no_network_no_fetch`, `symlink_submodule_refused`,
-`exact_oid_not_peeled`, `existing_hello_heartbeat_unchanged`, and the same
+`exact_oid_not_peeled`, `existing_hello_heartbeat_unchanged`, `disconnect_or_cancel_stops_git_read` (connection close, or cancellation as T041 defines it, stops the Git process and releases the helper directory; no later send), `host_reasons_and_logs_carry_no_stderr_paths_or_content` (failing Git with hostile stderr and absolute helper paths), and the same
 `bounds_at_n_and_n_plus_one` set enforced while reading (entries, path bytes, bytes per
 path, blobs, bytes per blob, total bytes, chunks, messages, aggregate encoded bytes).
 Each fails before its guard is added and its mutation probe (remove the owner
@@ -319,7 +319,7 @@ takes effect only with the owner's approval of that table.
 | --- | --- |
 | Isolated execution exceptions and sequence | PROPOSED; owner acceptance pending |
 | F8: host-agent object reads | DECIDED by owner, 2026-10-27, option B; spec_kit.read remains the unimplemented, proposed T041 work item |
-| Workspace-derived projection interface and bounds | PROPOSED engineering interface above |
+| Workspace-derived projection interface and bounds | Interface merged (`spec_kit.ex:29`); host-read bounds PROPOSED engineering values above |
 | Inert Markdown and unavailable status scope | PROPOSED; owner acceptance pending |
 | O1: existing workspace repository identity and immutable commit | DECIDED by owner, revised 2026-10-27; request selects workspace_id only |
 
