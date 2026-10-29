@@ -23,7 +23,7 @@ acceptance remain separate; no precursor closes them.
 
 | Precursor | Proposed prerequisites | Scope retained outside this package |
 | --- | --- | --- |
-| Spec Kit read-only | T006 authentication, existing T005 persistence and partial T009 trust persistence; usable artifacts also require the T007/T019 host read below | T019 agent interoperation, full T020 acceptance and downstream work |
+| Spec Kit read-only | T006 authentication, existing T005 persistence and partial T009 trust persistence; usable artifacts also require the T041 host read below | T019 agent interoperation, full T020 acceptance and downstream work |
 | Enrollment/trust read-only | Existing T005/T008 records, partial T009 ConfigTrust records and owner shell; reuse exception below | T011 client, full T012 lifecycle/retry/progress journeys and downstream work |
 
 Each package would be independently reviewed and tested against its own scope. An
@@ -31,7 +31,7 @@ accepted precursor would not mean its parent task or prerequisite is complete. T
 enrollment/trust exception would explicitly reconcile the frontend contract's
 W4-after-W3 sequencing; it would not silently change the W1-W4 package graph. No
 provider or local CLI behavior enters these packages. This docs-only proposal names
-the separate T007/T019 host-protocol dependency; it implements no host-agent behavior.
+the separate T041 host-protocol work item; it implements no host-agent behavior.
 
 ## Proposed usable Spec Kit source interface
 
@@ -42,15 +42,15 @@ path, URL, repository identity or commit. This replaces the earlier source
 interpretation. There is no new approval, configuration or permission point, and this
 decision does not accept the sequencing/reuse exception.
 
-Proposed interface: `SpecKit.project(principal, workspace_id)` authorizes the new
+Merged interface (`apps/control_plane/lib/workharbor/spec_kit.ex:29`): `SpecKit.project(principal, workspace_id)` authorizes the new
 `artifact_projection_read` action, then loads the existing workspace under the
 principal's owner before reading `Foundation.Workspace.requested_config`. Permit
 dashboard, CLI-owner and owner-browser credentials for this artifact read; the dashboard
 page admits only its dashboard credential. This is the narrow proposed exception to the
 frontend contract's dashboard-denied-for-every-new-read rule under FR-033;
 enrollment/trust new reads remain owner-browser/CLI-owner only, dashboard denied.
-Foreign ownership is refused before any source-field, Git or artifact read. The planned
-request decoder accepts exactly `workspace_id`; extra fields return `invalid_request`,
+Foreign ownership is refused before any source-field, Git or artifact read. The request
+decoder (`SpecKit.decode_request/1`, `spec_kit.ex:10-21`) accepts exactly `workspace_id`; extra fields return `invalid_request`,
 including source_id, feature and artifact selector overrides. Relative artifact IDs are
 output only. A foreign workspace UUID and absent UUID both return `not_found` without
 exposing ownership or calling the source/Git adapter.
@@ -59,13 +59,16 @@ Reuse existing revision approval records and ConfigTrust from the partial T009 s
 below; add no source registry, repository descriptor, approval/configuration flow,
 storage. The read-only host command required by F8 is a separate dependency below.
 Workspace has no approval-ID foreign key;
-`ConfigTrust.lookup/3` requires an approval ID plus descriptor and is not already a
-workspace resolver. Propose a read helper matching existing approval owner and
-normalized immutable descriptor under existing trust semantics, not a new approval or
-permission point. This action reuses existing credentials, not a new owner grant.
-Foundation persistence alone does not prove approval: no existing matching approval
-means unavailable/`trust_required`, never auto-approval or a new approval prompt. This
-resolver behavior is planned, not already implemented. The repository identity is not a
+`ConfigTrust.lookup/3` requires an approval ID plus descriptor and is not a workspace
+resolver. The merged read helper `ConfigTrust.artifact_approval/2`
+(`apps/control_plane/lib/workharbor/config_trust.ex:85-98`) matches the existing
+approval by owner and normalized immutable descriptor digest under existing trust
+semantics, not a new approval or permission point. This action reuses existing
+credentials, not a new owner grant. Foundation persistence alone does not prove
+approval: no existing matching approval means unavailable/`trust_required`, never
+auto-approval or a new approval prompt (`spec_kit.ex:87-108`, tested at
+`apps/control_plane/test/workharbor/spec_kit_test.exs:47-68`). This resolver behavior
+is implemented. The repository identity is not a
 control-plane checkout locator. F8 selects the existing workspace clone on its assigned
 host, resolved by the host agent from trusted workspace state, never from request paths.
 The control plane holds no clone or mirror. Until the host command below exists and is
@@ -147,16 +150,16 @@ clone held by the host agent, through a new read-only, bounded host-protocol com
 on the existing authenticated host connection and revision trust. No new approval,
 configuration, control-plane clone/mirror or fetching is introduced.
 
-The proposed command name is `spec_kit.read`. Its implementation is an explicit
-T007 host-protocol extension and T019 artifact-read integration dependency, not
-existing T007 capability or completion of either full task. The current closed v1
-lifecycle command/action grammar does not admit it. T007 must add reviewed versioned
-request/result forms, shared fixtures, both validators and negotiated capability
-before dispatch; never disguise the read as a lifecycle command or silently widen v1.
-AgentSocket currently accepts only hello/heartbeat messages; read-command dispatch
-and correlated chunk assembly are also new dependency work. Preserve those existing
-messages and their ingress limits.
-Until that command and integration exist, T020 renders artifacts unavailable.
+The proposed command name is `spec_kit.read`. Its implementation is the explicit work
+item [T041](../tasks.md); T007 and T008 are complete and did not add it, and it is not
+existing T007 capability. The current closed v1 lifecycle command/action grammar does
+not admit it. T041 must add reviewed versioned request/result forms, shared fixtures,
+both validators and a negotiated capability before dispatch; never disguise the read
+as a lifecycle command or silently widen v1. AgentSocket currently accepts only
+hello/heartbeat messages; read-command dispatch and correlated chunk assembly are also
+T041 work. Preserve those existing messages and their ingress limits. Rendering
+available artifacts remains T020 page work.
+Until that command exists, T020 renders artifacts unavailable.
 
 The following engineering contract is proposed for that dependency; the owner's
 choice of B does not claim these numeric bounds were separately approved:
@@ -197,7 +200,7 @@ names below are proposals for the reviewed T041 fixtures, not existing wire form
 | A workspace row carries `owner_id`, `host_id` and `requested_config`. | `apps/control_plane/lib/workharbor/foundation/records.ex:35-40` |
 | The host connection admits only hello, hello_ack, heartbeat and heartbeat_ack; hello capabilities are `[]` or `["docker"]`; messages are at most 4,096 bytes. | `apps/control_plane/lib/workharbor/host_connections/protocol.ex:8-26`, `apps/host_agent/internal/connection/protocol.go:13-42` |
 | `AgentSocket` accepts one text frame at a time and stops the connection on any other message; the ingress frame caps are 4,110 and 4,096 bytes. | `apps/control_plane/lib/workharbor_web/agent_socket.ex:21-36`, `apps/control_plane/lib/workharbor_web/agent_ingress.ex:130-131` |
-| The v1 lifecycle command has the closed actions create, start, stop, rebuild and remove_runtime. | `contracts/host-protocol/README.md` ("Exact command"), `apps/host_agent/internal/protocol/protocol.go:207-221` |
+| The v1 lifecycle command has the closed actions create, start, stop, rebuild and remove_runtime. | `contracts/host-protocol/README.md` ("Exact command"), `apps/host_agent/internal/protocol/protocol.go:343-356` |
 
 ### Request
 
@@ -210,7 +213,15 @@ includes the read capability (token name to be fixed in the T041 fixtures):
 | `request_id` | Fresh lowercase UUID, echoed by every response message; the correlation key. |
 | `owner_id`, `host_id`, `workspace_id` | Lowercase UUIDs from stored state, never from the browser. They must equal the authenticated peer on both ends. |
 | `repository_identity`, `commit` | Copied from the owner's stored `requested_config`; `commit` is a canonical lowercase full OID. |
-| `approval_id` | The matching retained approval's ID from `ConfigTrust.artifact_approval/2`. |
+| `approval_id` | The matching retained approval's ID from `ConfigTrust.artifact_approval/2`. The host only echoes it in the begin message and never looks up or judges approvals; the control plane rechecks it when the response completes, through `ConfigTrust.lookup_for_host/3` (`config_trust.ex:102-108`) for the current peer. A changed or missing approval makes the result unavailable. |
+
+Interleaving: after hello, `AgentSocket` today closes the connection on any message
+that is not the expected heartbeat (`agent_socket.ex:23-24`, `:32`). T041 admits response
+messages only for the single outstanding `request_id`; heartbeats continue on their
+own cadence and may arrive between response messages. A response message never counts
+as a heartbeat and does not touch the heartbeat refill (`host_connections.ex:13-14`
+sets the existing limits); an unsolicited, duplicated or unknown `request_id` message
+closes the connection as today. The read blocks no other message type.
 
 The closed request has no path, URL, ref, argv, root list, limit or feature field; the
 roots and bounds are fixed by the F8 table. The browser-facing decoder stays
@@ -229,20 +240,26 @@ counts and digests match the received entries is success.
 
 Control-plane result of `SpecKit.project/2`: success carries workspace and source
 identity, commit OID, per-entry relative path, blob OID, byte SHA-256 and the
-escaped plain-text source, plus `observed_at`. Any other outcome stays
-`{:ok, %{availability: :unavailable, reason: reason}}` and never an empty success.
+escaped plain-text source, plus `observed_at`. Every other outcome is one of two
+exact forms and never an empty success: `{:ok, %{availability: :unavailable, reason:
+reason}}` (existing `trust_required` and `host_read_unavailable` at `spec_kit.ex:87-108`,
+plus the host and validation reasons below), or `{:error, :unavailable}` for deadline
+expiry, a late result, a worker exception or exit (`spec_kit.ex:43-57`). The page
+renders both as unavailable (`spec_kit_live.ex:36-41`).
 
 ### Error cases
 
 | Case | Result | Reads |
 | --- | --- | --- |
 | Extra, duplicate or malformed request key | `{:error, :invalid_request}` | None |
-| Credential kind or action not admitted | `{:error, :forbidden}` | None |
+| Credential kind or action not admitted; credential expired or revoked before or during the read | `{:error, :forbidden}` (`spec_kit.ex:38`, `:61`; page stops, `spec_kit_live.ex:38`) | None; an expired credential also reads no source or approval |
 | Foreign or absent workspace | `{:error, :not_found}` with the existing denial audit | No source field, no host message |
-| No retained matching approval | unavailable, `trust_required` (existing) | No host message |
-| Host not connected, capability not negotiated, assignment changed, approval changed after dispatch | unavailable, safe reason | No Git read on mismatch |
-| Clone, commit or object missing; unsupported layout; malicious Git config or alternates | unavailable, safe reason from the host | No fetch, no fallback |
-| Any bound exceeded, malformed, late, uncorrelated or duplicated response, disconnect | unavailable or incomplete, never partial success | Stops the read |
+| No retained matching approval | `{:ok, ... reason: :trust_required}` (existing) | No host message |
+| Host not connected, capability not negotiated, assignment changed | `{:ok, ... unavailable}` with a safe reason | No host Git read on mismatch |
+| Commit or approval changed after dispatch (stored `requested_config` or approval no longer matches at completion) | `{:ok, ... unavailable}`; the response is discarded | Result not used |
+| Clone, commit or object missing; unsupported layout; malicious Git config or alternates | `{:ok, ... unavailable}` with the safe reason from the host | No fetch, no fallback |
+| Any bound exceeded; entry, blob or byte count or SHA-256 mismatch against the completion; malformed, uncorrelated, duplicated or out-of-order message; disconnect | `{:ok, ... unavailable}` (incomplete), never partial success | Stops the read |
+| One-second deadline expires, including authorization; late response | `{:error, :unavailable}` (`spec_kit.ex:49-57`) | Cancels the read; late result discarded |
 
 Reason atoms are a closed set fixed in the T041 fixtures; Git stderr, argv, absolute
 paths and content never appear in reasons or logs.
@@ -253,20 +270,31 @@ Control plane (`apps/control_plane/test/workharbor/spec_kit_test.exs` and a new 
 protocol test): `request_overrides_refused` and `workspace_only_request` (both exist
 for the browser decoder at `spec_kit_test.exs:20`; extended to the host request),
 `foreign_workspace_not_found` with two authenticated owners (exists at
-`spec_kit_test.exs:70`; extended to assert zero host messages), `wrong_peer_refused`,
-`assignment_changed_refused`, `approval_changed_refused`, `capability_not_negotiated`,
-`late_response_discarded`, `uncorrelated_response_refused`,
-`incomplete_response_is_unavailable`, `bounds_at_n_and_n_plus_one` for entries, path
-bytes, blobs, blob bytes, total bytes, chunks and messages, and
+`spec_kit_test.exs:70`; extended to assert zero host messages),
+`trust_required_sends_no_host_message`, `wrong_peer_refused`,
+`assignment_changed_refused`, `approval_changed_refused`, `commit_changed_after_dispatch_discarded`,
+`expired_or_revoked_credential_sends_no_host_message` (expiry read test exists at
+`spec_kit_test.exs:190`), `capability_not_negotiated`, `late_response_discarded`
+(exists for the worker at `spec_kit_test.exs:211`), `uncorrelated_response_refused`,
+`duplicated_response_refused`, `disconnect_is_unavailable`,
+`digest_or_count_mismatch_is_unavailable`, `incomplete_response_is_unavailable`,
+`heartbeat_interleaves_with_response`, `fixed_roots_only` and
+`traversing_absolute_symlink_submodule_entries_refused` (inventory validation),
+`bounds_at_n_and_n_plus_one` for every F8 bound (enumerated entries, aggregate path
+bytes, bytes per path, blobs, bytes per blob, total blob bytes, chunk bytes, chunks per
+blob, total chunks, response messages, aggregate encoded bytes), and
 `dashboard_shows_unavailable_without_capability`.
 
 Host agent (`apps/host_agent/internal/protocol/`, `apps/host_agent/internal/connection/`):
 `unknown_command_refused`, `forbidden_path_or_argv_field_refused`,
+`wrong_owner_host_or_workspace_refused`, `request_bound_to_clone_commit_mismatch_refused`,
 `missing_clone_unavailable`, `missing_object_unavailable`, `malicious_git_config_ignored`,
 `replace_graft_alternates_refused`, `no_network_no_fetch`, `symlink_submodule_refused`,
-`exact_oid_not_peeled`, `existing_hello_heartbeat_unchanged`. Each fails before its
-guard is added and its mutation probe (remove the owner predicate, relax the closed key
-check, raise a bound by one) turns it red.
+`exact_oid_not_peeled`, `existing_hello_heartbeat_unchanged`, and the same
+`bounds_at_n_and_n_plus_one` set enforced while reading (entries, path bytes, bytes per
+path, blobs, bytes per blob, total bytes, chunks, messages, aggregate encoded bytes).
+Each fails before its guard is added and its mutation probe (remove the owner
+predicate, relax the closed key check, raise a bound by one) turns it red.
 
 ### Out of scope
 
@@ -282,15 +310,15 @@ T008 (authenticated connection, `AgentSocket`, heartbeat ingress limits) and, th
 it, T007 (closed v1 protocol and validators). It reuses the partial T009 approval
 records and `ConfigTrust.artifact_approval/2`; it needs no other T009 behavior. T020
 keeps rendering artifacts unavailable until T041 is delivered and supported by the
-authenticated connection; whether T020's prerequisites list T041 is an owner decision
-not made here.
+authenticated connection. The edge T020 <- T041 in the dependency table is PROPOSED and
+takes effect only with the owner's approval of that table.
 
 ## Proposed approval and activation
 
 | Item | Current state |
 | --- | --- |
 | Isolated execution exceptions and sequence | PROPOSED; owner acceptance pending |
-| F8: host-agent object reads | DECIDED by owner, 2026-10-27, option B; spec_kit.read remains an unimplemented T007/T019 dependency |
+| F8: host-agent object reads | DECIDED by owner, 2026-10-27, option B; spec_kit.read remains the unimplemented, proposed T041 work item |
 | Workspace-derived projection interface and bounds | PROPOSED engineering interface above |
 | Inert Markdown and unavailable status scope | PROPOSED; owner acceptance pending |
 | O1: existing workspace repository identity and immutable commit | DECIDED by owner, revised 2026-10-27; request selects workspace_id only |
@@ -306,15 +334,19 @@ HTTP routes retain the [shared owner API](owner-api.md).
 Implementation needs a dashboard-specific mount; owner-only OwnerAuth cannot admit
 dashboard credentials. Reusing DashboardSocket requires tested ingress and no-write
 behavior; do not assume OwnerSocket's filter also protects it. The following named
-SpecKit tests are planned RED-first; none exists or was executed for this docs-only
-proposal:
+SpecKit tests were planned RED-first. The control-plane tests below exist in
+`apps/control_plane/test/workharbor/spec_kit_test.exs` (`workspace_only_request` and
+`request_overrides_refused` at line 20, `invalid_request_shape` at 31,
+`stored_source_and_approval` at 47, `foreign_workspace_not_found` at 70);
+`missing_objects_unavailable` exists only as the unavailable assertions at 47-68, and its
+host half belongs to T041. This docs-only PR executed none of them:
 
-| Planned test | Required case and causal assertion |
+| Test | Required case and causal assertion |
 | --- | --- |
 | `workspace_only_request` | Only a valid owner workspace_id is admitted; stored repository_identity/commit remain exact inputs. |
 | `request_overrides_refused` | Request, query and event fields cannot name a path, URL, repository or commit. Each extra path, url, repository, repository_identity, commit, owner, owner_id, source_id, feature or artifact key gives invalid_request before source/Git reads. |
 | `foreign_workspace_not_found` | Foreign and absent UUID both give not_found before source-field/Git reads, even with identical source fields; assert the authorization-denial audit without recording source fields. |
-| `stored_source_and_approval` | Own stored requested_config selects exact immutable descriptor; planned helper matches existing owner/normalized approval without an invented FK; unmatched approval is unavailable/trust_required with no prompt or auto-approval. |
+| `stored_source_and_approval` | Own stored requested_config selects exact immutable descriptor; `ConfigTrust.artifact_approval/2` matches existing owner/normalized approval without an invented FK; unmatched approval is unavailable/trust_required with no prompt or auto-approval. |
 | `missing_objects_unavailable` | Absent host capability, clone or objects is unavailable; no control-plane Git, configuration prompt, fetch or alternate source/revision. |
 | `invalid_request_shape` | Duplicate keys and malformed workspace IDs refuse before lookup; no owner/source request override. |
 
@@ -322,14 +354,14 @@ The override test must fail when the closed request-key check is relaxed. The
 foreign-workspace test must fail when the owner predicate is removed: use two
 actually authenticated owners and their real workspace rows, not forged
 principals. Foreign and absent workspaces return identical `not_found` with zero
-Git/source reads. These are causal expectations for future tests, not results.
+Git/source reads. These are causal expectations; this docs-only PR executed no test.
 
 Also require RED-first host-protocol cases for wrong peer/owner/workspace/assignment,
 changed commit/approval, unsupported command, forbidden path/write/argv fields,
 count/size/path/time bounds at N and N+1, disconnect, late or mismatched responses,
 missing clone/objects and malicious Git config. Assert refusal reasons, zero workspace/repository writes
 and no fetch; missing capability must show unavailable in the dashboard. These tests
-belong to the T007/T019 dependency and are not implemented or executed here.
+belong to T041 and are not implemented or executed here.
 
 Also plan direct calls to actual implemented mutation routes with dashboard credentials
 and denial audit; do not claim absent future routes were tested. Cover SC-009
