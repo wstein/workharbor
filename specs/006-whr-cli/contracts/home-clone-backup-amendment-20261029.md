@@ -1,8 +1,8 @@
 # Home clone and backup amendment
 
 Status: **DECIDED by the owner, 2026-10-29** (scope relayed to the implementing
-agent in the session request of that date, revised the same day: the helper is
-a pinned minimal base image running `tar`, not an rsync image). This document
+agent in the session request of that date, revised the same day; the final engine is in the DX revision at the end: rsync in the
+local `whr-tools` image, `tar` as the fallback). This document
 records that decision and the implementation contract. It claims no real-host
 acceptance: every test of this increment uses fake Docker executables.
 
@@ -13,8 +13,8 @@ continue in a new container without copying large caches. Approved scope, and
 only this scope:
 
 1. `whr workspace home clone` and `whr workspace home backup`, copying an
-   existing workspace home volume into a **new** volume with `tar` inside a
-   digest-pinned minimal base image.
+   existing workspace home volume into a **new** volume (see the DX revision for
+   the helper image: rsync in the local `whr-tools` image, or a digest pin).
 2. An additive optional `workharbor.json` field pinning that base image by
    digest, written by `whr workspace init` only when explicitly given.
 3. Documentation replacing the "no built-in backup" statements that this
@@ -114,7 +114,8 @@ Resolution and refusal before any effect, in this order:
 4. Helper pin: read `workharbor.json` from the selected container's
    `devcontainer.local_folder` label through the bounded no-follow reader. A
    missing label/manifest, manifest findings, or an absent or non-digest pin
-   falls back to the workspace's own local image (see the DX revision below).
+   falls back to the local `whr-tools` image, then to the workspace's own image
+   (see the DX revision below).
 5. Target: grammar 64; protected prefix, existing volume or source collision 68.
 
 The preview (dry-run and before confirmation) shows: mode, source container
@@ -213,10 +214,9 @@ any. Counts are not a content attestation.
 
 ## Non-binding future extension
 
-When the BundleDock toolbox ships `rsync`, `whr` may optionally run
-`/opt/bdock/toolbox/bin/rsync` from the workspace's own pinned toolbox volume,
-mounted read-only into the same base image, for resumable or incremental runs.
-This is a possible later decision only; nothing here specifies or implements it.
+Superseded by the DX revision: `rsync` now comes from the `whr-tools` image. Running
+the toolbox's own rsync from a mounted toolbox volume remains a possible later
+decision; nothing here specifies it.
 
 ## Acceptance (fixtures, then owner host)
 
@@ -237,10 +237,13 @@ owner gates and are not claimed here.
 the box. This revision supersedes the stricter statements above:
 
 - **Helper image.** A digest pin in `workharbor.json` (`helper_images.base`) is
-  optional. Without a usable pin the copy runs in the selected workspace's own
-  local image (it already contains `sh` and `tar`), with `--pull never` and no
-  pull. A valid pin still wins and is pulled as before. The argv admission
-  accepts any single image reference that cannot be read as an option.
+  optional and, when valid, still wins and is pulled as before. Without a pin the
+  copy runs `rsync` in the local `whr-tools` image. That image is built once from
+  the embedded Dockerfile (Alpine, `apk add rsync tar zstd jq`): `docker build`
+  pulls Alpine, so the first run needs network. If the build fails, the copy
+  falls back to `tar` in the selected workspace's own local image
+  (`--pull never`). The argv admission accepts any single image reference that
+  cannot be read as an option, plus the fixed build of the `whr-tools` tag.
 - **Consent.** `--yes` alone is enough for unattended use. `--trust` is optional:
   when given it must equal the freshly computed fingerprint (68 on a mismatch).
   On a terminal the command shows the preview and asks a plain `[y/N]`.
