@@ -696,14 +696,14 @@ const homeRunFixed = 35 // argv elements before the positional excludes
 func admitHomeMutation(args []string) bool {
 	switch {
 	case len(args) == 5 && args[0] == "image" && args[1] == "pull" && args[2] == "--quiet" && args[3] == "--":
-		return workspacecfg.DigestPinnedImage(args[4]) || args[4] == recoverImageRef || toolboxImageRE.MatchString(args[4])
+		return workspacecfg.DigestPinnedImage(args[4]) || args[4] == recoverImageRef || toolboxImageRE.MatchString(args[4]) || nixboxImageRE.MatchString(args[4])
 	case len(args) == 5 && args[0] == "build" && args[1] == "--quiet" && args[2] == "--tag" && localBuildTag(args[3]) && args[4] == "-":
 		return true
-	case len(args) == 6 && args[0] == "volume" && args[1] == "create" && args[2] == "--label" && args[3] == "workharbor.recover=toolbox" && args[4] == "--":
-		return toolboxVolumeRE.MatchString(args[5])
+	case len(args) == 6 && args[0] == "volume" && args[1] == "create" && args[2] == "--label" && args[4] == "--":
+		return (args[3] == "workharbor.recover=toolbox" && toolboxVolumeRE.MatchString(args[5])) || (args[3] == "workharbor.recover=nixbox" && nixboxVolumeRE.MatchString(args[5]))
 	case len(args) == 9 && args[0] == "run" && args[1] == "--rm" && args[2] == "--pull" && args[3] == "never" && args[4] == "--network" && args[5] == "none" && args[6] == "--mount":
 		id := args[8]
-		return imageIDRE.MatchString("sha256:"+id) && args[7] == "type=volume,src=bundledock-toolbox-"+id+",dst=/bundle,volume-nocopy"
+		return imageIDRE.MatchString("sha256:"+id) && (args[7] == "type=volume,src=bundledock-toolbox-"+id+",dst=/bundle,volume-nocopy" || args[7] == "type=volume,src=bundledock-nixbox-"+id+",dst=/bundle,volume-nocopy")
 	case len(args) == 10 && args[0] == "volume" && args[1] == "create":
 		mode := strings.TrimPrefix(args[3], "workharbor.home-copy=")
 		op := strings.TrimPrefix(args[5], homeOperationKey+"=")
@@ -760,7 +760,7 @@ func admitHomeRead(args []string) bool {
 		return true
 	}
 	switch {
-	case len(args) == 6 && args[0] == "image" && args[1] == "inspect" && args[2] == "--format" && args[3] == "{{.Id}}" && args[4] == "--" && (localBuildTag(args[5]) || args[5] == recoverImageRef || toolboxImageRE.MatchString(args[5])):
+	case len(args) == 6 && args[0] == "image" && args[1] == "inspect" && args[2] == "--format" && args[3] == "{{.Id}}" && args[4] == "--" && (localBuildTag(args[5]) || args[5] == recoverImageRef || toolboxImageRE.MatchString(args[5]) || nixboxImageRE.MatchString(args[5])):
 		return true
 	case reflect.DeepEqual(args, []string{"volume", "ls", "--quiet"}):
 		return true
