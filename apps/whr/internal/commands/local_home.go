@@ -41,6 +41,9 @@ func (a *app) localHomeOptions(c *cobra.Command) localHomeInvocation {
 		v.options.Excludes, _ = c.Flags().GetStringArray("exclude")
 		v.options.IncludeCredentials, _ = c.Flags().GetBool("include-credentials")
 	}
+	if a.env.IsTerminal(a.env.Stderr) && !a.jsonMode() {
+		v.options.Progress = a.env.Stderr
+	}
 	v.interactive = !a.jsonMode() && a.env.InputTerminal && a.env.IsTerminal(a.env.Stderr) && a.env.Stdin != nil
 	return v
 }
