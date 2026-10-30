@@ -78,13 +78,16 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 	if e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup" {
 		b.WriteString("Local: --local <exact-name|full-id> copies the workspace home volume, mounted read-only, into a new volume with tar in the\nhelper_images.base image pinned by digest in workharbor.json (set it with whr init --helper-base-image). Existing and protected\nvolumes are never targets and nothing is deleted. Use --dry-run for the preview and fingerprint; unattended/JSON apply\nrequires --yes and --trust <fingerprint>. A failure keeps and reports the new volume (exit 73).\n")
 	}
+	if e.ID == "workspace.recover" {
+		b.WriteString("Local: --local <exact-name|full-id> starts a throwaway container (image built once on first use) with the workspace home mounted\nread-only at /recover/home and a BundleDock toolbox mounted at /opt/bdock/toolbox, and opens its shell (fish from the toolbox, else sh).\n--toolbox latest|<tag> pulls quay.io/bundledock/toolbox once and fills a bundledock-toolbox-<id> volume; current uses the workspace's own\ntoolbox volume; a volume id uses a local one. Network is off unless --net; the home is read-only unless --rw. Terminal stdin/stdout\nrequired (or --dry-run). Nothing is deleted; the container is removed on exit.\n")
+	}
 	if e.ID == "workspace.console" {
 		b.WriteString("console --local is refused; use whr shell --local <ws> in the host multiplexer session.\n")
 	}
 	if e.JSON == "rejected" {
 		b.WriteString("JSON: not supported (--json is a usage error)\n")
 	}
-	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.drift" || e.ID == "workspace.rm" || e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console" || e.ID == "workspace.promote" || e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup") {
+	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.drift" || e.ID == "workspace.rm" || e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console" || e.ID == "workspace.promote" || e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup" || e.ID == "workspace.recover") {
 		fmt.Fprintf(b, "\nFlags:\n%s", usages)
 	}
 	b.WriteString("\n" + globalFlagsHelp)

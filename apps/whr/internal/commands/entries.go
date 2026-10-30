@@ -11,6 +11,7 @@ var entries = []Entry{
 	{ID: "workspace.drift", Path: []string{"workspace", "drift"}, Increment: "first", Needs: "none", Writes: "none", JSON: "envelope", Flags: []string{"--local", "--source", "--json"}},
 	{ID: "workspace.home.clone", Path: []string{"workspace", "home", "clone"}, Increment: "first", Needs: "none", Writes: "local", JSON: "envelope", Flags: []string{"--local", "--to", "--exclude", "--include-credentials", "--dry-run", "--trust", "--yes", "--json"}},
 	{ID: "workspace.home.backup", Path: []string{"workspace", "home", "backup"}, Increment: "first", Needs: "none", Writes: "local", JSON: "envelope", Flags: []string{"--local", "--to", "--dry-run", "--trust", "--yes", "--json"}},
+	{ID: "workspace.recover", Path: []string{"workspace", "recover"}, Increment: "first", Needs: "none", Writes: "local", JSON: "rejected", Flags: []string{"--local", "--toolbox", "--rw", "--net", "--dry-run"}},
 	{ID: "workspace.ls", Path: []string{"workspace", "ls"}, Short: []string{"ls"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "envelope", BlockedOn: "owner_api", Flags: []string{"--local", "--role", "--label", "--json"}},
 	{ID: "workspace.show", Path: []string{"workspace", "show"}, Short: []string{"show"}, Increment: "later", Needs: "control_plane", Writes: "none", JSON: "envelope", BlockedOn: "owner_api"},
 	{ID: "workspace.create", Path: []string{"workspace", "create"}, Short: []string{"create"}, Increment: "later", Needs: "control_plane", Writes: "remote", JSON: "envelope", BlockedOn: "owner_api", Flags: []string{"--cpus", "--memory"}},

@@ -87,6 +87,7 @@ var descriptions = map[string]string{
 	"workspace.drift":        "Report local bundle reference drift without changing the workspace",
 	"workspace.home.clone":   "Clone a local workspace home into a new volume without caches or credentials",
 	"workspace.home.backup":  "Back up a local workspace home into a new volume",
+	"workspace.recover":      "Open a throwaway recovery shell with a workspace home and a toolbox mounted",
 	"workspace.ls":           "List local workspaces with --local (remote listing waits for owner_api)",
 	"workspace.show":         "Show one workspace",
 	"workspace.create":       "Create a workspace",
