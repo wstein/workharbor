@@ -51,9 +51,9 @@ and [2026-10-25 throwaway amendment](contracts/throwaway-staging-amendment-20261
 ## Amendment (2026-10-29): workspace home clone and backup
 
 The owner decided local `whr workspace home clone` and `whr workspace home backup`:
-copy a workspace home volume into a new volume through a digest-pinned rsync
-helper image (`helper_images.rsync` in `workharbor.json`, written by
-`whr workspace init --rsync-image`), with stage-style fingerprint trust and
+copy a workspace home volume into a new volume with `tar` in a digest-pinned
+minimal base image (`helper_images.base` in `workharbor.json`, written by
+`whr workspace init --helper-base-image`), with stage-style fingerprint trust and
 confirmation. See the [home clone/backup amendment](contracts/home-clone-backup-amendment-20261029.md).
 It supersedes only the "no volume-backup feature" statement for workspace homes;
 stage, promote, `rm`, the throwaway disposal rules, FR-067 and the complete
