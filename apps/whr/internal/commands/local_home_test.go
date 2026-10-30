@@ -180,6 +180,25 @@ func TestLocalHomeCopyInteractiveConfirmation(t *testing.T) {
 	}
 }
 
+// rsync progress goes to the terminal's stderr and nowhere when the output is piped.
+func TestLocalHomeCopyProgressOnlyOnTerminal(t *testing.T) {
+	for _, terminal := range []bool{true, false} {
+		ok := homeCLIResult("clone")
+		ok.Status, ok.DryRun = "copied", false
+		f := &homeTxFixture{preview: homeCLIResult("clone"), result: ok}
+		n := 0
+		var o localdocker.HomeCopyOptions
+		var out, diag bytes.Buffer
+		env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(""), IsTerminal: func(io.Writer) bool { return terminal }}
+		if code := commands.Execute(context.Background(), []string{"workspace", "home", "clone", "--local", "ws1", "--yes"}, env, homeHandlers(f, &n, &o)); code != 0 {
+			t.Fatalf("terminal=%v code=%d %q", terminal, code, diag.String())
+		}
+		if (o.Progress != nil) != terminal {
+			t.Errorf("terminal=%v progress=%v", terminal, o.Progress)
+		}
+	}
+}
+
 // Disposal help points at the supported backup command instead of manual Docker steps.
 func TestCandidateDisposalHelpNamesHomeBackup(t *testing.T) {
 	for _, path := range [][]string{{"workspace", "rm"}, {"workspace", "promote"}} {
