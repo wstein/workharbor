@@ -7,6 +7,12 @@ candidate metadata. The old retained-clone and separate home-deletion consent
 rules below are superseded only for that scope. The accepted execution-profile
 body is unchanged; the separate amendment is authoritative for disposal.
 
+**Home backup override (owner, 2026-10-29):** the
+[home clone/backup amendment](home-clone-backup-amendment-20261029.md) adds
+explicit `workspace home clone|backup` commands. The "no automatic volume
+backup" statement below still holds for stage/promote/removal, which run no
+backup; the separate commands are the supported way to save a home first.
+
 Status and authority: interaction amendment following owner direction
 [LS-1 and its linked owner decision record](../spec.md#ls-1-owner-direction-2026-10-24).
 The approval record is the owner-authored approval or owner merge of

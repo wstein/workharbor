@@ -151,3 +151,16 @@ these commands already exist. No new alias or numeric exit code is introduced.
 The owner approval/merge of [PR #229](https://github.com/wstein/workharbor/pull/229)
 is the approval record for this interaction clarification only; before that record
 it is proposed, and S0 execution-profile approval remains separate afterwards.
+
+## Home clone/backup amendment (2026-10-29)
+
+The [home clone/backup amendment](../../specs/006-whr-cli/contracts/home-clone-backup-amendment-20261029.md)
+adds the three-word local commands `workspace home clone` and `workspace home backup`
+(IDs `workspace.home.clone`, `workspace.home.backup`) below a new `home` subgroup of
+`workspace`, reachable through the `ws` group alias. They get no short form: `clone`
+and `backup` are not daily verbs, and a bare `whr clone` would be ambiguous with Git.
+Both are first-increment local commands (`needs` none, `writes` local, JSON envelope)
+that change only together with `contracts/cli/commands.json`, the closed
+`localHomeCopyResult` schema and the freeze tests. No numeric exit code is added; the
+mapping is the stage table (64/65/68/70/71/72/73/74). Stage, promote and `rm` are
+unchanged.
