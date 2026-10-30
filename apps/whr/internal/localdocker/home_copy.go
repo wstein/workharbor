@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -41,6 +42,8 @@ const (
 	homeCopyTemplate = `set -eu -o pipefail; cd /from; tar -cpf - --numeric-owner "$@" . | tar -xpf - --numeric-owner -C /to`
 	// homeVerifyTemplate counts both read-only sides with the same excludes
 	// pruned; each exclude is used only as a quoted variable.
+	// homeRsyncTemplate runs in the whr tools image; excludes arrive as anchored --exclude=/x args.
+	homeRsyncTemplate  = `set -eu; cd /from; exec rsync -aH --numeric-ids --info=progress2 "$@" ./ /to/`
 	homeVerifyTemplate = `set -eu
 count() {
 	r=$1
@@ -69,6 +72,7 @@ type HomeCopyOptions struct {
 	To                 string // optional new volume name
 	Excludes           []string
 	IncludeCredentials bool
+	Progress           io.Writer // live rsync progress; nil discards it
 }
 
 // HomeCopySource identifies the source container and its home volume.
@@ -126,6 +130,8 @@ type homeCopyPlan struct {
 	target   string
 	image    string
 	pull     bool     // pinned image is pulled; a workspace image is already local
+	build    bool     // the tools image is missing and is built on apply
+	fallback string   // workspace image whose tar runs the copy if the build fails
 	excludes []string // canonical ./x form, sorted
 	size     *string
 	print    string
@@ -241,6 +247,9 @@ func (c Client) PrepareHomeCopy(parent context.Context, ports doctor.Ports, o Ho
 	if err != nil {
 		return nil, err
 	}
+	if o.Progress != nil {
+		c.Progress = o.Progress
+	}
 	return &HomeCopy{client: c, endpoint: endpoint, plan: plan, newOp: randomOperation}, nil
 }
 
@@ -294,9 +303,13 @@ func (c Client) planHomeCopy(ctx context.Context, endpoint string, o HomeCopyOpt
 		plan.image, plan.pull = pinned, true
 	} else if ctx.Err() != nil {
 		return homeCopyPlan{}, ctx.Err()
+	} else if c.toolsImagePresent(ctx, endpoint) {
+		plan.image = ToolsImage()
+	} else if ctx.Err() != nil {
+		return homeCopyPlan{}, ctx.Err()
 	} else if validLocalImage(item.Image) {
-		// No pin configured: the workspace's own image already holds sh and tar, so use it without a pull.
-		plan.image = item.Image
+		// No pin and no tools image yet: build it on apply; the workspace image's tar is the fallback.
+		plan.image, plan.build, plan.fallback = ToolsImage(), true, item.Image
 	} else {
 		return homeCopyPlan{}, perr
 	}
@@ -364,6 +377,11 @@ func helperBaseImage(ctx context.Context, folder string) (string, error) {
 	return checked.Manifest.HelperBaseImage, nil
 }
 
+func (c Client) toolsImagePresent(ctx context.Context, endpoint string) bool {
+	_, err := c.homeRead(ctx, endpoint, "image", "inspect", "--format", "{{.Id}}", "--", ToolsImage())
+	return err == nil
+}
+
 func (c Client) homeVolumes(ctx context.Context, endpoint string) (map[string]bool, error) {
 	raw, err := c.homeRead(ctx, endpoint, "volume", "ls", "--quiet")
 	if err != nil {
@@ -406,7 +424,7 @@ func homeFingerprint(endpoint string, p homeCopyPlan) string {
 		Excludes                                           []string
 		Credentials                                        bool
 		Template                                           string
-	}{endpoint, p.options.Mode, p.source.ContainerID, p.source.Volume, p.target, p.image, p.excludes, p.options.IncludeCredentials || p.options.Mode == "backup", homeCopyTemplate})
+	}{endpoint, p.options.Mode, p.source.ContainerID, p.source.Volume, p.target, p.image, p.excludes, p.options.IncludeCredentials || p.options.Mode == "backup", homeCopyTemplate + homeRsyncTemplate})
 	sum := sha256.Sum256(doc)
 	return "sha256:" + hex.EncodeToString(sum[:])
 }
@@ -486,6 +504,22 @@ func (h *HomeCopy) Apply(parent context.Context, trust string) (HomeCopyResult, 
 		result.Actions[i].Applied = true
 	}
 
+	if p.build {
+		i = act("tools_image_build", p.image)
+		if reply, err := h.client.homeMutateIO(parent, h.endpoint, bytes.NewReader(toolsDockerfile), nil, "build", "--quiet", "--tag", p.image, "-"); err != nil || reply.status != 0 {
+			if parent.Err() != nil {
+				return result, parent.Err()
+			}
+			if p.fallback == "" {
+				return fail(exitcode.PathConflict, "tools image build failed; no volume was created")
+			}
+			p.image = p.fallback // offline or no network: the workspace image's tar does the copy
+			result.HelperImage = p.image
+		} else {
+			result.Actions[i].Applied = true
+		}
+	}
+
 	i = act("volume_create", p.target)
 	reply, createErr := h.client.homeMutate(parent, h.endpoint, "volume", "create", "--label", "workharbor.home-copy="+p.options.Mode, "--label", homeOperationKey+"="+op, "--label", "workharbor.home-copy.source="+p.source.Volume, "--", p.target)
 	owned, inspectErr := h.client.homeVolumeOwned(parent, h.endpoint, p.target, op)
@@ -504,7 +538,11 @@ func (h *HomeCopy) Apply(parent context.Context, trust string) (HomeCopyResult, 
 	}
 
 	i = act("copy", p.target)
-	reply, err = h.client.homeMutate(parent, h.endpoint, homeRunArgv(false, p.source.Volume, p.target, op, p.image, homeCopyExcludeArgs(p.excludes))...)
+	var live io.Writer = io.Discard
+	if h.client.Progress != nil {
+		live = h.client.Progress
+	}
+	reply, err = h.client.homeMutateIO(parent, h.endpoint, nil, live, homeRunArgv(false, p.source.Volume, p.target, op, p.image, homeCopyExcludeArgs(p.image, p.excludes))...)
 	if err != nil || reply.status != 0 {
 		if parent.Err() != nil {
 			result.Residuals = append(result.Residuals, "container:"+homeCopyName+"-"+op)
@@ -536,9 +574,14 @@ func (h *HomeCopy) Apply(parent context.Context, trust string) (HomeCopyResult, 
 	return result, nil
 }
 
-func homeCopyExcludeArgs(excludes []string) []string {
+// homeCopyExcludeArgs spells excludes for the engine the image selects: tar
+// matches ./x, rsync matches the transfer-root anchored /x.
+func homeCopyExcludeArgs(image string, excludes []string) []string {
 	out := make([]string, len(excludes))
 	for i, e := range excludes {
+		if image == ToolsImage() {
+			e = strings.TrimPrefix(e, ".")
+		}
 		out[i] = "--exclude=" + e
 	}
 	return out
@@ -618,6 +661,9 @@ func parseHomeVerification(raw []byte) (HomeCopyVerification, bool) {
 // homeRunArgv builds the only two admitted helper runs.
 func homeRunArgv(verify bool, source, target, op, image string, excludes []string) []string {
 	name, template, mount := homeCopyName, homeCopyTemplate, target+":/to"
+	if image == ToolsImage() {
+		template = homeRsyncTemplate
+	}
 	if verify {
 		name, template, mount = homeVerifyName, homeVerifyTemplate, target+":/to:ro"
 	}
@@ -636,6 +682,8 @@ func admitHomeMutation(args []string) bool {
 	switch {
 	case len(args) == 5 && args[0] == "image" && args[1] == "pull" && args[2] == "--quiet" && args[3] == "--":
 		return workspacecfg.DigestPinnedImage(args[4])
+	case reflect.DeepEqual(args, []string{"build", "--quiet", "--tag", ToolsImage(), "-"}):
+		return true
 	case len(args) == 10 && args[0] == "volume" && args[1] == "create":
 		mode := strings.TrimPrefix(args[3], "workharbor.home-copy=")
 		op := strings.TrimPrefix(args[5], homeOperationKey+"=")
@@ -668,8 +716,12 @@ func admitHomeMutation(args []string) bool {
 		for _, e := range excludes {
 			rel := e
 			if !verify {
+				prefix := "--exclude=./"
+				if args[31] == ToolsImage() {
+					prefix = "--exclude=/"
+				}
 				var cut bool
-				if rel, cut = strings.CutPrefix(e, "--exclude=./"); !cut {
+				if rel, cut = strings.CutPrefix(e, prefix); !cut {
 					return false
 				}
 			}
@@ -688,6 +740,8 @@ func admitHomeRead(args []string) bool {
 		return true
 	}
 	switch {
+	case reflect.DeepEqual(args, []string{"image", "inspect", "--format", "{{.Id}}", "--", ToolsImage()}):
+		return true
 	case reflect.DeepEqual(args, []string{"volume", "ls", "--quiet"}):
 		return true
 	case reflect.DeepEqual(args, []string{"system", "df", "--verbose", "--format", "{{json .Volumes}}"}):
@@ -717,8 +771,14 @@ func (c Client) homeRead(ctx context.Context, endpoint string, args ...string) (
 }
 
 func (c Client) homeMutate(ctx context.Context, endpoint string, args ...string) (readResult, error) {
+	return c.homeMutateIO(ctx, endpoint, nil, nil, args...)
+}
+
+// homeMutateIO is homeMutate with optional stdin (the tools Dockerfile) and a
+// live stdout writer (rsync progress).
+func (c Client) homeMutateIO(ctx context.Context, endpoint string, stdin io.Reader, stdout io.Writer, args ...string) (readResult, error) {
 	if !homeEndpoint(endpoint) || !admitHomeMutation(args) {
 		return readResult{}, fmt.Errorf("unsupported home copy operation")
 	}
-	return c.runFixed(ctx, endpoint, args...)
+	return c.run(ctx, endpoint, stdin, stdout, args...)
 }

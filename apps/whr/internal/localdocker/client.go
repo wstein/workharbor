@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,11 @@ const maxOutput = 4 << 20
 // injectable for offline tests; an empty value resolves the installed Docker CLI.
 // A fresh empty Docker config directory prevents loading host credentials,
 // credential helpers, contexts or CLI plugin settings. It is removed on return.
-type Client struct{ Executable string }
+type Client struct {
+	Executable string
+	// Progress receives the live output of a home copy (rsync progress). Nil discards it.
+	Progress io.Writer
+}
 
 type readResult struct {
 	stdout, stderr []byte
@@ -48,6 +53,12 @@ func (c Client) runRead(ctx context.Context, endpoint string, args ...string) (r
 
 // runFixed is private to the operation-specific argv admission methods.
 func (c Client) runFixed(ctx context.Context, endpoint string, args ...string) (readResult, error) {
+	return c.run(ctx, endpoint, nil, nil, args...)
+}
+
+// run is runFixed with optional stdin and an optional live stdout writer that
+// replaces the bounded capture (the result then has no stdout).
+func (c Client) run(ctx context.Context, endpoint string, stdin io.Reader, stdout io.Writer, args ...string) (readResult, error) {
 	exe := c.Executable
 	if exe == "" {
 		var err error
@@ -69,7 +80,11 @@ func (c Client) runFixed(ctx context.Context, endpoint string, args ...string) (
 	cleanup := isolate(cmd)
 	defer cleanup()
 	out, diagnostic := &boundedOutput{cancel: cancel}, &boundedOutput{cancel: cancel}
+	cmd.Stdin = stdin
 	cmd.Stdout = out
+	if stdout != nil {
+		cmd.Stdout = stdout
+	}
 	cmd.Stderr = diagnostic
 	err = cmd.Run()
 	if ctx.Err() != nil {
