@@ -128,14 +128,25 @@ New whr-managed staging is throwaway. The
 [separate amendment](contracts/throwaway-staging-amendment-20261025.md) changes
 removal/promote to dispose of candidate container, home, clone/result tree and
 candidate metadata under the normal confirmation. No keep mode or later clone
-cleanup remains; back up a staging home with Docker yourself before disposal if
-needed. Existing `anchorage-home-*` and primary-home guards remain unchanged.
+cleanup remains; back up a staging home before disposal if needed, now with
+`whr workspace home backup` (see below). Existing `anchorage-home-*` and primary-home guards remain unchanged.
 
 The required library/CLI delta and host-run runbook are still planned; the old
 stage/promote library acceptance and pending CLI #271/#272 do not establish this
 new disposal behavior. Follow the
 [current delivery plan](plan.md#throwaway-staging-delivery-amendment-owner-2026-10-25)
 for the code, tests and real Linux/macOS+OrbStack evidence before claiming it.
+
+## Home clone and backup amendment (owner, 2026-10-29)
+
+`whr workspace home clone --local <ws>` and `whr workspace home backup --local <ws>`
+copy a workspace home into a new volume with `tar` in the digest-pinned
+`helper_images.base` image (`whr workspace init --helper-base-image <ref@sha256:...>`).
+Clone leaves out `./.cache` and credentials; backup leaves out only `./.cache`.
+Dry-run shows excludes, size estimate, image digest and fingerprint; apply needs
+`--yes` and `--trust <fingerprint>`. Nothing is deleted automatically. See the
+[amendment](contracts/home-clone-backup-amendment-20261029.md); only fixture
+tests exist, and host acceptance remains an owner gate.
 
 ## Local init, stage and promote handoff
 

@@ -114,9 +114,44 @@ separately previews the contracted primary replacement using its original home;
 that is not candidate disposal. Stop on an unexpected target. Init previews
 must be confined to the intended disposable checkout.
 
-If the owner wants candidate home data saved, back it up beforehand with Docker
-tools, without deleting or changing the primary/home. There is no keep flag or
-built-in backup. Normal removal confirmation covers losing unfetched clone work.
+If the owner wants candidate home data saved, back it up beforehand with
+`whr workspace home backup --local whr-anchorage-staging` (see section 2a),
+without deleting or changing the primary/home. There is still no keep flag, and
+removal/promotion never back up automatically. Normal removal confirmation
+covers losing unfetched clone work.
+
+## 2a. Home clone and backup (amendment of 2026-10-29)
+
+The [home clone/backup amendment](../../../specs/006-whr-cli/contracts/home-clone-backup-amendment-20261029.md)
+supersedes the former "no built-in backup" statement for workspace homes. Both
+commands copy a home volume, mounted read-only, into a **new** volume with `tar`
+in a digest-pinned base image; they never write, stop or delete the source and
+never delete anything else. These are future steps, not observed transcripts:
+
+```sh
+# once: pin the helper base image (preview first; nothing is pulled)
+record pin-preview whr workspace init "$WHR_SOURCE" --helper-base-image "$WHR_BASE_IMAGE" --overwrite workharbor.json --non-interactive --dry-run --json
+record pin-apply whr workspace init "$WHR_SOURCE" --helper-base-image "$WHR_BASE_IMAGE" --overwrite workharbor.json --non-interactive --yes --json
+# clone: leaves out ./.cache and credentials; continue sessions in a new container
+record clone-preview whr workspace home clone --local "$WHR_NAME" --dry-run --json
+record clone-apply whr workspace home clone --local "$WHR_NAME" --yes --trust "$WHR_HOME_FINGERPRINT" --json
+# backup: leaves out only ./.cache
+record backup-preview whr workspace home backup --local "$WHR_NAME" --dry-run --json
+record backup-apply whr workspace home backup --local "$WHR_NAME" --yes --trust "$WHR_HOME_FINGERPRINT" --json
+```
+
+`$WHR_BASE_IMAGE` is a minimal image with `/bin/sh`, `tar` and `find` pinned as
+`registry/repository@sha256:<64 hex>` (for example `docker.io/library/busybox@sha256:...`).
+Take `$WHR_HOME_FINGERPRINT` from the matching dry-run. Before applying, check
+that the preview names the intended source volume, a new target volume that is
+not `anchorage-home-*`, `whr-stage-home-*` or `bundledock-*`, the expected
+digest and excludes. Pause agents and editors in the source workspace for a
+consistent copy. Exit 0 means equal counts; exit 73 keeps the new volume and
+reports it as a residual for the owner to inspect or remove. Clones exclude
+`./.claude.json`, `./.codex/auth.json`, `./.ssh` and the other listed
+credential paths unless `--include-credentials`; log in again in the new
+container. Record Linux Docker and macOS+OrbStack results separately; fixture
+tests do not establish host behavior.
 
 ## 3. Init: flags and wizard
 
