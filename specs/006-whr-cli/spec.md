@@ -48,6 +48,17 @@ amendment or inferred as approved by LS-1. Those later decisions are recorded
 in the [candidate-home decision](contracts/candidate-home-cleanup-decision.md)
 and [2026-10-25 throwaway amendment](contracts/throwaway-staging-amendment-20261025.md).
 
+## Amendment (2026-10-29): workspace home clone and backup
+
+The owner decided local `whr workspace home clone` and `whr workspace home backup`:
+copy a workspace home volume into a new volume through a digest-pinned rsync
+helper image (`helper_images.rsync` in `workharbor.json`, written by
+`whr workspace init --rsync-image`), with stage-style fingerprint trust and
+confirmation. See the [home clone/backup amendment](contracts/home-clone-backup-amendment-20261029.md).
+It supersedes only the "no volume-backup feature" statement for workspace homes;
+stage, promote, `rm`, the throwaway disposal rules, FR-067 and the complete
+`anchorage-home-*` guard are unchanged. No candidate adoption is added.
+
 ### LS-1: owner direction (2026-10-24)
 
 Source: the foreman's [Owner decision record for D1 and D2 on PR #229](https://github.com/wstein/workharbor/pull/229#issuecomment-6385032899),
