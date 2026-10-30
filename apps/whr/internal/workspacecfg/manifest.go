@@ -34,8 +34,8 @@ type Manifest struct {
 	ConsoleMode      string
 	Shortcuts        string
 	Project          *Project
-	// RsyncImage is the optional digest-pinned helper_images.rsync reference.
-	RsyncImage string
+	// HelperBaseImage is the optional digest-pinned helper_images.base reference.
+	HelperBaseImage string
 }
 
 // EffectiveConsoleMode resolves an omitted field for a new session. ConsoleMode
@@ -217,7 +217,7 @@ func CheckManifest(raw []byte) ManifestResult {
 		m.Project = checkProject(&c, p, m.ProjectsPath)
 	}
 	if h, ok := doc.get("helper_images"); ok {
-		m.RsyncImage = checkHelperImages(&c, h)
+		m.HelperBaseImage = checkHelperImages(&c, h)
 	}
 	res.Findings = c.list
 	return res

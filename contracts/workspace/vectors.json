@@ -1834,27 +1834,27 @@
    "note": "array-only input still rejects a lone surrogate before checking the object shape"
   },
   {
-   "id": "v2-helper-rsync-pinned",
+   "id": "v2-helper-base-pinned",
    "document": {
     "schema_version": 2,
     "devcontainer_path": ".devcontainer/devcontainer.json",
     "projects_path": "projects",
     "bundles": [],
     "helper_images": {
-     "rsync": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     "base": "docker.io/library/busybox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     }
    },
    "expect_codes": []
   },
   {
-   "id": "v2-helper-rsync-tag-only",
+   "id": "v2-helper-base-tag-only",
    "document": {
     "schema_version": 2,
     "devcontainer_path": ".devcontainer/devcontainer.json",
     "projects_path": "projects",
     "bundles": [],
     "helper_images": {
-     "rsync": "quay.io/bundledock/rsync:latest"
+     "base": "docker.io/library/busybox:latest"
     }
    },
    "expect_codes": [
@@ -1869,8 +1869,8 @@
     "projects_path": "projects",
     "bundles": [],
     "helper_images": {
-     "rsync": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-     "tar": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     "base": "docker.io/library/busybox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+     "rsync": "docker.io/library/busybox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     }
    },
    "expect_codes": [
@@ -1898,7 +1898,7 @@
     "projects_path": "projects",
     "bundles": [],
     "helper_images": {
-     "rsync": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+     "base": "docker.io/library/busybox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
     }
    },
    "expect_codes": [

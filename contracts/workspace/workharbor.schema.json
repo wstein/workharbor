@@ -135,11 +135,11 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "rsync": {
+            "base": {
               "type": "string",
               "maxLength": 512,
               "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]{1,5})?(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$",
-              "description": "Digest-pinned rsync helper image (a static rsync with entrypoint rsync) used by whr workspace home clone and backup. A registry/repository path with at least one slash, an optional tag and a mandatory @sha256 digest. whr init writes it only when given --rsync-image and never pulls it."
+              "description": "Digest-pinned minimal base image (for example busybox or alpine) providing /bin/sh, tar and find, used by whr workspace home clone and backup. A registry/repository path with at least one slash, an optional tag and a mandatory @sha256 digest. whr init writes it only when given --helper-base-image and never pulls it."
             }
           },
           "description": "Optional, digest-pinned helper images for local whr operations; absent unless the owner sets it."
