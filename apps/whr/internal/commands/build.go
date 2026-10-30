@@ -95,6 +95,9 @@ func (a *app) build() {
 			if e.ID == "workspace.stage" {
 				ctx = context.WithValue(ctx, localStageKey{}, a.localStageOptions(c))
 			}
+			if e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup" {
+				ctx = context.WithValue(ctx, localHomeKey{}, a.localHomeOptions(c))
+			}
 			if e.ID == "workspace.drift" {
 				local, _ := c.Flags().GetBool("local")
 				source, _ := c.Flags().GetString("source")
@@ -152,6 +155,8 @@ func (a *app) build() {
 				c.Flags().Bool("dry-run", false, "preview only; no hook, build, receipt or native mutation")
 				c.Flags().String("trust", "", "trust this exact previewed source fingerprint (independent of --yes)")
 				c.Flags().Bool("yes", false, "confirm effects and the disclosed pause-writers condition")
+			} else if e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup" {
+				addLocalHomeFlags(c, e.ID == "workspace.home.clone")
 			} else if e.ID == "workspace.drift" {
 				c.Flags().Bool("local", false, "compare local running primary bundle references")
 				c.Flags().String("source", "", "explicit local source directory matching the primary label")
