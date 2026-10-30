@@ -261,8 +261,62 @@ func TestRecoverTagsPullAndPopulateBothVolumes(t *testing.T) {
 	if _, err = prepareRecover(t, f, RecoverOptions{Target: "ws1", Toolbox: "2026.10.24-b1", Nixbox: "latest"}).Start(context.Background(), recoverStreams(t)); err != nil {
 		t.Fatal(err)
 	}
-	if got := strings.Join(f.mutations(), ","); got != "image pull,image pull,run --rm" {
+	if got := strings.Join(f.mutations(), ","); got != "image pull,run --rm,image pull,run --rm,run --rm" {
 		t.Fatalf("second start mutations %s", got)
+	}
+	// Each reused volume is checked read-only for the carrier's .ready marker first.
+	var checks [][]string
+	for _, c := range f.calls() {
+		if c[0] == "run" && len(c) == 14 {
+			checks = append(checks, c)
+		}
+	}
+	if !reflect.DeepEqual(checks, [][]string{readyCheck("bundledock-toolbox-" + recoverPulledID), readyCheck("bundledock-nixbox-" + recoverPulledID)}) {
+		t.Fatalf("ready checks %q", checks)
+	}
+}
+
+// readyCheck is the one admitted completeness probe: the carrier writes .ready last and leaves .initializing behind on failure.
+func readyCheck(volume string) []string {
+	return []string{"run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--mount", "type=volume,src=" + volume + ",dst=/bundle,readonly",
+		"--entrypoint", "/bin/sh", debianPin, "-c", "test -f /bundle/.ready && ! test -e /bundle/.initializing"}
+}
+
+// An existing volume without the carrier's marker is filled again; nothing is mounted before that succeeds.
+func TestRecoverRefillsAnIncompleteExistingVolume(t *testing.T) {
+	f := newHomeFake(t, "")
+	f.set("volumes", "ws1-home\nbundledock-toolbox-"+recoverPulledID+"\nbundledock-nixbox-"+recoverPulledID+"\n")
+	f.set("not-ready", "")
+	res, err := prepareRecover(t, f, RecoverOptions{Target: "ws1", Toolbox: "2026.10.24-b1", Nixbox: "latest"}).Start(context.Background(), recoverStreams(t))
+	if err != nil {
+		t.Fatalf("start %+v %v", res, err)
+	}
+	if got := strings.Join(f.mutations(), ","); got != "image pull,run --rm,run --rm,image pull,run --rm,run --rm,run --rm" {
+		t.Fatalf("mutations %s (a refill must not create the volume again)", got)
+	}
+}
+
+// A failed or interrupted fill leaves no mount: the volume is reported as a residual and the shell never starts.
+func TestRecoverRefusesToMountAnIncompleteVolume(t *testing.T) {
+	for name, existing := range map[string]bool{"fresh": false, "existing": true} {
+		f := newHomeFake(t, "")
+		if existing {
+			f.set("volumes", "ws1-home\nbundledock-toolbox-"+recoverPulledID+"\n")
+			f.set("not-ready", "")
+		}
+		f.set("populate-fails", "")
+		res, err := prepareRecover(t, f, RecoverOptions{Target: "ws1", Toolbox: "2026.10.24-b1", Nixbox: "latest"}).Start(context.Background(), recoverStreams(t))
+		if exitcode.FromError(err) != exitcode.PartialFailure {
+			t.Fatalf("%s: %v", name, err)
+		}
+		for _, c := range f.calls() {
+			if c[0] == "run" && len(c) > 20 {
+				t.Fatalf("%s: the shell started: %q", name, c)
+			}
+		}
+		if !reflect.DeepEqual(res.Residuals, []string{"volume:bundledock-toolbox-" + recoverPulledID}) {
+			t.Fatalf("%s: residuals %q", name, res.Residuals)
+		}
 	}
 }
 
@@ -386,6 +440,12 @@ func TestRecoverArgvAdmission(t *testing.T) {
 		"nixbox create bad": {"volume", "create", "--label", "workharbor.recover=nixbox", "--", "ws1-home"},
 		"toolbox lbl nix":   {"volume", "create", "--label", "workharbor.recover=toolbox", "--", recoverTestNixbox},
 		"build other tag":   {"build", "--quiet", "--tag", "evil:1", "-"},
+		"check other vol":   readyCheck("ws1-home"),
+		"check writable":    withoutReadonly(readyCheck("bundledock-nixbox-" + recoverPulledID)),
+		"check other image": replaceArg(readyCheck("bundledock-nixbox-"+recoverPulledID), debianPin, "alpine:latest"),
+		"check script":      replaceArg(readyCheck("bundledock-nixbox-"+recoverPulledID), "test -f /bundle/.ready && ! test -e /bundle/.initializing", "rm -rf /bundle"),
+		"check network":     replaceArg(readyCheck("bundledock-nixbox-"+recoverPulledID), "none", "host"),
+		"check entrypoint":  replaceArg(readyCheck("bundledock-nixbox-"+recoverPulledID), "/bin/sh", "/bin/evil"),
 	} {
 		if admitRecoverRun(args) || admitHomeMutation(args) {
 			t.Errorf("%s admitted", name)
@@ -399,6 +459,8 @@ func TestRecoverArgvAdmission(t *testing.T) {
 		{"image", "pull", "--quiet", "--", debianPin},
 		nixPopulate("bundledock-toolbox-"+recoverPulledID, "none", recoverPulledID),
 		nixPopulate("bundledock-nixbox-"+recoverPulledID, "none", recoverPulledID),
+		readyCheck("bundledock-toolbox-" + recoverPulledID),
+		readyCheck("bundledock-nixbox-" + recoverPulledID),
 		{"volume", "create", "--label", "workharbor.recover=toolbox", "--", "bundledock-toolbox-" + recoverPulledID},
 		{"volume", "create", "--label", "workharbor.recover=nixbox", "--", "bundledock-nixbox-" + recoverPulledID},
 	} {
@@ -427,4 +489,22 @@ func indexOf(args []string, v string) int {
 		}
 	}
 	return -1
+}
+
+func replaceArg(args []string, from, to string) []string {
+	out := append([]string(nil), args...)
+	for i, a := range out {
+		if a == from {
+			out[i] = to
+		}
+	}
+	return out
+}
+
+func withoutReadonly(args []string) []string {
+	out := append([]string(nil), args...)
+	for i, a := range out {
+		out[i] = strings.TrimSuffix(a, ",readonly")
+	}
+	return out
 }
