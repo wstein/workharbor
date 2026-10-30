@@ -114,7 +114,7 @@ Resolution and refusal before any effect, in this order:
 4. Helper pin: read `workharbor.json` from the selected container's
    `devcontainer.local_folder` label through the bounded no-follow reader. A
    missing label/manifest, manifest findings, or an absent or non-digest pin
-   refuses **68** with init remediation. Nothing is pulled.
+   falls back to the workspace's own local image (see the DX revision below).
 5. Target: grammar 64; protected prefix, existing volume or source collision 68.
 
 The preview (dry-run and before confirmation) shows: mode, source container
@@ -137,7 +137,7 @@ Consent follows the [stage contract](local-stage-promote.md#source-trust-and-con
 | Case | Exit |
 | --- | --- |
 | Unattended/JSON apply without `--yes` | 70 |
-| Unattended/JSON apply without `--trust <fingerprint>` (`--yes` alone grants nothing) | 70 |
+| Unattended/JSON apply without `--trust <fingerprint>` | not required (DX revision below) |
 | Interactive fingerprint or `y/N` confirmation declined | 70 |
 | `--trust` differs from the freshly computed fingerprint, or the plan changed since preview | 68 |
 | Interrupt/cancellation before the first effect | 72 |
@@ -230,3 +230,20 @@ consent outcomes; copy failure keeping only the reported target with no
 deletion; verification mismatch 73; credential excludes and opt-in; command
 table, help and JSON schema. Linux Docker and macOS+OrbStack host runs remain
 owner gates and are not claimed here.
+
+## DX revision (2026-10-29, owner direction)
+
+`whr` is a developer tool, so the local home commands default to working out of
+the box. This revision supersedes the stricter statements above:
+
+- **Helper image.** A digest pin in `workharbor.json` (`helper_images.base`) is
+  optional. Without a usable pin the copy runs in the selected workspace's own
+  local image (it already contains `sh` and `tar`), with `--pull never` and no
+  pull. A valid pin still wins and is pulled as before. The argv admission
+  accepts any single image reference that cannot be read as an option.
+- **Consent.** `--yes` alone is enough for unattended use. `--trust` is optional:
+  when given it must equal the freshly computed fingerprint (68 on a mismatch).
+  On a terminal the command shows the preview and asks a plain `[y/N]`.
+- **Unchanged protections.** The source home is mounted read-only, only new
+  volumes are created, protected prefixes and existing volumes are refused,
+  excludes are positional arguments only, and nothing is deleted automatically.
