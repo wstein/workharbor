@@ -11,6 +11,8 @@ from pathlib import Path
 
 GO_MODULES = ('whr', 'host_agent', 'api_client')
 MODULE_PREFIX = 'github.com/wstein/workharbor-nxt/apps/'
+# The uncached go test ./... of apps/whr exceeds the 300s utility-command limit.
+GO_TEST_TIMEOUT_SECONDS = 1200
 HEX_VERSION = '2.5.2'
 REBAR_URL = 'https://github.com/erlang/rebar3/releases/download/3.27.3/rebar3'
 REBAR_SHA512 = ('30410ea3222f52f0af90e6ba7df483d9a1e3452dc6ed6f60f372008fc017dbd8a'
@@ -190,11 +192,11 @@ def check_applications(root, inventory, run):
         for name in ('HOME', 'MIX_HOME', 'HEX_HOME', 'MIX_ARCHIVES', 'GOCACHE', 'GOMODCACHE'):
             Path(env[name]).mkdir(parents=True, exist_ok=True)
         serial = 0
-        def execute(argv, cwd=root):
+        def execute(argv, cwd=root, timeout=300):
             nonlocal serial
             serial += 1
             output = cache/('output-' + str(serial))
-            if run(argv, cwd, env=env, output_path=output) != 0:
+            if run(argv, cwd, env=env, output_path=output, timeout=timeout) != 0:
                 raise ValueError('Application command failed: ' + ' '.join(argv))
             return output
         def download(url, destination, cwd):
@@ -238,7 +240,7 @@ def check_applications(root, inventory, run):
             argv = ([tools['go'], 'build', './...'] if module == 'api_client' else
                     [tools['go'], 'build', '-o', str(output) + '/', './...'])
             execute(argv, cwd)
-            events = execute([tools['go'], 'test', '-json', '-count=1', './...'], cwd)
+            events = execute([tools['go'], 'test', '-json', '-count=1', './...'], cwd, GO_TEST_TIMEOUT_SECONDS)
             count = validate_go_events(read_events(events), inventory[module])
             print(f'Application {module}: {count} Go tests passed; all required IDs present.', flush=True)
         cwd = root/'apps/control_plane'

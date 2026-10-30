@@ -62,7 +62,7 @@ remain in ADR 0007; they do not describe current raw outcomes.
 prints that raw result and separately verifies the full discovered matrix. It also
 runs repository validation, diff whitespace, shell syntax and Feature 001
 prerequisites; raw reds cannot skip these static checks. Raw and qualified aggregate
-budgets remain 600 and 1200 seconds, respectively; utility commands retain 300 seconds.
+budgets remain 600 and 1200 seconds, respectively; utility commands retain 300 seconds, except each module's uncached `go test`, which has 1200 seconds.
 
 Schema 2 adds an explicit `application_tests` inventory. Fixed repository code runs
 `gofmt -l`, `go mod download`, `go vet`, `go build` and uncached `go test -json` for

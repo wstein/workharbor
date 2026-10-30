@@ -93,8 +93,10 @@ class ApplicationChecksTests(unittest.TestCase):
             root = Path(directory)/'source'; root.mkdir()
             (root/'.tool-versions').write_text('erlang 29.1.1\nelixir 1.20.4-otp-29\ngolang 1.27.2\nnodejs 26.11.1\npython 3.14\n')
             observed = []
-            def execute(argv, cwd, *, env, output_path):
+            self.timeouts = {}
+            def execute(argv, cwd, *, env, output_path, timeout=300):
                 observed.append((argv, cwd, env))
+                self.timeouts[tuple(argv[1:])] = timeout
                 if observe: observe(argv, env)
                 command = tuple(argv)
                 if fail and fail(command): return 1
@@ -163,6 +165,8 @@ class ApplicationChecksTests(unittest.TestCase):
         self.assertIn(['vet', '-tags', 'docker_integration', './internal/providers/docker/'], commands)
         self.assertIn(['build', './...'], commands)
         self.assertEqual(2, sum(argv[:2] == ['build', '-o'] for argv in commands))
+        self.assertEqual(1200, self.timeouts[('test', '-json', '-count=1', './...')])
+        self.assertEqual(300, self.timeouts[('vet', './...')])
         for _, _, env in observed:
             for name in ('GOCACHE', 'GOMODCACHE', 'MIX_HOME', 'HEX_HOME', 'MIX_ARCHIVES', 'HOME'):
                 self.assertFalse(Path(env[name]).is_relative_to(root))
