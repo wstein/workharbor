@@ -510,3 +510,11 @@ func withoutReadonly(args []string) []string {
 	}
 	return out
 }
+
+// fish is exec'd only when it starts: a toolbox fish with missing libraries must fall back to sh.
+func TestRecoverShellProbesFishBeforeExec(t *testing.T) {
+	probe := "[ -x " + toolboxMount + "/bin/fish ] && " + toolboxMount + "/bin/fish -c true >/dev/null 2>&1"
+	if !strings.HasPrefix(recoverShell, "if "+probe+"; then exec "+toolboxMount+"/bin/fish -l; fi; exec /bin/sh") {
+		t.Fatalf("recover shell %q", recoverShell)
+	}
+}

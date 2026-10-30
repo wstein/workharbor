@@ -33,7 +33,7 @@ const (
 	recoverPath       = nixboxProfile + "/bin:" + toolboxMount + "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	recoverCABundle   = nixboxProfile + "/etc/ssl/certs/ca-bundle.crt"
 	recoverShareDirs  = toolboxMount + "/share:" + nixboxProfile + "/share:/usr/share"
-	recoverShell      = `if [ -x ` + toolboxMount + `/bin/fish ]; then exec ` + toolboxMount + `/bin/fish -l; fi; exec /bin/sh` // not sh -l: Debian's /etc/profile resets PATH
+	recoverShell      = `if [ -x ` + toolboxMount + `/bin/fish ] && ` + toolboxMount + `/bin/fish -c true >/dev/null 2>&1; then exec ` + toolboxMount + `/bin/fish -l; fi; exec /bin/sh` // not sh -l: Debian's /etc/profile resets PATH
 	defaultRecoverTag = "latest"
 )
 
