@@ -22,7 +22,8 @@ type recoverFixture struct {
 
 func (f *recoverFixture) Preview() localdocker.RecoverResult {
 	return localdocker.RecoverResult{Status: "preview", Source: localdocker.HomeCopySource{ContainerName: "ws1", Role: "primary", Volume: "ws1-home"},
-		Image: "whr-recover:abc", Toolbox: "quay.io/bundledock/toolbox:latest", ReadOnly: true, Actions: []localdocker.HomeCopyAction{}, Residuals: []string{}}
+		Image: "docker.io/library/debian@sha256:abc", Toolbox: "quay.io/bundledock/toolbox:latest", Nixbox: "quay.io/bundledock/nixbox:latest", ReadOnly: true,
+		Actions: []localdocker.HomeCopyAction{{Kind: "recover_image_pull", Target: "docker.io/library/debian@sha256:abc"}, {Kind: "nixbox_pull", Target: "quay.io/bundledock/nixbox:latest"}}, Residuals: []string{}}
 }
 
 func (f *recoverFixture) Start(context.Context, localdocker.RecoverStreams) (localdocker.RecoverResult, error) {
@@ -66,11 +67,12 @@ func TestRecoverDryRunPreviewsWithoutTerminalOrStart(t *testing.T) {
 	f := &recoverFixture{}
 	var out, diag bytes.Buffer
 	env := commands.Env{Stdout: &out, Stderr: &diag, Getenv: func(string) string { return "" }, IsTerminal: func(io.Writer) bool { return false }}
-	code := commands.Execute(context.Background(), []string{"workspace", "recover", "--local", "ws1", "--toolbox", "current", "--rw", "--net", "--dry-run"}, env, recoverHandlers(f))
-	if code != 0 || f.starts != 0 || !strings.Contains(out.String(), "ws1-home") || !strings.Contains(out.String(), "read-only") || !strings.Contains(out.String(), "quay.io/bundledock/toolbox:latest") {
+	code := commands.Execute(context.Background(), []string{"workspace", "recover", "--local", "ws1", "--toolbox", "current", "--nixbox", "2026.10.30-b2", "--rw", "--net", "--dry-run"}, env, recoverHandlers(f))
+	if code != 0 || f.starts != 0 || !strings.Contains(out.String(), "ws1-home") || !strings.Contains(out.String(), "read-only") || !strings.Contains(out.String(), "quay.io/bundledock/toolbox:latest") ||
+		!strings.Contains(out.String(), "nixbox quay.io/bundledock/nixbox:latest") || !strings.Contains(out.String(), "action: recover_image_pull docker.io/library/debian@sha256:abc attempted=false") || strings.Contains(out.String(), "built once") {
 		t.Fatalf("code=%d starts=%d out=%q diag=%q", code, f.starts, out.String(), diag.String())
 	}
-	if f.prep.Toolbox != "current" || !f.prep.RW || !f.prep.Net || f.prep.Target != "ws1" {
+	if f.prep.Toolbox != "current" || f.prep.Nixbox != "2026.10.30-b2" || !f.prep.RW || !f.prep.Net || f.prep.Target != "ws1" {
 		t.Fatalf("options %+v", f.prep)
 	}
 }
@@ -101,5 +103,13 @@ func TestRecoverAsksForTheToolboxOnATerminal(t *testing.T) {
 		if code != 0 || f.prep.Toolbox != want || !strings.Contains(diag, "Toolbox") {
 			t.Errorf("%q: code=%d toolbox=%q diag=%q", in, code, f.prep.Toolbox, diag)
 		}
+	}
+}
+
+// Setting only --nixbox does not ask for the toolbox either way; the default stays latest.
+func TestRecoverNixboxDefaultsToLatest(t *testing.T) {
+	f := &recoverFixture{}
+	if code, _, _ := runRecover(t, f, true, "\n", "--local", "ws1"); code != 0 || f.prep.Nixbox != "" {
+		t.Fatalf("code=%d nixbox=%q", code, f.prep.Nixbox)
 	}
 }
