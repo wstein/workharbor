@@ -18,7 +18,8 @@ SCHEMA = ROOT / 'contracts/workspace/workharbor.schema.json'
 BASE = {'schema_version': 1, 'devcontainer_path': '.devcontainer/devcontainer.json',
         'projects_path': 'projects', 'bundles': []}
 V2_FIELDS = {'name': 'my-ws', 'start_dir': '.', 'human_shell': 'fish', 'console_mode': 'herdr',
-             'shortcuts': 'on', 'project': {'url': 'https://f.example/o/a.git', 'path': 'projects/a'}}
+             'shortcuts': 'on', 'project': {'url': 'https://f.example/o/a.git', 'path': 'projects/a'},
+             'helper_images': {'rsync': 'quay.io/bundledock/rsync@sha256:' + '0' * 64}}
 
 
 def raw(document):

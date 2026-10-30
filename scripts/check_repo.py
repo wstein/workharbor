@@ -41,7 +41,7 @@ VECTORS_PATH = 'contracts/workspace/vectors.json'
 MANIFEST_MAX_BYTES = 65536
 MANIFEST_MAX_DEPTH = 128
 V1_FIELDS = ('schema_version', 'devcontainer_path', 'projects_path', 'bundles')
-V2_OPTIONAL = ('name', 'start_dir', 'human_shell', 'console_mode', 'shortcuts', 'project')
+V2_OPTIONAL = ('name', 'start_dir', 'human_shell', 'console_mode', 'shortcuts', 'project', 'helper_images')
 SCHEMA_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -246,6 +246,15 @@ def manifest_document_findings(data, schema=None):
         if field in data and field in properties and not (
                 isinstance(data[field], str) and data[field] in properties[field]['enum']):
             add('manifest.schema', field)
+    if 'helper_images' in data and 'helper_images' in properties:
+        helper = properties['helper_images']
+        value = data['helper_images']
+        rsync = helper['properties']['rsync']
+        if (not isinstance(value, dict) or set(value) - set(helper['properties'])
+                or ('rsync' in value and not (isinstance(value['rsync'], str)
+                                              and len(value['rsync']) <= rsync['maxLength']
+                                              and re.fullmatch(rsync['pattern'], value['rsync'])))):
+            add('manifest.schema', 'helper_images')
     if 'project' in data and 'project' in properties:
         findings.extend(_project_findings(data['project'], data.get('projects_path'), properties['project'],
                                           canonical(data.get('projects_path'))))
@@ -321,7 +330,7 @@ def vector_bytes(case):
     return template + b' ' * (spec['total'] - len(template))
 
 
-MIN_VECTOR_CASES = 145
+MIN_VECTOR_CASES = 150
 
 
 def vector_case_errors(cases):
