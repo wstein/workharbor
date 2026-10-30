@@ -64,11 +64,11 @@ case "$2 $3" in
  'volume ls') cat "$D/volumes";;
  'system df') test -f "$D/df" || exit 1; cat "$D/df";;
  'image pull') test -f "$D/pull-fails" && exit 1; printf '%%s\n' "$6";;
- 'image inspect') test -f "$D/no-tools" && exit 1; printf 'sha256:tools\n';;
+ 'image inspect') test -f "$D/no-tools" && exit 1; printf 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n';;
  'build --quiet') test -f "$D/build-fails" && exit 1; cat > "$D/stdin"; rm -f "$D/no-tools"; printf 'sha256:tools\n';;
  'volume create') printf '%%s\n' "${11}" >> "$D/volumes"; printf '%%s\n' "$7" > "$D/created-label"; printf '%%s\n' "${11}";;
  'volume inspect') l=$(cat "$D/created-label"); printf '{"workharbor.home-copy.operation":"%%s"}\n' "${l#workharbor.home-copy.operation=}";;
- 'run --rm') if [ "${36}" = whr-home-verify ]; then cat "$D/verify"; else test -f "$D/copy-fails" && exit 2; cat "$D/progress" 2>/dev/null; :; fi;;
+ 'run --rm') if [ "${36}" = whr-home-verify ]; then cat "$D/verify"; else test -f "$D/exit-code" && exit "$(cat "$D/exit-code")"; test -f "$D/copy-fails" && exit 2; cat "$D/progress" 2>/dev/null; :; fi;;
  *) exit 94;;
 esac`, dir)
 	return &homeFake{t: t, dir: dir, client: Client{Executable: fakeDocker(t, script)}}

@@ -261,6 +261,44 @@ func randomOperation() (string, error) {
 	return hex.EncodeToString(b[:]), nil
 }
 
+// homeSourceOf selects one verified workspace container by exact name or full ID and its home volume.
+func (c Client) homeSourceOf(ctx context.Context, endpoint, target string) (inspection, HomeCopySource, error) {
+	conflict := func(format string, args ...any) (inspection, HomeCopySource, error) {
+		return inspection{}, HomeCopySource{}, exitcode.Errorf(exitcode.PathConflict, format, args...)
+	}
+	all, _, err := c.inspectAllAt(ctx, endpoint)
+	if err != nil {
+		return inspection{}, HomeCopySource{}, err
+	}
+	var selected []inspection
+	for _, item := range all {
+		if item.ID == target || strings.TrimPrefix(item.Name, "/") == target {
+			selected = append(selected, item)
+		}
+	}
+	switch {
+	case len(selected) == 0:
+		return inspection{}, HomeCopySource{}, exitcode.Errorf(exitcode.PathTargetAbsent, "no local container matches %q", target)
+	case len(selected) > 1:
+		return inspection{}, HomeCopySource{}, exitcode.Errorf(exitcode.PathBadArguments, "local selector %q is ambiguous; use the full container ID", target)
+	}
+	item := selected[0]
+	role, recognized := workspaceRole(item.Labels)
+	if !recognized || !fullID(item.ID) {
+		return conflict("refusing container without verified workspace ownership")
+	}
+	source := HomeCopySource{ContainerID: item.ID, ContainerName: strings.TrimPrefix(item.Name, "/"), Role: role}
+	for _, m := range item.Mounts {
+		if homeMount(m) && (source.Volume == "" || m.Destination == "/home/captain") {
+			source.Volume = m.Name
+		}
+	}
+	if source.Volume == "" || !validHomeVolume(source.Volume) {
+		return conflict("the selected workspace has no usable home volume")
+	}
+	return item, source, nil
+}
+
 func (c Client) planHomeCopy(ctx context.Context, endpoint string, o HomeCopyOptions) (homeCopyPlan, error) {
 	excludes, err := validateHomeCopyOptions(o)
 	if err != nil {
@@ -269,36 +307,11 @@ func (c Client) planHomeCopy(ctx context.Context, endpoint string, o HomeCopyOpt
 	conflict := func(format string, args ...any) (homeCopyPlan, error) {
 		return homeCopyPlan{}, exitcode.Errorf(exitcode.PathConflict, format, args...)
 	}
-	all, _, err := c.inspectAllAt(ctx, endpoint)
+	item, source, err := c.homeSourceOf(ctx, endpoint, o.Target)
 	if err != nil {
 		return homeCopyPlan{}, err
 	}
-	var selected []inspection
-	for _, item := range all {
-		if item.ID == o.Target || strings.TrimPrefix(item.Name, "/") == o.Target {
-			selected = append(selected, item)
-		}
-	}
-	switch {
-	case len(selected) == 0:
-		return homeCopyPlan{}, exitcode.Errorf(exitcode.PathTargetAbsent, "no local container matches %q", o.Target)
-	case len(selected) > 1:
-		return homeCopyPlan{}, exitcode.Errorf(exitcode.PathBadArguments, "local selector %q is ambiguous; use the full container ID", o.Target)
-	}
-	item := selected[0]
-	role, recognized := workspaceRole(item.Labels)
-	if !recognized || !fullID(item.ID) {
-		return conflict("refusing container without verified workspace ownership")
-	}
-	plan := homeCopyPlan{options: o, excludes: excludes, source: HomeCopySource{ContainerID: item.ID, ContainerName: strings.TrimPrefix(item.Name, "/"), Role: role}}
-	for _, m := range item.Mounts {
-		if homeMount(m) && (plan.source.Volume == "" || m.Destination == "/home/captain") {
-			plan.source.Volume = m.Name
-		}
-	}
-	if plan.source.Volume == "" || !validHomeVolume(plan.source.Volume) {
-		return conflict("the selected workspace has no usable home volume")
-	}
+	plan := homeCopyPlan{options: o, excludes: excludes, source: source}
 	if pinned, perr := helperBaseImage(ctx, item.Labels["devcontainer.local_folder"]); perr == nil {
 		plan.image, plan.pull = pinned, true
 	} else if ctx.Err() != nil {
@@ -381,6 +394,8 @@ func (c Client) toolsImagePresent(ctx context.Context, endpoint string) bool {
 	_, err := c.homeRead(ctx, endpoint, "image", "inspect", "--format", "{{.Id}}", "--", ToolsImage())
 	return err == nil
 }
+
+func localBuildTag(ref string) bool { return ref == ToolsImage() || ref == RecoverImage() }
 
 func (c Client) homeVolumes(ctx context.Context, endpoint string) (map[string]bool, error) {
 	raw, err := c.homeRead(ctx, endpoint, "volume", "ls", "--quiet")
@@ -681,9 +696,14 @@ const homeRunFixed = 35 // argv elements before the positional excludes
 func admitHomeMutation(args []string) bool {
 	switch {
 	case len(args) == 5 && args[0] == "image" && args[1] == "pull" && args[2] == "--quiet" && args[3] == "--":
-		return workspacecfg.DigestPinnedImage(args[4])
-	case reflect.DeepEqual(args, []string{"build", "--quiet", "--tag", ToolsImage(), "-"}):
+		return workspacecfg.DigestPinnedImage(args[4]) || toolboxImageRE.MatchString(args[4])
+	case len(args) == 5 && args[0] == "build" && args[1] == "--quiet" && args[2] == "--tag" && localBuildTag(args[3]) && args[4] == "-":
 		return true
+	case len(args) == 6 && args[0] == "volume" && args[1] == "create" && args[2] == "--label" && args[3] == "workharbor.recover=toolbox" && args[4] == "--":
+		return toolboxVolumeRE.MatchString(args[5])
+	case len(args) == 9 && args[0] == "run" && args[1] == "--rm" && args[2] == "--pull" && args[3] == "never" && args[4] == "--network" && args[5] == "none" && args[6] == "--mount":
+		id := args[8]
+		return imageIDRE.MatchString("sha256:"+id) && args[7] == "type=volume,src=bundledock-toolbox-"+id+",dst=/bundle,volume-nocopy"
 	case len(args) == 10 && args[0] == "volume" && args[1] == "create":
 		mode := strings.TrimPrefix(args[3], "workharbor.home-copy=")
 		op := strings.TrimPrefix(args[5], homeOperationKey+"=")
@@ -740,7 +760,7 @@ func admitHomeRead(args []string) bool {
 		return true
 	}
 	switch {
-	case reflect.DeepEqual(args, []string{"image", "inspect", "--format", "{{.Id}}", "--", ToolsImage()}):
+	case len(args) == 6 && args[0] == "image" && args[1] == "inspect" && args[2] == "--format" && args[3] == "{{.Id}}" && args[4] == "--" && (localBuildTag(args[5]) || toolboxImageRE.MatchString(args[5])):
 		return true
 	case reflect.DeepEqual(args, []string{"volume", "ls", "--quiet"}):
 		return true
