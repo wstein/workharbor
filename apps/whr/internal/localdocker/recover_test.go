@@ -173,27 +173,19 @@ func TestRecoverTagPullsAndPopulatesToolboxVolume(t *testing.T) {
 	}
 }
 
-func TestRecoverBuildsMissingRecoverImage(t *testing.T) {
+func TestRecoverPullsMissingRecoverImage(t *testing.T) {
 	f := newHomeFake(t, "")
 	withMountedToolbox(t, f)
 	f.set("no-tools", "")
 	res, err := prepareRecover(t, f, RecoverOptions{Target: "ws1", Toolbox: "current"}).Start(context.Background(), recoverStreams(t))
-	if err != nil || res.Actions[0].Kind != "recover_image_build" || !res.Actions[0].Applied {
+	if err != nil || res.Actions[0].Kind != "recover_image_pull" || !res.Actions[0].Applied {
 		t.Fatalf("start %+v %v", res, err)
 	}
-	if got := strings.Join(f.mutations(), ","); got != "build --quiet,run --rm" {
+	if got := strings.Join(f.mutations(), ","); got != "image pull,run --rm" {
 		t.Fatalf("mutations %s", got)
 	}
-	if mustRead(t, filepath.Join(f.dir, "stdin")) != string(recoverDockerfile) {
-		t.Fatal("build did not receive the recover Dockerfile")
-	}
-	f = newHomeFake(t, "")
-	withMountedToolbox(t, f)
-	f.set("no-tools", "")
-	f.set("build-fails", "")
-	_, err = prepareRecover(t, f, RecoverOptions{Target: "ws1", Toolbox: "current"}).Start(context.Background(), recoverStreams(t))
-	if exitcode.FromError(err) != exitcode.Conflict || strings.Contains(strings.Join(f.mutations(), ","), "run") {
-		t.Fatalf("failed build: %v %v", err, f.mutations())
+	if RecoverImage() != "docker.io/library/debian@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4" {
+		t.Fatalf("recover image %s is not the pinned stock Debian", RecoverImage())
 	}
 }
 
@@ -236,6 +228,7 @@ func TestRecoverArgvAdmission(t *testing.T) {
 		"populate other":  {"run", "--rm", "--pull", "never", "--network", "none", "--mount", "type=volume,src=ws1-home,dst=/bundle,volume-nocopy", recoverPulledID},
 		"populate net":    {"run", "--rm", "--pull", "never", "--network", "host", "--mount", "type=volume,src=bundledock-toolbox-" + recoverPulledID + ",dst=/bundle,volume-nocopy", recoverPulledID},
 		"build other tag": {"build", "--quiet", "--tag", "evil:1", "-"},
+		"build recover":   {"build", "--quiet", "--tag", RecoverImage(), "-"},
 	} {
 		if admitRecoverRun(args) || admitHomeMutation(args) {
 			t.Errorf("%s admitted", name)
@@ -245,7 +238,7 @@ func TestRecoverArgvAdmission(t *testing.T) {
 		{"image", "pull", "--quiet", "--", "quay.io/bundledock/toolbox:latest"},
 		{"run", "--rm", "--pull", "never", "--network", "none", "--mount", "type=volume,src=bundledock-toolbox-" + recoverPulledID + ",dst=/bundle,volume-nocopy", recoverPulledID},
 		{"volume", "create", "--label", "workharbor.recover=toolbox", "--", "bundledock-toolbox-" + recoverPulledID},
-		{"build", "--quiet", "--tag", RecoverImage(), "-"},
+		{"image", "pull", "--quiet", "--", RecoverImage()},
 	} {
 		if !admitHomeMutation(ok) {
 			t.Errorf("%q refused", ok)
