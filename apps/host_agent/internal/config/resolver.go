@@ -393,7 +393,7 @@ func resolverManifestPaths(value any) (string, string, error) {
 			return "", "", invalidConfiguration()
 		}
 	case json.Number("2"):
-		if !fields(manifest, required, "name", "start_dir", "human_shell", "console_mode", "shortcuts", "project") {
+		if !fields(manifest, required, "name", "start_dir", "human_shell", "console_mode", "shortcuts", "project", "helper_images") {
 			return "", "", invalidConfiguration()
 		}
 	default:
@@ -440,6 +440,9 @@ func resolverManifestPaths(value any) (string, string, error) {
 				return "", "", invalidConfiguration()
 			}
 		}
+		if value, exists := manifest["helper_images"]; exists && !resolverManifestHelperImages(value) {
+			return "", "", invalidConfiguration()
+		}
 	}
 	// A well-shaped nonempty list retains the existing provider capability error;
 	// invalid manifests cannot mask their schema failure behind that capability.
@@ -447,6 +450,24 @@ func resolverManifestPaths(value any) (string, string, error) {
 		return "", "", unsupportedConfiguration()
 	}
 	return dc, projects, nil
+}
+
+// manifestHelperImage mirrors the whr digest-pinned helper reference: a
+// lowercase repository path, an optional tag and a mandatory sha256 digest.
+var manifestHelperImage = regexp.MustCompile(`^[a-z0-9]+(?:[._-][a-z0-9]+)*(?::[0-9]{1,5})?(?:/[a-z0-9]+(?:[._-][a-z0-9]+)*)+(?::[A-Za-z0-9_][A-Za-z0-9_.-]{0,127})?@sha256:[0-9a-f]{64}$`)
+
+// resolverManifestHelperImages validates the closed helper_images object. It is
+// a client-side declaration for whr; the provider never reads it.
+func resolverManifestHelperImages(value any) bool {
+	helpers, ok := value.(map[string]any)
+	if !ok || len(helpers) > 1 {
+		return false
+	}
+	if base, exists := helpers["rsync"]; exists {
+		text, ok := base.(string)
+		return ok && len(text) <= 512 && manifestHelperImage.MatchString(text)
+	}
+	return len(helpers) == 0
 }
 
 var manifestWorkspaceName = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)

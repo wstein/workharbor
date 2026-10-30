@@ -34,6 +34,8 @@ type Manifest struct {
 	ConsoleMode      string
 	Shortcuts        string
 	Project          *Project
+	// RsyncImage is the optional digest-pinned helper_images.rsync reference.
+	RsyncImage string
 }
 
 // EffectiveConsoleMode resolves an omitted field for a new session. ConsoleMode
@@ -58,6 +60,7 @@ var (
 	v2Fields = map[string]bool{
 		"schema_version": true, "devcontainer_path": true, "projects_path": true, "bundles": true,
 		"name": true, "start_dir": true, "human_shell": true, "console_mode": true, "shortcuts": true, "project": true,
+		"helper_images": true,
 	}
 	humanShells  = map[string]bool{"fish": true, "bash": true, "zsh": true, "nu": true}
 	consoleModes = map[string]bool{"herdr": true, "plain": true}
@@ -212,6 +215,9 @@ func CheckManifest(raw []byte) ManifestResult {
 	m.Shortcuts = enum("shortcuts", shortcutVals)
 	if p, ok := doc.get("project"); ok {
 		m.Project = checkProject(&c, p, m.ProjectsPath)
+	}
+	if h, ok := doc.get("helper_images"); ok {
+		m.RsyncImage = checkHelperImages(&c, h)
 	}
 	res.Findings = c.list
 	return res

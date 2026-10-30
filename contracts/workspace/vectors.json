@@ -1832,6 +1832,78 @@
     "manifest.encoding"
    ],
    "note": "array-only input still rejects a lone surrogate before checking the object shape"
+  },
+  {
+   "id": "v2-helper-rsync-pinned",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "helper_images": {
+     "rsync": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+   },
+   "expect_codes": []
+  },
+  {
+   "id": "v2-helper-rsync-tag-only",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "helper_images": {
+     "rsync": "quay.io/bundledock/rsync:latest"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-helper-unknown-member",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "helper_images": {
+     "rsync": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+     "tar": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v2-helper-not-object",
+   "document": {
+    "schema_version": 2,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "helper_images": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
+  },
+  {
+   "id": "v1-helper-images",
+   "document": {
+    "schema_version": 1,
+    "devcontainer_path": ".devcontainer/devcontainer.json",
+    "projects_path": "projects",
+    "bundles": [],
+    "helper_images": {
+     "rsync": "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    }
+   },
+   "expect_codes": [
+    "manifest.schema"
+   ]
   }
  ]
 }

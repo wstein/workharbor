@@ -86,7 +86,9 @@ for `--to`.
 
 `helper_images` is a closed object; `rsync` is its only member. The value is an
 image reference that **must** end in `@sha256:<64 lowercase hex>` (an optional
-tag may precede the digest), at most 512 bytes. Anything else is the existing
+tag may precede the digest), at most 512 bytes. The lowercase repository path
+needs at least one `/` (write `docker.io/library/<name>` rather than a bare
+Docker Hub name), so a value can never be read as a Docker option. Anything else is the existing
 `manifest.schema` finding. The field is absent unless the owner sets it.
 schema_version 1 refuses it (`needs schema_version 2`).
 
