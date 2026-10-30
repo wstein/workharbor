@@ -3,6 +3,7 @@ package localdocker
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -278,7 +279,7 @@ func TestRecoverTagsPullAndPopulateBothVolumes(t *testing.T) {
 	}
 }
 
-// readyCheck is the one admitted completeness probe: the carrier writes .ready last and leaves .initializing behind on failure.
+// readyCheck is the one admitted completeness probe: the carrier writes .ready last and holds .initializing while it runs.
 func readyCheck(volume string) []string {
 	return []string{"run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--mount", "type=volume,src=" + volume + ",dst=/bundle,readonly",
 		"--entrypoint", "/bin/sh", debianPin, "-c", "test -f /bundle/.ready && ! test -e /bundle/.initializing"}
@@ -310,6 +311,12 @@ func TestRecoverRefusesToMountAnIncompleteVolume(t *testing.T) {
 		res, err := prepareRecover(t, f, RecoverOptions{Target: "ws1", Toolbox: "2026.10.24-b1", Nixbox: "latest"}).Start(context.Background(), recoverStreams(t))
 		if exitcode.FromError(err) != exitcode.PartialFailure {
 			t.Fatalf("%s: %v", name, err)
+		}
+		// A concurrent carrier run also looks incomplete, so the wording must not claim it is.
+		var ee *exitcode.Error
+		if !errors.As(err, &ee) || !strings.Contains(ee.Error(), "may be incomplete or still being initialized") ||
+			!strings.Contains(ee.Remediation, "docker refuses to remove a volume that is in use") || !strings.Contains(ee.Remediation, "docker volume rm") {
+			t.Fatalf("%s: wording %v / %q", name, err, ee.Remediation)
 		}
 		for _, c := range f.calls() {
 			if c[0] == "run" && len(c) > 20 {
