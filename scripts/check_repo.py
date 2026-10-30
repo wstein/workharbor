@@ -249,11 +249,11 @@ def manifest_document_findings(data, schema=None):
     if 'helper_images' in data and 'helper_images' in properties:
         helper = properties['helper_images']
         value = data['helper_images']
-        rsync = helper['properties']['rsync']
+        base = helper['properties']['base']
         if (not isinstance(value, dict) or set(value) - set(helper['properties'])
-                or ('rsync' in value and not (isinstance(value['rsync'], str)
-                                              and len(value['rsync']) <= rsync['maxLength']
-                                              and re.fullmatch(rsync['pattern'], value['rsync'])))):
+                or ('base' in value and not (isinstance(value['base'], str)
+                                             and len(value['base']) <= base['maxLength']
+                                             and re.fullmatch(base['pattern'], value['base'])))):
             add('manifest.schema', 'helper_images')
     if 'project' in data and 'project' in properties:
         findings.extend(_project_findings(data['project'], data.get('projects_path'), properties['project'],

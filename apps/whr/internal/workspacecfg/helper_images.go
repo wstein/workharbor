@@ -21,7 +21,7 @@ func DigestPinnedImage(ref string) bool {
 }
 
 // checkHelperImages validates the closed helper_images object and returns the
-// rsync pin when it is valid.
+// base pin when it is valid.
 func checkHelperImages(c *collector, h jvalue) string {
 	schema := func(format string, args ...any) {
 		c.add("manifest.schema", ManifestFile, fmt.Sprintf(format, args...), "")
@@ -32,20 +32,20 @@ func checkHelperImages(c *collector, h jvalue) string {
 	}
 	ok := true
 	for _, m := range h.obj {
-		if m.key != "rsync" {
+		if m.key != "base" {
 			schema("unknown helper_images field %s", quoteKey(m.key))
 			ok = false
 		}
 	}
-	v, found := h.get("rsync")
+	v, found := h.get("base")
 	switch {
 	case !found:
 		return ""
 	case v.kind != jString:
-		schema("helper_images.rsync must be a string")
+		schema("helper_images.base must be a string")
 		return ""
 	case !DigestPinnedImage(v.str):
-		schema("helper_images.rsync must be an image reference pinned by digest (name@sha256:<64 hex>)")
+		schema("helper_images.base must be an image reference pinned by digest (name@sha256:<64 hex>)")
 		return ""
 	}
 	if !ok {

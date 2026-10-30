@@ -463,7 +463,7 @@ func resolverManifestHelperImages(value any) bool {
 	if !ok || len(helpers) > 1 {
 		return false
 	}
-	if base, exists := helpers["rsync"]; exists {
+	if base, exists := helpers["base"]; exists {
 		text, ok := base.(string)
 		return ok && len(text) <= 512 && manifestHelperImage.MatchString(text)
 	}

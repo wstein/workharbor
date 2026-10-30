@@ -19,7 +19,7 @@ BASE = {'schema_version': 1, 'devcontainer_path': '.devcontainer/devcontainer.js
         'projects_path': 'projects', 'bundles': []}
 V2_FIELDS = {'name': 'my-ws', 'start_dir': '.', 'human_shell': 'fish', 'console_mode': 'herdr',
              'shortcuts': 'on', 'project': {'url': 'https://f.example/o/a.git', 'path': 'projects/a'},
-             'helper_images': {'rsync': 'quay.io/bundledock/rsync@sha256:' + '0' * 64}}
+             'helper_images': {'base': 'docker.io/library/busybox@sha256:' + '0' * 64}}
 
 
 def raw(document):

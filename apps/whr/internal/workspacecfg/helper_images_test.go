@@ -9,34 +9,34 @@ import (
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg"
 )
 
-const pinnedRsync = "quay.io/bundledock/rsync@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+const pinnedBase = "docker.io/library/busybox@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
 // The helper image pin is additive, optional, schema_version 2 only and must be
 // digest-pinned (home clone/backup amendment, 2026-10-29).
-func TestManifestHelperImagesRsyncPin(t *testing.T) {
-	r := workspacecfg.CheckManifest(v2(`,"helper_images":{"rsync":"` + pinnedRsync + `"}`))
-	if len(r.Findings) != 0 || r.Manifest == nil || r.Manifest.RsyncImage != pinnedRsync {
+func TestManifestHelperImagesBasePin(t *testing.T) {
+	r := workspacecfg.CheckManifest(v2(`,"helper_images":{"base":"` + pinnedBase + `"}`))
+	if len(r.Findings) != 0 || r.Manifest == nil || r.Manifest.HelperBaseImage != pinnedBase {
 		t.Fatalf("valid pin: %+v %+v", r.Findings, r.Manifest)
 	}
-	if r := workspacecfg.CheckManifest(v2("")); len(r.Findings) != 0 || r.Manifest.RsyncImage != "" {
+	if r := workspacecfg.CheckManifest(v2("")); len(r.Findings) != 0 || r.Manifest.HelperBaseImage != "" {
 		t.Fatalf("absent pin: %+v", r)
 	}
-	tagged := "registry.example:5000/tools/rsync:3.4.1@sha256:" + strings.Repeat("a", 64)
-	if r := workspacecfg.CheckManifest(v2(`,"helper_images":{"rsync":"` + tagged + `"}`)); len(r.Findings) != 0 || r.Manifest.RsyncImage != tagged {
+	tagged := "registry.example:5000/tools/busybox:1.37@sha256:" + strings.Repeat("a", 64)
+	if r := workspacecfg.CheckManifest(v2(`,"helper_images":{"base":"` + tagged + `"}`)); len(r.Findings) != 0 || r.Manifest.HelperBaseImage != tagged {
 		t.Fatalf("tag plus digest: %+v", r)
 	}
 	for name, extra := range map[string]string{
-		"tag only":        `,"helper_images":{"rsync":"quay.io/bundledock/rsync:latest"}`,
-		"short digest":    `,"helper_images":{"rsync":"quay.io/bundledock/rsync@sha256:abc"}`,
-		"upper digest":    `,"helper_images":{"rsync":"quay.io/bundledock/rsync@sha256:` + strings.Repeat("A", 64) + `"}`,
-		"other algorithm": `,"helper_images":{"rsync":"quay.io/bundledock/rsync@sha512:` + strings.Repeat("a", 64) + `"}`,
-		"whitespace":      `,"helper_images":{"rsync":" ` + pinnedRsync + `"}`,
-		"option-like":     `,"helper_images":{"rsync":"--privileged@sha256:` + strings.Repeat("a", 64) + `"}`,
-		"not a string":    `,"helper_images":{"rsync":1}`,
-		"not an object":   `,"helper_images":"` + pinnedRsync + `"`,
-		"unknown member":  `,"helper_images":{"rsync":"` + pinnedRsync + `","tar":"` + pinnedRsync + `"}`,
+		"tag only":        `,"helper_images":{"base":"docker.io/library/busybox:latest"}`,
+		"short digest":    `,"helper_images":{"base":"docker.io/library/busybox@sha256:abc"}`,
+		"upper digest":    `,"helper_images":{"base":"docker.io/library/busybox@sha256:` + strings.Repeat("A", 64) + `"}`,
+		"other algorithm": `,"helper_images":{"base":"docker.io/library/busybox@sha512:` + strings.Repeat("a", 64) + `"}`,
+		"whitespace":      `,"helper_images":{"base":" ` + pinnedBase + `"}`,
+		"option-like":     `,"helper_images":{"base":"--privileged@sha256:` + strings.Repeat("a", 64) + `"}`,
+		"not a string":    `,"helper_images":{"base":1}`,
+		"not an object":   `,"helper_images":"` + pinnedBase + `"`,
+		"unknown member":  `,"helper_images":{"base":"` + pinnedBase + `","rsync":"` + pinnedBase + `"}`,
 		"empty object ok": ``,
-		"too long":        `,"helper_images":{"rsync":"` + strings.Repeat("a", 500) + `/r@sha256:` + strings.Repeat("a", 64) + `"}`,
+		"too long":        `,"helper_images":{"base":"` + strings.Repeat("a", 500) + `/r@sha256:` + strings.Repeat("a", 64) + `"}`,
 	} {
 		r := workspacecfg.CheckManifest(v2(extra))
 		got := strings.Join(manifestCodes(r.Findings), ",")
@@ -44,11 +44,11 @@ func TestManifestHelperImagesRsyncPin(t *testing.T) {
 		if name == "empty object ok" {
 			want = ""
 		}
-		if got != want || (want != "" && r.Manifest != nil && r.Manifest.RsyncImage != "") {
-			t.Errorf("%s: codes %q pin %q", name, got, r.Manifest.RsyncImage)
+		if got != want || (want != "" && r.Manifest != nil && r.Manifest.HelperBaseImage != "") {
+			t.Errorf("%s: codes %q pin %q", name, got, r.Manifest.HelperBaseImage)
 		}
 	}
-	v1 := []byte(`{"schema_version":1,"devcontainer_path":"a","projects_path":"b","bundles":[],"helper_images":{"rsync":"` + pinnedRsync + `"}}`)
+	v1 := []byte(`{"schema_version":1,"devcontainer_path":"a","projects_path":"b","bundles":[],"helper_images":{"base":"` + pinnedBase + `"}}`)
 	r = workspacecfg.CheckManifest(v1)
 	if got := strings.Join(manifestCodes(r.Findings), ","); got != "manifest.schema" || !strings.Contains(r.Findings[0].Message, "needs schema_version 2") {
 		t.Fatalf("v1 pin: %+v", r.Findings)
@@ -56,7 +56,7 @@ func TestManifestHelperImagesRsyncPin(t *testing.T) {
 }
 
 func TestDigestPinnedImageReference(t *testing.T) {
-	if !workspacecfg.DigestPinnedImage(pinnedRsync) || workspacecfg.DigestPinnedImage("rsync:latest") || workspacecfg.DigestPinnedImage("") {
+	if !workspacecfg.DigestPinnedImage(pinnedBase) || workspacecfg.DigestPinnedImage("busybox:latest") || workspacecfg.DigestPinnedImage("") {
 		t.Fatal("digest-pinned reference grammar")
 	}
 }
