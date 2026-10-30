@@ -208,3 +208,40 @@ func TestCandidateDisposalHelpNamesHomeBackup(t *testing.T) {
 		}
 	}
 }
+
+// The helper image is a digest pin, the local whr-tools tag, or (offline
+// fallback) the workspace image; every action kind the engine emits is allowed.
+func TestLocalHomeCopyEnvelopeAcceptsUnpinnedHelpersAndEveryActionKind(t *testing.T) {
+	kinds := []string{"image_pull", "tools_image_build", "volume_create", "copy", "verify"}
+	for _, helper := range []string{
+		"whr-tools:0123456789ab",
+		"mcr.microsoft.com/devcontainers/base:trixie",
+		"sha256:" + strings.Repeat("e", 64),
+		"docker.io/library/busybox@sha256:" + strings.Repeat("0", 64),
+	} {
+		preview := homeCLIResult("clone")
+		preview.HelperImage = helper
+		applied := preview
+		applied.Status, applied.DryRun = "copied", false
+		applied.Actions = nil
+		for _, k := range kinds {
+			applied.Actions = append(applied.Actions, localdocker.HomeCopyAction{Kind: k, Target: "x", Attempted: true, Applied: true})
+		}
+		for name, args := range map[string][]string{"preview": {"--dry-run"}, "apply": {"--yes"}} {
+			f := &homeTxFixture{preview: preview, result: applied}
+			n := 0
+			var o localdocker.HomeCopyOptions
+			got := run(t, homeHandlers(f, &n, &o), append([]string{"workspace", "home", "clone", "--local"}, append(args, "ws1", "--json")...)...)
+			if got.code != 0 {
+				t.Fatalf("%s %s: %+v", name, helper, got)
+			}
+			doc, err := jsonUnmarshal(got.stdout)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := compileSchema(t).Validate(doc); err != nil {
+				t.Errorf("%s with helper %q violates the output schema: %v", name, helper, err)
+			}
+		}
+	}
+}
