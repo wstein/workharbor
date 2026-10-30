@@ -36,6 +36,7 @@ func (a *app) localRecoverOptions(c *cobra.Command) localRecoverInvocation {
 	v.local, _ = c.Flags().GetBool("local")
 	v.dryRun, _ = c.Flags().GetBool("dry-run")
 	v.options.Toolbox, _ = c.Flags().GetString("toolbox")
+	v.options.Nixbox, _ = c.Flags().GetString("nixbox")
 	v.toolboxSet = c.Flags().Changed("toolbox")
 	v.options.RW, _ = c.Flags().GetBool("rw")
 	v.options.Net, _ = c.Flags().GetBool("net")
@@ -48,10 +49,11 @@ func (a *app) localRecoverOptions(c *cobra.Command) localRecoverInvocation {
 
 func addLocalRecoverFlags(c *cobra.Command) {
 	c.Flags().Bool("local", false, "use the local Docker daemon; no control plane")
-	c.Flags().String("toolbox", "", "toolbox to mount: latest (default), a tag, current (the workspace's own) or a local volume id")
+	c.Flags().String("toolbox", "", "toolbox to mount: latest (default), a tag, a sha256 digest, current (the workspace's own) or a local volume id")
+	c.Flags().String("nixbox", "", "nixbox to mount at /nix: latest (default), a tag, a sha256 digest, current or a local volume id")
 	c.Flags().Bool("rw", false, "mount the home read-write (default read-only)")
 	c.Flags().Bool("net", false, "allow network access (default none)")
-	c.Flags().Bool("dry-run", false, "preview only; no pull, build, volume or container")
+	c.Flags().Bool("dry-run", false, "preview only; no pull, volume or container")
 }
 
 // LocalRecoverHandler is the CLI adapter for workspace recover.
@@ -113,8 +115,8 @@ func recoverHuman(r localdocker.RecoverResult) string {
 	if r.Network {
 		network = "on"
 	}
-	fmt.Fprintf(&b, "recover: %s home %s (%s), toolbox %s, network %s\n", terminal.Escape(r.Source.ContainerName), terminal.Escape(r.Source.Volume), access, terminal.Escape(r.Toolbox), network)
-	fmt.Fprintf(&b, "image: %s (built once on first use)\n", terminal.Escape(r.Image))
+	fmt.Fprintf(&b, "recover: %s home %s (%s), toolbox %s, nixbox %s, network %s\n", terminal.Escape(r.Source.ContainerName), terminal.Escape(r.Source.Volume), access, terminal.Escape(r.Toolbox), terminal.Escape(r.Nixbox), network)
+	fmt.Fprintf(&b, "image: %s (stock, pulled when missing; no package manager runs)\n", terminal.Escape(r.Image))
 	for _, a := range r.Actions {
 		fmt.Fprintf(&b, "action: %s %s attempted=%t applied=%t\n", terminal.Escape(a.Kind), terminal.Escape(a.Target), a.Attempted, a.Applied)
 	}
