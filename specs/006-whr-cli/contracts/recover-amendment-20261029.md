@@ -17,8 +17,8 @@ a run without `--dry-run` needs terminal stdin and stdout.
 
 1. The workspace is selected like `home clone` (exact name or full ID, verified
    ownership, home volume from the container mounts).
-2. The base image `whr-recover:<hash>` (Alpine, git, openssh-client, less, ncdu,
-   rsync, tar, zstd, jq) is built from an embedded Dockerfile on first use. The
+2. The base image `whr-recover:<hash>` (Debian slim, so the glibc toolbox binaries run;
+   git, openssh-client, less, ncdu, rsync, tar, zstd, jq) is built from an embedded Dockerfile on first use. The
    tag is the hash of the Dockerfile. The build needs network once.
 3. The toolbox comes from `--toolbox`:
    - `latest` (default) or a tag: `quay.io/bundledock/toolbox:<tag>` is pulled and
