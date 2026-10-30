@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg"
 )
 
 // Pointers distinguish an omitted setting from an explicitly supplied value.
@@ -15,8 +16,10 @@ import (
 type Options struct {
 	Name, ProjectURL, StartDir, HumanShell, ConsoleMode, Shortcuts *string
 	Devcontainer, Template                                         *string
-	NonInteractive, Yes, DryRun, NoAgentsBlock                     bool
-	Overwrite                                                      []string
+	// HelperBaseImage is the digest-pinned helper_images.base reference.
+	HelperBaseImage                            *string
+	NonInteractive, Yes, DryRun, NoAgentsBlock bool
+	Overwrite                                  []string
 }
 
 // Entry is one bounded, no-follow observation. Info retains identity for the
@@ -52,6 +55,9 @@ func (o Options) validate() error {
 		}
 	}
 
+	if o.HelperBaseImage != nil && !workspacecfg.DigestPinnedImage(*o.HelperBaseImage) {
+		return exitcode.Errorf(exitcode.PathBadArguments, "--helper-base-image needs an image reference pinned by digest (registry/repository@sha256:<64 hex>)")
+	}
 	if o.NonInteractive && !o.Yes && !o.DryRun {
 		return exitcode.Errorf(exitcode.PathHumanDecisionMissing, "--non-interactive requires --yes (or --dry-run)")
 	}
@@ -67,7 +73,7 @@ func (o Options) validate() error {
 }
 
 func (o Options) requestsEdit() bool {
-	return o.Name != nil || o.ProjectURL != nil || o.StartDir != nil || o.HumanShell != nil || o.ConsoleMode != nil || o.Shortcuts != nil
+	return o.Name != nil || o.ProjectURL != nil || o.StartDir != nil || o.HumanShell != nil || o.ConsoleMode != nil || o.Shortcuts != nil || o.HelperBaseImage != nil
 }
 func (o Options) permits(path string) bool {
 	for _, p := range o.Overwrite {
