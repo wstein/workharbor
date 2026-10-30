@@ -56,16 +56,23 @@ func (c Client) runFixed(ctx context.Context, endpoint string, args ...string) (
 	return c.run(ctx, endpoint, nil, nil, args...)
 }
 
+func (c Client) dockerExecutable() (string, error) {
+	if c.Executable != "" {
+		return c.Executable, nil
+	}
+	exe, err := exec.LookPath("docker")
+	if err != nil {
+		return "", errors.New("Docker CLI unavailable")
+	}
+	return exe, nil
+}
+
 // run is runFixed with optional stdin and an optional live stdout writer that
 // replaces the bounded capture (the result then has no stdout).
 func (c Client) run(ctx context.Context, endpoint string, stdin io.Reader, stdout io.Writer, args ...string) (readResult, error) {
-	exe := c.Executable
-	if exe == "" {
-		var err error
-		exe, err = exec.LookPath("docker")
-		if err != nil {
-			return readResult{}, errors.New("Docker CLI unavailable")
-		}
+	exe, err := c.dockerExecutable()
+	if err != nil {
+		return readResult{}, err
 	}
 	env, cleanEnv, err := ClientEnvironment()
 	if err != nil {
