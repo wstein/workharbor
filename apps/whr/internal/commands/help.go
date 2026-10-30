@@ -10,7 +10,7 @@ import (
 )
 
 // candidateDisposalHelp is used only for receipt-bound managed candidate disposal.
-const candidateDisposalHelp = "Confirmed disposal removes the candidate container, candidate home, clone/result tree, and receipts, journals and private metadata. Removal loses unfetched commits and uncommitted clone work. Back up the staging home with Docker before removal or promotion if needed.\n"
+const candidateDisposalHelp = "Confirmed disposal removes the candidate container, candidate home, clone/result tree, and receipts, journals and private metadata. Removal loses unfetched commits and uncommitted clone work. Back up the staging home first with whr workspace home backup --local if needed.\n"
 
 const globalFlagsHelp = `Global flags:
   --json            write one JSON envelope to standard output

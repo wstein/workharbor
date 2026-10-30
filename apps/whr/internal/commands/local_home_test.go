@@ -173,3 +173,13 @@ func TestLocalHomeCopyInteractiveTrustAndConfirmation(t *testing.T) {
 		}
 	}
 }
+
+// Disposal help points at the supported backup command instead of manual Docker steps.
+func TestCandidateDisposalHelpNamesHomeBackup(t *testing.T) {
+	for _, path := range [][]string{{"workspace", "rm"}, {"workspace", "promote"}} {
+		got := run(t, nil, append(path, "--help")...)
+		if !strings.Contains(got.stdout, "whr workspace home backup --local") {
+			t.Errorf("%v help:\n%s", path, got.stdout)
+		}
+	}
+}
