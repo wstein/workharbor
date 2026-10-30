@@ -2503,7 +2503,8 @@
         },
         "helper_image": {
           "type": "string",
-          "pattern": "@sha256:[0-9a-f]{64}$"
+          "minLength": 1,
+          "description": "Image that runs the copy: a digest-pinned reference, the local whr-tools tag, or the workspace image when the tools image cannot be built."
         },
         "excludes": {
           "type": "array",
@@ -2570,6 +2571,7 @@
               "kind": {
                 "enum": [
                   "image_pull",
+                  "tools_image_build",
                   "volume_create",
                   "copy",
                   "verify"
