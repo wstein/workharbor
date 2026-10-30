@@ -53,7 +53,7 @@ func addLocalHomeFlags(c *cobra.Command, clone bool) {
 		c.Flags().Bool("include-credentials", false, "also copy the credential files a clone leaves out by default")
 	}
 	c.Flags().Bool("dry-run", false, "preview only; no pull, volume or container")
-	c.Flags().String("trust", "", "trust this exact previewed fingerprint (independent of --yes)")
+	c.Flags().String("trust", "", "optional: refuse unless the preview has this exact fingerprint")
 	c.Flags().Bool("yes", false, "confirm the previewed copy into a new volume")
 }
 
@@ -64,13 +64,8 @@ func LocalHomeCopyHandler(mode string, prepare func(context.Context, localdocker
 		if !v.local || len(call.Args) != 1 || strings.TrimSpace(call.Args[0]) == "" {
 			return Result{}, exitcode.Errorf(exitcode.PathBadArguments, "use workspace home %s --local <exact-name|full-id>", mode)
 		}
-		if !v.dryRun && !v.interactive {
-			if !v.yes {
-				return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "unattended home %s requires --yes (or --dry-run)", mode)
-			}
-			if v.trust == "" {
-				return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "unattended home %s requires exact --trust <fingerprint>, separately from --yes", mode)
-			}
+		if !v.dryRun && !v.interactive && !v.yes {
+			return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionMissing, "unattended home %s requires --yes (or --dry-run)", mode)
 		}
 		v.options.Mode = mode
 		v.options.Target = call.Args[0]
@@ -80,26 +75,16 @@ func LocalHomeCopyHandler(mode string, prepare func(context.Context, localdocker
 		}
 		preview := tx.Preview()
 		if v.dryRun {
-			return Result{Value: preview, Human: homeCopyHuman(preview) + "Apply requires --yes and --trust <fingerprint>, or interactive confirmation.\n"}, nil
+			return Result{Value: preview, Human: homeCopyHuman(preview) + "Apply with --yes, or run without --dry-run to confirm interactively.\n"}, nil
 		}
 		reader := bufio.NewReaderSize(v.input, 1025)
 		if v.interactive {
 			if _, err = io.WriteString(v.diagnostics, homeCopyHuman(preview)); err != nil {
 				return Result{}, err
 			}
-			if v.trust == "" {
-				if _, err = io.WriteString(v.diagnostics, "Trust home copy fingerprint "+terminal.Escape(preview.Fingerprint)+"? Enter the exact fingerprint: "); err != nil {
-					return Result{}, err
-				}
-				answer, e := lifecycleAnswer(ctx, reader)
-				if e != nil {
-					return Result{}, e
-				}
-				if answer != preview.Fingerprint {
-					return Result{}, exitcode.Errorf(exitcode.PathHumanDecisionRefused, "home copy fingerprint trust declined")
-				}
-				v.trust = answer
-			}
+		}
+		if v.trust == "" {
+			v.trust = preview.Fingerprint
 		}
 		if v.trust != preview.Fingerprint {
 			return Result{}, exitcode.Errorf(exitcode.PathConflict, "home copy fingerprint does not match --trust")

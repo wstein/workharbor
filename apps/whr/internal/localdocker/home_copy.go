@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -124,6 +125,7 @@ type homeCopyPlan struct {
 	source   HomeCopySource
 	target   string
 	image    string
+	pull     bool     // pinned image is pulled; a workspace image is already local
 	excludes []string // canonical ./x form, sorted
 	size     *string
 	print    string
@@ -288,8 +290,15 @@ func (c Client) planHomeCopy(ctx context.Context, endpoint string, o HomeCopyOpt
 	if plan.source.Volume == "" || !validHomeVolume(plan.source.Volume) {
 		return conflict("the selected workspace has no usable home volume")
 	}
-	if plan.image, err = helperBaseImage(ctx, item.Labels["devcontainer.local_folder"]); err != nil {
-		return homeCopyPlan{}, err
+	if pinned, perr := helperBaseImage(ctx, item.Labels["devcontainer.local_folder"]); perr == nil {
+		plan.image, plan.pull = pinned, true
+	} else if ctx.Err() != nil {
+		return homeCopyPlan{}, ctx.Err()
+	} else if validLocalImage(item.Image) {
+		// No pin configured: the workspace's own image already holds sh and tar, so use it without a pull.
+		plan.image = item.Image
+	} else {
+		return homeCopyPlan{}, perr
 	}
 	existing, err := c.homeVolumes(ctx, endpoint)
 	if err != nil {
@@ -319,6 +328,11 @@ func (c Client) planHomeCopy(ctx context.Context, endpoint string, o HomeCopyOpt
 	plan.print = homeFingerprint(endpoint, plan)
 	return plan, nil
 }
+
+var localImageRef = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/@-]*$`)
+
+// validLocalImage accepts an image reference that is safe as one docker argument.
+func validLocalImage(ref string) bool { return len(ref) <= 256 && localImageRef.MatchString(ref) }
 
 // helperBaseImage reads only workharbor.json of the label folder through the
 // bounded no-follow reader. Nothing is pulled here.
@@ -460,14 +474,17 @@ func (h *HomeCopy) Apply(parent context.Context, trust string) (HomeCopyResult, 
 		return result, e
 	}
 
-	i := act("image_pull", p.image)
-	if reply, err := h.client.homeMutate(parent, h.endpoint, "image", "pull", "--quiet", "--", p.image); err != nil || reply.status != 0 {
-		if parent.Err() != nil {
-			return result, parent.Err()
+	var i int
+	if p.pull {
+		i = act("image_pull", p.image)
+		if reply, err := h.client.homeMutate(parent, h.endpoint, "image", "pull", "--quiet", "--", p.image); err != nil || reply.status != 0 {
+			if parent.Err() != nil {
+				return result, parent.Err()
+			}
+			return fail(exitcode.PathConflict, "helper base image pull failed; no volume was created")
 		}
-		return fail(exitcode.PathConflict, "helper base image pull failed; no volume was created")
+		result.Actions[i].Applied = true
 	}
-	result.Actions[i].Applied = true
 
 	i = act("volume_create", p.target)
 	reply, createErr := h.client.homeMutate(parent, h.endpoint, "volume", "create", "--label", "workharbor.home-copy="+p.options.Mode, "--label", homeOperationKey+"="+op, "--label", "workharbor.home-copy.source="+p.source.Volume, "--", p.target)
@@ -641,7 +658,7 @@ func admitHomeMutation(args []string) bool {
 			suffix = ":/to:ro"
 		}
 		target, ok := strings.CutSuffix(args[28], suffix)
-		if !ok || !homeOperation(op) || !validHomeVolume(source) || !validHomeVolume(target) || protectedVolume(target) || source == target || !workspacecfg.DigestPinnedImage(args[31]) {
+		if !ok || !homeOperation(op) || !validHomeVolume(source) || !validHomeVolume(target) || protectedVolume(target) || source == target || !validLocalImage(args[31]) {
 			return false
 		}
 		excludes := args[homeRunFixed:]
