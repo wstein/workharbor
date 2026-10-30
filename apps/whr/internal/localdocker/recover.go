@@ -106,7 +106,8 @@ func (b bundle) parse(s string) (toolboxChoice, error) {
 		return toolboxChoice{"volume", strings.TrimPrefix(s, b.prefix())}, nil
 	case imageDigestRE.MatchString(s):
 		return toolboxChoice{"image", b.repo + "@" + s}, nil
-	case toolboxHexRE.MatchString(s):
+	case toolboxHexRE.MatchString(s) && (len(s) >= 12 || strings.ContainsAny(s, "abcdef")):
+		// A short all-digit string such as the date tag 20261029 is a tag, not a volume id.
 		return toolboxChoice{"volume", s}, nil
 	case toolboxTagRE.MatchString(s):
 		return toolboxChoice{"image", b.repo + ":" + s}, nil

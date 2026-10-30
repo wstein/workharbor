@@ -74,6 +74,8 @@ func TestRecoverToolboxChoices(t *testing.T) {
 		"current":                           {kind: "current"},
 		"sha256:" + strings.Repeat("c", 64): {kind: "image", value: "quay.io/bundledock/toolbox@sha256:" + strings.Repeat("c", 64)},
 		"d3a83465":                          {kind: "volume", value: "d3a83465"},
+		"20261029":                          {kind: "image", value: "quay.io/bundledock/toolbox:20261029"}, // digits only and short: a date tag
+		"202610291234":                      {kind: "volume", value: "202610291234"},                       // 12 or more hex characters: a volume id
 		recoverTestToolbox:                  {kind: "volume", value: strings.TrimPrefix(recoverTestToolbox, "bundledock-toolbox-")},
 	} {
 		got, err := parseToolboxChoice(in)
