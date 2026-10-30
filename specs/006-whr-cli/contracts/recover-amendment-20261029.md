@@ -14,7 +14,9 @@ whr workspace recover --local <exact-name|full-id> [--toolbox <choice>] [--nixbo
 ```
 
 `<choice>` is `latest` (default), a tag, `sha256:<digest>`, `current` (the volume
-mounted in the selected workspace) or a local volume id (hex prefix or full name).
+mounted in the selected workspace) or a local volume id (full name, or a hex prefix
+of 12 or more characters or with a letter a-f; a short all-digit string such as the
+date tag `20261029` is a tag).
 
 Command ID `workspace.recover`. Terminal-only: `--json` is a usage error, and
 a run without `--dry-run` needs terminal stdin and stdout.
@@ -30,8 +32,13 @@ a run without `--dry-run` needs terminal stdin and stdout.
 3. Each bundle comes from its flag:
    - `latest` (default), a tag or a digest: `quay.io/bundledock/toolbox` or
      `quay.io/bundledock/nixbox` is pulled and a `bundledock-<name>-<image id>`
-     volume is created and filled once by the carrier image (offline, as root, the
-     volume at `/bundle`), like BundleDock's `bundle-volume.sh`;
+     volume is created and filled by the carrier image (offline, the volume at
+     `/bundle`, no `--user`, so the image's default user, which is root in the
+     published toolbox image), like BundleDock's `bundle-volume.sh`. The carrier
+     writes `.ready` last and leaves `.initializing` behind if it fails. An existing
+     volume is reused only after a read-only offline probe in the pinned Debian image
+     finds `.ready` and no `.initializing`; otherwise the carrier run is repeated,
+     and if that fails the volume is reported as a residual and is never mounted;
    - `current`: the volume mounted in the selected workspace (`/opt/bdock/toolbox`
      or `/nix`);
    - a hex prefix or full name: a local `bundledock-<name>-*` volume.
@@ -44,17 +51,18 @@ a run without `--dry-run` needs terminal stdin and stdout.
    CHOWN, DAC_OVERRIDE, FOWNER and FSETID, no-new-privileges. Environment:
    `PATH=/nix/profile/bin:/opt/bdock/toolbox/bin:<system>`,
    `BDOCK_TOOLBOX=/opt/bdock/toolbox`,
-   `SSL_CERT_FILE=/nix/profile/etc/ssl/certs/ca-bundle.crt`. Tools: nixbox gives git
+   `SSL_CERT_FILE=/nix/profile/etc/ssl/certs/ca-bundle.crt`,
+   `XDG_DATA_DIRS=/opt/bdock/toolbox/share:/nix/profile/share:/usr/share`. Tools: nixbox gives git
    (no Perl), rsync, zstd, less, ssh and CA certificates; the toolbox gives jq, rg, jj,
    fastfetch (through nixbox shims) and its other tools; Debian gives tar, find and the
-   base utilities. The shell is the toolbox `fish`, else `sh`.
+   base utilities. The shell is the toolbox `fish` when `fish -c true` succeeds, else `sh`.
 5. The exit status of the shell is the exit status of the command.
 
 ## Safety
 
 Only fixed argument vectors are admitted: the pulls (the pinned Debian, toolbox and
 nixbox references only), the volume creates (labels `workharbor.recover=toolbox|nixbox`,
-matching names only), the populate runs and the one interactive run; everything else
+matching names only), the populate runs, the read-only completeness probe and the one interactive run; everything else
 is rejected. Nothing is deleted automatically: an incomplete volume is reported as
 a residual with the command to remove it. `--dry-run` lists the planned pulls and
 volumes and has no pull, volume or container effect.

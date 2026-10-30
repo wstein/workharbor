@@ -51,13 +51,23 @@ and [2026-10-25 throwaway amendment](contracts/throwaway-staging-amendment-20261
 ## Amendment (2026-10-29): workspace home clone and backup
 
 The owner decided local `whr workspace home clone` and `whr workspace home backup`:
-copy a workspace home volume into a new volume with `tar` in a digest-pinned
-minimal base image (`helper_images.base` in `workharbor.json`, written by
-`whr workspace init --helper-base-image`), with stage-style fingerprint trust and
-confirmation. See the [home clone/backup amendment](contracts/home-clone-backup-amendment-20261029.md).
+copy a workspace home volume into a new volume with `rsync` in the local
+`whr-tools` image (built once from Alpine; `tar` in the workspace image if the
+build fails; an optional digest pin `helper_images.base` in `workharbor.json`,
+written by `whr workspace init --helper-base-image`, wins), with `--yes` or a
+terminal confirmation and an optional fingerprint (`--trust`).
+See the [home clone/backup amendment](contracts/home-clone-backup-amendment-20261029.md).
 It supersedes only the "no volume-backup feature" statement for workspace homes;
 stage, promote, `rm`, the throwaway disposal rules, FR-067 and the complete
 `anchorage-home-*` guard are unchanged. No candidate adoption is added.
+
+## Amendment (2026-10-29, revised 2026-10-30): workspace recover
+
+`whr workspace recover --local` opens a throwaway shell on the stock pinned Debian
+image (pulled, never built; no package manager runs) with the workspace home
+mounted read-only and the BundleDock toolbox and nixbox mounted from volumes.
+See the [recover amendment](contracts/recover-amendment-20261029.md). It deletes
+nothing, is terminal-only (`--json` is a usage error) and changes no other command.
 
 ### LS-1: owner direction (2026-10-24)
 

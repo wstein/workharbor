@@ -140,11 +140,15 @@ for the code, tests and real Linux/macOS+OrbStack evidence before claiming it.
 ## Home clone and backup amendment (owner, 2026-10-29)
 
 `whr workspace home clone --local <ws>` and `whr workspace home backup --local <ws>`
-copy a workspace home into a new volume with `tar` in the digest-pinned
-`helper_images.base` image (`whr workspace init --helper-base-image <ref@sha256:...>`).
-Clone leaves out `./.cache` and credentials; backup leaves out only `./.cache`.
-Dry-run shows excludes, size estimate, image digest and fingerprint; apply needs
-`--yes` and `--trust <fingerprint>`. Nothing is deleted automatically. See the
+copy a workspace home into a new volume with `rsync` in the local `whr-tools`
+image. That Alpine image is built once (`docker build` pulls Alpine and runs
+`apk add`, so the first run needs network); if the build fails, `tar` in the
+workspace image does the copy. A digest pin (`helper_images.base`, set with
+`whr workspace init --helper-base-image <ref@sha256:...>`) is optional and wins
+when present. Clone leaves out `./.cache` and credentials; backup leaves out only
+`./.cache`. Dry-run shows excludes, size estimate, helper image and fingerprint;
+apply needs `--yes` unless interactive, and `--trust <fingerprint>` is optional.
+Nothing is deleted automatically. See the
 [amendment](contracts/home-clone-backup-amendment-20261029.md); only fixture
 tests exist, and host acceptance remains an owner gate.
 
