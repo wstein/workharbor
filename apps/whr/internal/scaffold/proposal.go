@@ -28,6 +28,10 @@ type manifest struct {
 	ConsoleMode      string   `json:"console_mode"`
 	Shortcuts        string   `json:"shortcuts"`
 	Project          *project `json:"project,omitempty"`
+	HelperImages     *helpers `json:"helper_images,omitempty"`
+}
+type helpers struct {
+	Base string `json:"base"`
 }
 type project struct {
 	URL  string `json:"url"`
@@ -142,6 +146,10 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 			doc.Project = &project{m.Project.URL, m.Project.Path}
 			p.preview.Settings["project"] = Setting{*doc.Project, "existing"}
 		}
+		if m.HelperBaseImage != "" {
+			doc.HelperImages = &helpers{m.HelperBaseImage}
+			p.preview.Settings["helper_images"] = Setting{map[string]string{"base": m.HelperBaseImage}, "existing"}
+		}
 	}
 	selectionChanged := o.Devcontainer != nil && *o.Devcontainer != doc.DevcontainerPath
 	if o.Devcontainer != nil {
@@ -158,6 +166,11 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 	if o.ProjectURL != nil {
 		doc.Project = &project{*o.ProjectURL, doc.ProjectsPath + "/" + projectName(*o.ProjectURL)}
 		p.preview.Settings["project"] = Setting{*doc.Project, "flag"}
+	}
+	if o.HelperBaseImage != nil {
+		doc.HelperImages = &helpers{*o.HelperBaseImage}
+		p.preview.Settings["helper_images"] = Setting{map[string]string{"base": *o.HelperBaseImage}, "flag"}
+		p.preview.NextSteps = append(p.preview.NextSteps, "Helper base image "+*o.HelperBaseImage+" is pinned for whr workspace home clone and backup; init does not pull or run it.")
 	}
 	fileRoles := map[string]bool{}
 	for _, name := range []string{"workharbor.json", doc.DevcontainerPath, doc.ProjectsPath + "/.gitkeep", claudeSettingsPath} {
@@ -189,7 +202,7 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 			if !o.requestsEdit() && !selectionChanged {
 				return nil, exitcode.Errorf(exitcode.PathUnclassified, "generated proposal failed self-validation")
 			}
-			return nil, exitcode.Errorf(exitcode.PathBadArguments, "init settings fail current manifest validation; check --name, --project-url, --start-dir, --human-shell, --console-mode and --shortcuts")
+			return nil, exitcode.Errorf(exitcode.PathBadArguments, "init settings fail current manifest validation; check --name, --project-url, --start-dir, --human-shell, --console-mode, --shortcuts and --helper-base-image")
 		}
 		for key, value := range values {
 			if *value != "" {

@@ -13,7 +13,7 @@ func initOptions(c *cobra.Command) (scaffold.Options, error) {
 	for _, setting := range []struct {
 		name   string
 		target **string
-	}{{"name", &o.Name}, {"project-url", &o.ProjectURL}, {"start-dir", &o.StartDir}, {"human-shell", &o.HumanShell}, {"console-mode", &o.ConsoleMode}, {"shortcuts", &o.Shortcuts}, {"devcontainer", &o.Devcontainer}, {"template", &o.Template}} {
+	}{{"name", &o.Name}, {"project-url", &o.ProjectURL}, {"start-dir", &o.StartDir}, {"human-shell", &o.HumanShell}, {"console-mode", &o.ConsoleMode}, {"shortcuts", &o.Shortcuts}, {"devcontainer", &o.Devcontainer}, {"template", &o.Template}, {"helper-base-image", &o.HelperBaseImage}} {
 		if !c.Flags().Changed(setting.name) {
 			continue
 		}

@@ -1222,6 +1222,36 @@
                   ]
                 }
               }
+            },
+            "helper_images": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "origin"
+              ],
+              "properties": {
+                "value": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "base"
+                  ],
+                  "properties": {
+                    "base": {
+                      "type": "string",
+                      "pattern": "@sha256:[0-9a-f]{64}$"
+                    }
+                  }
+                },
+                "origin": {
+                  "type": "string",
+                  "enum": [
+                    "flag",
+                    "existing"
+                  ]
+                }
+              }
             }
           },
           "description": "Effective manifest settings with the origin of each value (flag, existing, default)."

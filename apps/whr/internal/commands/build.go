@@ -248,6 +248,7 @@ func initFlagHelp(name string) string {
 		"console-mode": "console mode: herdr or plain", "shortcuts": "shell shortcuts: on or off",
 		"non-interactive": "never prompt", "yes": "confirm the proposed writes", "dry-run": "show the proposal without writing",
 		"overwrite": "replace this existing path (repeatable)", "no-agents-block": "do not write the agent workflow block into AGENTS.md",
+		"helper-base-image": "digest-pinned base image for home clone/backup (never pulled by init)",
 	}[name]
 }
 
