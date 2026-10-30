@@ -854,3 +854,32 @@ func TestLocalStageCommandContractAndAlias(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalHomeCopyCommandContract(t *testing.T) {
+	want := map[string][]string{
+		"workspace.home.clone":  {"--local", "--to", "--exclude", "--include-credentials", "--dry-run", "--trust", "--yes", "--json"},
+		"workspace.home.backup": {"--local", "--to", "--dry-run", "--trust", "--yes", "--json"},
+	}
+	for _, e := range commands.Table() {
+		flags, ok := want[e.ID]
+		if !ok {
+			continue
+		}
+		delete(want, e.ID)
+		if !reflect.DeepEqual(e.Flags, flags) || e.Short != nil || e.Needs != "none" || e.Writes != "local" || e.JSON != "envelope" || e.Increment != "first" {
+			t.Errorf("%s entry: %+v", e.ID, e)
+		}
+		if commands.DefaultHandlers()[e.ID] == nil {
+			t.Errorf("%s has no production handler", e.ID)
+		}
+		help := run(t, nil, append(append([]string{}, e.Path...), "--help")...)
+		for _, f := range append(flags, "--trust", "fingerprint", "new volume") {
+			if !strings.Contains(help.stdout, f) {
+				t.Errorf("%s help lacks %s:\n%s", e.ID, f, help.stdout)
+			}
+		}
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing entries %v", want)
+	}
+}

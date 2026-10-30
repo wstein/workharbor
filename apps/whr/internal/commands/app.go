@@ -71,8 +71,10 @@ func DefaultHandlers() map[string]Handler {
 		"workspace.rm": LocalRmHandler(func(ctx context.Context, o localdocker.RemovalOptions) (RemovalTransaction, error) {
 			return (localdocker.Client{}).PrepareRemoval(ctx, doctor.SystemPorts(nil), o)
 		}),
-		"workspace.init":  initHandler,
-		"workspace.shell": LocalShellHandler(localshell.SystemPorts()),
+		"workspace.init":        initHandler,
+		"workspace.home.clone":  LocalHomeCopyHandler("clone", productionHomeCopy),
+		"workspace.home.backup": LocalHomeCopyHandler("backup", productionHomeCopy),
+		"workspace.shell":       LocalShellHandler(localshell.SystemPorts()),
 	}
 }
 

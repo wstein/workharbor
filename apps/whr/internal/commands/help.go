@@ -75,13 +75,16 @@ func (a *app) leafHelp(b *strings.Builder, c *cobra.Command, e Entry) {
 		b.WriteString("Persistent identity: manually set 🟥 HOST or the workspace glyph + ws:<name> in both pane title and tab label (docs/container-runtime.md).\n")
 		b.WriteString("WHR_LOCAL_WORKSPACE and WHR_LOCAL_MODE=1 are available to an optional prompt; whr does not configure the prompt or multiplexer.\n")
 	}
+	if e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup" {
+		b.WriteString("Local: --local <exact-name|full-id> copies the workspace home volume, mounted read-only, into a new volume with tar in the\nhelper_images.base image pinned by digest in workharbor.json (set it with whr init --helper-base-image). Existing and protected\nvolumes are never targets and nothing is deleted. Use --dry-run for the preview and fingerprint; unattended/JSON apply\nrequires --yes and --trust <fingerprint>. A failure keeps and reports the new volume (exit 73).\n")
+	}
 	if e.ID == "workspace.console" {
 		b.WriteString("console --local is refused; use whr shell --local <ws> in the host multiplexer session.\n")
 	}
 	if e.JSON == "rejected" {
 		b.WriteString("JSON: not supported (--json is a usage error)\n")
 	}
-	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.drift" || e.ID == "workspace.rm" || e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console" || e.ID == "workspace.promote") {
+	if usages := c.LocalNonPersistentFlags().FlagUsages(); strings.TrimSpace(usages) != "" && (e.ID == "workspace.drift" || e.ID == "workspace.rm" || e.ID == "workspace.init" || e.ID == "workspace.ls" || e.ID == "workspace.shell" || e.ID == "workspace.console" || e.ID == "workspace.promote" || e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup") {
 		fmt.Fprintf(b, "\nFlags:\n%s", usages)
 	}
 	b.WriteString("\n" + globalFlagsHelp)
