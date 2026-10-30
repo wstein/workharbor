@@ -16,16 +16,19 @@ import (
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 )
 
-// whr workspace recover: a throwaway container with the workspace home mounted
-// (read-only by default) and a BundleDock toolbox mounted at /opt/bdock/toolbox.
-// The base image is built locally on first use; nothing is deleted.
+// whr workspace recover: a throwaway container on a stock, digest-pinned Debian
+// with the workspace home mounted (read-only by default) and a BundleDock
+// toolbox mounted at /opt/bdock/toolbox. No image is built and no package
+// manager runs. Nothing is deleted.
 
 const (
+	// recoverImageRef is pulled when missing and never built (Debian trixie-slim).
+	recoverImageRef   = "docker.io/library/debian@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4"
 	toolboxRepo       = "quay.io/bundledock/toolbox"
 	toolboxMount      = "/opt/bdock/toolbox"
 	recoverNameKey    = "workharbor.recover.operation"
 	recoverPath       = toolboxMount + "/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-	recoverShell      = `if [ -x ` + toolboxMount + `/bin/fish ]; then exec ` + toolboxMount + `/bin/fish -l; fi; exec /bin/sh -l`
+	recoverShell      = `if [ -x ` + toolboxMount + `/bin/fish ]; then exec ` + toolboxMount + `/bin/fish -l; fi; exec /bin/sh` // not sh -l: Debian's /etc/profile resets PATH
 	defaultRecoverTag = "latest"
 )
 
@@ -37,6 +40,9 @@ var (
 	imageIDRE       = regexp.MustCompile(`^sha256:([0-9a-f]{64})$`)
 	termNameRE      = regexp.MustCompile(`^[A-Za-z0-9._+-]{1,64}$`)
 )
+
+// RecoverImage is the pinned stock image of the recovery container.
+func RecoverImage() string { return recoverImageRef }
 
 // RecoverOptions selects the workspace home and the toolbox to mount.
 type RecoverOptions struct {
@@ -170,7 +176,7 @@ func (r *Recover) Preview() RecoverResult {
 		ReadOnly: !p.rw, Network: p.net, Actions: []HomeCopyAction{}, Residuals: []string{}}
 }
 
-// Start builds what is missing, then hands the terminal to the recovery shell.
+// Start pulls what is missing, then hands the terminal to the recovery shell.
 func (r *Recover) Start(parent context.Context, s RecoverStreams) (RecoverResult, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -209,12 +215,12 @@ func (r *Recover) Start(parent context.Context, s RecoverStreams) (RecoverResult
 		if parent.Err() != nil {
 			return result, parent.Err()
 		}
-		i := act("recover_image_build", RecoverImage())
-		if reply, err := c.homeMutateIO(parent, r.endpoint, strings.NewReader(string(recoverDockerfile)), nil, "build", "--quiet", "--tag", RecoverImage(), "-"); err != nil || reply.status != 0 {
+		i := act("recover_image_pull", RecoverImage())
+		if reply, err := c.homeMutate(parent, r.endpoint, "image", "pull", "--quiet", "--", RecoverImage()); err != nil || reply.status != 0 {
 			if parent.Err() != nil {
 				return result, parent.Err()
 			}
-			return fail(exitcode.PathConflict, "The recovery image needs network once to install its packages.", "recovery image build failed")
+			return fail(exitcode.PathConflict, "The recovery image is pulled once and needs network.", "recovery image pull failed")
 		}
 		result.Actions[i].Applied = true
 	}

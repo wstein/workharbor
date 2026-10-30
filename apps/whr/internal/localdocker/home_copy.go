@@ -395,7 +395,7 @@ func (c Client) toolsImagePresent(ctx context.Context, endpoint string) bool {
 	return err == nil
 }
 
-func localBuildTag(ref string) bool { return ref == ToolsImage() || ref == RecoverImage() }
+func localBuildTag(ref string) bool { return ref == ToolsImage() }
 
 func (c Client) homeVolumes(ctx context.Context, endpoint string) (map[string]bool, error) {
 	raw, err := c.homeRead(ctx, endpoint, "volume", "ls", "--quiet")
@@ -696,7 +696,7 @@ const homeRunFixed = 35 // argv elements before the positional excludes
 func admitHomeMutation(args []string) bool {
 	switch {
 	case len(args) == 5 && args[0] == "image" && args[1] == "pull" && args[2] == "--quiet" && args[3] == "--":
-		return workspacecfg.DigestPinnedImage(args[4]) || toolboxImageRE.MatchString(args[4])
+		return workspacecfg.DigestPinnedImage(args[4]) || args[4] == recoverImageRef || toolboxImageRE.MatchString(args[4])
 	case len(args) == 5 && args[0] == "build" && args[1] == "--quiet" && args[2] == "--tag" && localBuildTag(args[3]) && args[4] == "-":
 		return true
 	case len(args) == 6 && args[0] == "volume" && args[1] == "create" && args[2] == "--label" && args[3] == "workharbor.recover=toolbox" && args[4] == "--":
@@ -760,7 +760,7 @@ func admitHomeRead(args []string) bool {
 		return true
 	}
 	switch {
-	case len(args) == 6 && args[0] == "image" && args[1] == "inspect" && args[2] == "--format" && args[3] == "{{.Id}}" && args[4] == "--" && (localBuildTag(args[5]) || toolboxImageRE.MatchString(args[5])):
+	case len(args) == 6 && args[0] == "image" && args[1] == "inspect" && args[2] == "--format" && args[3] == "{{.Id}}" && args[4] == "--" && (localBuildTag(args[5]) || args[5] == recoverImageRef || toolboxImageRE.MatchString(args[5])):
 		return true
 	case reflect.DeepEqual(args, []string{"volume", "ls", "--quiet"}):
 		return true
