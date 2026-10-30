@@ -74,6 +74,7 @@ func DefaultHandlers() map[string]Handler {
 		"workspace.init":        initHandler,
 		"workspace.home.clone":  LocalHomeCopyHandler("clone", productionHomeCopy),
 		"workspace.home.backup": LocalHomeCopyHandler("backup", productionHomeCopy),
+		"workspace.recover":     LocalRecoverHandler(productionRecover),
 		"workspace.shell":       LocalShellHandler(localshell.SystemPorts()),
 	}
 }

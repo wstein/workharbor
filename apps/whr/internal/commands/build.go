@@ -98,6 +98,9 @@ func (a *app) build() {
 			if e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup" {
 				ctx = context.WithValue(ctx, localHomeKey{}, a.localHomeOptions(c))
 			}
+			if e.ID == "workspace.recover" {
+				ctx = context.WithValue(ctx, localRecoverKey{}, a.localRecoverOptions(c))
+			}
 			if e.ID == "workspace.drift" {
 				local, _ := c.Flags().GetBool("local")
 				source, _ := c.Flags().GetString("source")
@@ -157,6 +160,8 @@ func (a *app) build() {
 				c.Flags().Bool("yes", false, "confirm effects and the disclosed pause-writers condition")
 			} else if e.ID == "workspace.home.clone" || e.ID == "workspace.home.backup" {
 				addLocalHomeFlags(c, e.ID == "workspace.home.clone")
+			} else if e.ID == "workspace.recover" {
+				addLocalRecoverFlags(c)
 			} else if e.ID == "workspace.drift" {
 				c.Flags().Bool("local", false, "compare local running primary bundle references")
 				c.Flags().String("source", "", "explicit local source directory matching the primary label")
