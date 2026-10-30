@@ -64,9 +64,11 @@ case "$2 $3" in
  'volume ls') cat "$D/volumes";;
  'system df') test -f "$D/df" || exit 1; cat "$D/df";;
  'image pull') test -f "$D/pull-fails" && exit 1; printf '%%s\n' "$6";;
+ 'image inspect') test -f "$D/no-tools" && exit 1; printf 'sha256:tools\n';;
+ 'build --quiet') test -f "$D/build-fails" && exit 1; cat > "$D/stdin"; rm -f "$D/no-tools"; printf 'sha256:tools\n';;
  'volume create') printf '%%s\n' "${11}" >> "$D/volumes"; printf '%%s\n' "$7" > "$D/created-label"; printf '%%s\n' "${11}";;
  'volume inspect') l=$(cat "$D/created-label"); printf '{"workharbor.home-copy.operation":"%%s"}\n' "${l#workharbor.home-copy.operation=}";;
- 'run --rm') if [ "${36}" = whr-home-verify ]; then cat "$D/verify"; else test -f "$D/copy-fails" && exit 2; :; fi;;
+ 'run --rm') if [ "${36}" = whr-home-verify ]; then cat "$D/verify"; else test -f "$D/copy-fails" && exit 2; cat "$D/progress" 2>/dev/null; :; fi;;
  *) exit 94;;
 esac`, dir)
 	return &homeFake{t: t, dir: dir, client: Client{Executable: fakeDocker(t, script)}}
@@ -105,12 +107,22 @@ func (f *homeFake) calls() [][]string {
 	return out
 }
 
+func (f *homeFake) runs() [][]string {
+	var out [][]string
+	for _, c := range f.calls() {
+		if c[0] == "run" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (f *homeFake) mutations() []string {
 	var out []string
 	for _, c := range f.calls() {
 		key := strings.Join(c[:2], " ")
 		switch key {
-		case "container ls", "container inspect", "volume ls", "system df", "volume inspect":
+		case "container ls", "container inspect", "volume ls", "system df", "volume inspect", "image inspect":
 			continue
 		}
 		out = append(out, key)
@@ -191,13 +203,13 @@ func TestHomeBackupExcludesOnlyCacheAndKeepsCredentials(t *testing.T) {
 	}
 }
 
-// Without a usable pin the workspace's own local image runs the copy: no config, no pull.
-func TestHomeCopyWithoutPinUsesWorkspaceImageWithoutPull(t *testing.T) {
+// Without a usable pin the whr tools image (rsync) runs the copy: no config, no pull.
+func TestHomeCopyWithoutPinUsesToolsImageWithRsync(t *testing.T) {
 	for _, pin := range []string{"", "docker.io/library/busybox:latest"} {
 		f := newHomeFake(t, pin)
-		h := prepareHome(t, f, HomeCopyOptions{Mode: "clone", Target: "ws1"})
+		h := prepareHome(t, f, HomeCopyOptions{Mode: "clone", Target: "ws1", Excludes: []string{"projects/big"}})
 		preview := h.Preview()
-		if preview.HelperImage != "img" || len(f.mutations()) != 0 {
+		if preview.HelperImage != ToolsImage() || len(f.mutations()) != 0 {
 			t.Fatalf("%q: preview image %q %v", pin, preview.HelperImage, f.mutations())
 		}
 		result, err := h.Apply(context.Background(), preview.Fingerprint)
@@ -207,11 +219,82 @@ func TestHomeCopyWithoutPinUsesWorkspaceImageWithoutPull(t *testing.T) {
 		if got := strings.Join(f.mutations(), ","); got != "volume create,run --rm,run --rm" {
 			t.Fatalf("%q: mutations %s", pin, got)
 		}
-		for _, c := range f.calls() {
-			if c[0] == "run" && c[31] != "img" {
-				t.Fatalf("%q: run image %q", pin, c[31])
-			}
+		runs := f.runs()
+		if runs[0][31] != ToolsImage() || runs[0][33] != homeRsyncTemplate || runs[1][31] != ToolsImage() || runs[1][33] != homeVerifyTemplate {
+			t.Fatalf("%q: run argv %q", pin, runs)
 		}
+		if got := strings.Join(runs[0][35:], " "); !strings.Contains(got, "--exclude=/.cache ") || !strings.HasSuffix(got, "--exclude=/projects/big") || strings.Contains(got, "./") {
+			t.Fatalf("%q: rsync excludes %s", pin, got)
+		}
+	}
+}
+
+// A missing tools image is built once from the embedded Dockerfile, before the volume exists.
+func TestHomeCopyBuildsMissingToolsImageOnApply(t *testing.T) {
+	f := newHomeFake(t, "")
+	f.set("no-tools", "")
+	h := prepareHome(t, f, HomeCopyOptions{Mode: "clone", Target: "ws1"})
+	preview := h.Preview()
+	if preview.HelperImage != ToolsImage() || len(f.mutations()) != 0 {
+		t.Fatalf("preview %q %v", preview.HelperImage, f.mutations())
+	}
+	result, err := h.Apply(context.Background(), preview.Fingerprint)
+	if err != nil || result.Status != "copied" || result.HelperImage != ToolsImage() {
+		t.Fatalf("apply %+v %v", result, err)
+	}
+	if got := strings.Join(f.mutations(), ","); got != "build --quiet,volume create,run --rm,run --rm" {
+		t.Fatalf("mutations %s", got)
+	}
+	for _, c := range f.calls() {
+		if c[0] == "build" && !reflect.DeepEqual(c, []string{"build", "--quiet", "--tag", ToolsImage(), "-"}) {
+			t.Fatalf("build argv %q", c)
+		}
+	}
+	if mustRead(t, filepath.Join(f.dir, "stdin")) != string(toolsDockerfile) {
+		t.Fatal("build did not receive the embedded Dockerfile")
+	}
+	if result.Actions[0].Kind != "tools_image_build" || !result.Actions[0].Applied {
+		t.Fatalf("actions %+v", result.Actions)
+	}
+}
+
+// Offline or failing builds must not block the copy: the workspace image's tar still works.
+func TestHomeCopyFallsBackToTarWhenToolsImageBuildFails(t *testing.T) {
+	f := newHomeFake(t, "")
+	f.set("no-tools", "")
+	f.set("build-fails", "")
+	h := prepareHome(t, f, HomeCopyOptions{Mode: "clone", Target: "ws1"})
+	result, err := h.Apply(context.Background(), h.Preview().Fingerprint)
+	if err != nil || result.Status != "copied" || result.HelperImage != "img" {
+		t.Fatalf("apply %+v %v", result, err)
+	}
+	if result.Actions[0].Kind != "tools_image_build" || result.Actions[0].Applied {
+		t.Fatalf("actions %+v", result.Actions)
+	}
+	runs := f.runs()
+	if runs[0][31] != "img" || runs[0][33] != homeCopyTemplate || !strings.HasPrefix(runs[0][35], "--exclude=./") {
+		t.Fatalf("fallback copy argv %q", runs[0])
+	}
+}
+
+// The rsync progress line goes to the caller's writer, never into the captured result.
+func TestHomeCopyStreamsRsyncProgress(t *testing.T) {
+	f := newHomeFake(t, "")
+	f.set("progress", "  1,234,567  42%   55.1MB/s    0:00:10\r")
+	var progress bytes.Buffer
+	f.client.Progress = &progress
+	h := prepareHome(t, f, HomeCopyOptions{Mode: "clone", Target: "ws1"})
+	if _, err := h.Apply(context.Background(), h.Preview().Fingerprint); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(progress.String(), "42%") {
+		t.Fatalf("progress %q", progress.String())
+	}
+	f = newHomeFake(t, "")
+	f.set("progress", strings.Repeat("x", 5<<20))
+	h = prepareHome(t, f, HomeCopyOptions{Mode: "clone", Target: "ws1"})
+	if r, err := h.Apply(context.Background(), h.Preview().Fingerprint); err != nil || r.Status != "copied" {
+		t.Fatalf("unbounded progress without a writer: %+v %v", r, err)
 	}
 }
 
@@ -390,6 +473,20 @@ func TestHomeCopyArgvAdmission(t *testing.T) {
 	}
 	if admitHomeMutation(homeRunArgv(false, "src", "dst", homeTestOp, "--privileged", []string{"--exclude=./.cache"})) {
 		t.Fatal("option-looking image admitted")
+	}
+	rsync := homeRunArgv(false, "src", "dst", homeTestOp, ToolsImage(), []string{"--exclude=/.cache"})
+	if !admitHomeMutation(rsync) || !admitHomeMutation([]string{"build", "--quiet", "--tag", ToolsImage(), "-"}) {
+		t.Fatal("tools image vectors refused")
+	}
+	for name, args := range map[string][]string{
+		"rsync tar-style exclude": homeRunArgv(false, "src", "dst", homeTestOp, ToolsImage(), []string{"--exclude=./.cache"}),
+		"rsync option":            homeRunArgv(false, "src", "dst", homeTestOp, ToolsImage(), []string{"--delete"}),
+		"build other tag":         {"build", "--quiet", "--tag", "evil:1", "-"},
+		"build with context":      {"build", "--quiet", "--tag", ToolsImage(), "/"},
+	} {
+		if admitHomeMutation(args) {
+			t.Errorf("%s admitted", name)
+		}
 	}
 	mutate := func(i int, v string) []string {
 		c := append([]string(nil), good...)
