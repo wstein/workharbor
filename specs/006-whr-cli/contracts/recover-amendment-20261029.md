@@ -35,10 +35,16 @@ a run without `--dry-run` needs terminal stdin and stdout.
      volume is created and filled by the carrier image (offline, the volume at
      `/bundle`, no `--user`, so the image's default user, which is root in the
      published toolbox image), like BundleDock's `bundle-volume.sh`. The carrier
-     writes `.ready` last and leaves `.initializing` behind if it fails. An existing
-     volume is reused only after a read-only offline probe in the pinned Debian image
-     finds `.ready` and no `.initializing`; otherwise the carrier run is repeated,
-     and if that fails the volume is reported as a residual and is never mounted;
+     writes `.ready` last and holds `.initializing` while it runs (it removes it after
+     an ordinary failure, so a partial fill has neither marker; it stays after a hard
+     kill or while another run is in progress). An existing volume is reused only
+     after a read-only offline probe in the pinned Debian image finds `.ready` and no
+     `.initializing`. Otherwise the carrier runs once more; it fills an empty volume or
+     re-verifies a ready one, but refuses a nonempty or locked volume and never repairs
+     a partly filled one. In that case the volume is reported as a residual that may be
+     incomplete or still being initialized (a concurrent carrier run looks the same),
+     exit 73, and is never mounted; the owner removes it (docker refuses to remove a
+     volume that is in use) and runs recover again;
    - `current`: the volume mounted in the selected workspace (`/opt/bdock/toolbox`
      or `/nix`);
    - a hex prefix or full name: a local `bundledock-<name>-*` volume.
@@ -63,8 +69,8 @@ a run without `--dry-run` needs terminal stdin and stdout.
 Only fixed argument vectors are admitted: the pulls (the pinned Debian, toolbox and
 nixbox references only), the volume creates (labels `workharbor.recover=toolbox|nixbox`,
 matching names only), the populate runs, the read-only completeness probe and the one interactive run; everything else
-is rejected. Nothing is deleted automatically: an incomplete volume is reported as
-a residual with the command to remove it. `--dry-run` lists the planned pulls and
+is rejected. Nothing is deleted automatically: a volume that may be incomplete is
+reported as a residual with the command to remove it. `--dry-run` lists the planned pulls and
 volumes and has no pull, volume or container effect.
 
 ## Not in scope

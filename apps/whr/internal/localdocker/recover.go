@@ -323,9 +323,13 @@ func (r *Recover) Start(parent context.Context, s RecoverStreams) (RecoverResult
 		if err != nil {
 			return "", err
 		}
-		// The carrier writes .ready last and leaves .initializing behind when it fails or
-		// is interrupted. A volume is reused only when the marker is there; otherwise the
-		// idempotent carrier run is repeated and nothing is mounted unless it succeeds.
+		// The carrier writes .ready last and holds .initializing while it runs (it removes
+		// it on an ordinary failure, so a partial fill has neither marker; it stays after a
+		// hard kill). A volume is reused only when .ready is there and .initializing is not.
+		// Otherwise the carrier is run once more: it fills an empty volume or re-verifies a
+		// ready one, but refuses a nonempty or locked volume and never repairs a partial
+		// fill. Then the volume is reported as a residual and is never mounted. A concurrent
+		// carrier run (it holds .initializing even while only verifying) looks the same.
 		if volumes[volume] {
 			if reply, err := c.homeMutate(parent, r.endpoint, recoverReadyArgv(volume)...); err == nil && reply.status == 0 {
 				return volume, nil
@@ -349,7 +353,7 @@ func (r *Recover) Start(parent context.Context, s RecoverStreams) (RecoverResult
 			if parent.Err() != nil {
 				return "", parent.Err()
 			}
-			_, e := fail(exitcode.PathPartialFailure, "Remove the incomplete "+b.name+" volume yourself (docker volume rm "+volume+") and run again; whr deletes nothing automatically.", "%s volume %s is incomplete", b.name, volume)
+			_, e := fail(exitcode.PathPartialFailure, "If no other run is using it, remove the volume yourself (docker volume rm "+volume+"; docker refuses to remove a volume that is in use) and run again; whr deletes nothing automatically.", "%s volume %s may be incomplete or still being initialized", b.name, volume)
 			return "", e
 		}
 		result.Actions[i].Applied = true
@@ -381,8 +385,8 @@ func (r *Recover) Start(parent context.Context, s RecoverStreams) (RecoverResult
 }
 
 // recoverReadyArgv is the read-only completeness probe of a bundle volume: the
-// carrier (BundleDock tools-init) writes .ready last and leaves .initializing
-// behind when it fails. It runs in the pinned stock image, offline.
+// carrier (BundleDock tools-init) writes .ready last and holds .initializing
+// while it runs. It runs in the pinned stock image, offline.
 func recoverReadyArgv(volume string) []string {
 	return []string{"run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--mount", "type=volume,src=" + volume + ",dst=/bundle,readonly",
 		"--entrypoint", "/bin/sh", RecoverImage(), "-c", "test -f /bundle/.ready && ! test -e /bundle/.initializing"}
