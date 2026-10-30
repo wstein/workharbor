@@ -704,6 +704,11 @@ func admitHomeMutation(args []string) bool {
 	case len(args) == 9 && args[0] == "run" && args[1] == "--rm" && args[2] == "--pull" && args[3] == "never" && args[4] == "--network" && args[5] == "none" && args[6] == "--mount":
 		id := args[8]
 		return imageIDRE.MatchString("sha256:"+id) && (args[7] == "type=volume,src=bundledock-toolbox-"+id+",dst=/bundle,volume-nocopy" || args[7] == "type=volume,src=bundledock-nixbox-"+id+",dst=/bundle,volume-nocopy")
+	case len(args) == 14 && args[0] == "run" && args[1] == "--rm" && args[2] == "--pull":
+		const prefix, suffix = "type=volume,src=", ",dst=/bundle,readonly"
+		volume, ok := strings.CutPrefix(args[8], prefix)
+		volume, ok2 := strings.CutSuffix(volume, suffix)
+		return ok && ok2 && (toolboxVolumeRE.MatchString(volume) || nixboxVolumeRE.MatchString(volume)) && reflect.DeepEqual(args, recoverReadyArgv(volume))
 	case len(args) == 10 && args[0] == "volume" && args[1] == "create":
 		mode := strings.TrimPrefix(args[3], "workharbor.home-copy=")
 		op := strings.TrimPrefix(args[5], homeOperationKey+"=")

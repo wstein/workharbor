@@ -322,25 +322,33 @@ func (r *Recover) Start(parent context.Context, s RecoverStreams) (RecoverResult
 		if err != nil {
 			return "", err
 		}
+		// The carrier writes .ready last and leaves .initializing behind when it fails or
+		// is interrupted. A volume is reused only when the marker is there; otherwise the
+		// idempotent carrier run is repeated and nothing is mounted unless it succeeds.
 		if volumes[volume] {
-			return volume, nil
-		}
-		i := act(b.name+"_volume", volume)
-		if reply, err := c.homeMutate(parent, r.endpoint, "volume", "create", "--label", "workharbor.recover="+b.name, "--", volume); err != nil || reply.status != 0 {
-			if parent.Err() != nil {
+			if reply, err := c.homeMutate(parent, r.endpoint, recoverReadyArgv(volume)...); err == nil && reply.status == 0 {
+				return volume, nil
+			} else if parent.Err() != nil {
 				return "", parent.Err()
 			}
-			_, e := fail(exitcode.PathConflict, "", "%s volume %s could not be created", b.name, volume)
-			return "", e
+		} else {
+			i := act(b.name+"_volume", volume)
+			if reply, err := c.homeMutate(parent, r.endpoint, "volume", "create", "--label", "workharbor.recover="+b.name, "--", volume); err != nil || reply.status != 0 {
+				if parent.Err() != nil {
+					return "", parent.Err()
+				}
+				_, e := fail(exitcode.PathConflict, "", "%s volume %s could not be created", b.name, volume)
+				return "", e
+			}
+			result.Actions[i].Applied = true
 		}
-		result.Actions[i].Applied = true
 		result.Residuals = append(result.Residuals, "volume:"+volume)
-		i = act(b.name+"_populate", volume)
+		i := act(b.name+"_populate", volume)
 		if reply, err := c.homeMutate(parent, r.endpoint, "run", "--rm", "--pull", "never", "--network", "none", "--mount", "type=volume,src="+volume+",dst=/bundle,volume-nocopy", id); err != nil || reply.status != 0 {
 			if parent.Err() != nil {
 				return "", parent.Err()
 			}
-			_, e := fail(exitcode.PathPartialFailure, "Remove the incomplete "+b.name+" volume yourself (docker volume rm "+volume+"); whr deletes nothing automatically.", "%s volume %s is incomplete", b.name, volume)
+			_, e := fail(exitcode.PathPartialFailure, "Remove the incomplete "+b.name+" volume yourself (docker volume rm "+volume+") and run again; whr deletes nothing automatically.", "%s volume %s is incomplete", b.name, volume)
 			return "", e
 		}
 		result.Actions[i].Applied = true
@@ -369,6 +377,14 @@ func (r *Recover) Start(parent context.Context, s RecoverStreams) (RecoverResult
 	result.Actions[i].Applied = true
 	result.Status, result.ExitStatus = "exited", status
 	return result, nil
+}
+
+// recoverReadyArgv is the read-only completeness probe of a bundle volume: the
+// carrier (BundleDock tools-init) writes .ready last and leaves .initializing
+// behind when it fails. It runs in the pinned stock image, offline.
+func recoverReadyArgv(volume string) []string {
+	return []string{"run", "--rm", "--pull", "never", "--network", "none", "--read-only", "--mount", "type=volume,src=" + volume + ",dst=/bundle,readonly",
+		"--entrypoint", "/bin/sh", RecoverImage(), "-c", "test -f /bundle/.ready && ! test -e /bundle/.initializing"}
 }
 
 type recoverSpec struct {
