@@ -191,12 +191,26 @@ func TestHomeBackupExcludesOnlyCacheAndKeepsCredentials(t *testing.T) {
 	}
 }
 
-func TestHomeCopyRefusesUnpinnedHelperWithoutPull(t *testing.T) {
+// Without a usable pin the workspace's own local image runs the copy: no config, no pull.
+func TestHomeCopyWithoutPinUsesWorkspaceImageWithoutPull(t *testing.T) {
 	for _, pin := range []string{"", "docker.io/library/busybox:latest"} {
 		f := newHomeFake(t, pin)
-		_, err := f.client.PrepareHomeCopy(context.Background(), socketPorts(), HomeCopyOptions{Mode: "clone", Target: "ws1"})
-		if exitcode.FromError(err) != exitcode.Conflict || !strings.Contains(err.Error(), "helper") || len(f.mutations()) != 0 {
-			t.Fatalf("%q: %v %v", pin, err, f.mutations())
+		h := prepareHome(t, f, HomeCopyOptions{Mode: "clone", Target: "ws1"})
+		preview := h.Preview()
+		if preview.HelperImage != "img" || len(f.mutations()) != 0 {
+			t.Fatalf("%q: preview image %q %v", pin, preview.HelperImage, f.mutations())
+		}
+		result, err := h.Apply(context.Background(), preview.Fingerprint)
+		if err != nil || result.Status != "copied" {
+			t.Fatalf("%q: apply %+v %v", pin, result, err)
+		}
+		if got := strings.Join(f.mutations(), ","); got != "volume create,run --rm,run --rm" {
+			t.Fatalf("%q: mutations %s", pin, got)
+		}
+		for _, c := range f.calls() {
+			if c[0] == "run" && c[31] != "img" {
+				t.Fatalf("%q: run image %q", pin, c[31])
+			}
 		}
 	}
 }
@@ -371,6 +385,12 @@ func TestHomeCopyArgvAdmission(t *testing.T) {
 	if !admitHomeMutation(good) || !admitHomeMutation(homeRunArgv(true, "src", "dst", homeTestOp, homeTestImage, []string{".cache"})) {
 		t.Fatal("canonical vectors refused")
 	}
+	if !admitHomeMutation(homeRunArgv(false, "src", "dst", homeTestOp, "vsc-anchorage-abc:latest", []string{"--exclude=./.cache"})) {
+		t.Fatal("local workspace image refused")
+	}
+	if admitHomeMutation(homeRunArgv(false, "src", "dst", homeTestOp, "--privileged", []string{"--exclude=./.cache"})) {
+		t.Fatal("option-looking image admitted")
+	}
 	mutate := func(i int, v string) []string {
 		c := append([]string(nil), good...)
 		c[i] = v
@@ -379,7 +399,7 @@ func TestHomeCopyArgvAdmission(t *testing.T) {
 	for name, args := range map[string][]string{
 		"rw source":        mutate(26, "src:/from"),
 		"network":          mutate(5, "host"),
-		"tag image":        mutate(31, "busybox:latest"),
+		"option image":     mutate(31, "--privileged"),
 		"template":         mutate(33, "rm -rf /from"),
 		"exclude grammar":  append(append([]string(nil), good...), "--exclude=./a b"),
 		"exclude option":   append(append([]string(nil), good...), "--to-command=sh"),

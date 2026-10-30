@@ -104,7 +104,6 @@ func TestLocalHomeCopyConsentAndExitCodes(t *testing.T) {
 		{"no-selector", []string{"--local", "--dry-run"}, 64, "exact"},
 		{"two-selectors", []string{"--local", "--dry-run", "a", "b"}, 64, "exact"},
 		{"no-yes", []string{"--local", "--trust", homeFingerprint, "ws1"}, 70, "--yes"},
-		{"no-trust", []string{"--local", "--yes", "ws1"}, 70, "--trust"},
 		{"mismatch", []string{"--local", "--yes", "--trust", "sha256:" + strings.Repeat("e", 64), "ws1"}, 68, "fingerprint"},
 	} {
 		f := &homeTxFixture{preview: homeCLIResult("backup")}
@@ -125,6 +124,12 @@ func TestLocalHomeCopyConsentAndExitCodes(t *testing.T) {
 	got := run(t, homeHandlers(f, &n, &o), "workspace", "home", "backup", "--local", "--yes", "--trust", homeFingerprint, "ws1", "--json")
 	if got.code != 0 || f.applies != 1 || f.trust != homeFingerprint {
 		t.Fatalf("apply %+v %+v", got, f)
+	}
+	// --yes alone is enough; the previewed fingerprint is applied implicitly.
+	f = &homeTxFixture{preview: homeCLIResult("backup"), result: ok}
+	got = run(t, homeHandlers(f, &n, &o), "workspace", "home", "backup", "--local", "--yes", "ws1", "--json")
+	if got.code != 0 || f.applies != 1 || f.trust != homeFingerprint {
+		t.Fatalf("yes alone %+v %+v", got, f)
 	}
 	doc, _ := jsonUnmarshal(got.stdout)
 	if err := compileSchema(t).Validate(doc); err != nil {
@@ -150,15 +155,16 @@ func TestLocalHomeCopyConsentAndExitCodes(t *testing.T) {
 	}
 }
 
-func TestLocalHomeCopyInteractiveTrustAndConfirmation(t *testing.T) {
+func TestLocalHomeCopyInteractiveConfirmation(t *testing.T) {
 	for _, tc := range []struct {
 		input   string
 		code    int
 		applies int
 	}{
-		{homeFingerprint + "\ny\n", 0, 1},
-		{"wrong\n", 70, 0},
-		{homeFingerprint + "\nn\n", 70, 0},
+		{"y\n", 0, 1},
+		{"yes\n", 0, 1},
+		{"n\n", 70, 0},
+		{"\n", 70, 0},
 	} {
 		ok := homeCLIResult("clone")
 		ok.Status, ok.DryRun = "copied", false
@@ -168,7 +174,7 @@ func TestLocalHomeCopyInteractiveTrustAndConfirmation(t *testing.T) {
 		var out, diag bytes.Buffer
 		env := commands.Env{Stdout: &out, Stderr: &diag, Stdin: strings.NewReader(tc.input), InputTerminal: true, IsTerminal: func(io.Writer) bool { return true }}
 		code := commands.Execute(context.Background(), []string{"workspace", "home", "clone", "--local", "ws1"}, env, homeHandlers(f, &n, &o))
-		if code != tc.code || f.applies != tc.applies || !strings.Contains(diag.String(), "Enter the exact fingerprint") {
+		if code != tc.code || f.applies != tc.applies || !strings.Contains(diag.String(), "[y/N]") || strings.Contains(diag.String(), "exact fingerprint") {
 			t.Errorf("%q: code=%d applies=%d diag=%q", tc.input, code, f.applies, diag.String())
 		}
 	}
