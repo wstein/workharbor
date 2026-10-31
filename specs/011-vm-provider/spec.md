@@ -206,7 +206,7 @@ refusals. Every amendment is generic and additive.
   `name_and_record`); `interactive_shell` (`pty`, `none`). With `guest_os` and `guest_arch` the report has eighteen
   fields (eleven in Feature 008).
 - **FR-005**: A provider whose guest cannot mount the tool bundles reports `tool_mounts=none`. A request for `ro_bdock`
-  against it MUST be refused with `refused.tool_mounts_unavailable`.
+  against it, or against a provider whose `tool_mounts` is not `enforced`, MUST be refused with `refused.tool_mounts_unavailable`.
 
 **VM lifecycle**
 
@@ -251,7 +251,7 @@ refusals. Every amendment is generic and additive.
   only when the conformance corpus round-trips byte-exact through the guest shell the provider declares. The corpus is:
   empty argument, spaces, single and double quotes, newline, tab, `$`, backtick, backslash, `;`, `&&`, glob characters,
   leading dash, non-ASCII text, and a 64 KiB argument. A provider without proof MUST report `unavailable` and MUST
-  refuse every `Exec`, under every profile, with `refused.exec_argv_unavailable`, because Feature 008 FR-029 applies to
+  refuse every `Exec`, under every profile, also when the `exec_argv` status is not `enforced`, with `refused.exec_argv_unavailable`, because Feature 008 FR-029 applies to
   all of them.
 - **FR-013**: Environment filtering, identity variables and git-control variable handling are those of Feature 008
   FR-023. No host credential enters the guest.
@@ -262,8 +262,9 @@ refusals. Every amendment is generic and additive.
   only when named and confirmed, otherwise it is refused with `refused.copy_policy_secret_path`.
 - **FR-015**: Egress enforcement is reported `none` unless the provider's tests prove otherwise. A default guest network
   is not a claim.
-- **FR-016**: An interactive shell is offered only where `interactive_shell=pty`, with the terminal-safety rules of the
-  local shell of Feature 006. Otherwise a request for one is refused with `refused.interactive_unavailable`.
+- **FR-016**: An interactive shell is offered only where `interactive_shell=pty` with status `enforced`, with the terminal-safety rules of
+  the local shell of Feature 006. Otherwise (value `none`, or `pty` not `enforced`) a request for one is refused with
+  `refused.interactive_unavailable`.
 
 **Host boundary**
 
@@ -343,11 +344,11 @@ refusals. Every amendment is generic and additive.
 | `refused.guest_os_unavailable` | the provider does not declare the requested guest operating system as `enforced` |
 | `refused.guest_arch_unavailable` | the provider does not declare the requested guest architecture as `enforced` |
 | `refused.concurrency_limit_reached` | creating the instance would exceed the declared concurrency limit |
-| `refused.tool_mounts_unavailable` | `ro_bdock` is requested and the guest cannot mount tool bundles |
+| `refused.tool_mounts_unavailable` | `ro_bdock` is requested and `tool_mounts` is not `ro_bdock` with status `enforced` |
 | `refused.base_image_unavailable` | the named base image does not exist, is running or locked, or is not usable as a clone source |
-| `refused.exec_argv_unavailable` | `exec_argv` is `unavailable`; every `Exec` under every profile is refused |
+| `refused.exec_argv_unavailable` | `exec_argv` is `unavailable` or not `enforced`; every `Exec` under every profile is refused |
 | `refused.driver_unavailable` | no driver is chosen, or the chosen driver is missing or unsupported on this host |
-| `refused.interactive_unavailable` | an interactive shell is requested and `interactive_shell` is `none` |
+| `refused.interactive_unavailable` | an interactive shell is requested and `interactive_shell` is not `pty` with status `enforced` |
 
 Codes are appended to `refusal-codes.json` of Feature 008 and never reused or renamed.
 
@@ -395,8 +396,8 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   `refused.concurrency_limit_reached`; the refused one made zero driver calls; the reservation is released on failed
   create and on `Remove`; a reservation left by a killed `Create` is reclaimed and the next `Create` succeeds; a stale reservation with a matching driver instance keeps counting and the next `Create` is
   refused until `Remove` clears it (FR-009).
-- **SC-014**: A request for an interactive shell against `interactive_shell=none` is refused with
-  `refused.interactive_unavailable`; against `pty` it follows the terminal-safety rules (FR-003, FR-016).
+- **SC-014**: A request for an interactive shell against `interactive_shell=none`, or against `pty` that is not `enforced`, is
+  refused with `refused.interactive_unavailable`; against an `enforced` `pty` it follows the terminal-safety rules (FR-003, FR-016).
 - **SC-015**: Plans that share the host home directory, a secret-pattern path, the primary `.git` for untrusted work or
   a host socket as a mount are refused; a secret-pattern path in the private copy is refused unless named and confirmed
   (Feature 008 FR-009); a read-write shared mount is not planned by default (FR-014).
@@ -437,6 +438,8 @@ These choices were made by the author to stay conservative. The owner may change
 
 ## Assumptions
 
+- Admit, TestAdmitTable, the conformance suite and `apps/whr/internal/runtime/` do not exist yet (Feature 008 tasks
+  T001 and T002 are open), so the before-and-after regression check of FR-003 depends on Feature 008 landing first.
 - The Feature 008 trust profiles and plan model are reused. A test run uses a job profile with a private copy and a
   scratch home. This feature does not redefine them.
 - Real-VM evidence comes from the owner's Mac. Hosted CI runners are not assumed to support nested virtualization.
