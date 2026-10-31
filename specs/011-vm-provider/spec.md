@@ -132,7 +132,7 @@ evidence is produced by the owner on their Mac (FR-026).
 A request names a guest, a limit or a mount the provider cannot satisfy. It is refused with a stable code before any
 side effect.
 
-**Independent Test**: admission table of guest, architecture, tool mount and interactive shell against provider capabilities,
+**Independent Test**: admission table of guest, architecture, base image, tool mount and interactive shell against provider capabilities,
 with the expected code and zero driver calls per refusal row. The concurrency limit is not an admission row; it is
 tested by the provider check of FR-009 (SC-013).
 
@@ -197,10 +197,13 @@ refusals. Every amendment is generic and additive.
   argv as data);
   `ownership_mechanism=native_labels`; `interactive_shell=none` (the Feature 008 contract defines no interactive
   shell; conservative). Each of these values has status `enforced`, except `guest_arch` when it is `unknown`
-  and `concurrency_limit=unknown`, in line with the container report of the Feature 008 contract. `Admit` reads a new field only when the request names its requirement (`guest_os`,
-  `guest_arch`, a base image or an interactive shell); every `Exec` reads `exec_argv`, and the container value `native`
-  admits all existing rows; a request that names no base image is checked against `base_image` (FR-006), and the
-  container value `none` admits it; a request that names none of them is not affected by the new fields. Every row of the Feature 008 admission table (`TestAdmitTable`) MUST yield the same decision and code before
+  and `concurrency_limit=unknown`, in line with the container report of the Feature 008 contract. `Admit` reads `guest_os`, `guest_arch` and
+  `interactive_shell` only when the request names that requirement, and reads `base_image` for every request (FR-006): a
+  request that names a base image needs `read_only_clone_source`, and a request that names none needs `none`, which the
+  container value admits. Every `Exec` reads `exec_argv`, and the container value `native` admits all existing rows. So
+  a request that names none of these requirements gets the same decision from the container provider as before A1.
+  Whether the named image exists or is locked is runtime state and is checked by the provider, not by `Admit`
+  (Feature 008 FR-013). Every row of the Feature 008 admission table (`TestAdmitTable`) MUST yield the same decision and code before
   and after A1, checked by a regression row set that runs the table against the container values above.
 - **FR-004**: The capability report MUST gain these fields, each with status and scope:
   `base_image` (`read_only_clone_source`, `none`); `concurrency_limit` (a non-negative integer or `unknown`);
