@@ -81,7 +81,7 @@ count() { # count LINES: the number of lines, 0 for none
 	fi
 }
 bullets() { # bullets LINES
-	printf '%s\n' "$1" | sed 's/^/- /'
+	printf '%s\n' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/^/- /'
 }
 feats=$(pick '^feat(\([^)]*\))?!?:')
 breaking=$(pick '^[A-Za-z]+(\([^)]*\))?!:' | grep -Ev '^feat(\([^)]*\))?!:' || true)

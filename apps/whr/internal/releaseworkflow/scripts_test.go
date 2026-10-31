@@ -573,6 +573,13 @@ func TestNotesListBreakingChangesOfAnyType(t *testing.T) {
 	}
 }
 
+func TestNotesEscapeHTMLInSubjects(t *testing.T) {
+	out := notesFor(t, "fix: see </details> <b>x</b> & more")
+	if strings.Count(out, "</details>") != 1 || strings.Contains(out, "<b>") || !strings.Contains(out, "see &lt;/details> &lt;b>x&lt;/b> &amp; more (") {
+		t.Errorf("a subject must not close or inject HTML:\n%s", out)
+	}
+}
+
 func TestNotesListEveryBreakingChange(t *testing.T) {
 	dir := newRepo(t, "feat: a")
 	git(t, dir, "tag", "-a", "-m", "r", "v0.1.0")
