@@ -278,7 +278,8 @@ this revision does not expand them or authorize runtime operations.
 ### Agent workflow block in `AGENTS.md` (owner request, 2026-10-17)
 
 The owner decided that the owner-workflow rules for agents (own-branch pushes and
-rewrites, Ready as mergeable, delegation, stack handling) belong to the workspace
+rewrites, Ready for review as the owner's signal to accept and merge, delegation,
+stack handling) belong to the workspace
 repository, not to every project repository, because contributors need not use
 WorkHarbor. `ws init` therefore authors that block in the workspace `AGENTS.md`
 (FR-064, US0 scenario 10). This revision specifies the outcome; it does not implement
