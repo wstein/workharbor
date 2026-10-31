@@ -198,9 +198,9 @@ refusals. Every amendment is generic and additive.
   `ownership_mechanism=native_labels`; `interactive_shell=none` (the Feature 008 contract defines no interactive
   shell; conservative). Each of these values has status `enforced`, except `guest_arch` when it is `unknown`
   and `concurrency_limit=unknown`, in line with the container report of the Feature 008 contract. `Admit` reads a new field only when the request names its requirement (`guest_os`,
-  `guest_arch` or an interactive shell); every `Exec` reads `exec_argv`, and the container value `native` admits all
-  existing rows; a request that names none of them is not affected by the new
-  fields. Every row of the Feature 008 admission table (`TestAdmitTable`) MUST yield the same decision and code before
+  `guest_arch`, a base image or an interactive shell); every `Exec` reads `exec_argv`, and the container value `native`
+  admits all existing rows; a request that names no base image is checked against `base_image` (FR-006), and the
+  container value `none` admits it; a request that names none of them is not affected by the new fields. Every row of the Feature 008 admission table (`TestAdmitTable`) MUST yield the same decision and code before
   and after A1, checked by a regression row set that runs the table against the container values above.
 - **FR-004**: The capability report MUST gain these fields, each with status and scope:
   `base_image` (`read_only_clone_source`, `none`); `concurrency_limit` (a non-negative integer or `unknown`);
@@ -371,9 +371,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
 
 ### Measurable Outcomes
 
-- **SC-001**: The admission table (guest, architecture, tool mount, interactive shell by provider capability)
+- **SC-001**: The admission table (guest, architecture, base image, tool mount, interactive shell by provider capability)
   yields exactly the expected decision and code for every row, with zero driver calls on refusal (FR-001, FR-004,
-  FR-002, FR-005, FR-016). The concurrency limit is not an admission row (FR-009, SC-013).
+  FR-002, FR-005, FR-006, FR-016). The concurrency limit is not an admission row (FR-009, SC-013).
 - **SC-002**: Every Feature 008 admission row, run with the container provider report of FR-003, yields its previous
   decision and code, checked by a regression row set against the unamended `Admit` (FR-003).
 - **SC-003**: The conformance suite passes unchanged for the fake provider, the container provider and the fake VM
@@ -488,7 +488,8 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
   covers `name_and_record` (FR-008).
 - `specs/008-workspace-sandbox/contracts/runtime-provider.md`: the new fields with the container provider values of
   FR-003 and, per field, the code that refuses a request when the field is not `enforced`: `guest_os` and `guest_arch`
-  (FR-001), `tool_mounts` (FR-005), `base_image` (FR-006), `exec_argv` (FR-012), `interactive_shell` (FR-016),
+  (FR-001), `tool_mounts` (FR-005), `base_image` (FR-006, read for every request: a named image needs `read_only_clone_source`, no named image needs `none`),
+  `exec_argv` (FR-012), `interactive_shell` (FR-016),
   `ownership_mechanism` (`refused.foreign_object`, FR-008), and `concurrency_limit` (the provider check of FR-009, not
   an admission row); the re-verification sentence; conformance cases 1 ("all eleven fields"), 4 (label-based ownership, now per
   `ownership_mechanism`), 6 ("argv as data, no shell": shell transport allowed only under `exec_argv=quoted_verified`
