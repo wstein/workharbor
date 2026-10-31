@@ -140,6 +140,8 @@ against the request; each is refused with the stable code and zero provider call
 1. **Given** standard input or output is not a terminal, **When** the command runs, **Then** it exits 64 before any
    provider call that allocates anything, and no fallback to a piped shell exists (FR-007).
 2. **Given** `--json`, a trailing command or any further positional argument, **Then** exit 64 (FR-007).
+3. **Given** an `untrusted_job` instance, no `--confirm <id>` and standard error not a terminal, **Then** no prompt is shown
+   and the command exits 70 with a `whr:` line naming `--confirm` (FR-023).
 
 ### User Story 4 - The container disappears during the session (Priority: P2)
 
@@ -267,7 +269,7 @@ against the request; each is refused with the stable code and zero provider call
   global options and `--yes` (which has no effect on FR-023), and MUST reject `--json` as a usage error (exit 64), as Feature 010 FR-006
   does for `shell --local`. A pty MUST be allocated only in this case; no pty is requested when either stream is not a
   terminal, and there is no documented fallback to a piped shell, because that mode is the deferred `exec` (Feature 008
-  OD-1). Standard error need not be a terminal.
+  OD-1). Standard error need not be a terminal, except that an `untrusted_job` without `--confirm <id>` then exits 70 (FR-023).
 - **FR-008** (exec form): For the container provider the hand-over MUST be one invocation of the container runtime client
   with a fixed argument vector (no shell, no string evaluation) built only from validated values, addressing the
   container by full id and passing the discovered `unix://` endpoint explicitly, as Feature 010 FR-002 and FR-004 state
@@ -367,7 +369,7 @@ against the request; each is refused with the stable code and zero provider call
     SIGINT, SIGTERM or SIGHUP before or after the commit point, daemon unreachable after the client ends, and a client stream
     that ended while the remote side did not exit (a killed or lost client). Reading that last case as a transport loss
     is an author proposal for the owner to confirm; it needs no new code;
-  - 70 for a confirmation prompt (FR-023) that is declined or left unanswered (ADR 0013: a required human decision refused
+  - 70 for a confirmation prompt (FR-023) that is declined or left unanswered, or a missing confirmation when standard error is not a terminal (ADR 0013: a required human decision refused
     or not given; command-surface.md already lists "unattended confirmation missing" under 70);
   - 74 for an unclassified failure, including a client that cannot be launched (`start_failed`, FR-014).
   Exit codes 66 and 67 are not used (no remote authority), 71 and 73 are not used by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
@@ -453,17 +455,23 @@ against the request; each is refused with the stable code and zero provider call
   instance only, the command MUST warn that unfiltered terminal control sequences written by a process in the instance can
   act on the owner's terminal (title, clipboard and similar, FR-011) and MUST NOT start the shell without an explicit
   confirmation of that warning. `--yes` alone MUST NOT satisfy it: the prompt is still shown. `developer` and
-  `cooperative_job` ask for no such confirmation (the owner decided on `untrusted_job` only). Because FR-007 requires standard
-  input and output to be terminals, a prompt can always be answered, so the warning and the prompt are written to standard
-  output (a terminal) and the answer is read from standard input; where standard error is not a terminal, nothing about
-  the confirmation goes there. A run without a terminal never reaches this step (exit 64 at step 1), so no
-  "non-interactive" case exists for this command. Exit codes use the existing conventions: a prompt that is declined (any
-  answer other than the instance id) or left unanswered (end of input) is 70 (needs-human, ADR 0013; Feature 008
-  command-surface.md lists 70 for a missing confirmation); a `--confirm` value that does not equal the instance id is 64
-  (usage). The exact form is an author proposal under D1: a prompt that requires typing the instance id, and a flag
-  `--confirm <id>` that, with a value equal to the instance id, skips the prompt (the per-item `--confirm <id>` pattern of
-  Feature 009; Feature 011 FR-033 in the unmerged draft PR #290 uses it too). The confirmation is not part of `Admit` (it is
-  not a capability) and adds no refusal code. It does not remove the risk; see "Not enforced".
+  `cooperative_job` ask for no such confirmation (the owner decided on `untrusted_job` only). Following Feature 006 FR-014
+  (standard output carries command data only; prompts and diagnostics go to standard error; repeated in FR-045 and Feature
+  009 FR-004), the warning and the prompt are written to standard error and the answer is read from standard input (a
+  terminal, FR-007). No exception to Feature 006 FR-014 is made: the shell session's own terminal stream is the interactive
+  channel that Feature 006 FR-022a and Feature 010 FR-014 already treat as outside `whr`'s relay, not a prompt. If no
+  `--confirm <id>` is given and standard error is not a terminal, no prompt is shown, nothing is started and the command
+  exits 70 with a `whr:` line naming `--confirm`. A run without a terminal on standard input or output never reaches this
+  step (exit 64 at step 1). Exit codes use the existing conventions: a prompt that is declined (any answer other than the
+  instance id) or left unanswered (end of input), or the missing confirmation just described, is 70 (needs-human; ADR 0013
+  "required human decision refused in unattended or answer-file mode, or not given"; Feature 008 command-surface.md says
+  "70 unattended confirmation missing"; Feature 006 treats a missing or declined normal confirmation as 70). The precedent is
+  mixed, since Feature 006 treats a declined interactive wizard prompt as a cancellation, exit 72; 70 is an author proposal
+  for the owner to confirm (Open question 1). A `--confirm` value that does not equal the instance id is 64 (usage). The exact
+  form is an author proposal under D1: a prompt that requires typing the instance id, and a flag `--confirm <id>` that, with a
+  value equal to the instance id, skips the prompt (the per-item `--confirm <id>` pattern of Feature 009; Feature 011 FR-033
+  in the unmerged draft PR #290 uses it too). The confirmation is not part of `Admit` (it is not a capability) and adds no
+  refusal code. It does not remove the risk; see "Not enforced".
 
 **Conformance (cases added to the Feature 008 suite)**
 
@@ -499,8 +507,9 @@ S12-C8. Confirmation: an `untrusted_job` without confirmation starts nothing; a 
     instance id, or left unanswered, gives 70; `--yes` alone still shows the prompt and starts nothing without the answer;
     a `--confirm` value other than the instance id gives 64; `--confirm <id>` with the right id, or the right answer, proceeds;
     `developer` and `cooperative_job` are never asked; a signal during the prompt exits 72 with no state change; the
-    warning and prompt go to standard output, nothing to standard error when it is not a terminal; without a terminal the
-    run exits 64 at step 1 (FR-007, FR-023, FR-013).
+    warning and prompt go to standard error with standard output left as command data only; an `untrusted_job` without
+    `--confirm <id>` and with standard error not a terminal shows no prompt, starts nothing and exits 70 with a `whr:` line
+    naming `--confirm`; without a terminal on standard input or output the run exits 64 at step 1 (FR-007, FR-023, FR-013).
 S12-C9. Reconciliation (needs the verified query): a `running` record whose exec process is gone or was never started becomes
     `failed`/`session_lost` on a later `whr sandbox` invocation; a `running` record whose owner process is alive is untouched;
     after reconciliation `discard` and, for jobs, export work as for `failed` (FR-024).
@@ -567,16 +576,17 @@ This feature enforces nothing about what happens inside the shell. In particular
   statement of scope covered by SC-003 and case S12-C2 and has no separate test.
 
 - **SC-012**: An `untrusted_job` shell starts only after the explicit confirmation of FR-023, `--yes` alone never starts it,
-  the exit codes are 70 (prompt declined or unanswered) and 64 (wrong `--confirm` value) as FR-023 states, and `developer` is never asked (case S12-C8).
+  the exit codes are 70 (prompt declined or unanswered, or no confirmation possible because standard error is not a terminal) and 64 (wrong `--confirm` value) as FR-023 states, with the prompt on standard error, and `developer` is never asked (case S12-C8).
 - **SC-013**: With the verified query, reconciliation marks gone or never-started `running` records `failed`/`session_lost`
   and leaves live ones alone (case S12-C9). Before the query is verified this criterion is not claimed and the gap stays
   under "Not enforced".
 
 ## Open questions for the owner
 
-1. **Exit 72 for a killed or lost client stream.** When the container runtime client ends while the remote side did not
-   exit, this text reads it as a transport loss, exit 72 (FR-015, FR-016). That reading is an author proposal awaiting the
-   owner's confirmation; if the owner wants another code, that is an ADR 0013 decision.
+1. **Exit codes of two author-proposed readings.** (a) Exit 70 for a declined, unanswered or impossible confirmation
+   (FR-023), where Feature 006 treats a declined interactive wizard prompt as a cancellation, exit 72. (b) Exit 72 for a killed or lost client stream. For (b), when the container runtime client ends while the
+   remote side did not exit, this text reads it as a transport loss, exit 72 (FR-015, FR-016). Both are author proposals
+   awaiting the owner's confirmation; if the owner wants another code for (b), that is an ADR 0013 decision.
 
 The open questions 1 to 7 of earlier drafts were decided by the owner on 2026-10-31 (D1 to D7), and four author proposals
 became D8. What is otherwise left is for the plan, not for a decision: the mechanism of the atomic start transition (D8c),
