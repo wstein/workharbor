@@ -13,7 +13,7 @@
 # Time budget (minutes), job cap 50 (four minutes of slack for runner setup and post steps); the step timeouts below sum to 46 and a test pins: sum <= cap, every step has a
 # timeout, and for each step the probe/bounded bounds plus the watchdog grace (5 s per call, worst case) fit it. The start
 # loop counts twice; the cleanup counts up to 2 containers and 8 volumes. Calls on both sides of the runtime guard count
-# (worst case, as if a step ran both branches): measure 465 s of 480, install 15 s of 300.
+# (worst case, as if a step ran both branches): measure 465 s of 480, install 15 s of 300 (the Docker CLI is now installed on every row; its brew install is not a bounded call).
 #   checkout 1, setup-go 2, build 2, helpers 1, install 5, start 10, measure 8, whr 6, extra profile 5,
 #   cleanup 4, summary 1, upload 1.
 # Every probe is bounded by a process-group watchdog (TERM, then KILL): Go programs ignore SIGALRM, so an alarm is
@@ -240,29 +240,25 @@ jobs:
           TAR
           chmod 0755 "$RUNNER_TEMP/colima-bindtest.sh" "$RUNNER_TEMP/colima-tartest.sh"
           printf 'false\n' >"$out/started"
-      - name: Install Colima and, for the docker runtime, the Docker CLI (Homebrew core only)
+      - name: Install Colima and the Docker CLI (Homebrew core only)
         shell: bash
         timeout-minutes: 5
         run: |
           set -eu
           brew --version
-          if [ "$COLIMA_RUNTIME" = docker ]; then
-            brew install colima docker
-          else
-            brew install colima
-          fi
+          # The Docker CLI (client only) goes on every row: with a non-docker runtime whr must still be able to answer
+          # if a docker.sock does appear, which is the assumption the containerd row tests.
+          brew install colima docker
           # colima depends on lima only; the qemu VM type needs qemu itself.
           if [ "$VM_TYPE" = qemu ]; then
             brew install qemu
             qemu-img --version
           fi
           colima version
-          if [ "$COLIMA_RUNTIME" = docker ]; then
-            docker --version
-          else
-            # No Docker CLI for a non-docker runtime. Record whether the nerdctl wrapper exists; never run `colima nerdctl install`.
+          docker --version
+          if [ "$COLIMA_RUNTIME" != docker ]; then
+            # Record whether the nerdctl wrapper exists; never run `colima nerdctl install`.
             . "$RUNNER_TEMP/colima-lib.sh"
-            skipped_runtime docker-cli-install
             probe colima-nerdctl-help 10 colima nerdctl --help
           fi
       - name: Start Colima (the job is the owner here)
@@ -325,7 +321,7 @@ jobs:
             for n in docker-context-ls docker-info docker-pull docker-run-pinned bind-runner-temp bind-home bind-tmpdir volume-roundtrip tar-pipe-200mib; do
               skipped_runtime "$n"
             done
-            probe containerd-sockets 5 bash -c 'd="$HOME/.colima/default"; for n in docker.sock containerd.sock; do if test -e "$d/$n"; then e=yes; else e=no; fi; if test -S "$d/$n"; then s=yes; else s=no; fi; echo "RESULT $n exists=$e socket=$s"; done; echo "sockets in $d:"; find "$d" -maxdepth 1 -type s -exec ls -l {} + 2>&1; true'
+            probe containerd-sockets 5 bash -c 'for d in "$HOME/.colima/default" "$HOME/.colima/_lima/colima"; do echo "dir: $d"; for n in docker.sock containerd.sock; do if test -e "$d/$n"; then e=yes; else e=no; fi; if test -S "$d/$n"; then s=yes; else s=no; fi; echo "RESULT $d/$n exists=$e socket=$s"; done; echo "sockets in $d:"; find "$d" -maxdepth 1 -type s -print 2>&1; done; true'
             probe colima-yaml-top-level-keys 5 bash -c 'grep -E "^[A-Za-z][A-Za-z0-9_]*:" "$HOME/.colima/default/colima.yaml"'
             probe colima-nerdctl-version 20 colima nerdctl -- version
             probe lima-host-agent-log-tail 10 bash -c 'for f in "$HOME/.colima/_lima/colima/ha.stderr.log" "$HOME/.colima/_lima/colima/ha.stdout.log"; do echo "== $f"; if test -f "$f"; then tail -n 80 "$f"; else echo absent; fi; done; true'
