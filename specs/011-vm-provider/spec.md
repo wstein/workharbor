@@ -92,7 +92,7 @@ This feature defines:
 - `whr` does not publish, upload, sign, redistribute or pull prebuilt base images, and builds one only locally and only
   after an explicit prompt (FR-007, FR-034, FR-037).
 - The provider and `whr doctor` do not install a VM backend, and `whr` changes no host virtualization, network, firewall
-  or security setting (FR-017). Only the setup wizard installs the VM tool (from the one named package source, FR-038), from a catalogue entry that is not preselected
+  or security setting (FR-017). Only the setup wizard installs the VM tool (from a package source of the closed list of FR-038), from a catalogue entry that is not preselected
   and only on explicit selection (FR-031). `whr doctor` reports (FR-032, FR-039), removes owned leftovers (FR-033) and may rebuild
   an image (FR-037); `whr doctor --fix` does not install the VM tool, and the rest of Feature 009 FR-016 is unchanged.
 - Not in this increment (each needs its own specification): a Windows guest provider, Windows as a product target of
@@ -399,7 +399,7 @@ provider and Linux hosts are unchanged.
   selected, how the user does it themselves (the documented steps of the driver, FR-024, and the documented recipe, FR-007).
   The summary is not a plan step and writes nothing, so it also appears when the answer is `no` and under `--dry-run`.
   The wizard MAY offer, each as its own explicit step: (a) installing the VM tool, through a Feature 009 catalogue entry
-  that is not preselected (the catalogue grows from 13 to 14 entries), through the existing package-manager adapter, from the one named package source of FR-038, and only
+  that is not preselected (the catalogue grows from 13 to 14 entries), through the existing package-manager adapter, from the package source named by its entry under the closed list of FR-038, and only
   on explicit selection, never replacing or removing a tool from another source (Feature 009 FR-008); and (b) creating the
   image (FR-034). Nothing is installed, built, downloaded or elevated without that selection. `whr doctor` reports the tool
   entry like any catalogue item, but `whr doctor --fix` does not install the VM tool (the rest of Feature 009 FR-016 is
@@ -457,11 +457,14 @@ provider and Linux hosts are unchanged.
   never regenerates the definition. The build rules of FR-034 apply (normal build command, own label only, no VM setting changed). `whr doctor --fix` does not
   install the VM tool (FR-031). Real builds are owner-run evidence and FR-037 is tested with fake runners (SC-032). Linux
   `whr doctor --fix` still refuses.
-- **FR-038**: The catalogue entry for the VM tool (FR-031) MAY name exactly one third-party package source (a tap) in a
-  `tap` field of the catalogue schema; wildcards and lists are not allowed, and every other third-party source stays
-  forbidden (Feature 009 FR-025). The preview shows the source. The tool is installed only after explicit selection and a
-  confirmation of that item, never under `--yes` alone. The concrete source is named in the catalogue and in the driver
-  documentation, not in this specification's normative text.
+- **FR-038**: The catalogue definition MUST carry a closed, named list of allowed third-party package sources (taps), exactly
+  two: the source that carries the VM tool and the owner's own source. A catalogue entry MAY name at most one source from
+  that list in a `tap` field of the catalogue schema. Wildcards, a source supplied by the user and a source outside the
+  list are rejected, and every other third-party source stays forbidden (Feature 009 FR-025). The preview shows the source
+  per item. A tool is installed from a named source only after explicit selection and a confirmation of that item, never
+  under `--yes` alone. This adds no catalogue entry for the owner's own source: only the permission to name it exists; which
+  tools it carries is unknown here and future work. The concrete source names are in the informative notes, the
+  catalogue and the driver documentation, not in this specification's normative text.
 - **FR-039**: `whr doctor` MUST gain read-only checks for the container backend: `container.image` (the image exists and
   carries `whr`'s label: `pass`; missing or unusable: `fail`; no image defined: `skipped`) and `container.leftovers` (owned
   container instances, with their size when the runtime states it and "size unknown" otherwise). The free space of the
@@ -602,9 +605,11 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   the definition with no download before confirmation; a missing definition is reported and not regenerated, and a failed
   build is a failed step that points to `whr setup`; the same holds for the container and the VM backend, and the VM
   tool is not installed (FR-037).
-- **SC-033**: A catalogue entry with one named `tap` loads and its preview shows the source; zero taps, a wildcard, a list of
-  taps or a second entry with a third-party source are rejected; the install call happens only after explicit selection and
-  confirmation of the item and not under `--yes` alone; no other tap is added (FR-038).
+- **SC-033**: The catalogue loader accepts an entry whose `tap` is one of the two listed sources and shows it in the
+  preview; it rejects a `tap` outside the closed list, a wildcard, a user-supplied source and a list of sources; a listed
+  source is accepted only when an entry names it, and the shipped catalogue has no entry for the owner's own source; the
+  install call happens only after explicit selection and confirmation of the item and not under `--yes` alone; no other
+  tap is added (FR-038).
 - **SC-034**: With a fake container runtime, `container.image` reports `pass`, `fail` and `skipped` for a labeled image, a
   missing or unusable image and no defined image; `container.leftovers` lists owned instances only with size or "size
   unknown"; the recorded runtime calls are read-only list and inspect calls, none starts or changes anything; and
@@ -668,9 +673,11 @@ open for the owner are marked below. Decisions 10 to 13, 15 and 17 supersede par
     container runtime's normal build command. It changes no VM setting of the container runtime and writes only images
     that carry `whr`'s own label. Base layers fetched from a registry as part of the build are allowed; pulling a prebuilt
     finished image stays forbidden (FR-007, FR-034, SC-029).
-17. **Package source exception (NEW)**: the catalogue entry of the VM tool may name exactly one third-party package source.
-    The preview shows it, the install happens only after explicit selection and confirmation, and every other third-party
-    source stays forbidden (FR-038, SC-033).
+17. **Package source exception (NEW, extended)**: the catalogue definition carries a closed, named list of two allowed
+    third-party package sources: the one that carries the VM tool, and the owner's own. An entry names at most one of
+    them; there is no wildcard and no user-supplied source. The preview shows the source per item, installation needs
+    explicit selection and its own confirmation, and every other source stays forbidden. No catalogue entry is added for the
+    owner's own source now (FR-038, SC-033).
 
 Author proposals made while recording these decisions (the owner may change them):
 
@@ -699,6 +706,7 @@ Author proposals made while recording these decisions (the owner may change them
 - An interactive shell for the container provider (decision 1, draft Feature 012).
 - `whr doctor --deep`, a real clone-start-exec-stop-delete smoke (decision 8, D).
 - A separate `whr vm setup` command is not planned; any backend-specific command must not replace a core command (decision 9).
+- Entries for tools carried by the owner's own package source (FR-038 only permits naming it; which tools it carries is unknown here).
 - The owner may later configure an explicit concurrency limit for a driver that states none.
 
 ## Assumptions
@@ -783,15 +791,15 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
     images with `whr`'s own label and changes no VM setting; FR-012 ("downloads of software are done by Homebrew") allows
     the base-layer fetch that the container runtime's own build command performs during an image build.
   - **FR-009, FR-025, schema and brew forms (decision 17)**: FR-009 ("only taps homebrew/core and homebrew/cask"), FR-025
-    ("adds no taps"), the catalogue schema (`tap` pattern, now an optional field with exactly one named source, no
-    wildcard) and the brew invocation forms in `wizard-flow.md` ("tap" not used) admit the one named source of FR-038 for the
-    VM tool entry only. The wizard-flow sentence "git-config is not a fourteenth catalogue entry" becomes "fifteenth".
+    ("adds no taps"), the catalogue schema (`tap` pattern, now an optional per-entry field restricted to a closed
+    list of two named sources defined in the catalogue, no wildcard, no user-supplied source) and the brew invocation forms in
+    `wizard-flow.md` ("tap" not used) admit a source of that closed list when an entry names it. The wizard-flow sentence "git-config is not a fourteenth catalogue entry" becomes "fifteenth".
   - **FR-016**: "It does not repair non-host findings" is amended: the image rebuild and the owned-leftover removal are repairs
     of VM and container findings. `doctor --fix` does not install the VM tool, an explicit exception to the install behavior
     of FR-016 and of `wizard-flow.md` (`doctor --fix --yes` installs other missing selected catalogue items as before).
   - **Step deadline**: the deadline of `image_build` is a plan-time value, not the 900 s of the package-manager steps (DP-2).
   - **Boundaries**: "installing anything on Linux" and the Linux enrollment stay unchanged; the image offer is a macOS host
-    feature. Feature 009 FR-025 (no taps) is unchanged.
+    feature. Feature 009 FR-025 (no taps) is amended only by FR-038.
 - `docs/container-runtime.md`: add a VM backend prerequisite section; the Windows host statement stays unchanged.
 - `.github/workflows/check.yml` and `scripts/check_ci.py`: Python and Go suites in a macOS and Linux matrix for this
   repository, aggregate check, skip-record check.
@@ -805,7 +813,8 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 These notes name products. They are not requirements and the vendor-name gate of FR-022 skips this marked region.
 
 - The first driver targets Tart (OD-5), and the catalogue entry of decision 12 would be for its VM tool, which that vendor distributes through its own third-party
-  tap (decision 17; the exact tap name is verified at implementation). A driver for a Linux host would likely use KVM. A driver for Hyper-V is only a
+  tap (decision 17; the exact tap name is verified at implementation). The owner's own source is the repository
+  wstein/homebrew-tap, named `wstein/tap` by Homebrew convention; its contents are not known here. A driver for a Linux host would likely use KVM. A driver for Hyper-V is only a
   possibility.
 - Initial list for the gate of FR-022: tart, lima, utm, qemu, parallels, vmware, virtualbox, hyper-v, kvm, libvirt,
   vagrant, multipass, firecracker, wsl.
