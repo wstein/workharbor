@@ -800,8 +800,9 @@ Author proposals made while recording these decisions (the owner may change them
 ## Open Questions
 
 Two questions for the owner. (1) Should not-applicable skips (the six new checks on Linux, on a host without a VM driver or
-runtime) be left out of the doctor verdict? Today, with Feature 006 FR-060, such hosts always get the verdict `incomplete`
-instead of `ok` (the exit status stays 0). (2) Should container free space be measured through the runtime API, which Feature 006 FR-060 and the
+runtime) be left out of the doctor verdict? Today no host reaches `ok`: Feature 006 FR-060 already reports the control-plane
+and host-credential checks as `skipped`. The six permanent skips would keep such hosts at `incomplete` (the exit status stays 0)
+once those checks become measurable. (2) Should container free space be measured through the runtime API, which Feature 006 FR-060 and the
 `doctor-checks.json` note currently forbid, or stay `unknown` (FR-039)? No rule is invented for either. NC-1 to NC-3 were decided on 2026-10-31 and are recorded
 as OD-4 to OD-6.
 
@@ -848,9 +849,12 @@ as OD-4 to OD-6.
   that check, while `container.image` and `container.leftovers` make read-only list and inspect calls on the discovered
   socket; acceptance scenario 7 (plain `doctor` "started no process other than the fixed `git --version`" and the FR-055
   invocations) gains "and, when a VM driver is chosen, the driver's fixed read-only `probe` and `list` invocations of
-  Feature 011 FR-018". Consequence, stated plainly: because Feature 006 FR-060 gives the verdict `ok` only when all checks pass
-  and the six new checks report `skipped` for good on Linux and on hosts without a VM driver or runtime, such hosts get the
-  verdict `incomplete` (exit status 0) instead of `ok`; whether not-applicable skips should be left out is an open question.
+  Feature 011 FR-018". Consequence, stated plainly: Feature 006 FR-060 already
+  reports `control_plane.reachable`, `host.identity`, `host.credentials_permissions` and `service.agent` as `skipped` (and
+  `config.valid` outside a workspace), so no host reaches `ok` today and acceptance scenario 1 expects `incomplete`. The six
+  new checks report `skipped` for good on Linux and on hosts without a VM driver or runtime, so once the control-plane checks
+  become measurable such hosts would stay at `incomplete` (exit status 0); whether not-applicable skips should be left out is
+  an open question.
   The 5 s budget lists of FR-060 and of the `doctor-checks.json` rules ("each socket dial, `git --version` and
   `daemon.json` read draws on it") also name the driver `probe` and `list` invocations and the runtime list and inspect calls.
 - `specs/009-host-setup-wizard/` (spec, `contracts/wizard-flow.md`, `data-model.md`, the catalog schema
@@ -925,8 +929,10 @@ as OD-4 to OD-6.
     `tasks.md` T001 (line 22, done; `TestInitialCatalogueEntries` requires exactly 13 ids), `quickstart.md` (line 15),
     `HANDOFF.md` (line 52) and `checklists/requirements.md` (line 21); in code,
     `apps/whr/internal/hostsetup/catalogue/production_test.go` (line 50, expects 13 items) and
-    `apps/whr/internal/hostsetup/pkgmgr/pkgmgr.go` (lines 410 and 519, only `homebrew/core`). T001 and this code are reopened
-    by a new task in the implementation plan.
+    `apps/whr/internal/hostsetup/pkgmgr/pkgmgr.go` (lines 410 and 519, only `homebrew/core`) and the Go loader
+    `apps/whr/internal/hostsetup/catalogue/catalogue.go` (line 128, the rule "tap matches type" requires `homebrew/core` for a
+    formula; line 407, the hard-coded `source.tap` list), which would reject tap-sourced entries. T001 and this code are
+    reopened by a new task in the implementation plan.
   - **Step deadline**: the deadline of `image_build` is a plan-time value, not the 900 s of the package-manager steps (DP-2).
   - **Boundaries**: "installing anything on Linux" and the Linux enrollment stay unchanged; the image offer is a macOS host
     feature.
