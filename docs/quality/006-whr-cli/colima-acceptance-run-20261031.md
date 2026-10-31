@@ -1,7 +1,8 @@
 # Colima acceptance run: how to start it and what it measures
 
-Date: 2026-10-31. Status: **the workflow has NOT been run yet.** This page holds no
-measurement and supports no claim about Colima. Colima stays an alternative runtime
+Date: 2026-10-31. Status: **the workflow has still NOT been run.** This page holds no
+measurement and supports no claim about Colima; every statement about Colima below (including
+what the containerd row should show) is an assumption until a run measures it. Colima stays an alternative runtime
 whose support wording waits for evidence; it becomes the default only after a green
 matrix (owner decision, Feature 009 D-10).
 
@@ -11,18 +12,21 @@ The owner starts it: GitHub, Actions, workflow `colima-acceptance`, Run workflow
 (`workflow_dispatch` is the only trigger; there is no schedule, push or pull request
 trigger, and agents never start it). Source:
 [`.github/workflows/colima-acceptance.yml`](../../../.github/workflows/colima-acceptance.yml).
-It has `contents: read`, three matrix jobs with `continue-on-error`, and never gates
+It has `contents: read`, four matrix jobs with `continue-on-error`, and never gates
 a merge. `whr` never starts or configures Colima, so the job does it on a throwaway
-runner VM: `brew install colima docker` (Homebrew core only; plus `brew install qemu` for the qemu rows,
-because Colima depends on Lima only), then `colima start --runtime docker --vm-type ... --mount-type ...`
+runner VM: `brew install colima docker` (Homebrew core only, the Docker CLI only for the docker runtime; plus `brew install qemu` for the qemu rows,
+because Colima depends on Lima only), then `colima start --runtime "$COLIMA_RUNTIME" --vm-type ... --mount-type ...`
 with two bounded attempts. Destructive Colima commands and removals run only on a GitHub-hosted runner
 (`GITHUB_ACTIONS=true` and `RUNNER_ENVIRONMENT=github-hosted`); elsewhere they refuse.
 
 | Job | Runner | Colima flags |
 | --- | --- | --- |
-| `intel-qemu-sshfs` | `macos-15-intel` | `--vm-type qemu --mount-type sshfs` |
-| `intel-qemu-9p` | `macos-15-intel` | `--vm-type qemu --mount-type 9p` |
-| `arm-vz-virtiofs` | `macos-15` (Apple Silicon) | `--vm-type vz --mount-type virtiofs` |
+| `intel-qemu-sshfs` | `macos-15-intel` | `--runtime docker --vm-type qemu --mount-type sshfs` |
+| `intel-qemu-9p` | `macos-15-intel` | `--runtime docker --vm-type qemu --mount-type 9p` |
+| `arm-vz-virtiofs` | `macos-15` (Apple Silicon) | `--runtime docker --vm-type vz --mount-type virtiofs` |
+| `intel-containerd-qemu-sshfs` | `macos-15-intel` | `--runtime containerd --vm-type qemu --mount-type sshfs` |
+
+The matrix key `runtime` reaches the steps only as `COLIMA_RUNTIME` in `env`.
 
 Whether the Apple Silicon row can start at all (nested virtualization on GitHub arm
 runners) is unknown. A failed start is a result, not a hidden error: the job summary
@@ -74,9 +78,32 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
   small resources, then `colima status -p whr-acc`, `ls ~/.colima/whr-acc`, the socket path, `docker context ls`, and
   `whr doctor --json` once without `DOCKER_HOST` and once with `DOCKER_HOST` set to that profile's socket.
 
+## The containerd row
+
+Purpose: settle the open assumption of the Doctor hint proposal (`doctor-runtime-hint-proposal.md`):
+with a runtime other than docker, does `~/.colima/default/` hold a `docker.sock`, what does
+`colima.yaml` say under `runtime`, which sockets exist, and what do `whr doctor --json` and
+`whr ls --local --json` report without `DOCKER_HOST`? The assumption is that no `docker.sock`
+appears; it is not measured yet.
+
+What it does differently (every skipped probe is recorded as `skipped: runtime containerd`, so the
+artifact shows what was not measured):
+
+- Install: no Docker CLI (`docker-cli-install` skipped); `colima nerdctl --help` is recorded to show
+  whether the nerdctl wrapper exists. `colima nerdctl install` is never run.
+- Skipped: `docker context ls`, `docker info`, pull, run, the three bind mounts, the named-volume
+  round trip and the tar pipe, and the `whr` throwaway workspace, home clone, home backup and recover probes.
+- Recorded instead: `ls -la ~/.colima ~/.colima/default`, `ls -l /var/run/docker.sock`, `colima status`,
+  `colima status --json`, whether `docker.sock` and `containerd.sock` exist and are sockets (`test -S`) plus every
+  socket in the profile directory (`containerd-sockets`), the keys of `colima.yaml` (the `runtime` key and the
+  other top-level keys), `colima nerdctl -- version`, and the Lima host-agent log tail.
+- `whr`: only `doctor --json` and `ls --local --json`, both without `DOCKER_HOST`; exit codes come from the
+  probe status, stdout and stderr tails from the job summary and `logs/`.
+- The non-default profile stays on the first row only. `results.json` and the summary record the `runtime`.
+
 ## Mapping to the results
 
-- Matrix rows: the three jobs fill the runtime/mount-type rows of the verification
+- Matrix rows: the three docker jobs fill the runtime/mount-type rows of the verification
   matrix proposed in the Colima support audit
   (`colima-support-audit-20261031.md` on the unmerged branch `docs/colima-support-audit`). A row is green only when
   start, the mount and volume probes, the `whr` probes and the home copy all say
@@ -94,10 +121,14 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
 
 ## Time budget
 
-The job cap is 50 minutes, which leaves five minutes for runner setup and the post steps. The step timeouts add up to 45. A test pins that sum, that every step
+The job cap is 50 minutes, which leaves four minutes for runner setup and the post steps. The step timeouts add up to 46
+(the measure step went from 7 to 8 minutes for the containerd probes). A test pins that sum, that every step
 has a timeout, and that for each step the sum of its probe and `bounded` bounds, each plus the
 5 s watchdog grace of a call that hits its bound, fits the step timeout. The start loop counts
-twice; the cleanup counts up to 2 containers and 8 volumes. There is no slack, so a slow runner
+twice; the cleanup counts up to 2 containers and 8 volumes. Calls on both sides of the runtime guard are counted
+(worst case, as if a step ran both branches). Per-step worst case in seconds: install 15 of 300 (the nerdctl probe),
+start 590 of 600, measure 465 of 480 (405 plus four containerd probes at 10, 10, 25 and 15 including grace),
+`whr` 325 of 360, second profile 290 of 300, cleanup 226 of 240. There is almost no slack, so a slow runner
 fails a step on its timeout rather than overrunning the job.
 
 | Step | Minutes |
@@ -105,7 +136,7 @@ fails a step on its timeout rather than overrunning the job.
 | checkout, setup-go, build, helpers | 1, 2, 2, 1 |
 | install (colima, docker, qemu on qemu rows) | 5 |
 | start (two attempts of 200 s, diagnostics, one delete between) | 10 |
-| measure the runtime | 7 |
+| measure the runtime | 8 |
 | measure `whr` | 6 |
 | second profile (one row) | 5 |
 | cleanup, summary, upload | 4, 1, 1 |
