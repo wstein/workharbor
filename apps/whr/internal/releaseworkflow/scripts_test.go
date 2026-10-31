@@ -532,6 +532,47 @@ func TestNotesCountDocsAndOtherCommitsInsteadOfListingThem(t *testing.T) {
 	}
 }
 
+func notesFor(t *testing.T, subjects ...string) string {
+	t.Helper()
+	dir := newRepo(t, "feat: a")
+	git(t, dir, "tag", "-a", "-m", "r", "v0.1.0")
+	for i, s := range subjects {
+		commitFile(t, dir, "g"+string(rune('a'+i)), s)
+	}
+	r := sh(t, dir, nil, "release-notes.sh", "v0.2.0", git(t, dir, "rev-parse", "HEAD"), "1.27.2")
+	if r.code != 0 {
+		t.Fatalf("notes failed: %+v", r)
+	}
+	return r.stdout
+}
+
+func TestNotesListEachCommitOnceWhenTheDescriptionHasParentheses(t *testing.T) {
+	subjects := []string{"fix(a)!: x (y): z", "docs(b)!: rename (c): z", "perf(x)!: y (z): w", "fix(q): plain (r): s", "docs(d): plain (e): f", "chore: other"}
+	out := notesFor(t, subjects...)
+	for _, s := range subjects[:3] {
+		if n := strings.Count(out, "- "+s+" ("); n != 1 {
+			t.Errorf("%q must be listed once, got %d:\n%s", s, n, out)
+		}
+	}
+	if !strings.Contains(out, "### Breaking changes (3)") || !strings.Contains(out, "Fixes (1)") ||
+		!strings.Contains(out, "Not listed here: 1 documentation and 1 other commits") {
+		t.Errorf("counts must add up to the six commits:\n%s", out)
+	}
+}
+
+func TestNotesListBreakingChangesOfAnyType(t *testing.T) {
+	subjects := []string{"deps!: bump api", "security!: x", "Feat!: capitalized", "Fix(a)!: capitalized"}
+	out := notesFor(t, append(subjects, "feat!: lower")...)
+	for _, s := range subjects {
+		if n := strings.Count(out, "- "+s+" ("); n != 1 {
+			t.Errorf("%q must be listed once, got %d:\n%s", s, n, out)
+		}
+	}
+	if !strings.Contains(out, "### Breaking changes (4)") || !strings.Contains(out, "### Features (1)\n\n- feat!: lower (") || strings.Count(out, "feat!: lower") != 1 {
+		t.Errorf("feat! stays under Features only:\n%s", out)
+	}
+}
+
 func TestNotesListEveryBreakingChange(t *testing.T) {
 	dir := newRepo(t, "feat: a")
 	git(t, dir, "tag", "-a", "-m", "r", "v0.1.0")

@@ -83,11 +83,11 @@ count() { # count LINES: the number of lines, 0 for none
 bullets() { # bullets LINES
 	printf '%s\n' "$1" | sed 's/^/- /'
 }
-feats=$(pick '^feat(\(.+\))?!?:')
-breaking=$(pick '^(fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!:')
-fixes=$(pick '^fix(\(.+\))?:')
-tidy=$(pick '^(perf|refactor)(\(.+\))?:')
-docs=$(pick '^docs(\(.+\))?:')
+feats=$(pick '^feat(\([^)]*\))?!?:')
+breaking=$(pick '^[A-Za-z]+(\([^)]*\))?!:' | grep -Ev '^feat(\([^)]*\))?!:' || true)
+fixes=$(pick '^fix(\([^)]*\))?:')
+tidy=$(pick '^(perf|refactor)(\([^)]*\))?:')
+docs=$(pick '^docs(\([^)]*\))?:')
 ndocs=$(count "$docs")
 nall=$(count "$subjects")
 nother=$((nall - $(count "$feats") - $(count "$breaking") - $(count "$fixes") - $(count "$tidy") - ndocs))
