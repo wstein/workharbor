@@ -94,7 +94,7 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
 
 ## Time budget
 
-The job cap is 45 minutes. The step timeouts add up to 45. A test pins that sum, that every step
+The job cap is 50 minutes, which leaves five minutes for runner setup and the post steps. The step timeouts add up to 45. A test pins that sum, that every step
 has a timeout, and that for each step the sum of its probe and `bounded` bounds, each plus the
 5 s watchdog grace of a call that hits its bound, fits the step timeout. The start loop counts
 twice; the cleanup counts up to 2 containers and 8 volumes. There is no slack, so a slow runner

@@ -319,7 +319,7 @@ func TestColimaWorkflowRulesBite(t *testing.T) {
 		{"probe bound over step", "probe whr-env 5 ", "probe whr-env 5000 ", "probe bounds"},
 		{"start loop bound over step", "probe \"colima-start-$attempt\" 200 ", "probe \"colima-start-$attempt\" 2000 ", "probe bounds"},
 		{"bounded call over step", "bounded 40 colima delete -p", "bounded 4000 colima delete -p", "probe bounds"},
-		{"job cap too small", "    timeout-minutes: 45\n", "    timeout-minutes: 30\n", "step timeouts sum to 45 min, job cap 30"},
+		{"job cap too small", "    timeout-minutes: 50\n", "    timeout-minutes: 30\n", "step timeouts sum to 45 min, job cap 30"},
 	}
 	for _, c := range cases {
 		if strings.Count(raw, c.from) < 1 {

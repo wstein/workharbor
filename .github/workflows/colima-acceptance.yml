@@ -6,7 +6,7 @@
 # Runner VMs are throwaway: nothing here touches an owner machine. Whether the Apple Silicon row (vz) can start
 # at all (nested virtualization on GitHub arm runners) is not known; the summary says so either way.
 #
-# Time budget (minutes), job cap 45; the step timeouts below sum to 45 and a test pins: sum <= cap, every step has a
+# Time budget (minutes), job cap 50 (five minutes of slack for runner setup and post steps); the step timeouts below sum to 45 and a test pins: sum <= cap, every step has a
 # timeout, and for each step the probe/bounded bounds plus the watchdog grace (5 s per call, worst case) fit it. The start
 # loop counts twice; the cleanup counts up to 2 containers and 8 volumes.
 #   checkout 1, setup-go 2, build 2, helpers 1, install 5, start 10, measure 7, whr 6, extra profile 5,
@@ -26,7 +26,7 @@ jobs:
     name: colima (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
     continue-on-error: true
-    timeout-minutes: 45
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
