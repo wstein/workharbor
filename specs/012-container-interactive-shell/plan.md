@@ -5,7 +5,8 @@ Spec: [spec.md](spec.md) | Tasks: [tasks.md](tasks.md)
 Status: Draft for independent review and owner approval. The spec is itself a proposal ("nothing is implemented"); this plan
 and the tasks approve nothing, bind no revision and authorize no source work. Approval needs an independent review CLEAR for the
 exact head of spec, plan and tasks and explicit owner approval of that head, evidenced by a tracker or PR link (WORKFLOW.md).
-Decisions D1 to D8 are the owner's as the spec records them; their tracker or PR link is still to be added by the spec.
+Decisions D1 to D9 are the owner's as the spec records them (D9, 2026-10-31: `whr sandbox shell` accepts `--container-endpoint`);
+their tracker or PR link is still to be added by the spec.
 
 ## Summary
 
@@ -49,7 +50,7 @@ Checked against the constitution principles as the 010 plan does (`.specify/memo
 
 ## Dependencies on other features
 
-Verified from the specs and the tree at `origin/main` f00885c. A task starts only with the prerequisite implementation and test
+Verified from the specs and the tree at `origin/main` f00885c with the Feature 009 and 011 rows re-checked at e468971 (PRs #297, #298 and #299 are merged). A task starts only with the prerequisite implementation and test
 evidence; a checkbox is not evidence either way (Feature 006 T025 and T031 are unchecked while `internal/exitcode` and
 `internal/ptytest` exist in the tree), so T001 re-verifies each row.
 
@@ -63,7 +64,7 @@ evidence; a checkbox is not evidence either way (Feature 006 T025 and T031 are u
 | 008/T016, T017 (register `sandbox`, ADR 0014 amendment) | absent; both are owner gates scoped to the seven existing verbs | `shell` needs them extended (spec "Changes to existing documents"); T019, T023. |
 | Feature 011 (`interactive_shell` field A1, `refused.interactive_unavailable`, owner decision 1) | PR #290 and #291 are merged (merge commit 7bacb00 is an ancestor of `origin/main`); `specs/011-vm-provider/spec.md` on main has Owner decisions 1, 9 and 14 (decision 1: the container provider stays `interactive_shell=none` until a separate feature lands, then becomes `pty` with status `enforced`). Feature 011 itself is still a draft, and amendment A1 is not applied to Feature 008: `specs/008-workspace-sandbox/` has no `interactive_shell`, and `refusal-codes.json` has no `refused.interactive_unavailable` | Spec FR-004 and "Changes to existing documents": the 011 target is owner decision 1 (and FR-003). If A1 is not applied first, the gated docs task T022 adds the field and the one code; library task T004 edits no contract. |
 | Feature 010 `internal/localdocker` (client environment allowlist, 5 s budget; `ResolveEndpoint` wraps `doctor.ResolveLocalSocket` and so implements the pre-D-12 rule) and `internal/localshell` (TERM validation, exec plan, liveness inspect, exit classification) | present in the tree; P1/P2 merged per the 010 tasks and package-a-status; G-A/G-B real-host acceptance of 010 still open | Reuse the client environment allowlist, budget, TERM validation and exit classification by import or narrow extraction, not copy (as 010 did for `workspacecfg`); take the endpoint from the 009 selection function, not from `ResolveEndpoint`. Exec argv differs: detach keys disabled here, a fixed sequence there (FR-008). |
-| Feature 009 FR-029, FR-030, FR-032 (single endpoint selection function; owner decisions D-12 to D-18, merged on main) | FR-029 names "the runtime-access step of Feature 012" as a consumer: order `--container-endpoint`, host-profile `container_endpoint`, `DOCKER_HOST`, `/var/run/docker.sock`; the first specified source is the only one used and is never replaced by a lower one. FR-030: the option is accepted by the later commands of Features 011 and 012; a malformed value exits 64. FR-032: no usable endpoint exits 68 with a `whr:` line naming the source and the remedies (the option, the config value, `whr setup`); ordinary commands never prompt or investigate. No code under `apps/whr` has `container-endpoint` or `container_endpoint`; the plan and tasks update for it is in draft PR #299 | Prerequisite of T008 and T016: the 009 selection function, not yet built. Cite PR #299; do not duplicate its tasks here. Conflict with spec 012 FR-007: see open question 9. |
+| Feature 009 FR-029, FR-030, FR-032 (single endpoint selection function; owner decisions D-12 to D-18, merged on main) | FR-029 names "the runtime-access step of Feature 012" as a consumer: order `--container-endpoint`, host-profile `container_endpoint`, `DOCKER_HOST`, `/var/run/docker.sock`; the first specified source is the only one used and is never replaced by a lower one. FR-030: the option is accepted by the later commands of Features 011 and 012; a malformed value exits 64. FR-032: no usable endpoint exits 68 with a `whr:` line naming the source and the remedies (the option, the config value, `whr setup`); ordinary commands never prompt or investigate. No code under `apps/whr` has `container-endpoint` or `container_endpoint`; the plan and tasks for it are merged on main (PR #299) | Prerequisite of T008 and T016: the 009 selection function, not yet built. Cite the 009 tasks; do not duplicate them here. Owner decision D9 (spec FR-007) settles that `sandbox shell` accepts `--container-endpoint`, as 009 FR-030 requires; the wording "discovered endpoint" of spec FR-005 and FR-008 now reads "selected" (T008, T009). |
 | 006/T031 (PTY harness), 006/T027 (doctor socket rules) | `internal/ptytest`, `internal/doctor` exist | Native terminal wiring tests (T024). |
 | 006 FR-006, FR-019, FR-022a, FR-047 text | spec "Changes to existing documents" | Owner-gated amendments (T021); FR-030 unchanged. |
 | ADR 0013, `contracts/cli/exit-codes.json` | `remote_status.commands` lists `shell`, `console`, `ssh`, `agent attach` | Passthrough entry and killed-client exception (T020). |
@@ -73,7 +74,7 @@ evidence; a checkbox is not evidence either way (Feature 006 T025 and T031 are u
 
 ```text
 specs/012-container-interactive-shell/
-  spec.md          # authoritative requirements and decisions D1 to D8
+  spec.md          # authoritative requirements and decisions D1 to D9
   plan.md          # this plan
   tasks.md         # test-first tasks, FR/SC/decision coverage, owner gates
   data-model.md    # record, Plan and outcome additions only (no new entity)
@@ -128,7 +129,7 @@ Full FR/SC/decision mapping is in [tasks.md](tasks.md#coverage). Test names ther
 
 | Risk | Handling |
 | --- | --- |
-| **PTY handling.** `whr` must not relay the stream: the client child owns the terminal (FR-010, FR-011). A `whr` that proxies or logs bytes breaks the safety statement. | One child with the real descriptors, no copy loop, no recording; test that `whr` writes nothing while the client runs (T011) and that no pty is requested for a non-terminal (T009). Resize is expected from the client (FR-012); unverified until V1 and SC-010; if SC-010 fails, own resize handling is a new owner decision, deferred. |
+| **PTY handling.** `whr` must not relay the stream: the client child owns the terminal (FR-010, FR-011). A `whr` that proxies or logs bytes breaks the safety statement. | One child with the real descriptors, no copy loop, no recording; test that `whr` writes nothing while the client runs (T012) and that no pty is requested for a non-terminal (T009). Resize is expected from the client (FR-012); unverified until V1 and SC-010; if SC-010 fails, own resize handling is a new owner decision, deferred. |
 | **Detach key.** The runtime must be able to disable its detach sequence (FR-008); if not, no `pty`/`enforced`. | V2 in T002 before T016; T007 asserts the flag in the recorded vector; failing V2 blocks T026. |
 | **Signals.** Client reaction to SIGINT, SIGTERM and SIGHUP after hand-over is unverified (FR-013). The SIGHUP rule is an author proposal. | V4 in T002; T012 tests `whr`'s own rules with a fake child; SC-010 covers the live part. Exit 72 and `interrupted` as the spec states; no claim that the in-container shell ended. |
 | **Terminal restore.** Neither the spec nor Feature 010 requires `whr` to restore terminal modes, because it never puts the terminal in raw mode itself and the client owns the tty. If the client is killed while holding raw mode, the terminal can stay raw. | Not claimed. Spec states nothing on restore; plan adds no requirement. SC-010 should observe the terminal state after a killed client and record it; whether restore becomes a requirement is open question 5. |
@@ -138,8 +139,8 @@ Full FR/SC/decision mapping is in [tasks.md](tasks.md#coverage). Test names ther
 | **Unfiltered control sequences** from the instance act on the owner's terminal. Not preventable here. | Stated in help and "Not enforced"; confirmation for `untrusted_job` only (D1, FR-023); nothing is claimed beyond informed consent. |
 | **Orphans and a killed `whr`.** A killed client can leave the shell running; a SIGKILLed `whr` leaves `running` with no transition (FR-017). | Honest limits, no reaper; `discard` after `failed`; reconciliation T014 when V5 allows. Tests of the stuck-`running` behavior in T005. |
 | **Status ambiguity.** A shell status in 64 to 79 equals a CLI code. | Accepted by ADR 0013 for `ssh` and `shell --local`; `whr:` line only for CLI failures (T013). |
-| **Spec drift.** Spec text still says PR #290 and PR #291 are unmerged; both are merged. Feature 011 is a draft and A1 is not applied to Feature 008; 008 has nothing built; Feature 009 D-12 to D-18 changed the endpoint rule after the spec text. | T001 re-checks each dependency at start; amendments only through owner-gated PRs; a stale statement in the spec is a question to the owner, not an edit here. |
-| **Endpoint rule.** Spec 012 FR-007 accepts only `--confirm`, `--yes` and global options, but 009 FR-030 requires `--container-endpoint` on the later commands of Feature 012. | Not settled here (open question 9); the option test of T009 is held until the owner answers. |
+| **Spec drift.** Spec text (header, boundaries, owner decisions) still says PR #290 is unmerged; it is merged, and PR #291 too. Feature 011 is a draft and A1 is not applied to Feature 008; 008 has nothing built. Feature 009 D-12 to D-18 changed the endpoint rule after the spec text; D9 aligns FR-005, FR-007 and FR-008 with it. | T001 re-checks each dependency at start; amendments only through owner-gated PRs; a stale statement in the spec is a question to the owner, not an edit here. |
+| **Endpoint rule.** Spec 012 FR-007 once accepted only `--confirm`, `--yes` and global options, while 009 FR-030 requires `--container-endpoint` on the later commands of Feature 012. | Settled by owner decision D9: FR-007 accepts `--container-endpoint`; a malformed value exits 64 (usage, step 1). T009 tests the accepted options; T008 tests the 64 and the selection order; T023 registers the flag. Feature 009 is unchanged. |
 
 ## Platform notes
 
@@ -179,7 +180,7 @@ query; behavior of the 5-second budget of FR-016 when the daemon stalls; termina
 
 ## Open questions for the owner
 
-Mirrors the PR body. None blocks reviewing the spec; items 2, 3, 4, 9 and 10 affect task scope. These are plan questions; the spec's own
+This list is the record of the questions; PR #297 is merged, its description numbered some items differently and is no longer the reference. None blocks reviewing the spec; items 2, 3, 4 and 10 affect task scope (item 9 is resolved). These are plan questions; the spec's own
 open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or lost client) is carried here unchanged as item 1.
 
 1. Spec open question 1: exit 70 for a declined, unanswered or impossible confirmation and exit 72 for a killed or lost client
@@ -187,7 +188,7 @@ open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or 
 2. Mechanism and home of the instance record store for the atomic `ready` to `running` update (D8c) and the owner process id and
    start time (FR-024). Feature 008 defines none; Feature 011 FR-009 (draft) has a locked local record store. Proposal in research
    R-1: use the Feature 011 store if it lands first, otherwise a minimal store with a conditional update in 008/T003.
-3. Landing order and ownership: Feature 011 is a draft and amendment A1 is not applied to Feature 008, whose T001 to T017 are unbuilt; the 009 selection function (draft PR #299) is unbuilt too. This feature's tasks depend on all three. Confirm that T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to Feature 008 contracts only if 011 has not landed them first (FR-004).
+3. Landing order and ownership: Feature 011 is a draft and amendment A1 is not applied to Feature 008, whose T001 to T017 are unbuilt; the 009 selection function (tasks merged in PR #299) is unbuilt too. This feature's tasks depend on all three. Confirm that T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to Feature 008 contracts only if 011 has not landed them first (FR-004).
 4. Which real hosts must SC-010 cover (Linux Docker Engine, macOS with OrbStack, both)? The spec says "a real Docker host" only.
 5. Terminal restore: should `whr` verify or restore the terminal mode after a killed client? The spec requires nothing; the plan
    adds nothing; this lists the risk only.
@@ -195,5 +196,5 @@ open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or 
 7. Author proposals the spec still marks for confirmation and the plan tests as written: `WHR_SANDBOX_ID`, the SIGHUP rule, the
    failure `reason` field and values, the owner process id and start time, the `--confirm <id>` form, the widened trigger text.
 8. Whether V1 to V5 (T002) may follow plan approval, as scheduled, or must precede it as the spec section title says.
-9. Endpoint option conflict: spec 012 FR-007 accepts only `--confirm <id>`, `--yes` and global options, yet 009 FR-030 says `--container-endpoint` is accepted by the later commands of Feature 012 (malformed value: 64). Either `--container-endpoint` is added to FR-007's list or treated as a global option; the plan does not choose.
+9. RESOLVED (owner decision D9, 2026-10-31): endpoint option conflict between spec 012 FR-007 and 009 FR-030. FR-007 now also accepts `--container-endpoint <endpoint>` (a malformed value exits 64), consistent with 009 FR-029, FR-030 and FR-032; Feature 009 is unchanged. T008 and T009 are no longer held.
 10. Confirm plan decisions 1 to 4 above (notice bytes, working directory rule, S12 label numbering, client-disappears reading), and supply the literal per-profile working directories once the 008 Plan exists.

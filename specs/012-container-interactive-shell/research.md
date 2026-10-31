@@ -1,7 +1,7 @@
 # Feature 012 research
 
 Status: design options for review; nothing is run or claimed. The runtime facts named in the spec's "Verification before the
-plan" are unverified and stay so until T002. Nothing below reopens an owner decision (D1 to D8).
+plan" are unverified and stay so until T002. Nothing below reopens an owner decision (D1 to D9).
 
 <a id="r-1"></a>
 - **R-1 Atomic `ready` to `running` (D8c).** Feature 008 defines no instance-record store; Feature 011 FR-009 (draft) describes a
@@ -23,7 +23,7 @@ plan" are unverified and stay so until T002. Nothing below reopens an owner deci
   whether the exec process ended is needed; the spec names the engine API as a candidate. If only the engine API works, the adapter
   talks to the already selected `unix://` socket with no SDK (a dependency question for the owner, not decided here). Without a
   query, row 3 of FR-016 cannot be told from row 4 and S12-C7, hence FR-003, cannot be met.
-- **R-6 Reuse of Feature 010.** the client environment allowlist and 5-second budget of `localdocker`, and the
+- **R-6 Reuse of Feature 010.** The client environment allowlist and 5-second budget of `localdocker`, and the
   `localshell` TERM validation and exit classification already exist. The endpoint comes from the Feature 009 selection function (D-12 to D-18; `localdocker.ResolveEndpoint` is the older rule). Reuse by narrow extraction, not copy (as 010 did for
   `workspacecfg`). Differences stay explicit: detach disabled here; instance records and ownership labels here, container-name
   selection there; confirmation for `untrusted_job` only here.

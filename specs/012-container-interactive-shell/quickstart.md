@@ -11,11 +11,11 @@ umask 022   # sandboxes may start at 0000
 python3 scripts/check_repo.py
 (cd apps/whr && go vet ./internal/runtime/... ./internal/sandbox/... && go test ./internal/runtime/... ./internal/sandbox/...)
 git diff --check
-git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr specs/006-whr-cli specs/008-workspace-sandbox specs/011-vm-provider   # empty except the gated PRs
+git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr specs/006-whr-cli specs/008-workspace-sandbox specs/010-host-and-workspace-panes specs/011-vm-provider   # empty except the gated PRs
 ```
 
 Scenario to test map: US1 `TestShellExecPlanFullIdEndpointPty`, `TestEndOfSessionTableFourRows`; US2 `TestAdmitInteractiveShellTable`;
-US3 `TestShellNonTerminalExit64NoPtyRequested`, `TestStderrNotTerminalNoConfirmExit70NamesConfirmFlag`; US4
+US3 `TestShellNonTerminalExit64NoPtyRequested`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal`, `TestShellMalformedContainerEndpointExit64`, `TestStderrNotTerminalNoConfirmExit70NamesConfirmFlag`; US4
 `TestContainerLostPassesStatusRecordsFailed`, `TestKilledClientRowsClientStatusPassedShellStatusRecorded`; US5
 `TestYesAloneStillPrompts`.
 

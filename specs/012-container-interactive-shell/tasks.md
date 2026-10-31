@@ -10,7 +10,7 @@ container, image build, network, credential or host mutation, except in the owne
 with the other tasks that become startable at the same time (different files, no prerequisite relation between them). `[US1]` to `[US5]` are the spec's user stories. Exit codes: only the
 ADR 0013 table (FR-015). Test names are planned names. Stage 1 registers no command and changes no frozen contract.
 
-Labels: S12-C1 to S12-C9 are the spec's conformance cases; D1 to D8 its owner decisions; V1 to V5 the five verification items
+Labels: S12-C1 to S12-C9 are the spec's conformance cases; D1 to D9 its owner decisions; V1 to V5 the five verification items
 of the spec in the order listed there (V1 resize, V2 detach disabling, V3 environment route, V4 signals and client status, V5
 end-of-exec and reconciliation queries). OG-n gates as in Feature 008/009: OG-1 real Docker, OG-4 `contracts/cli/*`, ADR 0013 or
 ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
@@ -19,7 +19,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 
 - [ ] T001 Approval binding and prerequisite audit in `docs/quality/012-container-interactive-shell/implementation.md`: record the
   reviewed spec/plan/tasks revisions and owner approval links; re-verify each row of the plan's dependency table from the tree
-  (008/T001 to T004, T008, T009, T013; 006/T025, T031; 010 `localdocker`/`localshell`; the Feature 009 endpoint selection function and its plan/tasks update in draft PR #299; Feature 011 draft status and A1 application);
+  (008/T001 to T004, T008, T009, T013; 006/T025, T031; 010 `localdocker`/`localshell`; the Feature 009 endpoint selection function (unbuilt; its plan and tasks are merged in PR #299); Feature 011 draft status and A1 application);
   `python3 scripts/select_feature.py 012-container-interactive-shell`. No red test (documentation). Acceptance: `python3 scripts/check_repo.py`,
   `git diff --check`. Prerequisites: none.
 - [ ] T002 [P] OWNER GATE (OG-1), real host, no CI substitute: run V1 to V5 on a real Docker host with a terminal and record versions,
@@ -38,10 +38,10 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 - [ ] T004 [P] [US2] Admission rows in `internal/runtime/` (extends 008/T002): `interactive_shell` of `none`, `pty` with `not_enforced`,
   `pty` with `unknown` refused with `refused.interactive_unavailable`, `pty` with `enforced` allowed (FR-004). This task edits no
   contract file: the code and, if Feature 011 A1 is not applied, the field are added by the gated T022, and the tests read them
-  from the contract. Failing tests first: `TestAdmitInteractiveShellTable`, `TestAdmitInteractiveShellZeroProviderCalls`,
+  from the contract. The same `interactive_shell` admission rows are planned by Feature 011 T014 (`TestAdmitInteractiveRefusedUnlessEnforcedPTY`, same `admit.go`): whichever lands first adds the rows, the other verifies them and adds nothing, and the assertions must not diverge. Failing tests first: `TestAdmitInteractiveShellTable`, `TestAdmitInteractiveShellZeroProviderCalls`,
   `TestUnknownNeverSatisfiesInteractiveShell`, `TestRefusalCodesMatchContractWithInteractiveUnavailable`,
   `TestNoProviderKindBranchesInShellPath` (source scan, FR-022). Traces FR-004, FR-022; S12-C1; SC-001. Prerequisites: 008/T001,
-  008/T002, T022.
+  008/T002, T022 (a).
 - [ ] T005 [P] [US1] Instance record additions and the atomic start in `sandbox/` (extends 008/T003) per
   [data-model.md](data-model.md): `ready` to `running` as an atomic conditional update (D8c), no transition back to `ready`, failure
   `reason` (closed set `transport_lost`, `container_lost`, `end_undetermined`, `interrupted`, `start_failed`, `session_lost`),
@@ -57,7 +57,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 - [ ] T006 [P] [US1] Plan additions in `internal/runtime/plan.go` (extends 008/T006): working directory (rule of plan decision 2; literal values asserted once the 008 Plan exists, open question 10) and login shell fields (D3);
   `/bin/sh` default for the two job profiles, the `human_shell` of the workspace manifest for `developer` via `internal/workspacecfg`.
   Failing tests first: `TestPlanCarriesWorkdirAndShellPerProfile`, `TestJobShellDefaultsBinSh`,
-  `TestDeveloperShellIsManifestHumanShell`, `TestPlanWorkdirValuesPerProfileFixed`. Traces FR-008 (D3). Prerequisites: 008/T006.
+  `TestDeveloperShellIsManifestHumanShell`, `TestPlanWorkdirValuesPerProfileFixed`. Traces FR-008 (D3). Prerequisites: 008/T006, 008/T007 (cooperative worktree mount target), 008/T011 (untrusted private copy mount target).
 - [ ] T007 [US1] Shell exec plan and environment in `sandbox/shellsession/execplan.go`, over a `Shell` port that records the plan:
   full container id, explicit `unix://` endpoint, interactive pty, detach key sequence disabled (D2), the Plan's user, workdir and
   login shell; no privileged option, capability, mount, device, limit or env-file; no operator environment; environment sources of
@@ -77,12 +77,11 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   mutations), `TestShellMissingContainerNamesMissingNotForeign`, `TestShellStoppedPausedRestartingNamedNeverStarted` (D4),
   `TestShellForbiddenMountRecheckExistingCodes`, `TestShellEndpointAndClientRefusalsExit68` (non-`unix://`, absent client,
   unreachable socket), `TestShellEndpointFromFeature009SelectionFunction` (no own search; the first specified source is the only one
-  used), `TestShellNoEndpointExit68RemediationNamesOptionConfigSetup` (009 FR-032 EP-3), `TestShellMalformedContainerEndpointExit64`. Traces FR-002, FR-005, FR-006, FR-018 (re-check), D4, D5; S12-C4,
-  S12-C5; SC-004, SC-005. Prerequisites: T004, T005, 008/T003, the Feature 009 endpoint selection function (draft PR #299; unbuilt).
+  used), `TestShellNoEndpointExit68RemediationNamesOptionConfigSetup` (009 FR-032 EP-3), `TestShellMalformedContainerEndpointExit64` (usage error at step 1, owner decision D9). The spec wording "discovered endpoint" (FR-005 step 5, FR-008) is replaced by "selected endpoint" by the D9 spec amendment; this task's tests use the selected endpoint of the 009 function. Traces FR-002, FR-005, FR-006, FR-007 (option), FR-018 (re-check), D4, D5, D9; S12-C4,
+  S12-C5; SC-004, SC-005. Prerequisites: T004, T005, 008/T003, the Feature 009 endpoint selection function (unbuilt; plan and tasks merged in PR #299).
 - [ ] T009 [P] [US3] Terminal and usage gate in `sandbox/shellsession/usage.go`: stdin and stdout must be terminals; no
-  `--json`, trailing command or extra positional; only `--confirm <id>`, `--yes` and global options accepted. Failing tests first:
-  `TestShellNonTerminalExit64NoPtyRequested`, `TestShellRejectsJSONAndTrailingArguments`, `TestShellAcceptsOnlyConfirmYesGlobal` (HELD: spec FR-007 and 009 FR-030 conflict on `--container-endpoint`, open question 9;
-  written after the owner answers), `TestShellUsageChecksPrecedeProviderCalls`. Traces FR-007; S12-C6; SC-006. Prerequisites: 006/T025, 006/T031.
+  `--json`, trailing command or extra positional; only `--confirm <id>`, `--container-endpoint <endpoint>` (owner decision D9), `--yes` and global options accepted. Failing tests first:
+  `TestShellNonTerminalExit64NoPtyRequested`, `TestShellRejectsJSONAndTrailingArguments`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal` (any other option is a usage error, exit 64), `TestShellContainerEndpointValueReachesSelection` (a well-formed value is handed to the 009 selection function unchanged; the malformed-value exit 64 is T008's), `TestShellUsageChecksPrecedeProviderCalls`. Traces FR-007, D9; S12-C6; SC-006. Prerequisites: 006/T025, 006/T031.
 - [ ] T010 [US5] Confirmation for `untrusted_job` in `sandbox/shellsession/confirm.go` (form per FR-023, author proposal):
   warning and prompt on standard error, answer from standard input, answer must equal the instance id. Failing tests first:
   `TestUntrustedWithoutConfirmationStartsNothing`, `TestYesAloneStillPrompts`, `TestPromptAnswerOtherThanIdExit70`,
@@ -155,14 +154,14 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 - [ ] T021 OWNER GATE (OG-6), docs only: Feature 006 text: FR-019 (list gains `sandbox shell` with the exception), FR-006 (grant
   exception extends to `sandbox shell`, D6), FR-022a (no relay filtering), FR-047 (human shell for the `developer` login shell);
   FR-030 unchanged. Traces FR-010, FR-011, FR-015, D6. Prerequisites: T003.
-- [ ] T022 OWNER GATE (OG-8), docs only: Feature 008 text and contracts: FR-028, FR-029, FR-035, `runtime-provider.md` (`Shell`,
+- [ ] T022 OWNER GATE (OG-8), docs only, two PRs, (a) first: (a) only if Feature 011 has not landed them, the code
+  `refused.interactive_unavailable` (with the "when" text of 011) and the `interactive_shell` field (A1; the container provider row stays
+  `none`; this task never writes `pty`, which only T026 does) in the Feature 008 contracts; (b) the rest of the Feature 008 text and contracts: FR-028, FR-029, FR-035, `runtime-provider.md` (`Shell`,
   capability row after 011 A1, cases S12-C1 to S12-C9, re-verification note), `command-surface.md`, `data-model.md` (widened
   `ready` to `running` and `running` to `failed` triggers, atomic update, failure reason, Plan fields), `refusal-codes.json` "when"
-  texts of `refused.host_socket_mount` and `refused.tool_mount_writable`, and, only if Feature 011 has not landed them, the code
-  `refused.interactive_unavailable` (with the "when" text of 011) and the `interactive_shell` field (A1; the container provider row stays
-  `none`; this task never writes `pty`, which only T026 does); 008 `tasks.md` and `plan.md` rows for the new cases.
-  Traces FR-005, FR-014, FR-018, FR-004. May run before Stage 1: T004 waits for it. Prerequisites: T003.
-- [ ] T023 [US1] OWNER GATE (registration): register `whr sandbox shell` (and `--container-endpoint` if the owner answers open question 9 that way) in `internal/commands/` and `contracts/cli/commands.json`
+  texts of `refused.host_socket_mount` and `refused.tool_mount_writable`, (b is independent of T004); 008 `tasks.md` and `plan.md` rows for the new cases.
+  Traces FR-005, FR-014, FR-018, FR-004. May run before Stage 1: T004 waits for (a) only. Prerequisites: T003.
+- [ ] T023 [US1] OWNER GATE (OG-4, registration; edits `contracts/cli/commands.json`): register `whr sandbox shell` with its flag list (`--confirm`, `--container-endpoint`, owner decision D9) in `internal/commands/` and `contracts/cli/commands.json`
   within the extended 008/T016 scope, with help text and the freeze tests. Failing tests first: `TestSandboxShellCanonicalNoShortForm`,
   `TestCommandTableMatchesContractWithSandboxShell`, `TestSandboxShellRejectsJSONBeforeProvider`,
   `TestExitForGainsNoNewCodeAndFreezeUnchanged` (SC-007), `TestSandboxShellHelpStatesNoFiltering`,
@@ -184,7 +183,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   environment route does not expose values in the process list. Also observe, outside SC-010's pass condition, the terminal state after a killed client (plan risk, open question 5). Failure of the
   resize or signal checks returns to the owner (FR-012 says `whr` adds handling only if the check fails; that is a new decision).
   Traces SC-010, FR-011, FR-012, FR-013, FR-016, FR-009. Prerequisites: T016, T017, T023.
-- [ ] T026 OWNER GATE: flip the container provider report to `interactive_shell=pty`, status `enforced` for each supported profile
+- [ ] T026 OWNER GATE (OG-8, as it edits `runtime-provider.md`; it also edits Feature 011 text): flip the container provider report to `interactive_shell=pty`, status `enforced` for each supported profile
   only when S12-C1 to S12-C8 pass (T015, T016, T017, T018) and T025 evidence is recorded; land the Feature 011 text change (owner decision 1 and FR-003: the value becomes `pty` with status `enforced`)
   and the `runtime-provider.md` capability row in the same reviewed step. Failing test first: `TestCapabilityReportPtyAfterGate`
   (the switch needs the recorded evidence reference; the `none` default test of T018 stays for any profile without it). Traces
@@ -198,22 +197,22 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 ## Dependencies and execution
 
 Stage 0 starts after approval with T001; T002 and T003 follow T001 and may run in parallel. Stage 1: T004, T005 and T006 can start
-together (T004 needs 008/T001, T002 and the gated T022; T005 needs 008/T003; T006 needs 008/T006); T007 follows T004 and T006; T008 follows T004 and
+together (T004 needs 008/T001, T002 and the gated T022 (a) only; T005 needs 008/T003; T006 needs 008/T006, 008/T007 and 008/T011); T007 follows T004 and T006; T008 follows T004 and
 T005; T009 is independent of them (needs 006/T025 and T031); T010 follows T008 and T009; T011 follows T007; T012 follows T005, T007
 to T011; T013 follows T012; T014 follows T005 and T002; T015 follows T004, T007, T008, T010, T012, T013. Stage 2 needs 008/T013
 and the T002 record. Stage 3 amendments T019 to T022 depend only on T003 (T019 also on 008/T017) and are owner gates. T023 needs
 T012, T013 and T019 to T021 plus 008/T016. Stage 4 follows. Owner gates: real Docker (OG-1: none of T004 to T015, T016 to T018,
 T023, T024 may use one), `contracts/cli/*`, ADR 0013, ADR 0014 (OG-4), Feature 006 text (OG-6), Feature 008 text (OG-8).
-T019 to T023 and T026 (T022 includes the conditional contract append) are the only exceptions to the empty frozen-path diff.
+T019 to T023 and T026 (T022 (a) is the conditional contract append) are the only exceptions to the empty frozen-path diff.
 
 | Task | Prerequisites |
 | --- | --- |
 | T001 | none |
 | T002 | T001 |
 | T003 | T001 |
-| T004 | 008/T001, 008/T002, T022 |
+| T004 | 008/T001, 008/T002, T022 (a) |
 | T005 | 008/T003 |
-| T006 | 008/T006 |
+| T006 | 008/T006, 008/T007, 008/T011 |
 | T007 | T004, T006, 008/T008 |
 | T008 | T004, T005, 008/T003, 009 selection function (PR #299) |
 | T009 | 006/T025, 006/T031 |
@@ -245,10 +244,10 @@ Every requirement, success criterion and decision maps to at least one task, or 
 | FR-001 command, no short form, not registered by approval alone | T019, T023 | registration is owner-gated |
 | FR-002 selector | T008, T023 | |
 | FR-003 capability claim | T015, T016, T017, T018, T025, T026 | stays `none` until T026 |
-| FR-004 admission | T004, T022 | contract edit only in gated T022 |
+| FR-004 admission | T004, T022 | contract edit only in gated T022 (a) |
 | FR-005 order and state | T005, T008, T022 | |
 | FR-006 ownership | T008, T016 | |
-| FR-007 terminal required | T009, T023, T024 | accepted-option test held on open question 9 (`--container-endpoint`) |
+| FR-007 terminal required, accepted options | T008, T009, T023, T024 | `--container-endpoint` accepted (owner decision D9); malformed value exit 64 tested in T008 |
 | FR-008 exec form | T006, T007, T016 | V2 via T002 |
 | FR-009 environment | T007, T016, T025 | V3 via T002 |
 | FR-010 notice | T011, T023, T024 | |
@@ -287,4 +286,5 @@ Every requirement, success criterion and decision maps to at least one task, or 
 | D6 | T011, T021 | |
 | D7 | T014 | |
 | D8 (a), (b), (c), (d) | T013, T012, T005, T013 | |
+| D9 | T008, T009, T023 | `--container-endpoint` on `sandbox shell` |
 | S12-C1 to S12-C9 | C1 T004; C2, C3 T007, T016; C4 T008; C5 T005, T008; C6 T009, T013; C7 T012, T013, T017; C8 T010; C9 T014; all in T015 | |

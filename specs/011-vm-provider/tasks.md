@@ -102,7 +102,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   `TestAdmitGuestArchMismatchRefused`, `TestAdmitMicroVMDoesNotImplyGuestOS`, `TestAdmitWindowsRefusedUntilDeclared`,
   `TestAdmitBaseImageNamedNeedsReadOnlyCloneSource`, `TestAdmitNoBaseImageNeedsNone`, `TestAdmitToolMountsUnavailableRefused`,
   `TestAdmitInteractiveRefusedUnlessEnforcedPTY`, `TestAdmitUnknownNeverSatisfies`, `TestAdmitRefusalCallsNoDriver`, and
-  `TestAdmitTableContainerValuesUnchanged` stays green. Traces FR-001, FR-002, FR-003, FR-005, FR-006 (admission rows), FR-016
+  `TestAdmitTableContainerValuesUnchanged` stays green. The `interactive_shell` admission rows share `admit.go` with Feature 012 T004 (`TestAdmitInteractiveShellTable` and its siblings): whichever lands first adds the rows, the other verifies them and adds nothing, and the assertions must not diverge. Traces FR-001, FR-002, FR-003, FR-005, FR-006 (admission rows), FR-016
   (refusal only), FR-030; SC-001, SC-002, SC-014 (refusal half), SC-021; decision 14 (refusal part). Prerequisites: T012, T013.
 - [ ] T015 [P] [US4] Driver port and recording fake driver in `internal/runtime/vm/driver.go` and `internal/runtime/vm/fake/`:
   closed operation set (probe, list, clone, start, address and readiness, exec, copy in, copy out, stop, delete), optional size
