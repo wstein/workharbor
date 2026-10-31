@@ -555,6 +555,10 @@ func TestOnlyTheReleaseWorkflowRunsReleaseJobsAndQemu(t *testing.T) {
 		}
 		raw := strings.ToLower(readRepo(t, ".github/workflows/"+e.Name()))
 		for _, bad := range []string{"qemu", "release.yml", "release-smoke", "release-package", "release-verify"} {
+			// colima-acceptance.yml names qemu as a Colima VM type, not as release-smoke emulation.
+			if bad == "qemu" && e.Name() == "colima-acceptance.yml" {
+				continue
+			}
 			if strings.Contains(raw, bad) {
 				t.Errorf("%s must not reference %q: only the release workflow runs release jobs", e.Name(), bad)
 			}
