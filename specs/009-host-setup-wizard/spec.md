@@ -69,7 +69,7 @@ shipped by the project, and the owner confirms each step. The design defends aga
   (Tart stays the VM driver for macOS guests, Feature 011). Colima is open source and installed from Homebrew core; it is not preselected
   and needs no third-party tap. FR-026 and FR-027 carry the details; the points marked author proposal there, and the open questions after
   FR-027, are not owner decisions.
-- **D-11 (container storage location, owner decision of 2026-10-31)**: `disk.container_storage` does not query the runtime API. The wizard
+- **D-11 (container storage location, owner decision of 2026-10-31)**: `disk.container_storage` does not query the runtime API (the no-API rule of Feature 006 FR-060 is unchanged; only its budget and file-read lists get entries). The wizard
   records the storage location; doctor reads it from the runtime's readable configuration file first and falls back to the record
   (Feature 011 FR-041, decision 21; Colima details in FR-028).
 
@@ -276,7 +276,7 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
 
 - **FR-026** (Colima entry): The catalog MUST gain one entry for Colima, in addition to the 13 initial entries of FR-010 (a deliberate
   owner addition under OD-2; it is not part of the initial 13, so `orbstack` stays the only preselected runtime). Its fields follow the
-  existing entries: `id` `colima`, `kind` `runtime`, title naming Colima only (the Lima dependency is not named in command or preview text, because the Feature 011 FR-022 vendor-name gate lists that name; the informative notes and the PR text mention it), `platforms` `darwin-arm64` and `darwin-amd64`, `selected_by_default` false, `network` (host `formulae.brew.sh`, the
+  existing entries: `id` `colima`, `kind` `runtime`, title naming Colima only (author proposal: the Lima dependency is not named in the title, to keep that vendor name out of command and preview text; Feature 011 FR-022 would allow it in catalog data, so this is a choice, not a requirement; the PR text mentions the dependency), `platforms` `darwin-arm64` and `darwin-amd64`, `selected_by_default` false, `network` (host `formulae.brew.sh`, the
   read-only lookup URL of the formula, purpose as the other formula entries), and `tool` with `source` = Homebrew formula `colima` from
   `homebrew/core`, `may_elevate` false, `command` `colima`, a `version_args` and `version_regex` that read the version of the `colima` command,
   and a `min_version`. No new schema property is needed: `kind` `runtime` is not tied to the OrbStack-only `version_metadata` probe, and the
@@ -311,7 +311,7 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
   not used space, and they are information only (Feature 011 FR-041). The file is not known to state a host path; the host location that is
   measured is therefore the Colima data directory that holds the profile's directory (assumed to hold the VM disk, OG-1), and the number reported is
   the free space of the host volume that holds that directory. Every Colima fact in this FR (the file name and place, the key names and unit, that no path is stated, the data directory and when the file appears)
-  is unverified here and are measured on the owner's Mac (OG-1) before this FR is implemented; if the real file states the location,
+  is unverified here and is measured on the owner's Mac (OG-1) before this FR is implemented; if the real file states the location,
   the stated location replaces the directory rule. The wizard determines the same location when `colima.yaml` exists and records it
   (FR-041). If `colima.yaml` only appears after the first start of Colima (assumed, OG-1), nothing is recorded right after the install and the report names the later `whr setup` run.
   A runtime without a readable configuration file (for OrbStack none is specified here) gives no first source: the recorded value, else `unknown`.
@@ -423,7 +423,7 @@ Changes on approval, each through the plan and tasks, with the owner gates of FR
 - `specs/011-vm-provider/spec.md`: this change already adds FR-041, SC-036, decision 21 and the FR-039, decision 13 and changes-list edits for the
   storage lookup. It does not touch the count edits: FR-040 ("16 entries"), SC-035, decision 12 and the "seventeenth" sentence of its Feature 009
   amendment count only the entries of Feature 011 and stay as they are. Colima is a separate addition (FR-026), so when both are implemented the
-  totals are 17 entries and "eighteenth" (the 011 numbers plus one); those 011 sentences are updated when the implementation tasks land. FR-034 and FR-037 gain the explicit `--host=<endpoint>` for the build if P-2 is accepted.
+  totals are 17 entries and "eighteenth" (the 011 numbers plus one); the same holds for the 011 amendment bullet "now 13 of 16" and "loader tests become 16" (13 of 17 and 17 with Colima); all these 011 sentences are updated when the implementation tasks land. FR-034 and FR-037 gain the explicit `--host=<endpoint>` for the build if P-2 is accepted.
 - `specs/012-container-interactive-shell/spec.md`, `specs/010-host-and-workspace-panes/spec.md`: no change if OQ-1(a); amended if OQ-1(c).
 - `apps/whr/internal/doctor/` (`socket.go`, tests) is not reopened for the default profile; reopened for OQ-1(b)/(c) and for the storage lookup.
 

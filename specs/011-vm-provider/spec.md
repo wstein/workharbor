@@ -692,7 +692,7 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
 
 ## Owner decisions (confirmed 2026-10-31)
 
-The owner decided the six choices that the author had proposed and then added decisions 7 to 20. The author proposals that remain
+The owner decided the six choices that the author had proposed and then added decisions 7 to 22. The author proposals that remain
 open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of OD-4 and decisions 12 and 17 parts of OD-5, as noted there; none alters OD-1 to OD-3 or OD-6.
 
 1. **Interactive shell for the container provider (confirmed, follow-up)**: the owner wants an interactive shell for the
@@ -770,7 +770,7 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
     as its own modify-class step (`brew_upgrade_source`) with a preview and the per-item `--confirm <item id>`, exactly like
     the install. `doctor --fix` may do it; `--yes` alone never does (FR-038, SC-033).
 21. **Container storage location (2026-10-31, NEW; resolves Open Question 2)**: `disk.container_storage` does not query the runtime
-    API (Feature 006 FR-060 unchanged). The wizard records the storage location during setup; doctor reads it from the runtime's freely
+    API (the no-runtime-API rule of Feature 006 FR-060 is unchanged; only its budget and file-read lists get entries). The wizard records the storage location during setup; doctor reads it from the runtime's freely
     readable configuration file first, uses the recorded value as the fallback, else `unknown`; free space is measured on the host volume
     that holds the location (FR-041). The record name, its fields, the information-only use of a disk-size setting and that
     `doctor --fix` does not record are author proposals.
