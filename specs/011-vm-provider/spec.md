@@ -22,7 +22,7 @@ Feature 008 defines a RuntimeProvider contract and one container provider. Two n
 
 This feature defines:
 
-1. a **cross-platform CI evidence path** on macOS, Linux and Windows hosted runners, independent of any provider;
+1. a **cross-platform CI evidence path** on macOS and Linux hosted runners, independent of any provider;
 2. a **one-time, generic amendment (A1) to the Feature 008 contract** that adds the guest operating system and the
    capabilities a VM needs;
 3. a **VM provider** built on a vendor-neutral **driver port**, with disposable clones of an owner-supplied base image;
@@ -40,12 +40,25 @@ This feature defines:
 
 ### Owner decisions
 
-- **2026-10-31 (OD-1, CI first)**: repository CI is the authoritative cross-platform evidence path: macOS, Linux and
-  Windows. It does not depend on a provider, and a provider does not depend on it.
+- **2026-10-31 (OD-1, CI first)**: repository CI is the authoritative cross-platform evidence path: macOS and Linux
+  (OD-6). It does not depend on a provider, and a provider does not depend on it.
 - **2026-10-31 (OD-2, interactive macOS)**: the interactive local VM provider targets macOS guests first. Informative
-  only: Tart is the intended first driver for it, subject to open question NC-2.
+  only: Tart is the first driver for it (OD-5).
 - **2026-10-31 (OD-3, vendor neutrality)**: the contract and every normative requirement below are vendor-neutral
   (FR-022). Other drivers can be added without changing them.
+- **2026-10-31 (OD-4, base image; resolves NC-1)**: the owner builds the macOS base image on their own Mac from the
+  operating system vendor's official download and keeps it local. It is never uploaded to a registry or passed on. The
+  build recipe is documented so the image is reproducible (FR-007). Whether the vendor's license permits the intended
+  use of macOS in a VM is the owner's to check against that license; it was not checked here.
+- **2026-10-31 (OD-5, drivers; resolves NC-2)**: Tart is the first driver. The user installs the VM backend and holds
+  its license; `whr` only drives it and neither installs nor ships it (FR-017), the same pattern as the Docker runtime.
+  A KVM driver on a Linux host is the likely second wave. A Hyper-V driver is only a possibility, with no commitment.
+  Driver selection is explicit (FR-023), and the support matrix lists host and guest separately (FR-024). The
+  maintenance status of the first backend after a reported change of ownership is unverified. The swappable driver port
+  is the mitigation, so nothing depends on one vendor.
+- **2026-10-31 (OD-6, Windows; resolves NC-3)**: Windows is out of scope. The CI matrix is macOS and Linux, with no
+  Windows runner. `windows` stays a reserved `guest_os` value in the contract so that a later tool or a Windows guest
+  needs no further contract change (FR-030). Linux tests may also run under WSL 2, which is not a stated target.
 
 ### Boundaries
 
@@ -56,19 +69,20 @@ This feature defines:
 - `whr` does not create, download, build, publish, sign or redistribute base images (FR-007).
 - `whr` does not install a VM backend and changes no host virtualization, network, firewall or security setting
   (FR-017). Installing a backend on macOS would be a separate Feature 009 decision.
-- Not in this increment (each needs its own specification): a Windows guest provider, a Linux guest provider on a
-  non-Mac host, remote VM hosts, snapshots and rollback, egress enforcement, credential mediation, a wrapper command
-  for test runs (needs an ADR 0014 amendment).
-- Windows runners in CI are test evidence only. They do not declare Windows host support for `whr`
-  ([container runtime](../../docs/container-runtime.md) is unchanged) (FR-029).
+- Not in this increment (each needs its own specification): a Windows guest provider, Windows as a product target of
+  `whr` (a different tool would be a different specification), a driver for a Linux host (KVM is the likely next one),
+  remote VM hosts, snapshots and rollback, egress enforcement, credential mediation, a wrapper command for test runs
+  (needs an ADR 0014 amendment).
+- Windows is out of scope (FR-029). The [container runtime](../../docs/container-runtime.md) statement on Windows hosts
+  is unchanged.
 - No claim is made of universal containment, performance or portability. Every protection is stated with its scope.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Test results on three operating systems (Priority: P1)
+### User Story 1 - Test results on macOS and Linux (Priority: P1)
 
-A maintainer opens a pull request. The Python and Go suites run on macOS, Linux and Windows hosted runners. Each job
-reports a verdict for the exact head under test, and one aggregate check requires all of them.
+A maintainer opens a pull request. The Python and Go suites run on macOS and Linux hosted runners. Each job reports a
+verdict for the exact head under test, and one aggregate check requires both.
 
 **Why this priority**: it answers the open question about the failing tests at the lowest cost and needs no VM.
 
@@ -170,7 +184,8 @@ are retained, and leftovers are listed by name and id.
   job, written or modified, and removal MUST discard the clone.
 - **FR-007**: `whr` MUST NOT create, download, build, publish, sign or redistribute base images, and MUST NOT store or
   relay guest login credentials. The guest account the driver uses is part of the owner's base image and appears in
-  configuration only as a reference.
+  configuration only as a reference. The documentation MUST describe a reproducible recipe that starts from the operating
+  system vendor's official download and keeps the image local. The recipe is documentation, not a `whr` command (OD-4).
 - **FR-008**: Every instance name MUST be a reserved prefix plus the instance id. For `name_and_record`, ownership is
   proven only when the name matches and a provider-owned local record (instance id, base image id, creation time, owner
   marker) exists and agrees. `List` MUST return only owned instances. `Create`, `Exec`, `Export`, `Cancel` and `Remove`
@@ -204,7 +219,8 @@ are retained, and leftovers are listed by name and id.
 **Host boundary**
 
 - **FR-017**: The provider MUST change only instances it owns. It MUST NOT change host virtualization, network, firewall,
-  security or system settings, and MUST NOT install a VM backend.
+  security or system settings, and MUST NOT install or ship a VM backend. The user installs the backend and holds its
+  license, as with the Docker runtime (OD-5).
 - **FR-018**: `whr doctor` MUST gain read-only checks `vm.backend` (present, version, supported host), `vm.base_image`
   (the named image exists) and `vm.limit`. They never start a VM.
 
@@ -225,8 +241,9 @@ are retained, and leftovers are listed by name and id.
   the informative notes of this specification.
 - **FR-023**: Driver selection MUST be explicit (configuration or flag). There is no auto-detection and no substitution.
   Swapping the driver changes admission only through declared capability values.
-- **FR-024**: Each driver MUST publish a support matrix per release: host OS and architecture, guest OS and architecture,
-  limits and a license note. It states what the driver's tests prove, not portability.
+- **FR-024**: Each driver MUST publish a support matrix per release that lists the supported host (OS and architecture)
+  and the supported guest (OS and architecture) separately, plus limits and a license note that names the backend's
+  license as the user's concern. It states what the driver's tests prove, not portability.
 
 **Conformance and evidence**
 
@@ -240,19 +257,20 @@ are retained, and leftovers are listed by name and id.
 
 **Cross-platform CI evidence**
 
-- **FR-027**: Repository CI MUST run the Python and Go suites on macOS, Linux and Windows hosted runners. Each job MUST
-  bind its verdict to the exact tested head, and the aggregate `check` MUST require all of them. The exact runner images
-  are pinned in the plan.
+- **FR-027**: Repository CI MUST run the Python and Go suites on macOS and Linux hosted runners. Each job MUST bind its
+  verdict to the exact tested head, and the aggregate `check` MUST require both. The exact runner images are pinned in
+  the plan.
 - **FR-028**: A test that fails on a platform MUST NOT be silently skipped. A skip MUST name platform, reason and tracking
   reference, and a repository script MUST check it. Each failure is classified `product_defect`,
   `test_portability_defect` or `host_environment`, with evidence.
-- **FR-029**: Windows jobs are test evidence only. They declare neither Windows host support for `whr` nor a Windows
-  guest provider.
+- **FR-029**: Windows is out of scope (OD-6). CI has no Windows runner, `whr` declares no Windows host support, and no
+  Windows guest provider is specified. Linux tests may run under WSL 2, which is not a stated target and carries no
+  commitment.
 
-**Windows guests**
+**Reserved guest value**
 
-- **FR-030**: `guest_os=windows` MUST be representable in the contract. No provider is specified here, and a request
-  for it MUST be refused with `refused.guest_os_unavailable` until one is.
+- **FR-030**: `guest_os=windows` MUST remain a reserved, representable value in the contract. No provider declares it,
+  and a request for it MUST be refused with `refused.guest_os_unavailable` until one does.
 
 ### Appended refusal codes
 
@@ -303,21 +321,23 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
 
 ## Open Questions
 
-- **NC-1 (base image provenance and license)**: who builds and stores the macOS base image, and under which license
-  terms may it be used for testing? This specification forbids distributing it (FR-007). The owner confirms the
-  procedure before the plan.
-- **NC-2 (first driver)**: OD-2 names Tart as the intended first driver. Its current license terms and maintenance
-  status are unverified and must be reviewed before the plan. Lume and other macOS drivers remain valid alternatives
-  behind the same port.
-- **NC-3 (Windows CI scope)**: which tests run on Windows initially. Some code is Unix-only by design. Should the first
-  increment require all tests with recorded skips (FR-028), or start with an allowlist?
+None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
+
+### Verification before the plan (checks, not decisions)
+
+- The full text of the first backend's license and its maintenance status after the reported change of ownership. Only
+  search excerpts and a summary were read so far. Under OD-5 the license is the user's concern, so this check informs
+  the support matrix (FR-024) and the maintenance risk, not the design.
+- The operating system vendor's license terms for running macOS in a VM, including any limit on concurrent VMs. The
+  owner checks this (OD-4). It was not checked here, and the concurrency limit of FR-009 is declared by the driver.
 
 ## Changes to existing documents (on approval; each lands through the plan and tasks)
 
 - `specs/008-workspace-sandbox/contracts/runtime-provider.md`: add the fields of FR-001 and FR-004.
 - `specs/008-workspace-sandbox/contracts/refusal-codes.json`: append the seven codes above.
 - `docs/container-runtime.md`: add a VM backend prerequisite section; the Windows host statement stays unchanged.
-- `.github/workflows/check.yml` and `scripts/check_ci.py`: Python and Go suites in a three-platform matrix, aggregate
+- `.github/workflows/check.yml` and `scripts/check_ci.py`: Python and Go suites in a macOS and Linux matrix, aggregate
   check, skip-record check.
+- Documentation of the base image recipe (FR-007), outside the product commands.
 - `scripts/check_repo.py`: vendor-name gate of FR-022.
 - `apps/whr/internal/runtime/` (ADR 0010 layout): VM provider, driver port, fake driver and the added conformance cases.
