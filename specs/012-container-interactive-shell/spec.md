@@ -44,8 +44,13 @@ This feature defines that behavior for the container provider:
   characters (FR-002 there).
 - **Shell session**: one interactive login shell started by this feature inside an instance, with a pty allocated by the
   container runtime.
-- **Hand-over**: the point after which `whr` no longer writes to the terminal and the container runtime client owns the
-  terminal directly, as for `whr shell --local` (Feature 010 FR-010, FR-014).
+- **Commit point**: the move of the instance record from `ready` to `running` (FR-014), made as the last action before
+  the container runtime client is launched.
+- **Hand-over**: begins at the commit point. While the container runtime client runs, it owns the terminal directly and
+  `whr` writes nothing to the terminal stream, as for `whr shell --local` (Feature 010 FR-010, FR-014). Once the client has
+  ended, or on a signal, `whr` may write `whr:` lines to standard error (FR-015, FR-016). Feature 010 has the same tension
+  between its "nothing after the hand-over" sentence (FR-010) and its transport-loss `whr:` line (FR-008); this text states
+  the reading used here.
 
 ### Boundaries
 
@@ -64,17 +69,39 @@ This feature defines that behavior for the container provider:
 
 ### Owner decisions
 
-- **2026-10-31 (decision 1 of PR #290, not yet on `main`)**: the container provider should also get an interactive shell in the future;
-  until a separate feature builds it, the container provider keeps `interactive_shell=none`. This feature is the separate
-  feature. Its approval does not change what `main` says today; the change takes effect only through the tasks of a later
-  plan (see "Changes to existing documents").
+- **2026-10-31 (decision 1 of PR #290, not yet on `main`)**: the container provider should also get an interactive shell in
+  the future; until a separate feature builds it, the container provider keeps `interactive_shell=none`. This feature is
+  the separate feature. Its approval does not change what `main` says today; the change takes effect only through the
+  tasks of a later plan (see "Changes to existing documents").
 - **2026-10-31 (decisions 9 and 14 of PR #290, unmerged draft)**: one shared set of core commands for all backends, and one
   shell command that refuses with `refused.interactive_unavailable` where `pty` is not enforced. Feature 012 is referenced
   there as a draft. Nothing from #290 is relied on as merged.
-- No other owner decision is recorded for this feature. Choices below that go beyond the cited texts are author
-  proposals. The ones that matter are marked "author proposal" where they appear: the environment variable `WHR_SANDBOX_ID`
-  and the SIGHUP rule (FR-009, FR-013), the failure `reason` field and its values (FR-014, FR-016), the widened trigger of `running` to `failed` (FR-005),
-  the reading of a detach or lost client stream as a transport loss with exit 72 (FR-016), and the grant-free, local-only trust model (FR-010, Open question 6).
+- **2026-10-31 (decisions D1 to D8 for this feature)**, as the owner gave them to the author through the orchestrating
+  session; a tracker or PR link is added when the text is approved at an exact head:
+  - **D1**: a shell in an `untrusted_job` instance is allowed only after explicit confirmation with a warning that
+    unfiltered terminal control sequences from an instance process can act on the owner's terminal; no confirmation, no
+    shell; `--yes` alone does not satisfy it. `developer` needs no such confirmation (FR-023). The exact flag and prompt form
+    is an author proposal.
+  - **D2**: the container runtime's detach key sequence is disabled; the session ends only when the shell ends or the client
+    is interrupted or killed (FR-008, FR-016, FR-017).
+  - **D3**: the login shell is a field of the Plan next to the working directory; `/bin/sh` is the default for the job
+    profiles, and `developer` uses the shell of its development environment (FR-008).
+  - **D4**: `ready` does not imply a running container; a stopped or missing container is reported with exit 68 naming the
+    state and `whr` never starts it (FR-005).
+  - **D5**: no re-entry after `finished`; a shell is allowed from `ready` only, once per instance (FR-005).
+  - **D6**: the shell is local-only and needs no grant (FR-010).
+  - **D7**: a later `whr sandbox` invocation reconciles `running` records: if the exec process is no longer running in the
+    container, the record becomes `failed` with reason `session_lost` (FR-024). This is the owner's accepted direction and
+    depends on a provider query that is not verified; until it is, the gap stays under "Not enforced".
+  - **D8**: (a) a container stopped or removed from outside: the client status is passed through and the instance is
+    recorded `failed`/`container_lost`; (b) a client that cannot be launched: exit 74, `failed`/`start_failed`, no rollback
+    to `ready`; (c) `ready` to `running` is atomic, a new Feature 008 requirement with the mechanism left to the plan, and
+    "exactly one concurrent shell wins" depends on it; (d) for a killed client the client's exit status is passed through,
+    and the recorded status additionally holds the shell's status when readable and different (FR-014, FR-016).
+- Author proposals that remain (marked where they appear): the environment variable `WHR_SANDBOX_ID` (FR-009); the SIGHUP
+  rule (FR-013); the structure of the failure `reason` field and its values (FR-014); the reading of a client stream that ends
+  while the remote side did not exit as a transport loss with exit 72 (FR-015, FR-016); the exact confirmation form of D1
+  (FR-023); the owner process id and start time recorded for D7 (FR-024); the widened `running` to `failed` trigger text.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -122,8 +149,16 @@ against the request; each is refused with the stable code and zero provider call
    outcome table of FR-016 applies: the client's status is passed through unchanged, the instance is `failed` with reason
    `container_lost`, and no `whr:` line is written.
 2. **Given** the daemon is unreachable after the client ends, **Then** exit 72, `failed` with reason `transport_lost`.
-3. **Given** the user detaches with the detach keys and the shell keeps running, **Then** exit 72, `failed` with reason
-   `end_undetermined` (FR-016, FR-017).
+3. **Given** the container runtime client is killed and the shell keeps running, **Then** exit 72, `failed` with reason
+   `end_undetermined` (FR-016, FR-017). No key sequence detaches (FR-008).
+
+### User Story 5 - Confirmation for an untrusted job (Priority: P1)
+
+**Acceptance Scenarios**:
+
+1. **Given** a `ready` `untrusted_job` instance, **When** the command runs without confirmation, **Then** a warning about
+   unfiltered terminal control sequences is shown, and without an explicit confirmation no shell starts (exit 70) (FR-023).
+2. **Given** `--yes` alone, **Then** it does not count as confirmation. A `developer` instance asks for nothing.
 
 ### Edge Cases
 
@@ -131,8 +166,8 @@ against the request; each is refused with the stable code and zero provider call
   instance in `preparing`, `running`, `finished`, `failed`, `discarding`, `discarded` or `cleanup_incomplete`: refused
   `refused.invalid_state`, exit 68, no state change (FR-005, Feature 008 data model). A second shell on an instance whose
   first shell has not ended is the `running` case.
-- A `ready` record whose container is stopped or missing: exit 68 naming the state; `whr` starts nothing. Any other record
-  state is `refused.invalid_state` (FR-005 step 4).
+- A `ready` record whose container is stopped or missing: exit 68 naming the state; `whr` never starts the container (`ready`
+  does not imply a running container). Any other record state is `refused.invalid_state` (FR-005 step 4).
 - Unknown id: exit 65 (malformed id: 64). A container carrying only some of the ownership labels, or labels that do not match the instance
   record: `refused.foreign_object`, exit 68, zero mutations (FR-006).
 - The selector names the ADR 0009 workspace container, a container id or a name: it is not an instance id, so exit 64
@@ -141,14 +176,18 @@ against the request; each is refused with the stable code and zero provider call
 - `docker` client absent, daemon unreachable, a non-`unix://` endpoint or no permission on the socket: exit 68 with
   remediation, as Feature 010 FR-002 and FR-009 state for `shell --local`; no `sudo` is run.
 - The shell executable is missing in the image: the runtime reports its own error and status (126 or 127 are the usual
-  shell conventions), which `whr` cannot tell from a shell exit (Feature 010 Edge Cases, OQ-6). They pass through, the exec
-  process counts as ended, and the instance is `finished` with that status (row 3 of FR-016); there is no rollback to
-  `ready`. `whr` does not substitute another shell. Only a client that cannot be launched at all is a failed start (FR-014).
+  shell conventions), which `whr` cannot tell from a shell exit (Feature 010 Edge Cases, OQ-6). They pass through, and the
+  exec process counts as ended, so the instance is `finished` with that status (row 3 of FR-016); this relies on the
+  unverified end-of-exec query, and without it the case falls into row 4 (exit 72, `end_undetermined`). There is no rollback
+  to `ready`, and `whr` does not substitute another shell. Only a client that cannot be launched at all is a failed start
+  (FR-014).
 - The terminal type is hostile or unusual: `TERM` is validated, otherwise a fixed default is used (FR-009).
-- Two terminals attempt a shell on the same instance at once: the move `ready` to `running` is an atomic conditional transition (an author proposal, FR-014); if the record store
-  provides it, exactly one wins and the other gets `refused.invalid_state`, exit 68; without it only best effort is claimed.
-- The user detaches with the fixed detach keys, or the container runtime client is killed: FR-017. `whr` itself killed
-  without a handler (SIGKILL, out-of-memory kill, host crash): FR-017 and Open question 7.
+- Two terminals attempt a shell on the same instance at once: the move `ready` to `running` is atomic (FR-014), so exactly
+  one wins and the other gets `refused.invalid_state`, exit 68.
+- The container runtime client is killed: FR-017. `whr` itself killed without a handler (SIGKILL, out-of-memory kill, host
+  crash): FR-017 and FR-024.
+- The client binary disappears between step 5 and the launch: the launch fails, so it is a failed start (exit 74,
+  `start_failed`); reading it as an absent client (exit 68) is possible and is left to the plan.
 
 ## Requirements *(mandatory)*
 
@@ -179,7 +218,7 @@ against the request; each is refused with the stable code and zero provider call
 **Capability and admission**
 
 - **FR-003** (capability): The container provider MUST report `interactive_shell=pty` with status `enforced`, for each
-  profile it supports, only when the conformance cases of this feature (cases S12-C1 to S12-C7 below) pass for it and the real-host
+  profile it supports, only when the conformance cases of this feature (cases S12-C1 to S12-C9 below) pass for it and the real-host
   evidence gate of SC-010 is met. Until then it reports `interactive_shell=none` (Feature 011 FR-003 as it stands). A
   report claiming more than its tests prove is non-conformant (Feature 008 FR-018). The `scope` states that the claim covers
   a pty allocated by the container runtime for a login shell inside the instance's container, and nothing about what runs
@@ -196,20 +235,24 @@ against the request; each is refused with the stable code and zero provider call
   terminal conditions (FR-007), exit 64; (2) the instance record exists, exit 65; (3) `Admit` for the instance's profile and
   provider, exit 68 `refused.interactive_unavailable`; (4) the record's state is `ready` per the Feature 008 data model,
   otherwise `refused.invalid_state`, exit 68 (this reads only the record, so a `discarded`, `discarding`,
-  `cleanup_incomplete` or create-failed instance whose container is gone gets this code, not a container error);
+  `cleanup_incomplete` or create-failed instance whose container is gone gets this code, not a container error; a
+  `finished` instance is refused too, because a shell is allowed from `ready` only and once per instance, with no re-entry);
   (5) container runtime access: the client is present, the discovered endpoint is a `unix://` socket and the daemon is
   reachable, otherwise exit 68 with remediation (Feature 010 FR-002, FR-009); (6) ownership (FR-006): the provider
   inspects the container by its full id; if it no longer exists, exit 68 naming the state `missing` (not
   `refused.foreign_object`, which is for an existing object whose labels are absent or differ); (7) the container is running,
-  otherwise exit 68 naming the state (`stopped`, `paused` or `restarting`); (8) the forbidden-mount re-check of FR-018, with
-  the existing codes `refused.host_socket_mount` or `refused.tool_mount_writable`, exit 68. Step 4 reads only the record and
-  steps 5 to 8 make read-only provider queries only. The shell is allowed from `ready` only, so the Feature 008
-  state machine needs no new state or transition pair: `ready` to `running` at the commit point of FR-014, `running` to `finished` or `failed` at the end. No transition back to
-  `ready` exists: a failed start is `running` to `failed` (FR-014). Two trigger texts of the data model are widened
-  (see "Changes to existing documents"): the `ready` to `running` trigger "exec started" also covers a shell started, and
-  the `running` to `failed` trigger, which names only "cancellation, crash or deadline", also covers loss of the container
-  or daemon, a signal to `whr` after hand-over, and a session whose end cannot be established. No trigger moves a record
-  whose `whr` died without a handler after the commit point; that gap is named in FR-017.
+  otherwise exit 68 naming the state (`stopped`, `paused` or `restarting`); `whr` never starts, stops or changes the
+  container; (8) the forbidden-mount re-check of FR-018, with the existing codes `refused.host_socket_mount` or
+  `refused.tool_mount_writable`, exit 68; (9) for an `untrusted_job`, the confirmation of FR-023. Then the commit point of
+  FR-014. Step 4 reads only the record, steps 5 to 8 make read-only provider queries only, and step 9 talks to the person.
+  The Feature 008 state machine needs no new state or transition pair: `ready` to `running` at the commit point,
+  `running` to `finished` or `failed` at the end. No transition back to `ready` exists: a failed start is `running` to
+  `failed` (FR-014). Two trigger texts of the data model are widened (see "Changes to existing documents"): the `ready` to
+  `running` trigger "exec started" also covers a shell started, and the `running` to `failed` trigger, which names only
+  "cancellation, crash or deadline", also covers a client that cannot be launched (`start_failed`), loss of the container or
+  daemon, a signal to `whr` after the commit point, a session whose end cannot be established, and the reconciliation of
+  FR-024 (`session_lost`) (author proposal for the text; the behaviors are owner decisions D7 and D8). A `whr` that dies
+  without a handler after the commit point moves nothing by itself; FR-017 and FR-024 cover that.
 - **FR-006** (ownership): At step 6 of FR-005, before any change, the provider MUST inspect the target by its full id and verify that it carries
   every ownership label of the Feature 008 data model with values equal to the instance record (Feature 008 FR-005; the
   runtime-provider contract already requires `Create`, `Exec`, `Remove` and `Cancel` to re-verify). An existing object that lacks
@@ -226,8 +269,13 @@ against the request; each is refused with the stable code and zero provider call
 - **FR-008** (exec form): For the container provider the hand-over MUST be one invocation of the container runtime client
   with a fixed argument vector (no shell, no string evaluation) built only from validated values, addressing the
   container by full id and passing the discovered `unix://` endpoint explicitly, as Feature 010 FR-002 and FR-004 state
-  for `shell --local`. The invocation MUST request an interactive pty session, the fixed detach keys of Feature 010 FR-004,
-  the Plan's user and working directory, and the environment of FR-009. It MUST NOT use the runtime's privileged option,
+  for `shell --local`. The invocation MUST request an interactive pty session, MUST disable the runtime's detach key sequence
+  (owner decision D2; Feature 010 FR-004 instead fixes a rarely typed sequence for `shell --local`, a difference that
+  stays), the Plan's user, working directory and login shell, and the environment of FR-009. The Plan carries the login
+  shell as a field next to the working directory (D3): `/bin/sh` for the job profiles, and for `developer` the shell of its
+  development environment, which is the `human_shell` of the workspace manifest (Feature 006 FR-047; Feature 010 FR-005
+  reads it the same way). Whether the runtime can disable detaching is not verified; a provider whose runtime cannot MUST NOT
+  report `pty` with status `enforced`. It MUST NOT use the runtime's privileged option,
   add capabilities, add or change mounts, devices or limits, or read an environment file. The exact vector is the
   provider's and is asserted by the conformance suite (case S12-C2); this text states the constraints.
 - **FR-009** (environment): The command accepts no operator-supplied environment (FR-007). The shell environment has these
@@ -241,17 +289,19 @@ against the request; each is refused with the stable code and zero provider call
     (whose host configuration comes from the mount, FR-019 there);
   - `TERM` and `WHR_SANDBOX_ID=<id>` (author proposal, so a prompt can show it). `TERM` MUST be the host value when it
     matches `[A-Za-z0-9._+-]{1,64}`, otherwise `xterm-256color` (as Feature 010 FR-005).
-  No other host environment variable is forwarded. Other git-control variables in a job shell are scrubbed as for `Exec`,
-  with the scrub listed in the result. Because these sources are fixed and take nothing from the operator, the `developer`
+  No other host environment variable is forwarded. The Plan's environment was already filtered at `Create` (Feature 008
+  FR-023); `Shell` accepts no operator-supplied value, so it scrubs nothing and has no scrub list to report, and it removes
+  no variable that the image or container configuration sets (see "Not enforced"). Because these sources are fixed and take nothing from the operator, the `developer`
   refusal `refused.git_env_override` (an operator-supplied `GIT_CONFIG_*` variable) cannot arise for a shell; that holds only
   as long as the sources stay these. Values MUST NOT be placed in the argument vector (visible to other local users in the
   process list); the provider passes them by a route that does not expose them, which is to be verified (Verification
   before the plan).
 - **FR-010** (notice): When standard error is a terminal, `whr` MUST write one line to it before the hand-over, with the
-  instance id and profile escaped per Feature 006 FR-022, naming that the session has no grant, uses host container
-  runtime access and which detach keys apply (the byte-exact text is fixed by the plan, modeled on Feature 010 FR-010).
-  The grant-free, local-only model behind this line is an author proposal (Open question 6).
-  After the hand-over `whr` MUST write nothing to the terminal stream. Color MUST NOT be required.
+  instance id and profile escaped per Feature 006 FR-022, naming that the session has no grant and uses host container
+  runtime access (the byte-exact text is fixed by the plan, modeled on Feature 010 FR-010; no detach keys exist to name). The
+  command is local-only and needs no grant (owner decision D6; it extends the exception that Feature 006 FR-006 makes for
+  `shell --local`, see the changes list). While the client owns the terminal `whr` MUST write nothing to the terminal
+  stream. Color MUST NOT be required.
 - **FR-011** (terminal safety): The terminal-safety rules are those of the local shell of Feature 006 as Feature 011
   FR-016 requires: `whr` does not relay the stream, the container's process owns the terminal directly, and the OSC, DCS,
   APC, PM and SOS filtering of Feature 006 FR-022a does not apply to it (Feature 006 FR-022a states this exception for
@@ -259,7 +309,8 @@ against the request; each is refused with the stable code and zero provider call
   candidate lists), which contain untrusted names. `--help` MUST state that the session stream is neither inspected nor
   filtered. Consequence, stated plainly: a process in the instance, including one in an `untrusted_job`, can write
   control sequences that change the terminal title, write the clipboard or otherwise act on the owner's terminal. This
-  feature does not prevent that (see "Not enforced" and Open question 1).
+  feature does not prevent that; for an `untrusted_job` it requires an explicit, informed confirmation first (FR-023, owner
+  decision D1) and states the rest under "Not enforced".
 - **FR-012** (resize): The initial terminal size MUST reach the in-container pty at start, and later size changes MUST be
   propagated for the lifetime of the session. For the container provider this is expected to be carried by the container
   runtime client (Feature 010 Edge Cases states the same expectation for `shell --local`); it is not verified here and is
@@ -272,72 +323,78 @@ against the request; each is refused with the stable code and zero provider call
   - SIGHUP (for example the terminal closes) before the commit point: handled like SIGTERM (author proposal; Feature 006
     names only SIGINT and SIGTERM);
   - SIGINT, SIGTERM or SIGHUP after the commit point (hand-over has begun): `whr` records the instance `failed` with reason `interrupted`, exits 72 with a
-    `whr:` line, and does not claim that the in-container shell ended (FR-017).
+    `whr:` line once the client has ended or been abandoned, and does not claim that the in-container shell ended (FR-017).
+    A signal while the confirmation prompt of FR-023 is shown is before the commit point.
   How the container runtime client reacts to these signals is not verified here.
 
 **Exit status and lifecycle**
 
 - **FR-014** (state and record): The notice of FR-010 is written first. The commit point is the move of the instance record
   from `ready` to `running`, made as the last action before the container runtime client is launched; hand-over begins at
-  the commit point. The move MUST be an atomic conditional transition (applied only if the state is still `ready`; the loser
-  of a race gets `refused.invalid_state`, exit 68, and starts nothing). Feature 008 defines no instance-record store, location,
-  lock or atomic update, so this is an author proposal and a new Feature 008 requirement (the mechanism is fixed by the
-  plan); "exactly one concurrent start wins" depends on it. A failed start is only this: the client cannot be launched (an
-  operating-system error); the record then moves `running` to `failed` with reason `start_failed`, exit 74 and a `whr:` line.
-  There is no transition back to `ready`. When the provider has established that the shell process ended (FR-016) the record
-  moves to `finished`; the status passed through is the client's exit status, and the status recorded is that client status
-  too, plus the exec process's own status when the provider can read it and it differs (a killed client reports its own
-  signal status, for example 137, not the shell's; author proposal). A recorded status is not acceptance (Feature 008 FR-007). A loss, a signal after hand-over,
-  or an undetermined end moves the instance to `failed` with a `reason` (author proposal: a new field of the instance
-  record, with the values `transport_lost`, `container_lost`, `end_undetermined`, `interrupted` and `start_failed`), from which export
-  remains allowed for the job profiles with
-  `partial=true` (Feature 008 FR-007). A `developer` instance keeps its results in the repository (data model), so it has no
-  result bundle; the `failed` state and reason are the only record that the session did not end cleanly. `discard` is refused while the instance is `running` (data model); `clean` only selects finished or failed ephemeral instances (command-surface.md), so it does not touch a `running` one.
-  The session content, the environment and the terminal bytes MUST NOT be recorded or logged; only the `whr:` lines and the
-  status/reason fields are (as Feature 010 FR-015).
+  the commit point. The move MUST be atomic: it applies only if the state is still `ready`, and the loser of a race gets
+  `refused.invalid_state`, exit 68, and starts nothing. This is a new Feature 008 requirement (owner decision D8c): that
+  specification defines no instance-record store, location, lock or atomic update, so the mechanism is left to the plan, and
+  "exactly one concurrent shell wins" depends on it. A failed start is only this: the client cannot be launched (an
+  operating-system error); the record then moves `running` to `failed` with reason `start_failed`, exit 74 and a `whr:` line;
+  there is no transition back to `ready` (D8b). When the provider has established that the shell process ended (FR-016) the
+  record moves to `finished`. The status passed through is the client's exit status. The status recorded is that client
+  status and, when the provider can read the exec process's own status and it differs (a killed client reports its own signal
+  status, for example 137, not the shell's), also the shell's status (D8d). A recorded status is not acceptance (Feature 008
+  FR-007). A loss, a signal after the commit point, a failed start, an undetermined end or a reconciliation moves the
+  instance to `failed` with a `reason` (author proposal for the field; values `transport_lost`, `container_lost`,
+  `end_undetermined`, `interrupted`, `start_failed` and `session_lost`), from which export remains allowed for the job
+  profiles with `partial=true` (Feature 008 FR-007). A `developer` instance keeps its results in the repository (data model),
+  so it has no result bundle; the `failed` state and reason are the only record that the session did not end cleanly.
+  `discard` is refused while the instance is `running` (data model); `clean` only selects finished or failed ephemeral
+  instances (command-surface.md), so it does not touch a `running` one. The session content, the environment and the
+  terminal bytes MUST NOT be recorded or logged; only the `whr:` lines and the status/reason fields are (as Feature 010
+  FR-015).
 - **FR-015** (exit codes): The command MUST use the ADR 0013 table as it stands, with no new code or category:
   - the status of the remote side, 0 to 255, unchanged, whenever the exec process has exited and the daemon is reachable,
     including when it died because its container was stopped or removed (the passthrough rule, Feature 006 FR-019 and
     Feature 010 FR-008, which name `shell` including `shell --local`, `console`, `ssh` and `agent attach` today;
-    `sandbox shell` is added by the amendment listed below);
+    `sandbox shell` is added by the amendment listed below). One stated exception to "the remote status": when the container
+    runtime client was killed, the passed-through status is the client's own signal status (D8d), not the shell's; the
+    amendments of Feature 006 FR-019 and ADR 0013 say so;
   - 64 for usage, no terminal, `--json`, a trailing command or further argument;
   - 65 for an unknown instance;
   - 68 for any `refused.*` (including `refused.interactive_unavailable`, `refused.foreign_object`,
     `refused.invalid_state`), a non-running container, an absent client, an unreachable
     socket or a non-`unix://` endpoint (the mapping of Feature 008 FR-035 and Feature 010 FR-009), all before the hand-over;
   - 72 only where the ADR 0013 definition ("user interrupt, or transport lost during an interactive command") holds:
-    SIGINT, SIGTERM or SIGHUP before or after the hand-over, daemon unreachable after the client ends, and a client stream
-    that ended while the remote side did not exit (a deliberate detach, or a lost client). Reading that last case as a
-    transport loss is an author proposal for the owner to confirm; it needs no new code;
+    SIGINT, SIGTERM or SIGHUP before or after the commit point, daemon unreachable after the client ends, and a client stream
+    that ended while the remote side did not exit (a killed or lost client). Reading that last case as a transport loss
+    is an author proposal for the owner to confirm; it needs no new code;
+  - 70 for a confirmation (FR-023) that is declined, not given, or missing in a non-interactive run (ADR 0013: a required
+    human decision refused or not given; command-surface.md already lists "unattended confirmation missing" under 70);
   - 74 for an unclassified failure, including a client that cannot be launched (`start_failed`, FR-014).
-  Exit codes 66 and 67 are not used (no remote authority), 70 is not used (no confirmation exists), 71 and 73 are not used
-  by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
+  Exit codes 66 and 67 are not used (no remote authority), 71 and 73 are not used by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
   and a status coming from the shell MUST NOT (Feature 010 FR-008, ADR 0013). `--json` is rejected, so the `kind`
   field of the JSON exit event is not available for this command. The `whr:` line is advisory (ADR 0013), so for
   `sandbox shell` a status in 64 to 79 is ambiguous by design, as ADR 0013 and `contracts/cli/exit-codes.json` state for
   `ssh`, including a remote 72 against the CLI's own 72; the same gap already exists for `shell --local`.
-- **FR-016** (end of the session; author proposal for the table): After every client exit, whatever its status (a detach can
-  exit 0), `whr` MUST run one read-only query within a 5-second budget (Feature 010 FR-004, FR-008 pattern) that establishes
-  the daemon, the container state and whether the exec process has ended. Establishing the last point is the provider's
-  responsibility and uses a read-only query (Verification before the plan). The outcome is one row of this table:
+- **FR-016** (end of the session): After every client exit, whatever its status, `whr` MUST run one read-only query within a
+  5-second budget (Feature 010 FR-004, FR-008 pattern) that establishes the daemon, the container state and whether the exec
+  process has ended. Establishing the last point is the provider's responsibility and uses a read-only query that is not
+  verified (Verification before the plan). The outcome is one row of this table:
 
   | Case | Exit code | Instance | `whr:` line |
   | --- | --- | --- | --- |
   | Daemon unreachable, or the query does not answer in time | 72 | `failed`, reason `transport_lost` | yes |
-  | Daemon reachable; container stopped (not running) or removed | the client status, 0 to 255, unchanged (the remote process exited) | `failed`, reason `container_lost` | no (a remote status) |
+  | Daemon reachable; container stopped (not running) or removed (owner decision D8a) | the client status, 0 to 255, unchanged (the remote process exited) | `failed`, reason `container_lost` | no (a remote status) |
   | Container running; exec process ended | the client status, 0 to 255, unchanged | `finished`, status recorded as in FR-014 | no |
-  | Container running; exec process still running or its end cannot be established (deliberate detach, or a client lost without a signal to `whr`) | 72 (the client stream ended, the remote side did not exit) | `failed`, reason `end_undetermined` | yes |
+  | Container running; exec process still running or its end cannot be established (a killed or lost client) | 72 (the client stream ended, the remote side did not exit) | `failed`, reason `end_undetermined` | yes |
 
-  Why (author proposal, to be confirmed by the owner): when the daemon is reachable and the exec process has exited, even
-  because its container was stopped or removed, the remote side did exit, so the status passes through as Feature 006 FR-019
-  and Feature 010 FR-008 require; the instance is nevertheless recorded `failed` with reason `container_lost`, because the
-  shell did not end by itself, and the status alone (for example 137 or 143, or 0) cannot tell the two apart. A stop or
-  removal caused by the shell's own commands falls in the same row. A client stream that ends while the remote side did not
-  exit is read as a transport loss (exit 72, ADR 0013), including a deliberate detach; if the owner wants another code for it,
-  that is an ADR 0013 decision. Signals sent to `whr` are FR-013.
-- **FR-017** (detach, orphans and a killed `whr`): The fixed detach keys of Feature 010 FR-004 can leave the in-container shell
-  running after the client ends, and a killed client can too (Feature 010 FR-007 accepts this for `shell --local`). This
-  feature does not track or reap such a process. When the container runtime client ended, by detach or by being killed, while
+  Why: when the daemon is reachable and the exec process has exited, even because its container was stopped or removed, the
+  remote side did exit, so the status passes through as Feature 006 FR-019 and Feature 010 FR-008 require; the instance is
+  nevertheless recorded `failed` with reason `container_lost`, because the shell did not end by itself, and the status alone
+  (for example 137 or 143, or 0) cannot tell the two apart. A stop or removal caused by the shell's own commands falls in the
+  same row. Because no key sequence detaches (FR-008), a deliberate detach does not exist. A client stream that ends while
+  the remote side did not exit is read as a transport loss (exit 72, ADR 0013); that reading is an author proposal, and if
+  the owner wants another code for it, that is an ADR 0013 decision. Signals sent to `whr` are FR-013.
+- **FR-017** (killed client, orphans and a killed `whr`): With detaching disabled (FR-008), the session ends when the shell
+  ends or when the client is interrupted or killed. A killed client can leave the in-container shell running (Feature 010
+  FR-007 accepts this for `shell --local`). This feature does not track or reap such a process. When the client ended while
   `whr` itself is still running, the FR-016 query selects the row: if the exec process is still running or its end cannot be
   established, the last row (exit 72, `failed`, `end_undetermined`, a `whr:` line), so that a job profile's export carries
   `partial=true` (Feature 008 FR-007); if the exec process has already ended, row 3, with the status rules of FR-014. A running
@@ -348,8 +405,15 @@ against the request; each is refused with the stable code and zero provider call
   launch of the client, when no exec was ever started (SIGKILL, out-of-memory kill, host crash), produces no exit code, no
   `whr:` line and no further transition: the record stays `running`, `discard` refuses it, `clean` does not select it, a new
   shell is refused at step 4 of FR-005 and export is not allowed (the data model allows it only from `finished` or `failed`),
-  so job results cannot be exported either. This feature defines no recovery for that case (Open question 7). Whether the
-  shell session should disable detaching is Open question 2.
+  so job results cannot be exported either, until the reconciliation of FR-024 has run.
+- **FR-024** (reconciliation of `running` records; owner direction D7): A later `whr sandbox` invocation MUST, before it
+  acts on a `running` record, check whether the exec process still runs in the container; if it does not (it ended, or was
+  never started), the record becomes `failed` with reason `session_lost`, from which export and `discard` follow the rules of
+  FR-014. A record whose owner is still alive MUST NOT be touched: the plan therefore has the `running` record carry the owner
+  process id and start time (author proposal, modeled on the reservation record of Feature 011 FR-009), so that a concurrent
+  `whr` between the commit point and the launch is not marked. The query that tells whether the exec process runs is not
+  verified (Verification before the plan). Until it is, no provider may claim this behavior, and the gap of FR-017 remains
+  listed under "Not enforced".
 
 **Security**
 
@@ -383,35 +447,55 @@ against the request; each is refused with the stable code and zero provider call
   011 FR-022 lists its gated files and does not include this one; adding it is not part of this feature's change list
   (the owner may add it to Feature 011's list).
 
+- **FR-023** (confirmation for an `untrusted_job`; owner decision D1): Before the commit point, for an `untrusted_job`
+  instance only, the command MUST warn that unfiltered terminal control sequences written by a process in the instance can
+  act on the owner's terminal (title, clipboard and similar, FR-011) and MUST NOT start the shell without an explicit
+  confirmation of that warning. `--yes` alone MUST NOT satisfy it. `developer` and `cooperative_job` ask for no such
+  confirmation (the owner decided on `untrusted_job` only). Exit codes use the existing conventions: a declined or unanswered
+  prompt, or a non-interactive run without the confirmation flag, is 70 (needs-human, ADR 0013; Feature 008 command-surface.md
+  lists 70 for a missing unattended confirmation); a confirmation value that does not match is 64. The exact form is an
+  author proposal: a prompt that shows the warning and requires typing the instance id, and a flag `--confirm <id>` whose
+  value must equal the instance id (the per-item `--confirm <id>` pattern of Feature 009 and Feature 011 FR-033). The
+  confirmation is not part of `Admit` (it is not a capability) and adds no refusal code. It does not remove the risk; see
+  "Not enforced".
+
 **Conformance (cases added to the Feature 008 suite)**
 
-The labels S12-C1 to S12-C7 are stable. Feature 008 numbers its own cases 1 to 8 and Feature 011 FR-025 appends further cases
+The labels S12-C1 to S12-C9 are stable. Feature 008 numbers its own cases 1 to 8 and Feature 011 FR-025 appends further cases
 to the same suite, so the plan assigns the final numbers and updates the references here.
 
 
 S12-C1. `Shell` on a provider with `interactive_shell` of `none`, `pty`+`not_enforced` and `pty`+`unknown` is refused with
    `refused.interactive_unavailable` and zero provider side-effect calls (FR-004).
-S12-C2. The recorded exec plan for each profile has: full container id, explicit endpoint, interactive pty, detach keys, the
-    Plan's user and working directory; no privileged option, capability, mount, device, limit or env-file; no environment
+S12-C2. The recorded exec plan for each profile has: full container id, explicit endpoint, interactive pty, the detach key
+    sequence disabled, the Plan's user, working directory and login shell (`/bin/sh` for the job profiles by default); no privileged option, capability, mount, device, limit or env-file; no environment
     value in the argument vector (FR-008, FR-009, FR-018).
 S12-C3. Environment: only the sources listed in FR-009; jobs carry `GIT_CONFIG_GLOBAL` (the read-only profile file) and
     `GIT_CONFIG_NOSYSTEM=1`, `developer` carries neither; identity variables present in a job shell only if `Create` put them
-    in the container environment, otherwise absent; other git-control variables scrubbed for jobs; hostile `TERM` falls back;
-    the command accepts no operator environment (FR-007, FR-009).
+    in the container environment, otherwise absent; no operator-supplied value is accepted or scrubbed and no scrub list exists; hostile `TERM` falls back (FR-007, FR-009).
 S12-C4. Ownership: missing label, value mismatch and an unlabeled object behind an existing instance record are refused with `refused.foreign_object` and zero
     mutations; a selector that is a container id, a name or the ADR 0009 workspace container exits 64 or 65 (FR-002, FR-006).
-S12-C5. State (against a provider reporting `pty`/`enforced`; against `none`, `Admit` refuses first with `refused.interactive_unavailable`): every state other than `ready` is refused with `refused.invalid_state`, including a `discarded` record whose container no longer exists (the state check precedes the container inspection); for a `ready` record, a stopped, paused, restarting or missing container exits 68 naming the state and is not `refused.foreign_object`; two concurrent starts on one `ready` record: with the atomic conditional transition of FR-014 one wins and the other gets `refused.invalid_state`; `ready` becomes `running` then
+S12-C5. State (against a provider reporting `pty`/`enforced`; against `none`, `Admit` refuses first with `refused.interactive_unavailable`): every state other than `ready` is refused with `refused.invalid_state`, including a `discarded` record whose container no longer exists (the state check precedes the container inspection); for a `ready` record, a stopped, paused, restarting or missing container exits 68 naming the state and is not `refused.foreign_object`; two concurrent starts on one `ready` record: exactly one wins (the atomic transition of FR-014) and the other gets `refused.invalid_state`; a `finished` record gets no second shell; `ready` becomes `running` then
     `finished`; `discard` refuses a `running` instance and `clean` does not select it (FR-005, FR-014).
 S12-C6. Terminal: stdin or stdout not a terminal, `--json`, trailing arguments exit 64 and call no pty-allocating operation
     (FR-007); exit status 0, 1, 2, 126, 127, 130 and 255 pass through unchanged; a CLI failure writes a `whr:` line and a
     shell status does not (FR-015).
 S12-C7. End of session: each row of the FR-016 table with its exit code, instance state, reason and `whr:` line (daemon
-    unreachable 72, container stopped or removed (client status passed through, `failed`, no `whr:` line), ended with status passed through, still running or
-    undetermined 72 including a detach that exits 0); SIGINT, SIGTERM and SIGHUP before the commit point leave no state change and exit 72; after
-    it exit 72 and `failed` with reason `interrupted`; a client that cannot be launched gives `failed`/`start_failed`, exit 74
-    and no rollback to `ready`; a missing shell executable (status 126 or 127) passes through and ends `finished`; a killed
-    client whose exec process already ended is row 3 with the client's own signal status passed through and recorded
-    (FR-013, FR-014, FR-016, FR-017).
+    unreachable 72; container stopped or removed: client status passed through, `failed`/`container_lost`, no `whr:` line;
+    exec ended: status passed through, `finished`; killed or lost client with the exec still running or undetermined: 72,
+    `end_undetermined`); no key sequence detaches; SIGINT, SIGTERM and SIGHUP before the commit point leave no state change
+    and exit 72, and after it exit 72 and `failed`/`interrupted`; a client that cannot be launched gives
+    `failed`/`start_failed`, exit 74 and no rollback to `ready`; a missing shell executable (status 126 or 127) passes
+    through and ends `finished` where the end-of-exec query exists, otherwise falls into row 4; a killed client whose exec
+    process already ended is row 3 with the client's own signal status passed through and the shell's status also recorded
+    when readable and different (FR-013, FR-014, FR-016, FR-017).
+S12-C8. Confirmation: an `untrusted_job` without confirmation starts nothing; a prompt declined or unanswered gives 70; a
+    non-interactive run without `--confirm <id>` gives 70; `--yes` alone gives 70; a mismatching `--confirm` value gives 64;
+    a matching confirmation proceeds; `developer` and `cooperative_job` are never asked; a signal during the prompt exits 72
+    with no state change (FR-023, FR-013).
+S12-C9. Reconciliation (needs the verified query): a `running` record whose exec process is gone or was never started becomes
+    `failed`/`session_lost` on a later `whr sandbox` invocation; a `running` record whose owner process is alive is untouched;
+    after reconciliation `discard` and, for jobs, export work as for `failed` (FR-024).
 
 ### Key Entities
 
@@ -429,8 +513,11 @@ This feature enforces nothing about what happens inside the shell. In particular
 - limit what a person or program does with the instance's mounts, network (no egress enforcement,
   `egress_enforcement=none` for the container provider) or credentials already present;
 - provide kernel isolation beyond the shared-kernel claim of the container provider (`kernel_isolation=shared_kernel`);
-- end, track or reap an in-container shell after a detach or after `whr` is killed (FR-017);
-- recover an instance left `running` when `whr` died without a handler after the commit point (FR-017, Open question 7);
+- end, track or reap an in-container shell after the client or `whr` is killed (FR-017);
+- recover an instance left `running` when `whr` died without a handler after the commit point, until the reconciliation
+  query of FR-024 is verified and built;
+- make the confirmation of FR-023 anything but an informed consent: it does not filter terminal sequences, and it is not
+  asked for `developer` and `cooperative_job`, whose shells have the same unfiltered channel;
 - stop a person in the shell from exporting `GIT_CONFIG_*` or other git-control variables themselves, or remove variables the
   image sets (FR-009 describes only the environment the shell starts with);
 - hide the shell's process, environment or file contents from other processes in the same container;
@@ -443,26 +530,26 @@ This feature enforces nothing about what happens inside the shell. In particular
 - **SC-001**: The admission table for `interactive_shell` (`none`, `pty` not enforced, `pty` unknown, `pty` enforced) yields
   the expected decision, with `refused.interactive_unavailable` and zero side-effect calls for the first three (FR-004,
   Feature 011 SC-014).
-- **SC-002**: The container provider's reports contain `interactive_shell=none` until cases S12-C1 to S12-C7 pass and the
+- **SC-002**: The container provider's reports contain `interactive_shell=none` until cases S12-C1 to S12-C9 pass and the
   real-host evidence of SC-010 is recorded, and `pty`/`enforced` afterward (FR-003).
 - **SC-003**: The recorded exec plan matches FR-008, FR-009 and FR-018 for each of the three profiles, with a canary
   host-socket, writable-tool-mount and credential fixture absent (Feature 008 FR-027 style).
 - **SC-004**: Foreign, partially labeled and mismatched objects are refused with zero mutations (FR-006).
 - **SC-005**: Against a provider reporting `pty`/`enforced`, every state other than `ready`, including `discarded` with no
   container, is refused with
-  `refused.invalid_state` and unchanged; of two concurrent starts exactly one proceeds (FR-014); a `ready` record with a missing container exits 68 naming `missing`, not
+  `refused.invalid_state` and unchanged; of two concurrent starts exactly one proceeds (FR-014, MUST); a `finished` record gets no second shell; a `ready` record with a missing container exits 68 naming `missing`, not
   `refused.foreign_object` (FR-005, FR-014).
 - **SC-006**: Non-terminal use, `--json`, trailing arguments exit 64 without allocating a pty (FR-007).
-- **SC-007**: Shell statuses 0 to 255 pass through unchanged and CLI failures use only 64, 65, 68, 72, 74 with a `whr:` line
+- **SC-007**: Shell statuses 0 to 255 pass through unchanged and CLI failures use only 64, 65, 68, 70, 72, 74 with a `whr:` line
   (FR-015); the exit mapping function of Feature 008 T004 (`ExitFor`) gains no new code and its freeze test is unchanged
   except for the `sandbox shell` passthrough entry once the ADR 0013 amendment lands.
-- **SC-008**: Signals, loss, container stop or removal, and detach produce exactly the exit code, state, reason and `whr:`
+- **SC-008**: Signals, loss, container stop or removal, and a killed client produce exactly the exit code, state, reason and `whr:`
   line of the FR-016 table and FR-013 (case S12-C7), with no recorded session content (FR-014).
-- **SC-009**: A second provider fixture declaring `pty` passes cases S12-C1 to S12-C7 with no change to production contract code
+- **SC-009**: A second provider fixture declaring `pty` passes cases S12-C1 to S12-C9 with no change to production contract code
   (FR-022, Feature 008 SC-010).
 - **SC-010** (owner gate, real host): on a real Docker host with a terminal, evidence recorded in the PR or tracker shows:
   a shell starts and its status passes through; resize reaches the pty; job control (suspend, resume, interrupt) acts
-  in the container; stopping the container from another terminal gives the `container_lost` row of the FR-016 table (status passed through, instance `failed`), and a detach gives the `end_undetermined` row; the environment passing route of
+  in the container; stopping the container from another terminal gives the `container_lost` row of the FR-016 table (status passed through, instance `failed`), and a killed client with the shell still running gives the `end_undetermined` row; no key sequence detaches; the environment passing route of
   FR-009 does not expose values in the process list. Until this evidence exists FR-003 keeps `none`.
 - **SC-011**: FR-001, FR-002, FR-010, FR-011, FR-012, FR-020 and the notice and help text parts of FR-022 are checked
   by independent review of the spec and, at implementation, by the tests named in the plan: FR-001 and FR-002 by the
@@ -471,48 +558,39 @@ This feature enforces nothing about what happens inside the shell. In particular
   (no credential in the environment) and case S12-C2 (none in the argument vector) in addition to SC-003; FR-021 is a
   statement of scope covered by SC-003 and case S12-C2 and has no separate test.
 
+- **SC-012**: An `untrusted_job` shell starts only after the explicit confirmation of FR-023, `--yes` alone never starts it,
+  the exit codes are 70 and 64 as FR-023 states, and `developer` is never asked (case S12-C8).
+- **SC-013**: With the verified query, reconciliation marks gone or never-started `running` records `failed`/`session_lost`
+  and leaves live ones alone (case S12-C9). Before the query is verified this criterion is not claimed and the gap stays
+  under "Not enforced".
+
 ## Open questions for the owner
 
-1. **Untrusted jobs and terminal sequences.** Admission is by capability and does not exclude `untrusted_job`
-   (Feature 008 FR-024), and the stream is not filtered (FR-011). Should an `untrusted_job` shell be excluded, require an
-   explicit acknowledgement, or be served by a filtering relay (a different design with its own pty handling, cf. Feature 006
-   FR-022a)? Until decided this text admits it and states the risk.
-2. **Detach keys.** Should the sandbox shell disable detaching so that closing the client reliably ends the session, if the
-   container runtime allows it (not verified; Feature 010 FR-004 reports the documentation is silent)?
-3. **Shell for job profiles.** Feature 010 FR-005 takes the shell from the workspace manifest. A job's scratch home has
-   no equivalent in Feature 008. Which login shell does the Plan carry for `cooperative_job` and `untrusted_job`?
-4. **`ready` and a running container.** Feature 008 does not say whether a `ready` instance's container is already running
-   (FR-005 step 7 refuses a stopped one and starts nothing). Should `ready` imply a running container?
-5. **Re-entry.** The state machine allows one shell (or exec) per instance, because `finished` only allows export and
-   discard. Is that acceptable, or should a later change allow `finished` to `running` again?
-
-6. **Grant-free, local-only shell.** Feature 006 FR-006 requires grants for `shell`, with `shell --local` as the only
-   exception (Feature 010 FR-013). This text proposes that `sandbox shell` is also local-only and grant-free, because the
-   `sandbox` group has no remote counterpart. Does the owner accept that extension, or should another route be defined?
-7. **Instance left `running` after a hard kill of `whr`.** If `whr` dies without a handler at any point after the commit
-   point (FR-014), including before the container runtime client was launched, the record stays `running`: `discard`, a new
-   shell and export are all refused or unavailable (FR-017). Should a later `whr` invocation reconcile `running` records whose
-   exec process is no longer running or was never started (marking them `failed`), should another command force it, or is
-   the gap acceptable? No recovery is defined here.
+None remain from the points raised so far: Open questions 1 to 7 of earlier drafts were decided by the owner on 2026-10-31
+(D1 to D7 above). What is left is for the plan, not for a decision: the mechanism of the atomic start transition (D8c), the
+exact confirmation form (FR-023), and the verification items below.
 
 ## Assumptions
 
-- The instance and Plan model of Feature 008 is unchanged and `Create` produces a container that is able to host an exec
-  session; this is not stated in Feature 008 (Open question 4).
-- The container provider is local-only and uses the same host Docker access as `shell --local`; there is no control-plane
-  path and no grant, and the relaxation reasoning of Feature 010 FR-013 would apply by analogy. That is an author proposal
-  (Open question 6), not a decision, and it needs the Feature 006 amendments listed below.
-- Reading about the container runtime client (resize carriage, signal handling, detach semantics, environment passing) in
+- The instance and Plan model of Feature 008 is unchanged apart from the additions in "Changes to existing documents", and
+  `Create` produces a container that is able to host an exec session; `ready` does not imply that the container is running
+  (D4), so a stopped container is reported, never started.
+- The container provider is local-only and uses the same host Docker access as `shell --local` (D6); there is no
+  control-plane path and no grant. This extends the relaxation reasoning of Feature 010 FR-013 and needs the Feature 006
+  amendments listed below.
+- Reading about the container runtime client (resize carriage, signal handling, environment passing, detach disabling) in
   other specs is secondhand; none of it was run for this feature.
 
 ### Verification before the plan (checks, not decisions)
 
-- Whether the container runtime client carries the initial and later terminal size for a detached-keys exec (FR-012).
+- Whether the container runtime client carries the initial and later terminal size for the exec (FR-012).
+- Whether the runtime can disable its detach key sequence (FR-008); if not, no provider may report `pty`/`enforced`.
 - Which route passes environment values to the exec without placing them in the argument vector (FR-009).
 - How the client behaves on SIGHUP, SIGTERM and SIGINT sent to it after the hand-over, and what status it returns for a
-  detach, a stop and a removed container (FR-013, FR-016).
+  killed client, a stop and a removed container (FR-013, FR-016).
 - Which read-only query establishes that the exec process ended (the command-line client does not print an exec id; the
-  engine API is a candidate) (FR-014, FR-016).
+  engine API is a candidate) (FR-014, FR-016), and the same or a related query for the reconciliation of FR-024 (exec process
+  gone or never started).
 
 ## Changes to existing documents (on approval; each lands through the plan and tasks, none is made by this change)
 
@@ -527,29 +605,38 @@ This feature enforces nothing about what happens inside the shell. In particular
   provider (after 011 A1: `none` becomes `pty`); a `Shell` operation on the illustrative interface; conformance cases S12-C1 to
   S12-C7; the note that `Create`, `Exec`, `Shell`, `Remove` and `Cancel` re-verify ownership.
 - `specs/008-workspace-sandbox/contracts/command-surface.md`: verbs table row for `shell`; exit-code paragraph.
-- `specs/008-workspace-sandbox/data-model.md` and `contracts/`: the `ready` to `running` trigger "exec started" also covers a shell started
-  (Shell is an operation separate from Exec) and the transition becomes an atomic conditional update of the instance record
-  (a new requirement and an author proposal; the data model and Feature 008 define no record store or locking, so the
-  mechanism is fixed by the plan), and the `running` to `failed` trigger text is widened beyond
-  "cancellation, crash or deadline" to the losses of FR-014 and FR-016; a failure `reason` on the instance record (values `transport_lost`, `container_lost`, `end_undetermined`, `interrupted`, `start_failed`) and, beside the recorded status, the optional exec process status (FR-014); Plan gains the
-  login shell (Open question 3) and a working directory (the data model's Plan lists user and home but no working directory;
-  the per-profile values are fixed by the plan). `refusal-codes.json`: the "when" text of `refused.host_socket_mount` ("would be mounted", plan-time wording) is widened to
-  "is or would be mounted", and that of `refused.tool_mount_writable` ("would be writable") to "is or would be writable", so
-  that both cover the step-8 re-check of an existing container (FR-018); no code beyond Feature 011's `refused.interactive_unavailable`; if Feature 011 has not landed first,
-  append that one code (see FR-004).
-- `specs/008-workspace-sandbox/tasks.md` and `plan.md`: new tasks and evidence rows for cases S12-C1 to S12-C7, after T001 and T002.
-- `docs/adr/0013-whr-exit-codes.md` and `contracts/cli/exit-codes.json` (passthrough `commands`): add `sandbox shell`; no definition changes. The ambiguity note is extended to `sandbox shell` (text only; the ADR and `exit-codes.json` name only `ssh` today, and
-  `shell --local` has the same gap). The owner confirms the author reading that a client stream
-  ending while the remote side did not exit (including a detach) is a transport loss (72); if not, that is an ADR 0013 decision.
+- `specs/008-workspace-sandbox/data-model.md` and `contracts/`:
+  - the `ready` to `running` trigger "exec started" also covers a shell started (Shell is an operation separate from Exec),
+    and the transition is an atomic conditional update of the instance record (a new Feature 008 requirement, owner decision
+    D8c; the data model and Feature 008 define no record store or locking, so the mechanism is fixed by the plan);
+  - the `running` to `failed` trigger text is widened beyond "cancellation, crash or deadline" to a client that cannot be
+    launched (`start_failed`), loss of the container or daemon, a signal to `whr` after the commit point, a session whose end
+    cannot be established, and the reconciliation `session_lost` (FR-024; the reconciliation depends on a query that is not
+    verified, and the `running` record carries an owner process id and start time);
+  - a failure `reason` on the instance record (values `transport_lost`, `container_lost`, `end_undetermined`, `interrupted`,
+    `start_failed`, `session_lost`) and, beside the recorded status, the optional exec process status (FR-014);
+  - Plan gains a working directory (the data model's Plan lists user and home but no working directory; the per-profile
+    values are fixed by the plan) and a login shell field (D3: `/bin/sh` default for the job profiles; `developer` carries the
+    `human_shell` of the workspace manifest);
+  - `refusal-codes.json`: the "when" text of `refused.host_socket_mount` ("would be mounted", plan-time wording) is widened to
+    "is or would be mounted", and that of `refused.tool_mount_writable` ("would be writable") to "is or would be writable", so
+    that both cover the step-8 re-check of an existing container (FR-018); no code beyond Feature 011's
+    `refused.interactive_unavailable`; if Feature 011 has not landed first, append that one code (see FR-004).
+- `specs/008-workspace-sandbox/tasks.md` and `plan.md`: new tasks and evidence rows for cases S12-C1 to S12-C9, after T001 and T002.
+- `docs/adr/0013-whr-exit-codes.md` and `contracts/cli/exit-codes.json` (passthrough `commands`): add `sandbox shell`; no new code or category. The passthrough text states the one exception of FR-015: for a killed client the
+  passed-through status is the client's own signal status, not the shell's. The ambiguity note is extended to `sandbox shell`
+  (text only; the ADR and `exit-codes.json` name only `ssh` today, and `shell --local` has the same gap). The owner confirms
+  the author reading that a client stream ending while the remote side did not exit (a killed or lost client) is a transport
+  loss (72); if not, that is an ADR 0013 decision.
   `docs/adr/0014-whr-command-structure.md` (T017 amendment, group `sandbox`) and `contracts/cli/commands.json`
   (T016): register the verb. Feature 008 tasks.md scopes T016 to the seven existing verbs, so T016 and T017 must be
   extended to cover `shell`, or a new task added, before the freeze test of SC-011 can name it. These are owner-gated.
-- `specs/006-whr-cli/spec.md`: FR-019 (list gains `sandbox shell`), FR-006 (exception for the grant requirement extends to
-  `sandbox shell`, if Open question 6 is accepted), FR-022a (the relay filtering does not apply to `sandbox shell`, as it
-  states for `shell --local`) and FR-047 (human-shell policy for new shell sessions, depending on Open question 3).
-  FR-030 is unchanged.
+- `specs/006-whr-cli/spec.md`: FR-019 (list gains `sandbox shell`, with the killed-client status exception), FR-006 (the
+  exception for the grant requirement extends to `sandbox shell`, owner decision D6; the text today limits it to
+  `shell --local`), FR-022a (the relay filtering does not apply to `sandbox shell`, as it states for `shell --local`) and
+  FR-047 (human-shell policy for new shell sessions applies to the `developer` login shell). FR-030 is unchanged.
 - `specs/010-host-and-workspace-panes/spec.md`: no text change. Its FR-013 (grant relaxation), FR-014 (no filtering) and
-  Edge Cases / OQ-6 (126 and 127 pass through) are scoped to `shell --local`; this feature reuses the detach keys, notice
-  pattern and liveness query by reference and carries the extension in the Feature 006 amendments above.
+  Edge Cases / OQ-6 (126 and 127 pass through) are scoped to `shell --local`; this feature reuses the notice pattern and liveness query
+  by reference, differs on detach (disabled here, a fixed sequence there) and carries the extension in the Feature 006 amendments above.
 - `apps/whr/internal/runtime/` (ADR 0010 layout): `Shell` on the provider interface, fake provider support and the
   conformance cases. No code is written by this change.
