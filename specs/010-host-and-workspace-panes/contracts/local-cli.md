@@ -14,6 +14,8 @@ The P1 output-schema amendment defines `localWorkspaceListResult` using the exis
 Freeze schema and fixture examples in that amendment before the plugin consumes them; this document does not invent a second JSON
 wire shape. Human output escapes terminal controls; candidate display shortens ID to 12 characters without changing its internal ID.
 
+Amended in part by Feature 009 owner decisions D-12, D-13, D-16 and D-18 (spec FR-002): the endpoint order becomes option `--container-endpoint`, config value, `DOCKER_HOST`, `/var/run/docker.sock`, with no candidate search and no context read in local mode. The merged P1 code still implements the previous order until T032 to T034; this text is updated by T034.
+
 Socket admission reads only `DOCKER_HOST` and documented doctor candidates. No Docker context lookup or remote scheme is contacted.
 Explicit `--host=<endpoint>` applies to every Docker call. Docker listing/inspection is a read-only adapter concern; its bounded
 argv/metadata tests belong to P1 and its discovery work is separate from P2's post-selection inspect/exec call counts.

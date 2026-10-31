@@ -15,6 +15,8 @@ Each either duplicates policy or exceeds the requested local-shell dependency.
 
 ## Socket and Docker boundary
 
+Amended in part by Feature 009 owner decisions D-12, D-13, D-16 and D-18 (spec FR-002): the endpoint order becomes option `--container-endpoint`, config value, `DOCKER_HOST`, `/var/run/docker.sock`, with no candidate search and no context read in local mode. The merged P1 code still implements the previous order until T032 to T034; the decision below is updated by T034.
+
 **Decision:** Share/extract existing doctor socket rules into an internal reusable boundary in P1, preserving regression tests;
 use a pinned explicit Unix endpoint for all Docker subprocesses. Keep read-only discovery behind a port and fake daemon/client.
 **Implementation status:** P1 added `internal/localdocker/endpoint.go` over the existing doctor socket rules;
