@@ -131,8 +131,9 @@ id is unchanged. Real-VM evidence is produced by the owner on their Mac (FR-026)
 A request names a guest, a limit or a mount the provider cannot satisfy. It is refused with a stable code before any
 side effect.
 
-**Independent Test**: admission table of guest, architecture, concurrency and tool mount against provider capabilities,
-with the expected code and zero driver calls per refusal row.
+**Independent Test**: admission table of guest, architecture, tool mount and interactive shell against provider capabilities,
+with the expected code and zero driver calls per refusal row. The concurrency limit is not an admission row; it is
+tested by the provider check of FR-009 (SC-013).
 
 **Acceptance Scenarios**:
 
@@ -377,7 +378,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   platforms green yields a green aggregate bound to the head SHA (FR-027).
 - **SC-009**: The vendor-name gate (FR-022) fails on fixtures that put a listed name in a gated file outside the marked
   informative region, passes on the same name inside a driver location or the marked region, and does not fire on
-  "start" or "restart" (whole-word matching).
+  "start" or "restart" (whole-word matching). It also fails on a fixture where a marker comment does not stand alone on
+  its line (the marker is not recognized, so the names after it are gated), and on a fixture with an uppercase MUST,
+  SHOULD or MAY inside a marked region (FR-022).
 - **SC-010**: The `vm.*` doctor checks start no VM and no process other than the driver's declared read-only `probe`
   and `list`: the recorded driver calls are only those, no `exec` or `start` is recorded, and the file tree is
   unchanged (FR-018).
@@ -405,9 +408,10 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   repository check fails on a missing matrix (FR-024).
 - **SC-021**: A request for `guest_os=windows` is refused with `refused.guest_os_unavailable` by every provider that
   does not declare it, and the value stays representable in the contract (FR-030).
-- **SC-022**: With two fake drivers and none chosen, and with a chosen driver that is missing or unsupported on this
-  host, the request is refused with `refused.driver_unavailable` and no driver call other than the read-only `probe`;
-  with one supported driver chosen, only that driver records calls (FR-023).
+- **SC-022**: With two fake drivers and none chosen, the request is refused with `refused.driver_unavailable` and zero
+  driver calls. With a chosen driver that is missing or unsupported on this host, it is refused with the same code and
+  the only driver call is that driver's read-only `probe`. With one supported driver chosen, only that driver records
+  calls (FR-023).
 - **SC-023**: A missing, running, locked or unusable base image is refused with `refused.base_image_unavailable` and
   zero clone calls (FR-006).
 - **SC-024**: No CI job, check or document of this repository declares Windows host support or a Windows runner
