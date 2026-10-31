@@ -159,7 +159,8 @@ are retained, and leftovers are listed by name and id.
 
 ### Edge Cases
 
-- The base image is missing, or it is running or locked by another process: refused with
+- The base image does not exist, is running or locked (for example by another process), or is not usable as a clone
+  source: refused with
   `refused.base_image_unavailable`, nothing is created.
 - Clone succeeds and start fails; the guest never becomes reachable within the deadline.
 - The host sleeps or the VM backend restarts during a run; the driver's state differs from the provider's record.
@@ -202,8 +203,8 @@ refusals. Every amendment is generic and additive.
   request that names a base image needs `read_only_clone_source`, and a request that names none needs `none`, which the
   container value admits. Every `Exec` reads `exec_argv`, and the container value `native` admits all existing rows. So
   a request that names none of these requirements gets the same decision from the container provider as before A1.
-  Whether the named image exists or is locked is runtime state and is checked by the provider, not by `Admit`
-  (Feature 008 FR-013). Every row of the Feature 008 admission table (`TestAdmitTable`) MUST yield the same decision and code before
+  Whether the named image exists, is running or locked, or is usable as a clone source is runtime state and is checked
+  by the provider before any clone call, not by `Admit` (Feature 008 FR-013). Every row of the Feature 008 admission table (`TestAdmitTable`) MUST yield the same decision and code before
   and after A1, checked by a regression row set that runs the table against the container values above.
 - **FR-004**: The capability report MUST gain these fields, each with status and scope:
   `base_image` (`read_only_clone_source`, `none`); `concurrency_limit` (a non-negative integer or `unknown`);
@@ -436,7 +437,7 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   driver calls. With a chosen driver that is missing or unsupported on this host, it is refused with the same code and
   the only driver call is that driver's read-only `probe`. With one supported driver chosen, only that driver records
   calls (FR-023).
-- **SC-023**: A missing, running, locked or unusable base image, a named base image against a provider whose
+- **SC-023**: A base image that does not exist, is running or locked, or is not usable as a clone source, a named base image against a provider whose
   `base_image` is not `read_only_clone_source` with status `enforced`, and a request naming no base image against a
   provider whose `base_image` is not `none`, are refused with `refused.base_image_unavailable`
   and zero clone calls (FR-006).
