@@ -159,7 +159,8 @@ against the request; each is refused with the stable code and zero provider call
 **Acceptance Scenarios**:
 
 1. **Given** a `ready` `untrusted_job` instance, **When** the command runs without confirmation, **Then** a warning about
-   unfiltered terminal control sequences is shown, and without an explicit confirmation no shell starts (exit 70) (FR-023).
+   unfiltered terminal control sequences is shown on standard error, which must be a terminal for the prompt (otherwise see
+   User Story 3 scenario 3), and without an explicit confirmation no shell starts (exit 70) (FR-023).
 2. **Given** `--yes` alone, **Then** it does not count as confirmation. A `developer` instance asks for nothing.
 
 ### Edge Cases
@@ -457,7 +458,7 @@ against the request; each is refused with the stable code and zero provider call
   confirmation of that warning. `--yes` alone MUST NOT satisfy it: the prompt is still shown. `developer` and
   `cooperative_job` ask for no such confirmation (the owner decided on `untrusted_job` only). Following Feature 006 FR-014
   (standard output carries command data only; prompts and diagnostics go to standard error; repeated in FR-045 and Feature
-  009 FR-004), the warning and the prompt are written to standard error and the answer is read from standard input (a
+  009 FR-005 and FR-020), the warning and the prompt are written to standard error and the answer is read from standard input (a
   terminal, FR-007). No exception to Feature 006 FR-014 is made: the shell session's own terminal stream is the interactive
   channel that Feature 006 FR-022a and Feature 010 FR-014 already treat as outside `whr`'s relay, not a prompt. If no
   `--confirm <id>` is given and standard error is not a terminal, no prompt is shown, nothing is started and the command
@@ -576,7 +577,7 @@ This feature enforces nothing about what happens inside the shell. In particular
   statement of scope covered by SC-003 and case S12-C2 and has no separate test.
 
 - **SC-012**: An `untrusted_job` shell starts only after the explicit confirmation of FR-023, `--yes` alone never starts it,
-  the exit codes are 70 (prompt declined or unanswered, or no confirmation possible because standard error is not a terminal) and 64 (wrong `--confirm` value) as FR-023 states, with the prompt on standard error, and `developer` is never asked (case S12-C8).
+  the exit codes are 70 (prompt declined or unanswered, or no prompt possible because standard error is not a terminal and no `--confirm` is given) and 64 (wrong `--confirm` value) as FR-023 states, with the prompt on standard error, and `developer` is never asked (case S12-C8).
 - **SC-013**: With the verified query, reconciliation marks gone or never-started `running` records `failed`/`session_lost`
   and leaves live ones alone (case S12-C9). Before the query is verified this criterion is not claimed and the gap stays
   under "Not enforced".
@@ -584,7 +585,7 @@ This feature enforces nothing about what happens inside the shell. In particular
 ## Open questions for the owner
 
 1. **Exit codes of two author-proposed readings.** (a) Exit 70 for a declined, unanswered or impossible confirmation
-   (FR-023), where Feature 006 treats a declined interactive wizard prompt as a cancellation, exit 72. (b) Exit 72 for a killed or lost client stream. For (b), when the container runtime client ends while the
+   (FR-023), where Feature 006 treats a declined interactive wizard prompt as a cancellation, exit 72, and Feature 009 FR-004 gives exit 72 for end of input or an interrupt at its wizard question, whereas FR-023 gives 70 for end of input; both merged cases should be in view for the decision. (b) Exit 72 for a killed or lost client stream. For (b), when the container runtime client ends while the
    remote side did not exit, this text reads it as a transport loss, exit 72 (FR-015, FR-016). Both are author proposals
    awaiting the owner's confirmation; if the owner wants another code for (b), that is an ADR 0013 decision.
 
