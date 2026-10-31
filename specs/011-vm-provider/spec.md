@@ -349,7 +349,9 @@ refusals. Every amendment is generic and additive.
     the conformance suite, the command text under `apps/whr/` (the registry, help, output and error strings in non-test files; test files are
     not gated), and the normative sections of this specification.
   - Allowed places: driver packages (`apps/whr/internal/runtime/drivers/<name>/`), their tests, adapter documentation
-    (`docs/drivers/`), and regions of this specification between the HTML comment markers `informative:begin` and
+    (`docs/drivers/`), the host catalog asset (`apps/whr/internal/hostsetup/catalogue/assets/catalogue.json`, whose VM tool
+    entry names the tool and its source) with its templates, and text built at run time from catalog data or driver data (the
+    setup and doctor preview, the `vm.backend` evidence), which is data and not gated command text, and regions of this specification between the HTML comment markers `informative:begin` and
     `informative:end` (the check recognizes a marker only when the comment stands alone on its line), which hold the owner decisions and the informative notes. Marked regions hold no MUST, SHOULD or MAY; the check
     looks for these uppercase words, matched case-sensitively, and fails if one occurs.
 - **FR-023**: Exactly one driver MUST be chosen explicitly, by configuration or provider id. There MUST be no
@@ -797,8 +799,10 @@ Author proposals made while recording these decisions (the owner may change them
 
 ## Open Questions
 
-One question for the owner: should container free space be measured through the runtime API, which Feature 006 FR-060 and the
-`doctor-checks.json` note currently forbid, or stay `unknown` (FR-039)? NC-1 to NC-3 were decided on 2026-10-31 and are recorded
+Two questions for the owner. (1) Should not-applicable skips (the six new checks on Linux, on a host without a VM driver or
+runtime) be left out of the doctor verdict? Today, with Feature 006 FR-060, such hosts always get the verdict `incomplete`
+instead of `ok` (the exit status stays 0). (2) Should container free space be measured through the runtime API, which Feature 006 FR-060 and the
+`doctor-checks.json` note currently forbid, or stay `unknown` (FR-039)? No rule is invented for either. NC-1 to NC-3 were decided on 2026-10-31 and are recorded
 as OD-4 to OD-6.
 
 ### Verification before the plan (checks, not decisions)
@@ -844,7 +848,10 @@ as OD-4 to OD-6.
   that check, while `container.image` and `container.leftovers` make read-only list and inspect calls on the discovered
   socket; acceptance scenario 7 (plain `doctor` "started no process other than the fixed `git --version`" and the FR-055
   invocations) gains "and, when a VM driver is chosen, the driver's fixed read-only `probe` and `list` invocations of
-  Feature 011 FR-018"; the 5 s budget lists of FR-060 and of the `doctor-checks.json` rules ("each socket dial, `git --version` and
+  Feature 011 FR-018". Consequence, stated plainly: because Feature 006 FR-060 gives the verdict `ok` only when all checks pass
+  and the six new checks report `skipped` for good on Linux and on hosts without a VM driver or runtime, such hosts get the
+  verdict `incomplete` (exit status 0) instead of `ok`; whether not-applicable skips should be left out is an open question.
+  The 5 s budget lists of FR-060 and of the `doctor-checks.json` rules ("each socket dial, `git --version` and
   `daemon.json` read draws on it") also name the driver `probe` and `list` invocations and the runtime list and inspect calls.
 - `specs/009-host-setup-wizard/` (spec, `contracts/wizard-flow.md`, `data-model.md`, the catalog schema
   `host-tool-catalogue.schema.json`, its loader tests, `refusal-codes.json` and the protocol contract; amendment for FR-031,
@@ -913,6 +920,13 @@ as OD-4 to OD-6.
   - **Feature 009 FR-023**: the allowed-argv table admits the driver's read-only `probe` and `list` (FR-031), the runtime's
     read-only list and inspect calls, the fixed image build invocation of each backend, the removal calls of owned instances,
     and the tap-sourced install and upgrade.
+  - **Other places that still say 13 or allow only core sources** (to be changed with the catalog; none is edited by this
+    spec-only pull request): in Feature 009, `spec.md` D-9 (line 66, "13 initial entries"), `plan.md` OD-2 (line 56),
+    `tasks.md` T001 (line 22, done; `TestInitialCatalogueEntries` requires exactly 13 ids), `quickstart.md` (line 15),
+    `HANDOFF.md` (line 52) and `checklists/requirements.md` (line 21); in code,
+    `apps/whr/internal/hostsetup/catalogue/production_test.go` (line 50, expects 13 items) and
+    `apps/whr/internal/hostsetup/pkgmgr/pkgmgr.go` (lines 410 and 519, only `homebrew/core`). T001 and this code are reopened
+    by a new task in the implementation plan.
   - **Step deadline**: the deadline of `image_build` is a plan-time value, not the 900 s of the package-manager steps (DP-2).
   - **Boundaries**: "installing anything on Linux" and the Linux enrollment stay unchanged; the image offer is a macOS host
     feature.
