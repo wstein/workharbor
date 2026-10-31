@@ -26,7 +26,7 @@ Markers: `[P]` parallelizable with the other `[P]` tasks of the same stage once 
   container values of FR-003, the per-field refusing code, the re-verification sentence, conformance cases 1, 4, 6 and the new
   cases), `contracts/refusal-codes.json` (the eight codes of the spec appended relative to the 008 baseline, or seven if Feature 012 landed first and already added `refused.interactive_unavailable`; `refused.foreign_object` text widened exactly as FR-008).
   Acceptance: `check_repo.py`, `git diff --check`; review CLEAR; owner approval of the exact head. Traces FR-001 to FR-005,
-  FR-008, FR-012, FR-030; decisions 3 and 6. Coordination: the Feature 012 plan and tasks (PR 297, open, ready for review) may add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contract if this task has not landed; whichever lands first adds them, the other verifies they match FR-004 and the refusal table and adds nothing. Prerequisite: T001.
+  FR-008, FR-012, FR-030; decisions 3 and 6. Coordination: the Feature 012 plan and tasks (on main, merged as PR 297; its T022) add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contract if this task has not landed; whichever lands first adds them, the other verifies they match FR-004 and the refusal table and adds nothing. Prerequisite: T001.
 - [ ] T003 OWNER GATE (OG-5, OG-6), docs only: apply the approved amendments to Feature 006 (FR-060 check ids, budget lists,
   scenario 7, the verdict consequence of decision 22) and `docs/container-runtime.md` (VM backend prerequisite section; the
   Windows statement unchanged). No `contracts/cli/` edit here. Acceptance as T002. Traces FR-018, FR-029, FR-032, FR-039,
@@ -190,7 +190,7 @@ is unchanged in every task.
   unusable, no defined image `no_image_defined`), `TestContainerLeftoversListOwnedOnlyWithSizeOrSizeUnknown`,
   `TestContainerLeftoversNeverFailDoctor`, `TestContainerChecksReadOnlyListAndInspectOnly`,
   `TestContainerChecksSkippedOnLinuxAndWithoutEndpoint` (`unsupported_platform`, `no_runtime`). The endpoint comes from the selection function of draft PR 299 (OQ-6). Traces FR-039; SC-034 (checks
-  half); decision 13; OQ-6 for the real endpoint. Prerequisites: 006/T027, 009/T006, T003.
+  half); decisions 13, 23; OQ-6 for the real endpoint. Prerequisites: 006/T027, 009/T006, T003.
 - [ ] T028 [P] `disk.container_storage` macOS lookup in `internal/doctor/disk.go`: runtime configuration file (bounded
   plain read), then the recorded value, else `unknown`; the disk-size setting is information only. Failing tests first:
   `TestStorageLookupMakesNoRuntimeAPICallAndStartsNoProcess`, `TestConfigFileFirstAndSourceNamed`,
@@ -227,7 +227,7 @@ is unchanged in every task.
   `TestUnattendedWithoutConfirmExits70NoBuildCall`, `TestExistingDefinitionByteIdenticalUnlessDiffConfirmedWithVerifiedBackup`,
   `TestContainerBuildUsesOnlyNormalBuildInvocationLabelOnlyNoVMSettingCall`, `TestBaseLayerFetchAllowedPrebuiltPullAndPublishFail`,
   `TestDefinitionIsNotACatalogDotfile`, `TestImageBuildDeadlineIsInjected`, `TestContainerBuildUsesSelectedEndpoint` (the build invocation carries `--host=<selected endpoint>`, taken from the endpoint port of OQ-6, never the Docker client's active context). Traces FR-034, FR-007, FR-037 (shared mechanics);
-  SC-029, SC-016; decisions 10, 11, 16, 19(d). Prerequisites: T004, 009/T006. Needs the `image_build` deadline (OQ-7).
+  SC-029, SC-016; decisions 10, 11, 16, 19(d), 23. Prerequisites: T004, 009/T006. Needs the `image_build` deadline (OQ-7).
 - [ ] T033 Wizard image offer and profile records: the `image_definition_write` and `image_build` steps (modify class), the
   host profile records for the image (home-relative path, name, label), `container_storage` and the `container_endpoint`
   neighbor, accepted confirmation ids `image:container` and `image:vm`. Failing tests first:
