@@ -20,8 +20,8 @@ own git worktree on its own topic branch.
 3. Run checks with `umask 022`; never run tests inside `git rebase --exec`. Required: `python3 scripts/check_repo.py`, `git diff
    --check`, `go vet` and `go test` for the touched packages in `apps/whr`; record exact commands and results in the PR.
 4. PRs target `main` (owner decision 2026-10-20), are at most about 1,500 changed lines, name task IDs, prerequisites, tests,
-   commands and review state. Draft only with a named blocker; Ready means the owner can merge once the exact head has an
-   independent CLEAR review and required checks are green. Never merge, tag, release, push `main` or change settings. Stack
+   commands and review state. Draft only with a named blocker; Ready for review is set once the exact head has an
+   independent CLEAR review and required checks are green, and is the owner's signal to accept and merge. Never merge, tag, release, push `main` or change settings. Stack
    dependent PRs natively (`GH_REPO=wstein/workharbor gh stack link <PRs>`).
 5. A rewritten head needs a new review of the new SHA before `--force-with-lease=<ref>:<observed SHA>`.
 6. No real Docker, host mutation, image or documentation build, release, publication or volume deletion without the owner's

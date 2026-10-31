@@ -1114,8 +1114,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   FR-057 unless `--no-agents-block` is given; the block is on by default (owner decision of 2026-10-17). The
   agent workflow block comes from one template shipped with `whr`. It covers: pushes of topic branches and PRs by
   agents within the requested task; rewrites of agent-authored PR branches only after checks and an exact-SHA review
-  of the rewritten head, then only with an explicit expected-head lease; Ready meaning the owner can merge and requiring
-  independent CLEAR review of the exact current head; Draft only with a named blocker; owner-only merge, tag, release,
+  of the rewritten head, then only with an explicit expected-head lease; Ready for review set only after independent CLEAR review of the exact current head and green required checks, as the
+  owner's signal to accept and merge, with agents never merging; Draft only with a named blocker; owner-only merge, tag, release,
   publication and settings; an approval covering one named operation with no standing approval; submodule gitlinks
   belonging to the owner; running source checks with `umask 022` (avoiding sandbox `umask 0000` permission breakages);
   stacked PRs targeting their parent branch, linked as a stack, and retargeted to `main` once the parent merges; never
