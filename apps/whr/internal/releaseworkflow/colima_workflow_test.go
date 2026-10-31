@@ -20,6 +20,10 @@ import (
 
 const colimaWorkflow = ".github/workflows/colima-acceptance.yml"
 
+// watchdogGrace is the worst-case extra time of one bounded call: the TERM-to-KILL grace of the watchdog.
+// TestColimaWatchdogGraceDefault pins it to the workflow text.
+const watchdogGrace = 5
+
 var (
 	topKey     = regexp.MustCompile(`^[A-Za-z_-]+:`)
 	childKey   = regexp.MustCompile(`^  ([A-Za-z_-]+):`)
@@ -27,11 +31,13 @@ var (
 	permsLine  = regexp.MustCompile(`^(\s*)permissions:\s*(.*)$`)
 	leadingWS  = regexp.MustCompile(`^\s*`)
 	colimaJobs = regexp.MustCompile(`(?m)^  ([a-z][a-z0-9-]*):\n`)
-	exprRe     = regexp.MustCompile(`\$\{\{(.*?)\}\}`)
+	exprRe     = regexp.MustCompile(`(?s)\$\{\{.*?\}\}`)
+	runKeyRe   = regexp.MustCompile(`^(\s*)(?:- )?run:(?:\s+(.*))?$`)
 	// The only expressions the workflow may contain: matrix values, the ref in the concurrency group,
 	// the runner temp path, and step conditions. Anything else (inputs, tokens, event data) is a violation.
 	allowedExpr = regexp.MustCompile(`^(matrix\.[a-z_]+|github\.ref|github\.workflow|runner\.temp|always\(\)|!cancelled\(\)|always\(\) && matrix\.extra_profile == 'true')$`)
-	probeRe     = regexp.MustCompile(`\b(?:destroy_)?probe [A-Za-z0-9$_-]+ ([0-9]+) `)
+	probeRe     = regexp.MustCompile(`\b(?:destroy_)?probe "?[A-Za-z0-9$_-]+"? ([0-9]+) `)
+	boundedRe   = regexp.MustCompile(`\bbounded ([0-9]+) `)
 	timeoutRe   = regexp.MustCompile(`(?m)^\s*timeout-minutes: ([0-9]+)$`)
 )
 
@@ -106,15 +112,38 @@ func colimaViolations(raw string) []string {
 		out = append(out, "no uses: lines found")
 	}
 
-	// Expressions: only the allowlist; a single-line run: with an expression is an injection path.
-	for _, m := range exprRe.FindAllStringSubmatch(raw, -1) {
-		if e := strings.TrimSpace(m[1]); !allowedExpr.MatchString(e) {
-			out = append(out, sprintf("expression not allowed: ${{ %s }}", e))
+	// Expressions: only the allowlist, each on one line and closed; none inside any run: scalar.
+	found := exprRe.FindAllString(raw, -1)
+	if strings.Count(raw, "${{") != len(found) {
+		out = append(out, "unclosed expression: ${{ without }}")
+	}
+	for _, m := range found {
+		e := strings.TrimSuffix(strings.TrimPrefix(m, "${{"), "}}")
+		switch {
+		case strings.Contains(e, "\n"):
+			out = append(out, sprintf("expression spans lines: %q", m))
+		case !allowedExpr.MatchString(strings.TrimSpace(e)):
+			out = append(out, sprintf("expression not allowed: ${{ %s }}", strings.TrimSpace(e)))
 		}
 	}
-	for _, l := range lines {
-		if t := strings.TrimSpace(l); strings.HasPrefix(t, "run:") && strings.Contains(t, "${{") {
-			out = append(out, sprintf("expression inside a run: line: %s", t))
+	for n, l := range lines {
+		m := runKeyRe.FindStringSubmatch(l)
+		if m == nil {
+			continue
+		}
+		scalar := m[2]
+		if strings.HasPrefix(scalar, "|") || strings.HasPrefix(scalar, ">") {
+			scalar = ""
+			indent := len(m[1])
+			for _, next := range lines[n+1:] {
+				if strings.TrimSpace(next) != "" && len(leadingWS.FindString(next)) <= indent+1 {
+					break
+				}
+				scalar += next + "\n"
+			}
+		}
+		if strings.Contains(scalar, "${{") {
+			out = append(out, sprintf("expression inside a run: scalar at line %d", n+1))
 		}
 	}
 	for _, bad := range []string{"github.token", "GITHUB_TOKEN", "github.event.inputs", "persist-credentials: true"} {
@@ -166,12 +195,21 @@ func colimaViolations(raw string) []string {
 			total += minutes
 			seconds := 0
 			for _, l := range strings.Split(st, "\n") {
-				if pm := probeRe.FindStringSubmatch(l); pm != nil {
-					n, _ := strconv.Atoi(pm[1])
-					if strings.Contains(l, "$attempt") {
-						n *= 2 // the start loop runs twice
+				weight := 1
+				if strings.Contains(l, "$attempt") {
+					weight = 2 // the start loop runs twice
+				}
+				if strings.Contains(l, "docker rm -f") {
+					weight = 2 // one throwaway container, with one spare
+				}
+				if strings.Contains(l, "docker volume rm") {
+					weight = 8 // up to eight throwaway volumes are removed one by one
+				}
+				for _, re := range []*regexp.Regexp{probeRe, boundedRe} {
+					if pm := re.FindStringSubmatch(l); pm != nil {
+						n, _ := strconv.Atoi(pm[1])
+						seconds += weight * (n + watchdogGrace)
 					}
-					seconds += n
 				}
 			}
 			if seconds > minutes*60 {
@@ -242,58 +280,62 @@ func TestColimaWorkflowMatrixRows(t *testing.T) {
 	if strings.Count(raw, "extra_profile: 'true'") != 1 {
 		t.Error("exactly one row (intel qemu sshfs) measures the non-default profile")
 	}
-	// Matrix values reach scripts through env, never by interpolation inside a run: block.
-	inRun := false
-	for _, l := range strings.Split(raw, "\n") {
-		trimmed := strings.TrimSpace(l)
-		switch {
-		case strings.HasPrefix(trimmed, "run: |"):
-			inRun = true
-		case inRun && len(leadingWS.FindString(l)) <= 8 && trimmed != "":
-			inRun = false
-		}
-		if inRun && strings.Contains(l, "${{") {
-			t.Errorf("expression inside a run: script: %s", trimmed)
-		}
-	}
 }
 
 func TestColimaWorkflowRulesBite(t *testing.T) {
 	raw := readRepo(t, colimaWorkflow)
 	sha := "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
-	cases := []struct{ name, from, to string }{
-		{"pull_request trigger", "on:\n  workflow_dispatch:\n", "on:\n  workflow_dispatch:\n  pull_request:\n"},
-		{"schedule trigger", "on:\n  workflow_dispatch:\n", "on:\n  workflow_dispatch:\n  schedule:\n    - cron: '0 3 * * *'\n"},
-		{"push trigger instead", "on:\n  workflow_dispatch:\n", "on:\n  push:\n"},
-		{"wider permissions", "permissions:\n  contents: read\n", "permissions:\n  contents: read\n  pull-requests: write\n"},
-		{"write permission", "permissions:\n  contents: read\n", "permissions:\n  contents: write\n"},
-		{"job-level permissions", "    continue-on-error: true\n", "    continue-on-error: true\n    permissions:\n      contents: read\n      id-token: write\n"},
-		{"tag instead of SHA", sha, "actions/checkout@v7 # v7.0.1"},
-		{"SHA without version comment", sha, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"},
-		{"missing continue-on-error", "    continue-on-error: true\n", ""},
-		{"continue-on-error false", "    continue-on-error: true\n", "    continue-on-error: false\n"},
-		{"fail-fast on", "      fail-fast: false\n", "      fail-fast: true\n"},
-		{"single-line run with an expression", "          set -eu\n          brew --version\n", "          set -eu\n          brew --version\n          echo \"x\"\n      - run: echo \"${{ github.event.inputs.x }}\"\n        timeout-minutes: 1\n"},
-		{"persist-credentials true", "persist-credentials: false", "persist-credentials: true"},
-		{"token in env", "      GOTOOLCHAIN: local\n", "      GOTOOLCHAIN: local\n      T: ${{ github.token }}\n"},
-		{"unguarded colima delete", "on_hosted_runner && bounded 40 colima delete --force", "bounded 40 colima delete --force"},
-		{"unguarded destroy in the start loop", "destroy_probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force"},
-		{"colima stop unguarded", "          unset DOCKER_HOST\n          rm -rf", "          unset DOCKER_HOST\n          colima stop --force\n          rm -rf"},
-		{"prune", "          unset DOCKER_HOST\n          rm -rf", "          unset DOCKER_HOST\n          docker system prune -af\n          rm -rf"},
-		{"cleanup without refusal", "if ! on_hosted_runner; then", "if false; then"},
-		{"step without timeout", "        timeout-minutes: 2\n        with:\n          go-version-file", "        with:\n          go-version-file"},
-		{"probe bound over step", "probe whr-env 5 ", "probe whr-env 5000 "},
-		{"job cap too small", "    timeout-minutes: 45\n", "    timeout-minutes: 30\n"},
+	env := "      GOTOOLCHAIN: local\n"
+	cleanupAnchor := "          unset DOCKER_HOST\n          rm -rf"
+	// Each case must produce the expected violation, not just any: a case that fails for a second reason proves nothing.
+	cases := []struct{ name, from, to, want string }{
+		{"pull_request trigger", "on:\n  workflow_dispatch:\n", "on:\n  workflow_dispatch:\n  pull_request:\n", "triggers [workflow_dispatch pull_request]"},
+		{"schedule trigger", "on:\n  workflow_dispatch:\n", "on:\n  workflow_dispatch:\n  schedule:\n    - cron: '0 3 * * *'\n", "triggers [workflow_dispatch schedule]"},
+		{"push trigger instead", "on:\n  workflow_dispatch:\n", "on:\n  push:\n", "triggers [push]"},
+		{"wider permissions", "permissions:\n  contents: read\n", "permissions:\n  contents: read\n  pull-requests: write\n", "permissions grant [contents: read pull-requests: write]"},
+		{"write permission", "permissions:\n  contents: read\n", "permissions:\n  contents: write\n", "permissions grant [contents: write]"},
+		{"job-level permissions", "    continue-on-error: true\n", "    continue-on-error: true\n    permissions:\n      contents: read\n      id-token: write\n", "permissions grant [contents: read id-token: write]"},
+		{"tag instead of SHA", sha, "actions/checkout@v7 # v7.0.1", "action not pinned to a full SHA with a version comment: actions/checkout@v7"},
+		{"SHA without version comment", sha, "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1", "action not pinned"},
+		{"missing continue-on-error", "    continue-on-error: true\n", "", "lacks continue-on-error: true"},
+		{"continue-on-error false", "    continue-on-error: true\n", "    continue-on-error: false\n", "lacks continue-on-error: true"},
+		{"fail-fast on", "      fail-fast: false\n", "      fail-fast: true\n", "lacks fail-fast: false"},
+		{"single-line run with an expression", "      - name: Prepare probe helpers\n", "      - run: echo \"${{ github.event.inputs.x }}\"\n        timeout-minutes: 1\n      - name: Prepare probe helpers\n", "expression inside a run: scalar"},
+		{"dash run with an allowed expression", "      - name: Prepare probe helpers\n", "      - run: echo ${{ matrix.name }}\n        timeout-minutes: 1\n      - name: Prepare probe helpers\n", "expression inside a run: scalar"},
+		{"run with two spaces and an expression", "          set -eu\n          brew --version\n", "          set -eu\n          echo ${{ runner.temp }}\n          brew --version\n", "expression inside a run: scalar"},
+		{"folded run with a split expression", "      - name: Prepare probe helpers\n", "      - run: >-\n          echo ${{\n          matrix.name }}\n        timeout-minutes: 1\n      - name: Prepare probe helpers\n", "expression spans lines"},
+		{"split expression in env", env, env + "      T: ${{ github.\n        token }}\n", "expression spans lines"},
+		{"split expression in with", "          cache: false\n", "          cache: ${{ matrix.\n          name }}\n", "expression spans lines"},
+		{"unclosed expression", env, env + "      T: ${{ matrix.name\n", "unclosed expression"},
+		{"persist-credentials true", "persist-credentials: false", "persist-credentials: true", "must not contain \"persist-credentials: true\""},
+		{"token in env", env, env + "      T: ${{ github.token }}\n", "expression not allowed: ${{ github.token }}"},
+		{"input in env", env, env + "      T: ${{ inputs.x }}\n", "expression not allowed: ${{ inputs.x }}"},
+		{"unguarded colima delete", "on_hosted_runner && bounded 40 colima delete --force", "bounded 40 colima delete --force", "unguarded destructive command"},
+		{"unguarded destroy in the start loop", "destroy_probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "unguarded destructive command"},
+		{"colima stop unguarded", cleanupAnchor, "          unset DOCKER_HOST\n          colima stop --force\n          rm -rf", "unguarded destructive command: colima stop"},
+		{"prune", cleanupAnchor, "          unset DOCKER_HOST\n          docker system prune -af\n          rm -rf", "must not prune"},
+		{"cleanup without refusal", "if ! on_hosted_runner; then", "if false; then", "cleanup removes things before refusing"},
+		{"step without timeout", "        timeout-minutes: 2\n        with:\n          go-version-file", "        with:\n          go-version-file", "step without timeout-minutes"},
+		{"probe bound over step", "probe whr-env 5 ", "probe whr-env 5000 ", "probe bounds"},
+		{"start loop bound over step", "probe \"colima-start-$attempt\" 200 ", "probe \"colima-start-$attempt\" 2000 ", "probe bounds"},
+		{"bounded call over step", "bounded 40 colima delete -p", "bounded 4000 colima delete -p", "probe bounds"},
+		{"job cap too small", "    timeout-minutes: 45\n", "    timeout-minutes: 30\n", "step timeouts sum to 45 min, job cap 30"},
 	}
 	for _, c := range cases {
 		if strings.Count(raw, c.from) < 1 {
 			t.Fatalf("%s: mutation anchor %q not found", c.name, c.from)
 		}
-		v := colimaViolations(strings.Replace(raw, c.from, c.to, 1))
-		if len(v) == 0 {
-			t.Errorf("%s: no violation reported", c.name)
+		v := strings.Join(colimaViolations(strings.Replace(raw, c.from, c.to, 1)), "\n")
+		if !strings.Contains(v, c.want) {
+			t.Errorf("%s: violations %q lack %q", c.name, v, c.want)
 		}
-		t.Logf("%s -> %v", c.name, v)
+	}
+}
+
+func TestColimaWatchdogGraceDefault(t *testing.T) {
+	want := "$ENV{COLIMA_WATCHDOG_GRACE} : " + strconv.Itoa(watchdogGrace) + ";"
+	if !strings.Contains(shellBlock(t, readRepo(t, colimaWorkflow), "WATCHDOG"), want) {
+		t.Errorf("watchdog default grace is not %d s; update watchdogGrace and the budget", watchdogGrace)
 	}
 }
 
@@ -320,6 +362,12 @@ func shellBlock(t *testing.T, raw, tag string) string {
 // probeRun runs `probe NAME SECS CMD...` from the workflow's real helper text in a scratch directory
 // and returns the recorded result line and the elapsed time.
 func probeRun(t *testing.T, secs string, cmd ...string) (string, time.Duration) {
+	line, elapsed, _ := probeRunErr(t, secs, cmd...)
+	return line, elapsed
+}
+
+// probeRunErr is probeRun plus the recorded stderr of the probe.
+func probeRunErr(t *testing.T, secs string, cmd ...string) (string, time.Duration, string) {
 	t.Helper()
 	need(t, "bash", "perl")
 	raw := readRepo(t, colimaWorkflow)
@@ -352,7 +400,8 @@ func probeRun(t *testing.T, secs string, cmd ...string) (string, time.Duration) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	return strings.TrimSpace(string(b)), elapsed
+	e, _ := os.ReadFile(filepath.Join(dir, "colima-acceptance", "logs", "t.err"))
+	return strings.TrimSpace(string(b)), elapsed, string(e)
 }
 
 func TestColimaWatchdogKillsCommandsThatIgnoreSignals(t *testing.T) {
@@ -368,6 +417,13 @@ func TestColimaWatchdogKillsCommandsThatIgnoreSignals(t *testing.T) {
 	line, elapsed = probeRun(t, "1", "sh", "-c", `trap "" TERM ALRM; sleep 30 & sleep 30`)
 	if !strings.Contains(line, "failed: timeout after 1s") || elapsed > 8*time.Second {
 		t.Errorf("result %q after %v, want a timeout within the bound", line, elapsed)
+	}
+}
+
+func TestColimaWatchdogIsQuietOnNormalCalls(t *testing.T) {
+	line, _, stderr := probeRunErr(t, "5", "true")
+	if !strings.Contains(line, "\tobserved\t") || stderr != "" {
+		t.Errorf("result %q with stderr %q, want observed and no stderr noise", line, stderr)
 	}
 }
 
