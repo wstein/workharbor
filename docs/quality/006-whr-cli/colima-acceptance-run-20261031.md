@@ -13,8 +13,10 @@ trigger, and agents never start it). Source:
 [`.github/workflows/colima-acceptance.yml`](../../../.github/workflows/colima-acceptance.yml).
 It has `contents: read`, three matrix jobs with `continue-on-error`, and never gates
 a merge. `whr` never starts or configures Colima, so the job does it on a throwaway
-runner VM: `brew install colima docker` (Homebrew core only), then
-`colima start --runtime docker --vm-type ... --mount-type ...` with two bounded attempts.
+runner VM: `brew install colima docker` (Homebrew core only; plus `brew install qemu` for the qemu rows,
+because Colima depends on Lima only), then `colima start --runtime docker --vm-type ... --mount-type ...`
+with two bounded attempts. Destructive Colima commands and removals run only on a GitHub-hosted runner
+(`GITHUB_ACTIONS=true` and `RUNNER_ENVIRONMENT=github-hosted`); elsewhere they refuse.
 
 | Job | Runner | Colima flags |
 | --- | --- | --- |
@@ -30,15 +32,23 @@ and records every dependent probe as `failed: colima did not start`.
 ## What it records
 
 Each probe is `observed` or `failed: <reason>`; a failing probe never fails the job.
-Only checkout, the Go setup, the `whr` build and the Homebrew install can. Output goes
+The steps that can fail the job are checkout, the Go setup, the `whr` build, the Homebrew
+install, and any step that exceeds its own timeout (see the budget below). The measure, `whr`,
+cleanup, summary and upload steps run even then, so a start that failed or timed out is written
+as "Colima did NOT start". Every probe is bounded by a watchdog that kills its whole process
+group (TERM, then KILL); an alarm would not work because Go programs ignore SIGALRM. Output goes
 to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`,
 `logs/`, 14 days).
 
 - Runner facts: architecture, macOS version, CPU, memory, `kern.hv_support`.
+- Before the first start: whether `~/.colima`, `~/.colima/default`, `~/.config/colima` and a
+  `colima.yaml` exist at all.
 - Colima: `colima version`, `status`, `status --json`, `list`; Homebrew versions of
   colima, lima, docker, qemu.
 - Layout: `ls -la ~/.colima ~/.colima/default`, whether `colima.yaml` sits next to
   `docker.sock`, `ls -l /var/run/docker.sock`, `df -k` of the volume holding `~/.colima`.
+- VM disk: `du -sk` of `~/.colima/_lima` and its subdirectories, files over 1 MiB with their
+  allocated size, and `df -k` of the volume holding `~/.colima/_lima`.
 - Effective configuration: the keys `runtime`, `vmType`, `mountType`, `cpu`, `memory`,
   `disk`, `rootDisk`, `arch`, `autoActivate` and the `mounts` block of `colima.yaml`.
 - Docker: `docker context ls`; `docker info` fields Server Version, OperatingSystem,
@@ -56,7 +66,10 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
   `workspace home clone --local --dry-run`, a real `home clone` and `home backup`
   followed by reading back the seed file, and `workspace recover --local --dry-run`.
   All throwaway objects carry the run id and are removed in an `always()` step, which
-  also stops and deletes the Colima VM.
+  also deletes the Colima VM (hosted runners only).
+- On the Intel qemu/sshfs row only, a second profile: `colima start -p whr-acc` with the same flags and
+  small resources, then `ls ~/.colima/whr-acc`, the socket path, `docker context ls`, and
+  `whr doctor --json` once without `DOCKER_HOST` and once with `DOCKER_HOST` set to that profile's socket.
 
 ## Mapping to the results
 
@@ -68,13 +81,28 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
 - Audit assumptions: A-1 (socket path), A-2 (context, `/var/run/docker.sock`), A-3 and
   A-4 (mounts, mount types), A-5 (rootful daemon, uids), A-9 (default resources and disk),
   A-10 (architecture) and A-12 (build fallback via the home clone) get observed values.
-- Feature 009 OG-1 (facts the owner's Mac must confirm): the workflow answers
-  `colima.yaml` next to `docker.sock` (FR-028), the `colima version` output for
-  `version_args`/`version_regex`, the `disk` and `rootDisk` keys and unit, and the
-  Colima data directory (FR-028). It is CI evidence on runner images, so it does not
-  replace the owner's Mac for `min_version` or for a Mac with Docker Desktop or OrbStack
-  also present. Results from the `colima.yaml` that appears only after the first start
-  are visible here because the job always starts first.
+- Feature 009 OG-1 (facts the owner's Mac must confirm): the workflow records, on runner images,
+  whether `colima.yaml` exists before the first start and sits next to `docker.sock` (FR-028),
+  the `colima version` output (input for `version_args` and `version_regex`), the `disk` and
+  `rootDisk` keys as written in `colima.yaml`, and where the VM disk lives and how large it is
+  (FR-028). The second-profile probe gives evidence for OQ-1 (profiles other than `default`) on one
+  row only. It does not decide `min_version`, the unit of `disk`, or behavior on a Mac that also has
+  Docker Desktop or OrbStack; those stay with the owner's Mac.
+
+## Time budget
+
+The job cap is 45 minutes. The step timeouts add up to 44, and a test pins that sum, that every
+step has a timeout, and that the probe bounds of each step fit it (the start loop counts twice).
+
+| Step | Minutes |
+| --- | --- |
+| checkout, setup-go, build, helpers | 1, 2, 2, 1 |
+| install (colima, docker, qemu on qemu rows) | 5 |
+| start (two attempts of 200 s, cleanup between) | 10 |
+| measure the runtime | 7 |
+| measure `whr` | 6 |
+| second profile (one row) | 5 |
+| cleanup, summary, upload | 3, 1, 1 |
 
 ## Limits
 
