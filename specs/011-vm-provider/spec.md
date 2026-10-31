@@ -8,7 +8,7 @@ guests driven through the same sandbox lifecycle as containers, vendor neutral.
 **Status**: Draft, proposed for independent review and owner approval; nothing is implemented. Approval of this text
 needs an independent review CLEAR for its exact head and explicit owner approval of that head, evidenced by a tracker
 or PR link (WORKFLOW.md).
-**Related**: [Feature 008](../008-workspace-sandbox/spec.md) (RuntimeProvider contract, FR-012 to FR-018, FR-029, FR-034),
+**Related**: [Feature 008](../008-workspace-sandbox/spec.md) (RuntimeProvider contract, Feature 008 FR-012 to FR-018, FR-029, FR-034),
 [Feature 009](../009-host-setup-wizard/spec.md) (host setup), [Feature 006](../006-whr-cli/spec.md),
 [container runtime prerequisite](../../docs/container-runtime.md).
 
@@ -40,6 +40,11 @@ This feature defines:
 ### Terms
 
 - **Guest**: the operating system inside a VM (`linux`, `darwin`, `windows`) and its architecture (`arm64`, `amd64`).
+- **Image**: a container image or a VM base image. A **container image** is the image the container provider runs
+  instances from, built locally from a user-owned container build file and carrying `whr`'s own label. It is not a
+  `base_image` in the sense of FR-006: the container provider keeps `base_image=none` (FR-003) because a request never
+  names a clone source for it, and how the container provider names its image is part of the Feature 009 amendment (Feature
+  008 defines no such field).
 - **Base image**: a VM image that belongs to the user and stays local. `whr` names it; the setup wizard can build it
   locally from a user-owned definition after an explicit prompt (FR-034).
 - **Disposable clone**: an instance created from a base image for one use and discarded afterward.
@@ -60,11 +65,13 @@ This feature defines:
 - **2026-10-31 (OD-4, base image; resolves NC-1)**: the owner builds the macOS base image on their own Mac from the
   operating system vendor's official download and keeps it local. It is never uploaded to a registry or passed on. The
   build recipe is documented so the image is reproducible (FR-007). Whether the vendor's license permits the intended
-  use of macOS in a VM is the user's own responsibility (decision 15 below); `whr` does not check it. Decisions 10 to 13
-  below amend the sentence on the recipe: the setup wizard can now build the image locally from a user-owned definition.
+  use of macOS in a VM is the owner's to check against that license; it was not checked here. Superseded in part by
+  decisions 10, 11 and 15 below: the setup wizard can build the image locally from a user-owned definition, and the license
+  is the user's responsibility.
 - **2026-10-31 (OD-5, drivers; resolves NC-2)**: Tart is the first driver. The user installs the VM backend and holds
-  its license; `whr` ships no backend and the provider never installs one (FR-017). Decision 12 below adds an opt-in catalogue entry that
-  the setup wizard installs only on explicit selection, as it does for the container runtime.
+  its license; `whr` only drives it and neither installs nor ships it (FR-017), the same pattern as the Docker runtime.
+  Superseded in part by decisions 12 and 17 below: the setup wizard can install the VM tool from a catalogue entry on
+  explicit selection.
   A KVM driver on a Linux host is the likely second wave. A Hyper-V driver is only a possibility, with no commitment.
   Driver selection is explicit (FR-023), and the support matrix lists host and guest separately (FR-024). The
   maintenance status of the first backend after a reported change of ownership is unverified. The swappable driver port
@@ -77,7 +84,7 @@ This feature defines:
 ### Boundaries
 
 - Feature 008 stays in force. This feature changes it only through amendment A1 (FR-001 to FR-005) and the appended
-  and widened refusal codes. A1 reaches more than the contract: Feature 008 FR-012, FR-034, the data model, the
+  and widened refusal codes. A1 reaches more than the contract: Feature 008 FR-012, Feature 008 FR-034, the data model, the
   conformance suite and the admission paths for the new refusals (see "Changes to existing documents"). Every Feature 008
   admission decision is unchanged (FR-003).
 - A1 is the single exception to the sentence of Feature 008 FR-034 that adding a provider changes no contract: the
@@ -85,9 +92,9 @@ This feature defines:
 - `whr` does not publish, upload, sign, redistribute or pull prebuilt base images, and builds one only locally and only
   after an explicit prompt (FR-007, FR-034, FR-037).
 - The provider and `whr doctor` do not install a VM backend, and `whr` changes no host virtualization, network, firewall
-  or security setting (FR-017). Only the setup wizard installs the VM tool, from a catalogue entry that is not preselected
-  and only on explicit selection (FR-031). `whr doctor` reports (FR-032), removes owned leftovers (FR-033) and may rebuild
-  an image (FR-037), and installs no tool.
+  or security setting (FR-017). Only the setup wizard installs the VM tool (from the one named package source, FR-038), from a catalogue entry that is not preselected
+  and only on explicit selection (FR-031). `whr doctor` reports (FR-032, FR-039), removes owned leftovers (FR-033) and may rebuild
+  an image (FR-037); `whr doctor --fix` does not install the VM tool, and the rest of Feature 009 FR-016 is unchanged.
 - Not in this increment (each needs its own specification): a Windows guest provider, Windows as a product target of
   `whr` (a different tool would be a different specification), a driver for a Linux host, remote VM hosts, snapshots
   and rollback, egress enforcement, credential mediation, a wrapper command for test runs (needs an ADR 0014
@@ -194,7 +201,7 @@ are retained, and leftovers are listed by name and id.
 
 **Amendment A1 to the Feature 008 contract**
 
-A1 amends Feature 008 as listed under "Changes to existing documents": FR-012, FR-034, the data model, the contract
+A1 amends Feature 008 as listed under "Changes to existing documents": Feature 008 FR-012, Feature 008 FR-034, the data model, the contract
 (fields, re-verification sentence, conformance cases 1, 4, 6 and the new ones; case 6 "argv as data, no shell" is amended
 so that shell transport is allowed only under `exec_argv=quoted_verified` with the FR-012 corpus round-tripping byte-exact) and the admission paths for the new
 refusals. Every amendment is generic and additive.
@@ -243,13 +250,14 @@ refusals. Every amendment is generic and additive.
   image against a provider whose `base_image` is not `read_only_clone_source` with status `enforced`; and a request
   that names no base image against a provider whose `base_image` is not `none`. The container provider reports
   `base_image=none` (FR-003), so nothing changes for it.
-- **FR-007**: `whr` MUST NOT publish, upload, sign, redistribute or pass on base images, MUST NOT pull a prebuilt image
+- **FR-007**: `whr` MUST NOT publish, upload, sign, redistribute or pass on images, MUST NOT pull a prebuilt, finished image
   from a registry, and MUST NOT store or relay guest login credentials. The image stays with the user and local (OD-4).
-  The only commands that build one are `whr setup` and `whr doctor --fix`, locally, from the user-owned definition, after an
-  explicit prompt or per-item confirmation (FR-034, FR-037); the provider never builds. The guest account the driver uses is
-  part of the user's image and appears in configuration only as a reference. The documentation MUST also describe a
-  reproducible recipe that starts from the operating system vendor's official download and keeps the image local, so the
-  user can build the image without `whr`.
+  Base layers that the container runtime's own build command fetches from a registry while building the image from the
+  user-owned definition are not a pull of a prebuilt image (FR-034, decision 16). The only commands that build an image
+  are `whr setup` and `whr doctor --fix`, locally, from the user-owned definition, after an explicit prompt or per-item
+  confirmation (FR-034, FR-037); the provider never builds. The guest account the driver uses is part of the user's image
+  and appears in configuration only as a reference. The documentation MUST also describe a reproducible recipe that starts
+  from the operating system vendor's official download and keeps the VM image local, so the user can build it without `whr`.
 - **FR-008**: Every instance name MUST be a reserved prefix plus the instance id. For `name_and_record`, ownership is
   proven only when the name matches and a provider-owned local record exists and agrees. The record MUST carry the full
   ownership label set of the Feature 008 data model (the sandbox marker, id, workspace, profile, provider, retention,
@@ -310,8 +318,8 @@ refusals. Every amendment is generic and additive.
 **Host boundary**
 
 - **FR-017**: The provider MUST change only instances it owns. It MUST NOT change host virtualization, network, firewall,
-  security or system settings, and MUST NOT install or ship a VM backend; `whr doctor` installs no tool either. Only the
-  setup wizard installs the VM tool, on explicit selection (FR-031). The user holds its license (FR-036).
+  security or system settings, and MUST NOT install or ship a VM backend; `whr doctor --fix` does not install the VM tool either. Only the
+  setup wizard installs the VM tool, on explicit selection (FR-031, FR-038). The user holds its license (FR-036).
 - **FR-018**: `whr doctor` MUST gain read-only checks `vm.backend` (present, version, supported host), `vm.base_image`
   (the named image exists) and `vm.limit` (reports the declared concurrency limit, or that no limit is stated or enforced and therefore none is
   applied, the number of owned instances and pending reservations from the local records, stale reservations, and
@@ -391,10 +399,11 @@ provider and Linux hosts are unchanged.
   selected, how the user does it themselves (the documented steps of the driver, FR-024, and the documented recipe, FR-007).
   The summary is not a plan step and writes nothing, so it also appears when the answer is `no` and under `--dry-run`.
   The wizard MAY offer, each as its own explicit step: (a) installing the VM tool, through a Feature 009 catalogue entry
-  that is not preselected (the catalogue grows from 13 to 14 entries), through the existing package-manager adapter and only
+  that is not preselected (the catalogue grows from 13 to 14 entries), through the existing package-manager adapter, from the one named package source of FR-038, and only
   on explicit selection, never replacing or removing a tool from another source (Feature 009 FR-008); and (b) creating the
   image (FR-034). Nothing is installed, built, downloaded or elevated without that selection. `whr doctor` reports the tool
-  entry like any catalogue item, but `whr doctor --fix` never installs it; it points to `whr setup`. Linux `whr setup` is
+  entry like any catalogue item, but `whr doctor --fix` does not install the VM tool (the rest of Feature 009 FR-016 is
+  unchanged); it points to `whr setup`. Linux `whr setup` is
   unchanged.
 - **FR-032**: `whr doctor` MUST gain a read-only check `vm.space` and report in it: the disk space taken by owned leftover
   instances, and the free disk space on the volume that holds the VM storage. It MUST report `fail` when that free space
@@ -402,13 +411,15 @@ provider and Linux hosts are unchanged.
   cannot state a size or the storage location. Sizes and the storage location are optional fields in the results of the
   existing driver `probe` and `list` (no new port operation, FR-021); the free space is measured by the host with a file
   system statistic. The check stays inside the shared 5 s budget and starts no VM.
-- **FR-033**: On a macOS host, `whr doctor --fix` MUST remove owned leftovers only: instances left by a killed or canceled
-  run, and stale reservations (FR-009), through the provider's `Remove` with the ownership check of FR-008 on every item. A
+- **FR-033**: On a macOS host, `whr doctor --fix` MUST remove owned leftovers only, for the VM and the container backend
+  alike: VM or container instances left by a killed or canceled run, and stale VM reservations (FR-009), through the
+  provider's `Remove` with the ownership check on every item (FR-008 for a VM instance; the label ownership of Feature 008 for
+  a container). A
   foreign or unlabeled object MUST be refused with `refused.foreign_object` and never touched, an instance of a run that
   is still active is not a leftover, and nothing else is repaired except the image rebuild of FR-037. It uses the mechanics of Feature 009 FR-016, FR-007 and
   FR-017: it requires a host profile and otherwise refuses with `host_setup.profile_absent` (Feature 009 FR-016); the repair
-  is a modify-class step (it removes something present) with the item id `vm-instance:<instance id>` or
-  `vm-reservation:<reservation id>`. Without `--yes` it prints the preview (name, id and size if known, per item) and exits
+  is a modify-class step (it removes something present) with the item id `vm-instance:<instance id>`,
+  `vm-reservation:<reservation id>` (VM) or `container-instance:<instance id>` (container). Without `--yes` it prints the preview (name, id and size if known, per item) and exits
   70, and with `--yes` each item is removed only with its own `--confirm <id>`. The preview MUST show, for each leftover,
   whether its results were exported; a stopped or failed clone whose results were not exported is marked "results not
   exported". Confirming such an item with `--confirm <id>` IS the results-deletion confirmation of Feature 008 FR-008:
@@ -417,15 +428,19 @@ provider and Linux hosts are unchanged.
   while no export command is registered (FR-019 adds none, and `whr sandbox export` is proposed syntax under Feature 008
   FR-028), the preview says so instead of naming a command. Linux `whr doctor --fix` still refuses (Feature 009 FR-001).
 - **FR-034**: `whr setup` on a macOS host MAY offer "create the image now?" for the container backend and for the VM backend
-  alike. The offer is its own step, with these rules. The wizard generates the image definition (a container build file or
-  a VM recipe) as a readable file owned by the user, shows it, shows a size preview (download and disk size, "size
-  unknown" when not stated) and then asks an explicit question with the default `no`. It builds locally only from that
-  file and only after `yes`. A build never starts silently, `--yes` alone does not approve it, and an unattended run
-  without confirmation exits 70. Any download the build needs is named in the preview and happens only after the
-  confirmation. An existing definition file is never overwritten without asking (diff and its own confirmation, as for a
-  dotfile in Feature 009 FR-013). The built image stays local and is never distributed (FR-007); prebuilt images pulled
-  from a registry are out of scope. Feature 009 and ADR 0009 define no image creation today, so this is new for both
-  backends and is delivered through the Feature 009 amendment below. Linux `whr setup` is unchanged.
+  alike (the limit to a macOS host holds for both). The offer is its own step, with these rules. The wizard generates the
+  image definition (a container build file or a VM recipe) as a readable file owned by the user, shows it, shows a size
+  preview (download and disk size, "size unknown" when not stated) and then asks an explicit question with the default
+  `no`. It builds locally only from that file and only after `yes`. The container image is built with the container
+  runtime's normal build command: the build changes no VM setting of the container runtime, writes only images that carry
+  `whr`'s own label, and may fetch base layers from a registry as part of the build; that fetch is not a pull of a prebuilt
+  image (FR-007). A build never starts silently, `--yes` alone does not approve it, and an unattended run without
+  confirmation exits 70. Any download the build needs is named in the preview and happens only after the confirmation. An
+  existing definition file is never overwritten without asking: the diff, its own confirmation and a verified backup, as for a
+  dotfile in Feature 009 FR-013. The built image stays local and is never distributed (FR-007). Feature 009 and ADR 0009
+  define no image creation today, so this is new for both backends and is delivered through the Feature 009 amendment below.
+  Real image builds are owner gates (Feature 008 FR-032, plan OG-3) and owner-run evidence; FR-034 is tested offline with
+  fake runners (SC-029). Linux `whr setup` is unchanged.
 - **FR-035**: The container and the VM backend MUST share one set of core commands (`whr setup`, `whr doctor`,
   `whr sandbox ...` and the interactive shell command). Differences show only in the capability report and in a refusal
   that names its reason. A backend-specific extra command is allowed but MUST NOT replace a core command.
@@ -439,8 +454,21 @@ provider and Linux hosts are unchanged.
   when not stated), and that an existing unusable image is replaced. A build never starts silently, nothing is downloaded
   before the confirmation, and nothing is distributed. If the definition is missing, or was edited so that it no longer
   builds, doctor reports it (a missing file in the check, a failed build as a failed step) and points to `whr setup`; it
-  never regenerates the definition. `whr doctor` and `--fix` install no host tool (FR-031). Linux `whr doctor --fix`
-  still refuses.
+  never regenerates the definition. The build rules of FR-034 apply (normal build command, own label only, no VM setting changed). `whr doctor --fix` does not
+  install the VM tool (FR-031). Real builds are owner-run evidence and FR-037 is tested with fake runners (SC-032). Linux
+  `whr doctor --fix` still refuses.
+- **FR-038**: The catalogue entry for the VM tool (FR-031) MAY name exactly one third-party package source (a tap) in a
+  `tap` field of the catalogue schema; wildcards and lists are not allowed, and every other third-party source stays
+  forbidden (Feature 009 FR-025). The preview shows the source. The tool is installed only after explicit selection and a
+  confirmation of that item, never under `--yes` alone. The concrete source is named in the catalogue and in the driver
+  documentation, not in this specification's normative text.
+- **FR-039**: `whr doctor` MUST gain read-only checks for the container backend: `container.image` (the image exists and
+  carries `whr`'s label: `pass`; missing or unusable: `fail`; no image defined: `skipped`) and `container.leftovers` (owned
+  container instances, with their size when the runtime states it and "size unknown" otherwise). The free space of the
+  container storage is the existing `disk.container_storage` check. They use only read-only list and inspect calls of the
+  container runtime on the discovered socket within the shared 5 s budget, start no container and change nothing. The VM
+  space report of FR-032 has no further container counterpart in this increment: container space is the leftover sizes
+  and `disk.container_storage`.
 
 ### Appended refusal codes
 
@@ -460,7 +488,7 @@ Codes are appended to `refusal-codes.json` of Feature 008 and never reused or re
 ### Key Entities *(include if feature involves data)*
 
 BaseImageRef, DisposableClone, OwnershipRecord, GuestPlatform (`guest_os`, `guest_arch`), VMDriver (port),
-DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyReservation, VMReadinessSummary, LeftoverCleanupPlan, ImageDefinition, ImageBuildOffer.
+DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyReservation, VMReadinessSummary, LeftoverCleanupPlan, ImageDefinition, ImageBuildOffer, PackageSource.
 
 ## Success Criteria *(mandatory)*
 
@@ -517,7 +545,7 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
 - **SC-016**: No code path or command of `whr` publishes, uploads, signs, redistributes or registry-pulls a base image, the
   provider never builds one, only `whr setup` and `whr doctor --fix` build, locally, after confirmation, and no
   configuration field holds a guest credential, only a reference (FR-007). No host virtualization, network, firewall or
-  security setting is changed and the provider and `whr doctor` install no backend; the recorded mutating calls (start, write, stop, delete) target owned instances only, and the clone call reads the
+  security setting is changed and neither the provider nor `whr doctor` (including `--fix`) installs a VM backend; the recorded mutating calls (start, write, stop, delete) target owned instances only, and the clone call reads the
   base image only as its source (FR-017).
 - **SC-017**: A start failure leaves no owned instance and lists leftovers by name and id; readiness is reported only
   after the bounded reachability check (FR-010).
@@ -553,14 +581,17 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   active run, a foreign object with the reserved prefix): `doctor --fix --dry-run` writes nothing; `doctor --fix`
   prints the preview and exits 70; `--yes` alone removes nothing; `--yes --confirm <id>` removes exactly the confirmed owned
   leftover through `Remove`; the foreign object is refused with `refused.foreign_object` and untouched; the active run is
-  not listed as a leftover; without a host profile `doctor --fix` refuses with `host_setup.profile_absent`; `doctor --fix` makes no tool install call; Linux `doctor --fix` is refused (FR-033).
+  not listed as a leftover; without a host profile `doctor --fix` refuses with `host_setup.profile_absent`; `doctor --fix` makes no install call for the VM tool; Linux `doctor --fix` is refused (FR-033).
 - **SC-028**: The `doctor --fix` preview marks every leftover whose results were not exported as "results not exported" with
   the Export step, for a stopped and for a failed clone, and marks exported ones as exported; the marking is present in
   the preview that precedes any removal. An item marked "results not exported" is not removed without its `--confirm <id>`, and after a confirmed removal the files already in the result directory are byte-identical to before (FR-033, FR-011, FR-020).
 - **SC-029**: With fake container and VM runners, an image offer shows the generated definition and the size preview before
   any build; no build or download call happens before `yes`; `--yes` alone does not build; an unattended run without
   confirmation exits 70 with no build call; `no` leaves no build call; an existing definition file stays byte-identical
-  unless the diff is confirmed; no call uploads, signs, publishes or registry-pulls (FR-034, FR-007).
+  unless the diff is confirmed, and a verified backup precedes its replacement; the container build uses only the runtime's
+  normal build invocation, writes only labeled images, makes no VM setting call, and a base-layer fetch during the build
+  is allowed while a call that pulls a prebuilt finished image, and any call that uploads, signs or publishes, fail the test
+  (FR-034, FR-007). Real builds are owner-run evidence.
 - **SC-030**: The command registry has one entry per core command for both backends, no backend-specific command replaces a
   core command, and the same command-level conformance cases pass for the fake container provider and the fake VM provider
   with differences only in the capability report and in refusal codes that name their reason (FR-035, FR-016).
@@ -569,13 +600,21 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
 - **SC-032**: With a fake runner, `doctor --fix` without `--yes` previews the rebuild (definition file, size and effort,
   replacement of an unusable image) and exits 70; `--yes` alone builds nothing; `--yes --confirm <id>` builds locally from
   the definition with no download before confirmation; a missing definition is reported and not regenerated, and a failed
-  build is a failed step that points to `whr setup`; the same holds for the container and the VM backend, and no host
-  tool is installed (FR-037).
+  build is a failed step that points to `whr setup`; the same holds for the container and the VM backend, and the VM
+  tool is not installed (FR-037).
+- **SC-033**: A catalogue entry with one named `tap` loads and its preview shows the source; zero taps, a wildcard, a list of
+  taps or a second entry with a third-party source are rejected; the install call happens only after explicit selection and
+  confirmation of the item and not under `--yes` alone; no other tap is added (FR-038).
+- **SC-034**: With a fake container runtime, `container.image` reports `pass`, `fail` and `skipped` for a labeled image, a
+  missing or unusable image and no defined image; `container.leftovers` lists owned instances only with size or "size
+  unknown"; the recorded runtime calls are read-only list and inspect calls, none starts or changes anything; and
+  `doctor --fix` removes an owned container leftover only with its `--confirm container-instance:<id>`, refuses an
+  unlabeled container with `refused.foreign_object` and leaves it untouched (FR-039, FR-033).
 
 ## Owner decisions (confirmed 2026-10-31)
 
 The owner decided the six choices that the author had proposed and then added decisions 7 to 15. The author proposals that remain
-open for the owner are marked below. None alters OD-1 to OD-6.
+open for the owner are marked below. Decisions 10 to 13, 15 and 17 supersede parts of OD-4 and OD-5 as noted there; none alters OD-1 to OD-3 or OD-6.
 
 1. **Interactive shell for the container provider (confirmed, follow-up)**: the owner wants an interactive shell for the
    container provider in the future. Until a separate feature builds it, the capability report stays honest (FR-025): the
@@ -602,11 +641,11 @@ open for the owner are marked below. None alters OD-1 to OD-6.
    (the check statuses have no warning). C is `whr doctor --fix` removing owned leftovers only
    (FR-033). D (`doctor --deep`, a real clone-start-exec-stop-delete smoke) is future work only. E (`doctor --fix` installs
    the VM tool or builds the image) was rejected; by decision 13 the image-build half is now accepted (FR-037) and the
-   tool-install half stays rejected: only the wizard installs host tools.
+   VM-tool-install half stays rejected: only the wizard installs the VM tool.
 9. **One experience for every backend (NEW)**: one shared set of core commands (setup, doctor, sandbox, shell) for the
    container and the VM backend. Differences show only in the capability report and in a refusal that names its reason. A
    backend-specific extra command is allowed but never replaces a core command (FR-035, SC-030).
-10. **Image creation (NEW)**: `whr setup` may offer "create the image now?" for both backends. It builds locally, after an
+10. **Image creation (NEW)**: on a macOS host, `whr setup` may offer "create the image now?" for both backends (Linux is unchanged). It builds locally, after an
     explicit prompt and a size preview. No silent build or download. The image stays with the owner and is never
     distributed; NC-1 stays valid. Registry-pulled prebuilt images stay out of scope (FR-034, FR-007, SC-029).
 11. **Image definition (NEW)**: `whr` generates the definition (container build file or VM recipe) as a readable file owned
@@ -614,26 +653,34 @@ open for the owner are marked below. None alters OD-1 to OD-6.
 12. **VM tool installation (NEW)**: the VM tool becomes a catalogue entry that is not preselected (13 to 14 entries),
     installed through the existing adapter only on explicit selection; a tool from another source is never replaced or
     removed (Feature 009 FR-008). This changes decision 7 (FR-031, SC-025).
-13. **Doctor and cleanup (NEW, corrected)**: the same rules for both backends: read-only checks, the space report, and
+13. **Doctor and cleanup (NEW, corrected)**: on a macOS host, the same rules for both backends (container checks FR-039, container leftovers FR-033; the space report is the VM check FR-032 plus, for containers, leftover sizes and `disk.container_storage`): read-only checks, the space report, and
     `whr doctor --fix` removing only owned leftovers (FR-033) with preview and per-item `--confirm`. `doctor --fix` may also
     rebuild a missing or unusable image locally from the user-owned definition, after a preview with size and effort and a
-    per-item `--confirm`; no silent build, no download, nothing distributed (FR-037, SC-032). Doctor never installs host
-    tools; only the wizard does.
+    per-item `--confirm`; no silent build, no download, nothing distributed (FR-037, SC-032). `doctor --fix` does not install
+    the VM tool; only the wizard does. The rest of Feature 009 FR-016 (repairing other selected catalogue items) is unchanged.
 14. **One interactive shell command (NEW)**: one command with the same behavior for both backends (proposed syntax
     `whr sandbox shell <id>`, draft Feature 012, pull request 291, not merged). A backend without an enforced `pty`
     refuses with `refused.interactive_unavailable` (FR-016).
 15. **Licensing (NEW)**: license terms of host software (the VM tool, the host operating system in a VM, concurrency caps from
     licenses, third-party package sources) are the user's responsibility, as for all user-installed host software; `whr`
     does not check or enforce them (FR-036, SC-031). The concurrency decision (unknown means unlimited) is unchanged.
+16. **Container image build, a narrow exception (NEW)**: on a macOS host, the wizard builds the container image with the
+    container runtime's normal build command. It changes no VM setting of the container runtime and writes only images
+    that carry `whr`'s own label. Base layers fetched from a registry as part of the build are allowed; pulling a prebuilt
+    finished image stays forbidden (FR-007, FR-034, SC-029).
+17. **Package source exception (NEW)**: the catalogue entry of the VM tool may name exactly one third-party package source.
+    The preview shows it, the install happens only after explicit selection and confirmation, and every other third-party
+    source stays forbidden (FR-038, SC-033).
 
 Author proposals made while recording these decisions (the owner may change them):
 
 - A limit with status not `enforced` is treated like `unknown` (decision 2).
 - Command names other than those the owner named are not settled. `whr sandbox shell <id>` is proposed syntax of the draft
-  Feature 012; the item ids `image:container` and `image:vm` and the image check name for the container backend (for
-  example `container.image`) are author proposals (FR-037).
+  Feature 012; the item ids `image:container`, `image:vm` and `container-instance:<id>` are author proposals (FR-037, FR-033). The check ids
+  `container.image` and `container.leftovers` are specified in FR-039 and need the doctor contract amendment.
 - Decisions 12 and 13 read together: the VM tool entry is checked by `whr doctor` like any item, but `whr doctor --fix` does
-  not install it, although Feature 009 FR-016 repairs other selected catalogue items by installing them.
+  not install the VM tool (an explicit exception to Feature 009 FR-016; every other selected catalogue item is repaired as
+  before), although Feature 009 FR-016 repairs other selected catalogue items by installing them.
 - If the definition is missing or no longer builds, doctor reports it and points to `whr setup` and never regenerates it
   (FR-037). An unusable existing image is replaced by the rebuild after the per-item confirmation.
 - The default location of the definition file is a user-owned path shown by the wizard; the choice is not fixed here.
@@ -686,8 +733,8 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 
 ## Changes to existing documents (on approval; each lands through the plan and tasks)
 
-- `specs/008-workspace-sandbox/spec.md`: FR-012 (capability list gains the fields of FR-001 and FR-004), FR-034 (the
-  exception of A1 and the new refusal paths) and, for the new codes, the error mapping of FR-035 (capability refusals
+- `specs/008-workspace-sandbox/spec.md`: Feature 008 FR-012 (capability list gains the fields of FR-001 and FR-004), Feature 008 FR-034 (the
+  exception of A1 and the new refusal paths) and, for the new codes, the error mapping of Feature 008 FR-035 (capability refusals
   and `refused.driver_unavailable` map to 68 like the existing refusals; ADR 0013 has no configuration-error code).
 - `specs/008-workspace-sandbox/data-model.md`: "the eleven fields" becomes eighteen; the ownership description
   covers `name_and_record` (FR-008).
@@ -704,8 +751,9 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 - The Feature 008 conformance suite and `Admit` (`apps/whr/internal/runtime/`): new cases and the admission paths for
   the new refusals. The existing table rows stay unchanged (FR-003).
 - `contracts/cli/doctor-checks.json` and its freeze test `TestDoctorChecksMatchContract`: add `vm.backend`,
-  `vm.base_image`, `vm.limit` and `vm.space` (FR-018, FR-032), and amend the process rule to allow the driver's fixed read-only `probe` and `list`
-  invocations within the shared 5 s budget (owner-gated like other contract changes). `whr doctor --fix` for the VM
+  `vm.base_image`, `vm.limit`, `vm.space`, `container.image` and `container.leftovers` (FR-018, FR-032, FR-039), and amend the process rule to allow the driver's fixed read-only `probe` and `list`
+  invocations and the runtime's read-only list and inspect calls (replacing the note "no Docker API call is made" of the socket
+  discovery for these checks; Feature 006 FR-060 is read together) within the shared 5 s budget (owner-gated like other contract changes). `whr doctor --fix` for the VM
   leftovers is covered by the Feature 009 entry below, since `doctor-checks.json` lists only checks.
 - `specs/009-host-setup-wizard/` (spec, `contracts/wizard-flow.md`, `data-model.md`, the catalogue schema and the protocol
   contract; amendment for FR-031, FR-033, FR-034 and FR-037, owner-gated like AP-1 to AP-9; Feature 009 FR-024 applies and
@@ -731,6 +779,17 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
     owned VM instances and images, never the Docker VM.
   - **Allowed-argv table (FR-023)**: admits the driver's read-only `probe` and `list` (FR-031), the fixed image build
     invocation of each backend and the VM tool install. The fake exec port fails on any other call.
+  - **FR-002 and FR-012 (decision 16)**: FR-002 ("never changes the Docker VM") states that the image build writes only
+    images with `whr`'s own label and changes no VM setting; FR-012 ("downloads of software are done by Homebrew") allows
+    the base-layer fetch that the container runtime's own build command performs during an image build.
+  - **FR-009, FR-025, schema and brew forms (decision 17)**: FR-009 ("only taps homebrew/core and homebrew/cask"), FR-025
+    ("adds no taps"), the catalogue schema (`tap` pattern, now an optional field with exactly one named source, no
+    wildcard) and the brew invocation forms in `wizard-flow.md` ("tap" not used) admit the one named source of FR-038 for the
+    VM tool entry only. The wizard-flow sentence "git-config is not a fourteenth catalogue entry" becomes "fifteenth".
+  - **FR-016**: "It does not repair non-host findings" is amended: the image rebuild and the owned-leftover removal are repairs
+    of VM and container findings. `doctor --fix` does not install the VM tool, an explicit exception to the install behavior
+    of FR-016 and of `wizard-flow.md` (`doctor --fix --yes` installs other missing selected catalogue items as before).
+  - **Step deadline**: the deadline of `image_build` is a plan-time value, not the 900 s of the package-manager steps (DP-2).
   - **Boundaries**: "installing anything on Linux" and the Linux enrollment stay unchanged; the image offer is a macOS host
     feature. Feature 009 FR-025 (no taps) is unchanged.
 - `docs/container-runtime.md`: add a VM backend prerequisite section; the Windows host statement stays unchanged.
@@ -745,7 +804,8 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 <!-- informative:begin -->
 These notes name products. They are not requirements and the vendor-name gate of FR-022 skips this marked region.
 
-- The first driver targets Tart (OD-5), and the catalogue entry of decision 12 would be for its VM tool. A driver for a Linux host would likely use KVM. A driver for Hyper-V is only a
+- The first driver targets Tart (OD-5), and the catalogue entry of decision 12 would be for its VM tool, which that vendor distributes through its own third-party
+  tap (decision 17; the exact tap name is verified at implementation). A driver for a Linux host would likely use KVM. A driver for Hyper-V is only a
   possibility.
 - Initial list for the gate of FR-022: tart, lima, utm, qemu, parallels, vmware, virtualbox, hyper-v, kvm, libvirt,
   vagrant, multipass, firecracker, wsl.
