@@ -26,13 +26,15 @@ There is no CHANGELOG file. `.github/scripts/release-notes.sh` generates the not
 subjects between the previous release tag and the tagged commit, and keeps them short:
 
 - **Features (N)**: every `feat` commit.
-- **Breaking changes (N)**: every commit with `!` after its type (for example `docs!:` or `fix!:`)
-  that is not a `feat`, so nothing breaking is hidden. A `feat!` stays under Features. Only the
+- **Breaking changes (N)**: every commit with `!` after its type or scope, whatever the type (for
+  example `docs!:`, `fix(api)!:`, `deps!:` or `Feat!:`), except a lowercase `feat!`, so nothing
+  breaking is hidden. A lowercase `feat!` stays under Features. Only the
   subject is read; a `BREAKING CHANGE:` footer alone is not detected, so mark the subject with `!`.
 - **Fixes (N)**: every `fix` commit, in a collapsed `<details>` block.
 - **Other changes (N)**: `perf` and `refactor` commits, only when there are any.
+- Subjects are HTML-escaped (`&` and `<`) so a subject cannot close the Fixes block.
 - A closing line counts the documentation commits and all remaining commits (tests, style, build, CI,
-  chores, reverts and subjects that are not Conventional Commits) without listing them, and links the
+  chores, reverts, any type not listed above and every subject that is not a Conventional Commit) without listing them, and links the
   full comparison `https://github.com/wstein/workharbor/compare/<previous>...<tag>`.
 
 A group without commits is omitted. The first release prints "First release." and a range without
