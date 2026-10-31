@@ -1,0 +1,334 @@
+# SPDX-License-Identifier: EUPL-1.2
+# Informative Colima acceptance (Feature 009 D-10, OG-1; docs/quality/006-whr-cli/colima-acceptance-run-20261031.md).
+# Owner-started only (Actions > colima-acceptance > Run workflow). It never gates anything: every matrix job is
+# continue-on-error and every measurement is recorded as observed or `failed: <reason>`. `whr` never starts or
+# configures Colima, so this job (the "owner" here) installs and starts it, then measures what `whr` meets.
+# Runner VMs are throwaway: nothing here touches an owner machine. Whether the Apple Silicon row (vz) can start
+# at all (nested virtualization on GitHub arm runners) is not known; the summary says so either way.
+name: colima-acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: colima-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    name: colima (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    continue-on-error: true
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: intel-qemu-sshfs
+            runner: macos-15-intel
+            vm_type: qemu
+            mount_type: sshfs
+          - name: intel-qemu-9p
+            runner: macos-15-intel
+            vm_type: qemu
+            mount_type: 9p
+          - name: arm-vz-virtiofs
+            runner: macos-15
+            vm_type: vz
+            mount_type: virtiofs
+    env:
+      MATRIX_NAME: ${{ matrix.name }}
+      RUNNER_LABEL: ${{ matrix.runner }}
+      VM_TYPE: ${{ matrix.vm_type }}
+      MOUNT_TYPE: ${{ matrix.mount_type }}
+      # The alpine digest that whr pins in apps/whr/internal/localdocker/tools.Dockerfile: whr already uses it, so
+      # pulling it proves a reference whr depends on and warms the layer cache for the home clone build. hello-world
+      # is not used by whr and would prove less.
+      PROBE_IMAGE: docker.io/library/alpine@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
+      GOTOOLCHAIN: local
+      HOMEBREW_NO_ANALYTICS: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      HOMEBREW_NO_ENV_HINTS: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: apps/whr/go.mod
+          cache: false
+      - name: Build whr from source
+        shell: bash
+        working-directory: apps/whr
+        run: |
+          set -eu
+          go build -trimpath -o "$RUNNER_TEMP/whr" ./cmd/whr
+          "$RUNNER_TEMP/whr" --version || true
+      - name: Prepare probe helpers
+        shell: bash
+        run: |
+          set -eu
+          out="$RUNNER_TEMP/colima-acceptance"
+          mkdir -p "$out/logs"
+          cat >"$RUNNER_TEMP/colima-lib.sh" <<'LIB'
+          # Sourced by later steps. probe never fails the step: it records `observed` or `failed: <reason>`.
+          OUT="$RUNNER_TEMP/colima-acceptance"
+          PFX="whr-colima-acc-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${MATRIX_NAME}"
+          now_ms() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000'; }
+          # probe NAME SECONDS COMMAND [ARG...]: stdout to logs/NAME.log, stderr to logs/NAME.err, bounded by alarm.
+          probe() {
+            p_name=$1
+            p_secs=$2
+            shift 2
+            p_start=$(now_ms)
+            set +e
+            perl -e 'alarm shift; exec @ARGV or die "exec failed: $!\n"' "$p_secs" "$@" >"$OUT/logs/$p_name.log" 2>"$OUT/logs/$p_name.err"
+            PROBE_RC=$?
+            set -e
+            p_end=$(now_ms)
+            if [ "$PROBE_RC" -eq 0 ]; then
+              p_status=observed
+            elif [ "$PROBE_RC" -eq 142 ]; then
+              p_status="failed: timeout after ${p_secs}s"
+            else
+              p_status="failed: exit $PROBE_RC"
+            fi
+            printf '%s\t%s\t%s\t%s\n' "$p_name" "$p_status" "$((p_end - p_start))" "$p_name" >>"$OUT/probes.tsv"
+          }
+          # skipped NAME REASON: record a probe that could not run.
+          skipped() {
+            printf '%s\t%s\t%s\t%s\n' "$1" "failed: $2" 0 "$1" >>"$OUT/probes.tsv"
+          }
+          LIB
+          cat >"$RUNNER_TEMP/colima-bindtest.sh" <<'BIND'
+          #!/bin/bash
+          # bindtest.sh DIR IMAGE: is a host directory visible and writable in a container?
+          set -eu
+          dir=$1
+          image=$2
+          mkdir -p "$dir"
+          printf 'host-wrote\n' >"$dir/from-host"
+          echo "dir: $dir"
+          echo "host stat of from-host (uid:gid mode): $(stat -f '%u:%g %Sp' "$dir/from-host")"
+          docker run --rm --pull never --volume "$dir:/m" "$image" sh -c '
+            echo "container uid: $(id -u)"
+            echo "container ls:"; ls -la /m
+            if cat /m/from-host; then echo "RESULT visible=yes"; else echo "RESULT visible=no"; fi
+            if touch /m/from-container; then echo "RESULT write=yes"; else echo "RESULT write=no"; fi
+          '
+          echo "host ls after run:"; ls -la "$dir"
+          if [ -e "$dir/from-container" ]; then echo "RESULT host-sees-container-write=yes"; else echo "RESULT host-sees-container-write=no"; fi
+          BIND
+          cat >"$RUNNER_TEMP/colima-tartest.sh" <<'TAR'
+          #!/bin/bash
+          # tartest.sh IMAGE PREFIX: ~200 MiB tar pipe between named volumes, timed, two ways.
+          set -eu
+          image=$1
+          pfx=$2
+          now_ms() { perl -MTime::HiRes=time -e 'printf "%.0f\n", time()*1000'; }
+          size=209715200
+          docker run --rm --pull never --volume "$pfx-src:/to" "$image" sh -c "head -c $size /dev/urandom >/to/blob && sync"
+          t0=$(now_ms)
+          docker run --rm --pull never --volume "$pfx-src:/from:ro" --volume "$pfx-dst1:/to" "$image" sh -c 'tar -cpf - -C /from . | tar -xpf - -C /to'
+          t1=$(now_ms)
+          echo "RESULT in-container tar pipe ms=$((t1 - t0)) bytes=$size"
+          docker run --rm --pull never --volume "$pfx-src:/from:ro" "$image" tar -cpf - -C /from . \
+            | docker run --rm --interactive --pull never --volume "$pfx-dst2:/to" "$image" tar -xpf - -C /to
+          t2=$(now_ms)
+          echo "RESULT host-piped tar pipe ms=$((t2 - t1)) bytes=$size"
+          for v in dst1 dst2; do
+            echo "RESULT $v bytes=$(docker run --rm --pull never --volume "$pfx-$v:/to:ro" "$image" sh -c 'wc -c </to/blob')"
+          done
+          TAR
+          chmod 0755 "$RUNNER_TEMP/colima-bindtest.sh" "$RUNNER_TEMP/colima-tartest.sh"
+      - name: Install Colima and the Docker CLI (Homebrew core only)
+        shell: bash
+        timeout-minutes: 15
+        run: |
+          set -eu
+          brew --version
+          brew install colima docker
+          colima version
+          docker --version
+      - name: Start Colima (the job is the owner here)
+        id: start
+        shell: bash
+        timeout-minutes: 25
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/colima-lib.sh"
+          probe runner-facts 60 bash -c 'uname -m; sw_vers; sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize kern.hv_support kern.hv_vmm_present 2>&1; true'
+          started=false
+          for attempt in 1 2; do
+            probe "colima-start-$attempt" 480 colima start --runtime docker --vm-type "$VM_TYPE" --mount-type "$MOUNT_TYPE" --cpu 2 --memory 4 --disk 30
+            if [ "$PROBE_RC" -eq 0 ]; then
+              started=true
+              break
+            fi
+            probe "colima-cleanup-after-start-$attempt" 180 colima delete --force
+          done
+          printf '%s\n' "$started" >"$OUT/started"
+          probe lima-hostagent-stderr-tail 30 bash -c 'for f in "$HOME"/.colima/_lima/colima/ha.stderr.log; do test -f "$f" && tail -n 80 "$f"; done; true'
+          echo "colima started: $started"
+          {
+            echo "### Colima start ($MATRIX_NAME on $RUNNER_LABEL, vm-type $VM_TYPE, mount-type $MOUNT_TYPE)"
+            if [ "$started" = true ]; then
+              echo "Colima STARTED."
+            else
+              echo "Colima did NOT start after 2 attempts. For the vz row this is the answer to the nested-virtualization question; see the start logs below."
+            fi
+          } >>"$GITHUB_STEP_SUMMARY"
+      - name: Measure the runtime
+        shell: bash
+        timeout-minutes: 20
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/colima-lib.sh"
+          started=$(cat "$OUT/started")
+          probe brew-versions 60 brew list --versions colima lima docker qemu
+          probe colima-version 30 colima version
+          probe colima-status 60 colima status
+          probe colima-status-json 60 colima status --json
+          probe colima-list 60 colima list
+          probe ls-colima-home 30 ls -la "$HOME/.colima" "$HOME/.colima/default"
+          probe ls-var-run-docker-sock 30 ls -l /var/run/docker.sock
+          probe colima-yaml-next-to-socket 30 bash -c 'sock="$HOME/.colima/default/docker.sock"; if test -S "$sock"; then echo "RESULT socket=yes"; else echo "RESULT socket=no"; fi; if test -f "$HOME/.colima/default/colima.yaml"; then echo "RESULT colima.yaml-next-to-socket=yes"; else echo "RESULT colima.yaml-next-to-socket=no"; fi'
+          probe colima-yaml-keys 30 bash -c 'f="$HOME/.colima/default/colima.yaml"; grep -E "^(runtime|vmType|mountType|cpu|memory|disk|rootDisk|arch|autoActivate|rosetta|nestedVirtualization|cpuType|hostname):" "$f"; awk "/^mounts:/{p=1;print;next} /^[A-Za-z]/{p=0} p" "$f"'
+          probe df-colima-volume 30 df -k "$HOME/.colima"
+          if [ "$started" != true ]; then
+            for n in docker-context-ls docker-info docker-pull docker-run-pinned bind-runner-temp bind-home bind-tmpdir volume-roundtrip tar-pipe-200mib; do
+              skipped "$n" "colima did not start"
+            done
+            exit 0
+          fi
+          probe docker-context-ls 30 docker context ls
+          probe docker-info 60 docker info --format 'Server Version: {{.ServerVersion}}
+          OperatingSystem: {{.OperatingSystem}}
+          Driver: {{.Driver}}
+          DockerRootDir: {{.DockerRootDir}}
+          Name: {{.Name}}
+          Architecture: {{.Architecture}}
+          SecurityOptions: {{.SecurityOptions}}'
+          probe docker-pull 300 docker pull --quiet "$PROBE_IMAGE"
+          probe docker-run-pinned 120 docker run --rm --pull never "$PROBE_IMAGE" sh -c 'uname -a; id'
+          # Bind mounts: RUNNER_TEMP and HOME are both under /Users/runner here; TMPDIR is outside the home.
+          probe bind-runner-temp 120 "$RUNNER_TEMP/colima-bindtest.sh" "$RUNNER_TEMP/colima-bind-probe" "$PROBE_IMAGE"
+          probe bind-home 120 "$RUNNER_TEMP/colima-bindtest.sh" "$HOME/colima-bind-probe-$GITHUB_RUN_ID-$MATRIX_NAME" "$PROBE_IMAGE"
+          tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/colima-bind.XXXXXX")
+          probe bind-tmpdir 120 "$RUNNER_TEMP/colima-bindtest.sh" "$tmpdir" "$PROBE_IMAGE"
+          probe volume-roundtrip 120 bash -c 'set -eu; v="$1-roundtrip"; docker volume create "$v"; docker run --rm --pull never --volume "$v:/d" "$2" sh -c "echo roundtrip-ok >/d/f"; docker run --rm --pull never --volume "$v:/d:ro" "$2" cat /d/f' _ "$PFX" "$PROBE_IMAGE"
+          probe tar-pipe-200mib 600 "$RUNNER_TEMP/colima-tartest.sh" "$PROBE_IMAGE" "$PFX"
+      - name: Measure whr against the real socket (no DOCKER_HOST)
+        shell: bash
+        timeout-minutes: 15
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/colima-lib.sh"
+          unset DOCKER_HOST
+          whr="$RUNNER_TEMP/whr"
+          started=$(cat "$OUT/started")
+          probe whr-env 10 bash -c 'echo "DOCKER_HOST=${DOCKER_HOST-unset}"; echo "COLIMA_HOME=${COLIMA_HOME-unset}"'
+          # Doctor and ls need no daemon to report; they show what whr finds on its own.
+          probe whr-doctor-json 60 "$whr" doctor --json
+          probe whr-ls-local-json 60 "$whr" ls --local --json
+          if [ "$started" != true ]; then
+            for n in whr-throwaway-setup whr-ls-local-json-throwaway whr-home-clone-dry-run whr-home-clone-apply whr-home-clone-verify whr-home-backup-apply whr-home-backup-verify whr-recover-dry-run; do
+              skipped "$n" "colima did not start"
+            done
+            exit 0
+          fi
+          # A minimal workspace for whr: a container with the label workharbor.workspace (a recognized workspace
+          # marker) and a named volume mounted at /home/captain. Names carry the run id and a non-protected prefix.
+          ws="$PFX-ws"
+          home="$PFX-home"
+          probe whr-throwaway-setup 300 bash -c 'set -eu; docker volume create --label whr.colima.acceptance=1 "$2"; docker run --rm --pull never --volume "$2:/home/captain" "$3" sh -c "echo seed >/home/captain/seed.txt"; docker create --pull never --name "$1" --label workharbor.workspace=colima-acceptance --label whr.colima.acceptance=1 --volume "$2:/home/captain" "$3" sleep 3600; docker start "$1"' _ "$ws" "$home" "$PROBE_IMAGE"
+          probe whr-ls-local-json-throwaway 60 "$whr" ls --local --json
+          probe whr-home-clone-dry-run 120 "$whr" workspace home clone --local "$ws" --dry-run --json
+          probe whr-home-clone-apply 600 "$whr" workspace home clone --local "$ws" --to "$PFX-clone" --yes --json
+          probe whr-home-clone-verify 60 docker run --rm --pull never --volume "$PFX-clone:/v:ro" "$PROBE_IMAGE" cat /v/seed.txt
+          probe whr-home-backup-apply 600 "$whr" workspace home backup --local "$ws" --to "$PFX-backup" --yes --json
+          probe whr-home-backup-verify 60 docker run --rm --pull never --volume "$PFX-backup:/v:ro" "$PROBE_IMAGE" cat /v/seed.txt
+          probe whr-recover-dry-run 300 "$whr" workspace recover --local "$ws" --dry-run
+      - name: Remove throwaway containers, volumes and directories
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -eu
+          . "$RUNNER_TEMP/colima-lib.sh" || true
+          for id in $(docker ps -aq --filter "name=$PFX" 2>/dev/null || true); do
+            docker rm -f -- "$id" >/dev/null 2>&1 || true
+          done
+          for v in $(docker volume ls -q --filter "name=$PFX" 2>/dev/null || true); do
+            docker volume rm -- "$v" >/dev/null 2>&1 || true
+          done
+          rm -rf -- "$RUNNER_TEMP/colima-bind-probe" "$HOME/colima-bind-probe-$GITHUB_RUN_ID-$MATRIX_NAME" 2>/dev/null || true
+          for d in "${TMPDIR:-/tmp}"/colima-bind.*; do
+            if [ -d "$d" ]; then rm -rf -- "$d"; fi
+          done
+          colima stop --force >/dev/null 2>&1 || true
+          colima delete --force >/dev/null 2>&1 || true
+      - name: Write results.json and the job summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -eu
+          cat >"$RUNNER_TEMP/colima-summarize.py" <<'PY'
+          import json
+          import os
+          import pathlib
+
+          out = pathlib.Path(os.environ['OUT'])
+
+
+          def tail(path, limit):
+              try:
+                  text = path.read_text(errors='replace')
+              except OSError:
+                  return ''
+              if len(text) <= limit:
+                  return text
+              return text[:limit // 2] + '\n[... truncated, full text in the artifact ...]\n' + text[-limit // 2:]
+
+
+          probes = []
+          table = out / 'probes.tsv'
+          if table.exists():
+              for line in table.read_text(errors='replace').splitlines():
+                  parts = line.split('\t')
+                  if len(parts) != 4:
+                      continue
+                  name, status, ms, _ = parts
+                  probes.append({'name': name, 'status': status,
+                                 'duration_ms': int(ms) if ms.isdigit() else None,
+                                 'stdout': tail(out / 'logs' / (name + '.log'), 6000),
+                                 'stderr': tail(out / 'logs' / (name + '.err'), 2000)})
+          started_file = out / 'started'
+          started = started_file.read_text().strip() if started_file.exists() else 'unknown'
+          keys = ('MATRIX_NAME', 'RUNNER_LABEL', 'VM_TYPE', 'MOUNT_TYPE', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA')
+          meta = {key.lower(): os.environ.get(key, '') for key in keys}
+          meta['colima_started'] = started
+          (out / 'results.json').write_text(json.dumps({'meta': meta, 'probes': probes}, indent=2) + '\n')
+
+          fence = '~~~~'
+          lines = ['## Colima acceptance: %s' % meta['matrix_name'],
+                   '',
+                   'Runner `%s`, vm-type `%s`, mount-type `%s`. **Colima started: %s.**' % (
+                       meta['runner_label'], meta['vm_type'], meta['mount_type'], started),
+                   '',
+                   '| probe | result | ms |', '| --- | --- | --- |']
+          for p in probes:
+              lines.append('| %s | %s | %s |' % (p['name'], p['status'].replace('|', '/'), p['duration_ms']))
+          for p in probes:
+              body = (p['stdout'] + ('\n[stderr]\n' + p['stderr'] if p['stderr'].strip() else '')).replace(fence, '~~~')
+              lines += ['', '<details><summary>%s: %s</summary>' % (p['name'], p['status'].replace('<', '&lt;')), '',
+                        fence, body.rstrip(), fence, '', '</details>']
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as handle:
+              handle.write('\n'.join(lines) + '\n')
+          PY
+          OUT="$RUNNER_TEMP/colima-acceptance" python3 -I -B "$RUNNER_TEMP/colima-summarize.py"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() }}
+        with:
+          name: colima-acceptance-${{ matrix.name }}
+          path: ${{ runner.temp }}/colima-acceptance
+          retention-days: 14
+          if-no-files-found: warn
