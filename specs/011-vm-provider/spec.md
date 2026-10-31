@@ -214,13 +214,14 @@ refusals. Every amendment is generic and additive.
 
 - **FR-006**: An instance MUST be created only as a disposable clone of a base image the owner named. The Plan MUST
   record the base image name and the identifier the driver reports for it. The base image MUST NOT be started for a
-  job, written or modified, and removal MUST discard the clone. A request that names a base image against a provider
-  whose `base_image` is not `read_only_clone_source` with status `enforced` MUST be refused with
-  `refused.base_image_unavailable` before any clone call. The offline suite proves this with the fake driver
+  job, written or modified, and removal MUST discard the clone. The offline suite proves this with the fake driver
   (no start, write or delete call targets the base image). For a real image the claim is owner-run evidence: the owner
   compares a host-computed digest of the image files before and after a run. The driver-reported identifier alone is
-  not proof. A base image that does not exist, is running or locked, or is not usable as a clone source MUST be refused
-  with `refused.base_image_unavailable` before any clone call.
+  not proof. Each of the following MUST be refused with `refused.base_image_unavailable` before any clone call: a base
+  image that does not exist, is running or locked, or is not usable as a clone source; a request that names a base
+  image against a provider whose `base_image` is not `read_only_clone_source` with status `enforced`; and a request
+  that names no base image against a provider whose `base_image` is not `none`. The container provider reports
+  `base_image=none` (FR-003), so nothing changes for it.
 - **FR-007**: `whr` MUST NOT create, download, build, publish, sign or redistribute base images, and MUST NOT store or
   relay guest login credentials. The guest account the driver uses is part of the owner's base image and appears in
   configuration only as a reference. The documentation MUST describe a reproducible recipe that starts from the operating
@@ -237,7 +238,8 @@ refusals. Every amendment is generic and additive.
   `refused.foreign_object` before any side effect, and its `List` returns no instance. The "when" text of
   `refused.foreign_object` becomes exactly: "a target object lacks the ownership labels, or, for `name_and_record`, its
   name or provider record is missing or disagrees, or the provider's `ownership_mechanism` is not `enforced`". For
-  labelled objects of the container provider its meaning is unchanged. No new code is needed.
+  the container provider, whose `ownership_mechanism` is `native_labels` with status `enforced` (FR-003), its meaning
+  is unchanged. No new code is needed.
 - **FR-009**: The provider MUST declare a concurrency limit derived from the driver and the host. Concurrency is runtime
   state, so it is not an `Admit` input: `Admit` stays a pure function of request and capabilities (Feature 008 FR-013).
   The limit is an explicit provider check immediately before the driver is touched in `Create`. It MUST be atomic: under
@@ -351,9 +353,9 @@ refusals. Every amendment is generic and additive.
 | --- | --- |
 | `refused.guest_os_unavailable` | the provider does not declare the requested guest operating system as `enforced` |
 | `refused.guest_arch_unavailable` | the provider does not declare the requested guest architecture as `enforced` |
-| `refused.concurrency_limit_reached` | creating the instance would exceed the declared concurrency limit |
+| `refused.concurrency_limit_reached` | creating the instance would exceed the effective concurrency limit of FR-009: the declared integer limit when its status is `enforced`, otherwise one |
 | `refused.tool_mounts_unavailable` | `ro_bdock` is requested and `tool_mounts` is not `ro_bdock` with status `enforced` |
-| `refused.base_image_unavailable` | the named base image does not exist, is running or locked, is not usable as a clone source, or `base_image` is not `read_only_clone_source` with status `enforced` |
+| `refused.base_image_unavailable` | no base image is named for a provider whose `base_image` is not `none`, or the named base image does not exist, is running or locked, is not usable as a clone source, or `base_image` is not `read_only_clone_source` with status `enforced` |
 | `refused.exec_argv_unavailable` | `exec_argv` is `unavailable` or not `enforced`; every `Exec` under every profile is refused |
 | `refused.driver_unavailable` | no driver is chosen, or the chosen driver is missing or unsupported on this host |
 | `refused.interactive_unavailable` | an interactive shell is requested and `interactive_shell` is not `pty` with status `enforced` |
@@ -431,8 +433,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   driver calls. With a chosen driver that is missing or unsupported on this host, it is refused with the same code and
   the only driver call is that driver's read-only `probe`. With one supported driver chosen, only that driver records
   calls (FR-023).
-- **SC-023**: A missing, running, locked or unusable base image, and a named base image against a provider whose
-  `base_image` is not `read_only_clone_source` with status `enforced`, are refused with `refused.base_image_unavailable`
+- **SC-023**: A missing, running, locked or unusable base image, a named base image against a provider whose
+  `base_image` is not `read_only_clone_source` with status `enforced`, and a request naming no base image against a
+  provider whose `base_image` is not `none`, are refused with `refused.base_image_unavailable`
   and zero clone calls (FR-006).
 - **SC-024**: No CI job, check or current document of this repository (the verbatim historical copies under
   `docs/archive/` excepted) declares Windows host support or a Windows runner (FR-029).
