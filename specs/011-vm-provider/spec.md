@@ -774,6 +774,9 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
     readable configuration file first, uses the recorded value as the fallback, else `unknown`; free space is measured on the host volume
     that holds the location (FR-041). The record name, its fields, the information-only use of a disk-size setting and that
     `doctor --fix` does not record are author proposals.
+22. **Doctor verdict for skipped checks unchanged (2026-10-31, NEW; resolves Open Question 1)**: not-applicable skips are NOT excluded from
+    the doctor verdict. Today no host reaches `ok`; this stays. It is revisited as its own Feature 006 change when the control-plane
+    checks become measurable. No verdict rule changes in this feature.
 
 Author proposals made while recording these decisions (the owner may change them):
 
@@ -828,11 +831,9 @@ Author proposals made while recording these decisions (the owner may change them
 
 ## Open Questions
 
-Two questions for the owner. (1) Should not-applicable skips (the six new checks on Linux, on a host without a VM driver or
-runtime) be left out of the doctor verdict? Today no host reaches `ok`: Feature 006 FR-060 already reports the control-plane
-and host-credential checks as `skipped`. The six permanent skips would keep such hosts at `incomplete` (the exit status stays 0)
-once those checks become measurable. (2) was decided on 2026-10-31 (decision 21, FR-041): no runtime API; the location comes from a readable runtime
-configuration file or a wizard record. NC-1 to NC-3 were decided on 2026-10-31 and are recorded
+No question is open for the owner at this point. Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
+checks on Linux, on a host without a VM driver or runtime) stay in the doctor verdict (decision 22). (2) Container free space: no runtime API;
+the location comes from a readable runtime configuration file or a wizard record (decision 21, FR-041). NC-1 to NC-3 were decided on 2026-10-31 and are recorded
 as OD-4 to OD-6.
 
 ### Verification before the plan (checks, not decisions)
@@ -882,8 +883,7 @@ as OD-4 to OD-6.
   reports `control_plane.reachable`, `host.identity`, `host.credentials_permissions` and `service.agent` as `skipped` (and
   `config.valid` outside a workspace), so no host reaches `ok` today and acceptance scenario 1 expects `incomplete`. The six
   new checks report `skipped` for good on Linux and on hosts without a VM driver or runtime, so once the control-plane checks
-  become measurable such hosts would stay at `incomplete` (exit status 0); whether not-applicable skips should be left out is
-  an open question.
+  become measurable such hosts would stay at `incomplete` (exit status 0); decision 22 keeps that verdict rule unchanged.
   The 5 s budget lists of FR-060 and of the `doctor-checks.json` rules ("each socket dial, `git --version` and
   `daemon.json` read draws on it") also name the driver `probe` and `list` invocations and the runtime list and inspect calls, and
   (FR-041) the runtime configuration file read and the filesystem free-space call of `disk.container_storage`. FR-060 and the
