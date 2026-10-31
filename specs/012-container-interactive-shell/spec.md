@@ -98,6 +98,12 @@ This feature defines that behavior for the container provider:
     to `ready`; (c) `ready` to `running` is atomic, a new Feature 008 requirement with the mechanism left to the plan, and
     "exactly one concurrent shell wins" depends on it; (d) for a killed client the client's exit status is passed through,
     and the recorded status additionally holds the shell's status when readable and different (FR-014, FR-016).
+- **2026-10-31 (decision D9, the endpoint option of `shell`, given after D1 to D8)**: `whr sandbox shell` also accepts
+  `--container-endpoint <endpoint>`, consistent with Feature 009 FR-029, FR-030 and FR-032, which name the later commands of
+  Feature 012 among the consumers of the one endpoint selection function. A malformed value is a usage error, exit 64
+  (FR-007). This resolves the conflict between the earlier text of FR-007 (global options, `--confirm` and `--yes` only) and
+  Feature 009 FR-030; Feature 009 is unchanged. The tracker or PR link is added with the other decisions when the text is
+  approved at an exact head.
 - Author proposals that remain (marked where they appear): the environment variable `WHR_SANDBOX_ID` (FR-009); the SIGHUP
   rule (FR-013); the structure of the failure `reason` field and its values (FR-014); the reading of a client stream that ends
   while the remote side did not exit as a transport loss with exit 72 (FR-015, FR-016); the exact confirmation form of D1
@@ -142,6 +148,9 @@ against the request; each is refused with the stable code and zero provider call
 2. **Given** `--json`, a trailing command or any further positional argument, **Then** exit 64 (FR-007).
 3. **Given** an `untrusted_job` instance, no `--confirm <id>` and standard error not a terminal, **Then** no prompt is shown
    and the command exits 70 with a `whr:` line naming `--confirm` (FR-023).
+4. **Given** `--container-endpoint` with a malformed value (empty, relative, or not `unix://` followed by an absolute path),
+   **Then** exit 64 before any provider call (FR-007, Feature 009 FR-030); **Given** a well-formed value, **Then** it is the one
+   endpoint used at step 5 and no lower source replaces it (FR-005, Feature 009 FR-029).
 
 ### User Story 4 - The container disappears during the session (Priority: P2)
 
@@ -176,7 +185,8 @@ against the request; each is refused with the stable code and zero provider call
 - The selector names the ADR 0009 workspace container, a container id or a name: it is not an instance id, so exit 64
   (malformed) or 65 (no record); the operator uses `whr shell --local` for the workspace container. `refused.foreign_object`
   arises only when an existing instance record points to an object that lacks the labels or whose values differ (FR-006).
-- `docker` client absent, daemon unreachable, a non-`unix://` endpoint or no permission on the socket: exit 68 with
+- No usable endpoint (Feature 009 FR-032), `docker` client absent, daemon unreachable, a non-`unix://` endpoint (from
+  `--container-endpoint` or otherwise) or no permission on the socket: exit 68 with
   remediation, as Feature 010 FR-002 and FR-009 state for `shell --local`; no `sudo` is run.
 - The shell executable is missing in the image: the runtime reports its own error and status (126 or 127 are the usual
   shell conventions), which `whr` cannot tell from a shell exit (Feature 010 Edge Cases, OQ-6). They pass through, and the
@@ -241,8 +251,9 @@ against the request; each is refused with the stable code and zero provider call
   otherwise `refused.invalid_state`, exit 68 (this reads only the record, so a `discarded`, `discarding`,
   `cleanup_incomplete` or create-failed instance whose container is gone gets this code, not a container error; a
   `finished` instance is refused too, because a shell is allowed from `ready` only and once per instance, with no re-entry);
-  (5) container runtime access: the client is present, the discovered endpoint is a `unix://` socket and the daemon is
-  reachable, otherwise exit 68 with remediation (Feature 010 FR-002, FR-009); (6) ownership (FR-006): the provider
+  (5) container runtime access: the client is present, the endpoint selected by the one rule of Feature 009 FR-029 (`--container-endpoint`
+  first, FR-007) is a `unix://` socket and the daemon is reachable, otherwise exit 68 with remediation (Feature 009 FR-032,
+  Feature 010 FR-009); (6) ownership (FR-006): the provider
   inspects the container by its full id; if it no longer exists, exit 68 naming the state `missing` (not
   `refused.foreign_object`, which is for an existing object whose labels are absent or differ); (7) the container is running,
   otherwise exit 68 naming the state (`stopped`, `paused` or `restarting`); `whr` never starts, stops or changes the
@@ -266,14 +277,16 @@ against the request; each is refused with the stable code and zero provider call
 **Terminal behavior**
 
 - **FR-007** (terminal required): The command MUST require standard input and standard output to be terminals, MUST take
-  no trailing command and no positional argument beyond `<id>`, accepting only the option `--confirm <id>` (FR-023), the
-  global options and `--yes` (which has no effect on FR-023), and MUST reject `--json` as a usage error (exit 64), as Feature 010 FR-006
+  no trailing command and no positional argument beyond `<id>`, accepting only the options `--confirm <id>` (FR-023) and
+  `--container-endpoint <endpoint>` (owner decision D9; Feature 009 FR-029, FR-030), the global options and `--yes` (which has
+  no effect on FR-023), treating a malformed `--container-endpoint` value as a usage error (exit 64, Feature 009 FR-030; a
+  well-formed value with another scheme is refused at step 5 of FR-005 with exit 68), and MUST reject `--json` as a usage error (exit 64), as Feature 010 FR-006
   does for `shell --local`. A pty MUST be allocated only in this case; no pty is requested when either stream is not a
   terminal, and there is no documented fallback to a piped shell, because that mode is the deferred `exec` (Feature 008
   OD-1). Standard error need not be a terminal, except that an `untrusted_job` without `--confirm <id>` then exits 70 (FR-023).
 - **FR-008** (exec form): For the container provider the hand-over MUST be one invocation of the container runtime client
   with a fixed argument vector (no shell, no string evaluation) built only from validated values, addressing the
-  container by full id and passing the discovered `unix://` endpoint explicitly, as Feature 010 FR-002 and FR-004 state
+  container by full id and passing the selected `unix://` endpoint explicitly, as Feature 010 FR-002 and FR-004 state
   for `shell --local`. The invocation MUST request an interactive pty session, MUST disable the runtime's detach key sequence
   (owner decision D2; Feature 010 FR-004 instead fixes a rarely typed sequence for `shell --local`, a difference that
   stays), the Plan's user, working directory and login shell, and the environment of FR-009. The Plan carries the login
@@ -492,7 +505,7 @@ S12-C4. Ownership: missing label, value mismatch and an unlabeled object behind 
     mutations; a selector that is a container id, a name or the ADR 0009 workspace container exits 64 or 65 (FR-002, FR-006).
 S12-C5. State (against a provider reporting `pty`/`enforced`; against `none`, `Admit` refuses first with `refused.interactive_unavailable`): every state other than `ready` is refused with `refused.invalid_state`, including a `discarded` record whose container no longer exists (the state check precedes the container inspection); for a `ready` record, a stopped, paused, restarting or missing container exits 68 naming the state and is not `refused.foreign_object`; two concurrent starts on one `ready` record: exactly one wins (the atomic transition of FR-014) and the other gets `refused.invalid_state`; a `finished` record gets no second shell; `ready` becomes `running` then
     `finished`; `discard` refuses a `running` instance and `clean` does not select it (FR-005, FR-014).
-S12-C6. Terminal: stdin or stdout not a terminal, `--json`, trailing arguments exit 64 and call no pty-allocating operation
+S12-C6. Terminal: stdin or stdout not a terminal, `--json`, trailing arguments, a malformed `--container-endpoint` exit 64 and call no pty-allocating operation
     (FR-007); exit status 0, 1, 2, 126, 127, 130 and 255 pass through unchanged; a CLI failure writes a `whr:` line and a
     shell status does not (FR-015).
 S12-C7. End of session: each row of the FR-016 table with its exit code, instance state, reason and `whr:` line (daemon
@@ -557,7 +570,7 @@ This feature enforces nothing about what happens inside the shell. In particular
   container, is refused with
   `refused.invalid_state` and unchanged; of two concurrent starts exactly one proceeds (FR-014, MUST); a `finished` record gets no second shell; a `ready` record with a missing container exits 68 naming `missing`, not
   `refused.foreign_object` (FR-005, FR-014).
-- **SC-006**: Non-terminal use, `--json`, trailing arguments exit 64 without allocating a pty (FR-007).
+- **SC-006**: Non-terminal use, `--json`, trailing arguments and a malformed `--container-endpoint` value exit 64 without allocating a pty (FR-007).
 - **SC-007**: Shell statuses 0 to 255 pass through unchanged and CLI failures use only 64, 65, 68, 70, 72, 74 with a `whr:` line
   (FR-015); the exit mapping function of Feature 008 T004 (`ExitFor`) gains no new code and its freeze test is unchanged
   except for the `sandbox shell` passthrough entry once the ADR 0013 amendment lands.
@@ -652,7 +665,7 @@ the exact confirmation form (FR-023), and the verification items below.
   the author reading that a client stream ending while the remote side did not exit (a killed or lost client) is a transport
   loss (72); if not, that is an ADR 0013 decision.
   `docs/adr/0014-whr-command-structure.md` (T017 amendment, group `sandbox`) and `contracts/cli/commands.json`
-  (T016): register the verb. Feature 008 tasks.md scopes T016 to the seven existing verbs, so T016 and T017 must be
+  (T016): register the verb with its flag list (`--confirm`, `--container-endpoint`, FR-007). Feature 008 tasks.md scopes T016 to the seven existing verbs, so T016 and T017 must be
   extended to cover `shell`, or a new task added, before the freeze test of SC-011 can name it. These are owner-gated.
 - `specs/006-whr-cli/spec.md`: FR-019 (list gains `sandbox shell`, with the killed-client status exception), FR-006 (the
   exception for the grant requirement extends to `sandbox shell`, owner decision D6; the text today limits it to
