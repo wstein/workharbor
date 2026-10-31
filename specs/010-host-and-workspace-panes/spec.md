@@ -274,7 +274,7 @@ multiplexer nested in their host pane.
   owner API exists). `--local` MUST NOT be accepted by `console`, `ssh` or `agent attach`, except that `console --local` is refused as
   FR-011 states.
 - **FR-002**: Local mode MUST run only on the Docker host and MUST use the local daemon at the endpoint selected by the rule of
-  [Feature 009](../009-host-setup-wizard/spec.md) FR-029 (owner decisions D-12, D-13 and D-16 of 2026-10-31, which amend this requirement; the owner decided the default `DOCKER_HOST` then `/var/run/docker.sock`, that an explicit option or config value beats it, that a configured value stays authoritative, and the full order: option, config value, `DOCKER_HOST`, standard socket, D-16 (r) of Feature 009): the option `--container-endpoint`, else the
+  [Feature 009](../009-host-setup-wizard/spec.md) FR-029 (owner decisions D-12, D-13, D-16 and D-18 of 2026-10-31, which amend this requirement; the owner decided the default `DOCKER_HOST` then `/var/run/docker.sock`, that an explicit option or config value beats it, that a configured value stays authoritative, and the full order: option, config value, `DOCKER_HOST`, standard socket, D-16 (r) of Feature 009): the option `--container-endpoint`, else the
   config value of the host profile, else `DOCKER_HOST`, else `/var/run/docker.sock`. The documented candidate list of `whr doctor` (Feature 006 FR-060) is no longer a default search. Selection runs within the 5-second budget and the
   fixed-argument rule of FR-066 and never prompts; with no usable endpoint it exits 68 (Feature 009 FR-032). The selected endpoint MUST be a `unix://`
   socket; any other scheme (`tcp://`, `ssh://`, `npipe://`) is refused with exit 68 before any
