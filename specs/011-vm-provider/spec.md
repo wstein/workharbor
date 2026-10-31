@@ -527,7 +527,7 @@ provider and Linux hosts are unchanged.
   configuration yet (never started), nothing is recorded, the report says so, and a later `whr setup` run records it. Plain `doctor` and
   `doctor --fix` record nothing here (author proposal: `doctor --fix` only removes leftovers and rebuilds the image). The record name
   `container_storage`, its fields (runtime item id, profile name, home-relative location, source) and its place beside the image record of FR-034 are author proposals; the
-  read order is the owner's. The endpoint chosen in the wizard is a separate profile record `container_endpoint` (Feature 009 FR-030, owner decisions D-12, D-13 and D-16; the name is an author proposal in line with `container_storage`); the storage lookup uses the selected endpoint, and the wizard determines and records the storage location in the same run as a newly recorded endpoint. Evidence redacts the home directory as in Feature 006 FR-060. A recorded value that no longer exists
+  read order is the owner's. The endpoint chosen in the wizard is a separate profile record `container_endpoint` (Feature 009 FR-030, owner decisions D-12, D-13 and D-16; the name is confirmed by Feature 009 D-18 (u), in line with `container_storage`); the storage lookup uses the selected endpoint, and the wizard determines and records the storage location in the same run as a newly recorded endpoint. Evidence redacts the home directory as in Feature 006 FR-060. A recorded value that no longer exists
   is `unknown`, not `fail`. The reads of the file and the free-space call draw on the shared 5 s budget.
 
 ### Appended refusal codes
@@ -834,7 +834,7 @@ Author proposals made while recording these decisions (the owner may change them
 
 ## Open Questions
 
-No question is open for the owner in this feature (the endpoint selection is decided in Feature 009 D-12 to D-17 and has no open owner question; only the details EP-2, EP-3, EP-5 to EP-8 and part of EP-4 stay author proposals that the owner may change). Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
+No question is open for the owner in this feature (the endpoint selection is decided in Feature 009 D-12, D-13, D-15 and D-16, its details are confirmed by D-18, and no owner question is open). Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
 checks on Linux, on a host without a VM driver or runtime) stay in the doctor verdict (decision 22). (2) Container free space: no runtime API;
 the location comes from a readable runtime configuration file or a wizard record (decision 21, FR-041). NC-1 to NC-3 were decided on 2026-10-31 and are recorded
 as OD-4 to OD-6.
