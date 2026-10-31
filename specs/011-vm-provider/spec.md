@@ -115,8 +115,8 @@ The owner runs a test run against a base image they prepared. A clone is created
 command runs, results are exported, and the clone is removed. The host is not modified.
 
 **Independent Test**: a fake driver records every driver call. Apart from the read-only `probe` and `list`, the calls
-are clone, start, ready, copy in, exec, copy out, stop, delete, in that order, and none of them targets the base image.
-After the run no owned instance exists, results are present, and the base image content id is unchanged. Real-VM
+are clone, start, ready, copy in, exec, copy out, stop, delete, in that order. The clone call names the base image only as its read-only source, and no start, write or delete call
+targets it. After the run no owned instance exists, results are present, and the base image content id is unchanged. Real-VM
 evidence is produced by the owner on their Mac (FR-026).
 
 **Acceptance Scenarios**:
@@ -398,7 +398,8 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   a host socket are refused; a read-write shared mount is not planned by default (FR-014).
 - **SC-016**: No code path or command of `whr` creates, downloads, builds, publishes or signs a base image, and no
   configuration field holds a guest credential, only a reference (FR-007). No host virtualization, network, firewall or
-  security setting is changed and no backend is installed; the recorded calls touch owned instances only (FR-017).
+  security setting is changed and no backend is installed; the recorded mutating calls (start, write, stop, delete) target owned instances only, and the clone call reads the
+  base image only as its source (FR-017).
 - **SC-017**: A start failure leaves no owned instance and lists leftovers by name and id; readiness is reported only
   after the bounded reachability check (FR-010).
 - **SC-018**: The guest environment equals the Feature 008 FR-023 result and contains no host credential variable
