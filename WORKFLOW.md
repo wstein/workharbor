@@ -181,9 +181,9 @@ Implement a focused slice with Conventional Commits. Run make check and all test
 required by the changed product behavior. Never substitute scaffold checks for real
 Docker/browser acceptance. Missing tools or credentials are blockers, not passes.
 Update specs, ADRs and quality register when required. Preserve existing work on
-retry. Once the slice is committed and checked, push the topic branch and always
-create a draft PR with a description, including the checks actually run, reusing the
-existing task PR on retries. An orchestrator starts the agents. The owner gives
+retry. An orchestrator starts the agents. Once the slice is committed and checked,
+push the topic branch and always create a draft PR with a description, including the
+checks actually run, reusing the existing task PR on retries. The owner gives
 standing authorization for PR publication; do not ask again for unchanged scope. The
 orchestrator then starts a new independent review agent, using a stronger model than
 the implementer, which reviews the PR at its exact head and records CLEAR or findings
@@ -219,9 +219,9 @@ acceptance policy; record retained raw reds separately without calling them pass
 raw checks or waiving a failing required check.
 Distinguish optional, nonblocking suggestions from actionable findings. If the
 head changes, keep or return the PR to draft and refresh independent review and
-check evidence before marking ready again. Ready for review is the signal for the owner to accept the result and
-merge; agents never merge. It does not grant product scope/spec/plan or dispatch
-approval, nor does it relax merge, publication or deployment gates; those still apply.
+check evidence before marking ready again. Ready for review is the signal for the
+owner to accept the result and merge; agents never merge. It does not grant product
+scope/spec/plan or dispatch approval, nor does it relax merge, publication or deployment gates; those still apply.
 
 If the owner selects operator-assisted Git handoff, preserve sealed evidence when
 .git writes are denied and hand off as blocked for the operator to commit and
