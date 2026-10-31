@@ -413,12 +413,12 @@ provider and Linux hosts are unchanged.
   cannot state a size or the storage location. Sizes and the storage location are optional fields in the results of the
   existing driver `probe` and `list` (no new port operation, FR-021); the free space is measured by the host with a file
   system statistic. The check stays inside the shared 5 s budget and starts no VM.
-- **FR-033**: On a macOS host, `whr doctor --fix` MUST remove owned leftovers only, for the VM and the container backend
-  alike: VM or container instances left by a killed or canceled run, and stale VM reservations (FR-009), through the
+- **FR-033**: On a macOS host, `whr doctor --fix` MUST remove only owned leftovers of the VM and the container backend
+  (the rest of Feature 009 FR-016 is unchanged), for both alike: VM or container instances left by a killed or canceled run, and stale VM reservations (FR-009), through the
   provider's `Remove` with the ownership check on every item (FR-008 for a VM instance; the label ownership of Feature 008 for
   a container). A
   foreign or unlabeled object MUST be refused with `refused.foreign_object` and never touched, an instance of a run that
-  is still active is not a leftover, and nothing else is repaired except the image rebuild of FR-037. It uses the mechanics of Feature 009 FR-016, FR-007 and
+  is still active is not a leftover, and no other VM or container object is repaired except the image rebuild of FR-037. It uses the mechanics of Feature 009 FR-016, FR-007 and
   FR-017: it requires a host profile and otherwise refuses with `host_setup.profile_absent` (Feature 009 FR-016); the repair
   is a modify-class step (it removes something present) with the item id `vm-instance:<instance id>`,
   `vm-reservation:<reservation id>` (VM, released by the step kind `vm_reservation_release`) or `container-instance:<instance id>` (container). Without `--yes` it prints the preview (name, id and size if known, per item) and exits
@@ -439,7 +439,8 @@ provider and Linux hosts are unchanged.
   `whr`'s own label, and may fetch base layers from a registry as part of the build; that fetch is not a pull of a prebuilt
   image (FR-007). A build never starts silently, `--yes` alone approves neither the definition write nor the build (both belong to the offer and are modify-class steps
   with the per-item `--confirm image:<backend>`), and an unattended run without confirmation exits 70. Any download the build needs is named in the preview and happens only after the confirmation. An
-  existing definition file is never overwritten without asking: the diff, its own confirmation and a verified backup, as for a
+  existing definition file is never overwritten without asking: the diff, the confirmation `--confirm image:<backend>` (which then also covers the overwrite, an author proposal) and a
+  verified backup, as for a
   dotfile in Feature 009 FR-013. The generated definition is not a catalog dotfile: its content comes from a template of
   the release that the wizard shows, and its target path is chosen by the wizard and shown; the catalog-template and SHA-256
   rule of Feature 009 FR-013 applies to catalog dotfiles only (Feature 009 amendment below). The wizard records the
@@ -473,8 +474,9 @@ provider and Linux hosts are unchanged.
   source is installed by the modify-class step `brew_install_source` and upgraded by the modify-class step
   `brew_upgrade_source` (`brew install <tap>/<name>` and `brew upgrade <tap>/<name>`, for the listed sources only, decisions
   19 and 20). The wizard asks for each one by one with default `no`, `--yes` alone never approves either, and an unattended
-  run needs `--confirm <item id>`, so `--yes --only <tool>` cannot install or upgrade it. `doctor --fix` may upgrade such an
-  item with the same preview and per-item `--confirm`, and never installs the VM tool (FR-031). The concrete source names
+  run needs `--confirm <item id>`, so `--yes --only <tool>` cannot install or upgrade it. `doctor --fix` may install such an item
+  when it is selected and missing (other than the VM tool, FR-031) or upgrade it when outdated, with the same preview and
+  per-item `--confirm`. The concrete source names
   are in the informative notes, the catalog and the driver documentation, not in this specification's normative text.
 - **FR-039**: `whr doctor` MUST gain read-only checks for the container backend: `container.image` (the image recorded by FR-034 exists and
   carries `whr`'s label: `pass`; missing or unusable: `fail`; no recorded image definition: `skipped`, reason
@@ -482,7 +484,9 @@ provider and Linux hosts are unchanged.
   container instances, with their size when the runtime states it and "size unknown" otherwise; `pass` with the leftovers as
   evidence when they are measurable, `unknown` when not, never `fail` for leftovers alone, so leftovers do not fail `whr
   doctor`; they are listed for `doctor --fix`, FR-033). The free space of the
-  container storage is the existing `disk.container_storage` check. They use only read-only list and inspect calls of the
+  container storage is the existing `disk.container_storage` check, which is `unknown` whenever the storage location cannot be
+  found without the runtime API (the normal case on macOS), so container free space is in practice not measured, while
+  `vm.space` can fail on low space. This is a stated limit, not changed here (Open Questions). They use only read-only list and inspect calls of the
   container runtime on the discovered socket within the shared 5 s budget, start no container and change nothing. The VM
   space report of FR-032 has no further container counterpart in this increment: container space is the leftover sizes
   and `disk.container_storage`. On Linux both checks report `skipped` (reason `unsupported_platform`: the image offer and the
@@ -500,11 +504,11 @@ provider and Linux hosts are unchanged.
   issue and pull request work on GitHub workspaces, which needs Git 2.46 or newer; its entry carries a host requirement for
   Git. Before the install, setup detects Git with the existing detection (Feature 009 FR-006) and shows the result in the
   preview. If Git is absent, is only the Command Line Tools shim (counted as absent by Feature 009 FR-006) or is older than
-  2.46, the preview says so, the step is `blocked` with the reason `host_setup.host_requirement_unmet`, and Git is neither
+  2.46 and the catalog `git` item is not in the plan, the preview says so, the step is `blocked` with the reason `host_setup.host_requirement_unmet`, and Git is neither
   installed nor upgraded silently for this entry. If the catalog `git` item is installed or upgraded in the same plan, the
-  entry's step depends on it (Feature 009 `requires` and `depends_on`) and Git is detected again after that step. The
-  `blocked` state and its reason code are author proposals; the reason code is appended to the Feature 009
-  `refusal-codes.json` (changes list).
+  entry's step depends on it (Feature 009 `requires` and `depends_on`) and Git is detected again after that step, and the step is `blocked` only if Git is still too old. The
+  `blocked` is an existing Feature 009 StepResult status; only its use for an unmet host requirement and the reason code are
+  new and are author proposals; the reason code is appended to the Feature 009 `refusal-codes.json` (changes list).
 
 ### Appended refusal codes
 
@@ -643,8 +647,8 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   `tap` outside the closed list, a wildcard, a user-supplied source and a list of sources. For every entry from a listed
   third-party source, the fake adapter records an install call (`brew install <tap>/<name>`) or an upgrade call
   (`brew upgrade <tap>/<name>`) only after explicit selection and the per-item confirmation: `--yes` alone, and `--yes` with
-  only a selection of the tool, record neither, an unattended run without `--confirm` exits 70, and `doctor --fix` upgrades
-  such an item only with its `--confirm <item id>`. A call with a source outside the list is refused by the argv table (FR-038).
+  only a selection of the tool, record neither, an unattended run without `--confirm` exits 70, and `doctor --fix` installs a missing
+  selected item (other than the VM tool) or upgrades an outdated one only with its `--confirm <item id>`. A call with a source outside the list is refused by the argv table (FR-038).
 - **SC-034**: With a fake container runtime, `container.image` reports `pass`, `fail` and `skipped` for a labeled image, a
   missing or unusable image and no defined image; `container.leftovers` lists owned instances only with size or "size
   unknown"; with leftovers present it is still `pass` (leftovers are evidence only); the recorded runtime calls are read-only list and inspect calls, none starts or changes anything; and
@@ -655,10 +659,10 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   id, kind, title, platforms, source, version detection fields, `network` (including the source host) and
   `selected_by_default=false`; the tool for OCI tool bundles is not offered on a
   platform other than macOS on arm64 and its preview states the container runtime note; for the other tool, with a fake
-  Git older than 2.46 the preview says so, the step is `blocked`, and no Git install or upgrade call is recorded, while with
-  Git 2.46 or newer the step is offered; with Git absent or only the Command Line Tools shim it is `blocked` the same way; and
-  when the catalog `git` item is installed in the same plan the step depends on it and Git is detected again after it
-  (FR-040).
+  Git older than 2.46, absent or only the Command Line Tools shim, and the catalog `git` item not in the plan, the preview
+  says so, the step is `blocked`, and no Git install or upgrade call is recorded; with Git 2.46 or newer the step is
+  offered; when the catalog `git` item is in the same plan the step depends on it and Git is detected again after it, and
+  the step is `blocked` only if Git is still too old (FR-040).
 
 ## Owner decisions (confirmed 2026-10-31)
 
@@ -702,7 +706,7 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
 12. **VM tool installation (NEW)**: the VM tool becomes a catalog entry that is not preselected (decision 18 brings the catalog to 16 entries),
     installed through the existing adapter only on explicit selection; a tool from another source is never replaced or
     removed (Feature 009 FR-008). This changes decision 7 (FR-031, SC-025).
-13. **Doctor and cleanup (NEW, corrected)**: on a macOS host, the same rules for both backends (container checks FR-039, container leftovers FR-033; the space report is the VM check FR-032 plus, for containers, leftover sizes and `disk.container_storage`): read-only checks, the space report, and
+13. **Doctor and cleanup (NEW, corrected)**: on a macOS host, the same rules for both backends (container checks FR-039, container leftovers FR-033; the space report is the VM check FR-032 plus, for containers, leftover sizes and `disk.container_storage`, which is usually `unknown` on macOS; see Open Questions): read-only checks, the space report, and
     `whr doctor --fix` removing only owned leftovers (FR-033) with preview and per-item `--confirm`. `doctor --fix` may also
     rebuild a missing or unusable image locally from the user-owned definition, after a preview with size and effort and a
     per-item `--confirm`; no silent build and no silent download (downloads only after the confirmed preview), nothing distributed (FR-037, SC-032). `doctor --fix` does not install
@@ -752,8 +756,12 @@ Author proposals made while recording these decisions (the owner may change them
   profile; the form of that record is part of the Feature 009 amendment.
 - `container.leftovers` is `pass` with the leftovers as evidence (never `fail` for leftovers alone), so leftovers do not make
   `whr doctor` exit 68 (FR-039).
-- The step kinds `brew_upgrade_source`, `vm_reservation_release` and the reason code `host_setup.host_requirement_unmet`, and
-  the `blocked` state for an unmet Git requirement, are author proposals (FR-038, FR-040, FR-033).
+- The names and classes of the new step kinds (`image_definition_write`, `image_build`, `vm_instance_remove`,
+  `container_instance_remove`, `vm_reservation_release`, `brew_install_source`, `brew_upgrade_source`) are author proposals.
+  The behavior of the last two (per-item confirmation, `doctor --fix` may install a missing or upgrade an outdated tap item)
+  is owner decisions 19(c) and 20.
+- The reason code `host_setup.host_requirement_unmet`, and the use of the existing Feature 009 status `blocked` for an unmet
+  host requirement, are author proposals (FR-040).
 - Decisions 12 and 13 read together: the VM tool entry is checked by `whr doctor` like any item, but `whr doctor --fix` does
   not install the VM tool (an explicit exception to Feature 009 FR-016; every other selected catalog item is repaired as
   before, including per-item confirmation for tap-sourced items), although Feature 009 FR-016 repairs other selected catalog
@@ -765,8 +773,6 @@ Author proposals made while recording these decisions (the owner may change them
   (FR-032).
 - The cleanup keeps the Feature 009 requirement of a host profile, as a modify-class step with the item ids
   `vm-instance:<instance id>` and `vm-reservation:<reservation id>` (FR-033).
-- The per-item `--confirm <id>` of an item marked "results not exported" doubles as the results-deletion confirmation of
-  Feature 008 FR-008, with no new flag. This is an orchestrator-requested design point the owner should confirm (FR-033).
 
 ## Future work (not started; each needs its own specification and is re-decided after the first real VM run)
 
@@ -791,7 +797,9 @@ Author proposals made while recording these decisions (the owner may change them
 
 ## Open Questions
 
-None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
+One question for the owner: should container free space be measured through the runtime API, which Feature 006 FR-060 and the
+`doctor-checks.json` note currently forbid, or stay `unknown` (FR-039)? NC-1 to NC-3 were decided on 2026-10-31 and are recorded
+as OD-4 to OD-6.
 
 ### Verification before the plan (checks, not decisions)
 
@@ -831,12 +839,13 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
   process other than the fixed `git --version` ..." to allow the driver's fixed read-only `probe` and `list` invocations,
   and the socket-discovery note "no Docker API call is made" to allow the read-only list and inspect calls of the two
   container checks on the discovered socket, within the shared 5 s budget (owner-gated like other contract changes).
-- `specs/006-whr-cli/spec.md` (Feature 009 FR-024 gates Feature 006 text, so these are named amendments): FR-060 gains the two
-  container checks and the six check ids above; its wording that `container.socket` "connects and sends nothing" stays for
+- `specs/006-whr-cli/spec.md` (Feature 009 FR-024 gates Feature 006 text, so these are named amendments): FR-060 gains the six new check ids above
+  (the four `vm.*` checks and the two container checks); its wording that `container.socket` "connects and sends nothing" stays for
   that check, while `container.image` and `container.leftovers` make read-only list and inspect calls on the discovered
   socket; acceptance scenario 7 (plain `doctor` "started no process other than the fixed `git --version`" and the FR-055
   invocations) gains "and, when a VM driver is chosen, the driver's fixed read-only `probe` and `list` invocations of
-  Feature 011 FR-018".
+  Feature 011 FR-018"; the 5 s budget lists of FR-060 and of the `doctor-checks.json` rules ("each socket dial, `git --version` and
+  `daemon.json` read draws on it") also name the driver `probe` and `list` invocations and the runtime list and inspect calls.
 - `specs/009-host-setup-wizard/` (spec, `contracts/wizard-flow.md`, `data-model.md`, the catalog schema
   `host-tool-catalogue.schema.json`, its loader tests, `refusal-codes.json` and the protocol contract; amendment for FR-031,
   FR-033, FR-034, FR-037, FR-038 and FR-040, owner-gated like AP-1 to AP-9; Feature 009 FR-024 applies and the frozen contracts
