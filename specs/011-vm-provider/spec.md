@@ -405,8 +405,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   repository check fails on a missing matrix (FR-024).
 - **SC-021**: A request for `guest_os=windows` is refused with `refused.guest_os_unavailable` by every provider that
   does not declare it, and the value stays representable in the contract (FR-030).
-- **SC-022**: With two fake drivers and none chosen, the request is refused before any driver call; with one chosen,
-  only that driver records calls (FR-023).
+- **SC-022**: With two fake drivers and none chosen, and with a chosen driver that is missing or unsupported on this
+  host, the request is refused with `refused.driver_unavailable` and no driver call other than the read-only `probe`;
+  with one supported driver chosen, only that driver records calls (FR-023).
 - **SC-023**: A missing, running, locked or unusable base image is refused with `refused.base_image_unavailable` and
   zero clone calls (FR-006).
 - **SC-024**: No CI job, check or document of this repository declares Windows host support or a Windows runner
@@ -453,7 +454,7 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 
 - `specs/008-workspace-sandbox/spec.md`: FR-012 (capability list gains the fields of FR-001 and FR-004), FR-034 (the
   exception of A1 and the new refusal paths) and, for the new codes, the error mapping of FR-035 (capability refusals
-  map to 68 like the existing ones).
+  and `refused.driver_unavailable` map to 68 like the existing refusals; ADR 0013 has no configuration-error code).
 - `specs/008-workspace-sandbox/data-model.md`: "the eleven fields" becomes eighteen; the ownership description
   covers `name_and_record` (FR-008).
 - `specs/008-workspace-sandbox/contracts/runtime-provider.md`: the new fields with the container provider values of
