@@ -182,13 +182,14 @@ required by the changed product behavior. Never substitute scaffold checks for r
 Docker/browser acceptance. Missing tools or credentials are blockers, not passes.
 Update specs, ADRs and quality register when required. Preserve existing work on
 retry. Once the slice is committed and checked, push the topic branch and always
-create a draft PR with a description (what, why, checks actually run), reusing the
-existing task PR on retries. The owner gives standing authorization for PR
-publication; do not ask again for unchanged scope. Then a new independent review
-agent, using a stronger model than the implementer, reviews the PR at its exact head
-and records CLEAR or findings without editing the PR. The original implementation
-agent fixes findings with new commits on the same branch; a fresh review run follows
-at each new exact head until CLEAR. Keep the PR draft while actionable findings remain
+create a draft PR with a description, including the checks actually run, reusing the
+existing task PR on retries. An orchestrator starts the agents. The owner gives
+standing authorization for PR publication; do not ask again for unchanged scope. The
+orchestrator then starts a new independent review agent, using a stronger model than
+the implementer, which reviews the PR at its exact head and records CLEAR or findings
+without editing the PR. The original implementation agent fixes findings with new
+commits on the same branch; the orchestrator starts a fresh review run at each new
+exact head until CLEAR. Keep the PR draft while actionable findings remain
 or required checks are missing, pending or failing. If forge access or native/automatic
 approval review blocks publication, preserve commits/evidence and report the exact
 blocked action and reason. This authorization does not grant merge, other
