@@ -139,7 +139,7 @@ against the request; each is refused with the stable code and zero provider call
 
 1. **Given** standard input or output is not a terminal, **When** the command runs, **Then** it exits 64 before any
    provider call that allocates anything, and no fallback to a piped shell exists (FR-007).
-2. **Given** `--json`, a trailing command or any further argument, **Then** exit 64 (FR-007).
+2. **Given** `--json`, a trailing command or any further positional argument, **Then** exit 64 (FR-007).
 
 ### User Story 4 - The container disappears during the session (Priority: P2)
 
@@ -218,8 +218,9 @@ against the request; each is refused with the stable code and zero provider call
 **Capability and admission**
 
 - **FR-003** (capability): The container provider MUST report `interactive_shell=pty` with status `enforced`, for each
-  profile it supports, only when the conformance cases of this feature (cases S12-C1 to S12-C9 below) pass for it and the real-host
-  evidence gate of SC-010 is met. Until then it reports `interactive_shell=none` (Feature 011 FR-003 as it stands). A
+  profile it supports, only when the conformance cases S12-C1 to S12-C8 below pass for it and the real-host evidence gate of SC-010 is met. The
+  reconciliation of FR-024 (case S12-C9) is not a gate for this claim (author proposal): it is claimed separately, once
+  its query is verified. The end-of-exec query behind rows 3 and 4 of FR-016 is part of case S12-C7 and so of the gate. Until then it reports `interactive_shell=none` (Feature 011 FR-003 as it stands). A
   report claiming more than its tests prove is non-conformant (Feature 008 FR-018). The `scope` states that the claim covers
   a pty allocated by the container runtime for a login shell inside the instance's container, and nothing about what runs
   in it.
@@ -262,7 +263,8 @@ against the request; each is refused with the stable code and zero provider call
 **Terminal behavior**
 
 - **FR-007** (terminal required): The command MUST require standard input and standard output to be terminals, MUST take
-  no trailing command and no further arguments, and MUST reject `--json` as a usage error (exit 64), as Feature 010 FR-006
+  no trailing command and no positional argument beyond `<id>`, accepting only the option `--confirm <id>` (FR-023), the
+  global options and `--yes` (which has no effect on FR-023), and MUST reject `--json` as a usage error (exit 64), as Feature 010 FR-006
   does for `shell --local`. A pty MUST be allocated only in this case; no pty is requested when either stream is not a
   terminal, and there is no documented fallback to a piped shell, because that mode is the deferred `exec` (Feature 008
   OD-1). Standard error need not be a terminal.
@@ -365,8 +367,8 @@ against the request; each is refused with the stable code and zero provider call
     SIGINT, SIGTERM or SIGHUP before or after the commit point, daemon unreachable after the client ends, and a client stream
     that ended while the remote side did not exit (a killed or lost client). Reading that last case as a transport loss
     is an author proposal for the owner to confirm; it needs no new code;
-  - 70 for a confirmation (FR-023) that is declined, not given, or missing in a non-interactive run (ADR 0013: a required
-    human decision refused or not given; command-surface.md already lists "unattended confirmation missing" under 70);
+  - 70 for a confirmation prompt (FR-023) that is declined or left unanswered (ADR 0013: a required human decision refused
+    or not given; command-surface.md already lists "unattended confirmation missing" under 70);
   - 74 for an unclassified failure, including a client that cannot be launched (`start_failed`, FR-014).
   Exit codes 66 and 67 are not used (no remote authority), 71 and 73 are not used by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
   and a status coming from the shell MUST NOT (Feature 010 FR-008, ADR 0013). `--json` is rejected, so the `kind`
@@ -413,7 +415,7 @@ against the request; each is refused with the stable code and zero provider call
   process id and start time (author proposal, modeled on the reservation record of Feature 011 FR-009), so that a concurrent
   `whr` between the commit point and the launch is not marked. The query that tells whether the exec process runs is not
   verified (Verification before the plan). Until it is, no provider may claim this behavior, and the gap of FR-017 remains
-  listed under "Not enforced".
+  listed under "Not enforced". Case S12-C9 is not a gate for `pty`/`enforced` (FR-003).
 
 **Security**
 
@@ -450,14 +452,18 @@ against the request; each is refused with the stable code and zero provider call
 - **FR-023** (confirmation for an `untrusted_job`; owner decision D1): Before the commit point, for an `untrusted_job`
   instance only, the command MUST warn that unfiltered terminal control sequences written by a process in the instance can
   act on the owner's terminal (title, clipboard and similar, FR-011) and MUST NOT start the shell without an explicit
-  confirmation of that warning. `--yes` alone MUST NOT satisfy it. `developer` and `cooperative_job` ask for no such
-  confirmation (the owner decided on `untrusted_job` only). Exit codes use the existing conventions: a declined or unanswered
-  prompt, or a non-interactive run without the confirmation flag, is 70 (needs-human, ADR 0013; Feature 008 command-surface.md
-  lists 70 for a missing unattended confirmation); a confirmation value that does not match is 64. The exact form is an
-  author proposal: a prompt that shows the warning and requires typing the instance id, and a flag `--confirm <id>` whose
-  value must equal the instance id (the per-item `--confirm <id>` pattern of Feature 009 and Feature 011 FR-033). The
-  confirmation is not part of `Admit` (it is not a capability) and adds no refusal code. It does not remove the risk; see
-  "Not enforced".
+  confirmation of that warning. `--yes` alone MUST NOT satisfy it: the prompt is still shown. `developer` and
+  `cooperative_job` ask for no such confirmation (the owner decided on `untrusted_job` only). Because FR-007 requires standard
+  input and output to be terminals, a prompt can always be answered, so the warning and the prompt are written to standard
+  output (a terminal) and the answer is read from standard input; where standard error is not a terminal, nothing about
+  the confirmation goes there. A run without a terminal never reaches this step (exit 64 at step 1), so no
+  "non-interactive" case exists for this command. Exit codes use the existing conventions: a prompt that is declined (any
+  answer other than the instance id) or left unanswered (end of input) is 70 (needs-human, ADR 0013; Feature 008
+  command-surface.md lists 70 for a missing confirmation); a `--confirm` value that does not equal the instance id is 64
+  (usage). The exact form is an author proposal under D1: a prompt that requires typing the instance id, and a flag
+  `--confirm <id>` that, with a value equal to the instance id, skips the prompt (the per-item `--confirm <id>` pattern of
+  Feature 009; Feature 011 FR-033 in the unmerged draft PR #290 uses it too). The confirmation is not part of `Admit` (it is
+  not a capability) and adds no refusal code. It does not remove the risk; see "Not enforced".
 
 **Conformance (cases added to the Feature 008 suite)**
 
@@ -489,10 +495,12 @@ S12-C7. End of session: each row of the FR-016 table with its exit code, instanc
     through and ends `finished` where the end-of-exec query exists, otherwise falls into row 4; a killed client whose exec
     process already ended is row 3 with the client's own signal status passed through and the shell's status also recorded
     when readable and different (FR-013, FR-014, FR-016, FR-017).
-S12-C8. Confirmation: an `untrusted_job` without confirmation starts nothing; a prompt declined or unanswered gives 70; a
-    non-interactive run without `--confirm <id>` gives 70; `--yes` alone gives 70; a mismatching `--confirm` value gives 64;
-    a matching confirmation proceeds; `developer` and `cooperative_job` are never asked; a signal during the prompt exits 72
-    with no state change (FR-023, FR-013).
+S12-C8. Confirmation: an `untrusted_job` without confirmation starts nothing; a prompt answered with anything other than the
+    instance id, or left unanswered, gives 70; `--yes` alone still shows the prompt and starts nothing without the answer;
+    a `--confirm` value other than the instance id gives 64; `--confirm <id>` with the right id, or the right answer, proceeds;
+    `developer` and `cooperative_job` are never asked; a signal during the prompt exits 72 with no state change; the
+    warning and prompt go to standard output, nothing to standard error when it is not a terminal; without a terminal the
+    run exits 64 at step 1 (FR-007, FR-023, FR-013).
 S12-C9. Reconciliation (needs the verified query): a `running` record whose exec process is gone or was never started becomes
     `failed`/`session_lost` on a later `whr sandbox` invocation; a `running` record whose owner process is alive is untouched;
     after reconciliation `discard` and, for jobs, export work as for `failed` (FR-024).
@@ -530,7 +538,7 @@ This feature enforces nothing about what happens inside the shell. In particular
 - **SC-001**: The admission table for `interactive_shell` (`none`, `pty` not enforced, `pty` unknown, `pty` enforced) yields
   the expected decision, with `refused.interactive_unavailable` and zero side-effect calls for the first three (FR-004,
   Feature 011 SC-014).
-- **SC-002**: The container provider's reports contain `interactive_shell=none` until cases S12-C1 to S12-C9 pass and the
+- **SC-002**: The container provider's reports contain `interactive_shell=none` until cases S12-C1 to S12-C8 pass and the
   real-host evidence of SC-010 is recorded, and `pty`/`enforced` afterward (FR-003).
 - **SC-003**: The recorded exec plan matches FR-008, FR-009 and FR-018 for each of the three profiles, with a canary
   host-socket, writable-tool-mount and credential fixture absent (Feature 008 FR-027 style).
@@ -545,7 +553,7 @@ This feature enforces nothing about what happens inside the shell. In particular
   except for the `sandbox shell` passthrough entry once the ADR 0013 amendment lands.
 - **SC-008**: Signals, loss, container stop or removal, and a killed client produce exactly the exit code, state, reason and `whr:`
   line of the FR-016 table and FR-013 (case S12-C7), with no recorded session content (FR-014).
-- **SC-009**: A second provider fixture declaring `pty` passes cases S12-C1 to S12-C9 with no change to production contract code
+- **SC-009**: A second provider fixture declaring `pty` passes cases S12-C1 to S12-C8 with no change to production contract code
   (FR-022, Feature 008 SC-010).
 - **SC-010** (owner gate, real host): on a real Docker host with a terminal, evidence recorded in the PR or tracker shows:
   a shell starts and its status passes through; resize reaches the pty; job control (suspend, resume, interrupt) acts
@@ -559,16 +567,20 @@ This feature enforces nothing about what happens inside the shell. In particular
   statement of scope covered by SC-003 and case S12-C2 and has no separate test.
 
 - **SC-012**: An `untrusted_job` shell starts only after the explicit confirmation of FR-023, `--yes` alone never starts it,
-  the exit codes are 70 and 64 as FR-023 states, and `developer` is never asked (case S12-C8).
+  the exit codes are 70 (prompt declined or unanswered) and 64 (wrong `--confirm` value) as FR-023 states, and `developer` is never asked (case S12-C8).
 - **SC-013**: With the verified query, reconciliation marks gone or never-started `running` records `failed`/`session_lost`
   and leaves live ones alone (case S12-C9). Before the query is verified this criterion is not claimed and the gap stays
   under "Not enforced".
 
 ## Open questions for the owner
 
-None remain from the points raised so far: Open questions 1 to 7 of earlier drafts were decided by the owner on 2026-10-31
-(D1 to D7 above). What is left is for the plan, not for a decision: the mechanism of the atomic start transition (D8c), the
-exact confirmation form (FR-023), and the verification items below.
+1. **Exit 72 for a killed or lost client stream.** When the container runtime client ends while the remote side did not
+   exit, this text reads it as a transport loss, exit 72 (FR-015, FR-016). That reading is an author proposal awaiting the
+   owner's confirmation; if the owner wants another code, that is an ADR 0013 decision.
+
+The open questions 1 to 7 of earlier drafts were decided by the owner on 2026-10-31 (D1 to D7), and four author proposals
+became D8. What is otherwise left is for the plan, not for a decision: the mechanism of the atomic start transition (D8c),
+the exact confirmation form (FR-023), and the verification items below.
 
 ## Assumptions
 
@@ -603,7 +615,7 @@ exact confirmation form (FR-023), and the verification items below.
   agent), FR-035 (mapping: no new code, passthrough).
 - `specs/008-workspace-sandbox/contracts/runtime-provider.md`: capability table row `interactive_shell` for the container
   provider (after 011 A1: `none` becomes `pty`); a `Shell` operation on the illustrative interface; conformance cases S12-C1 to
-  S12-C7; the note that `Create`, `Exec`, `Shell`, `Remove` and `Cancel` re-verify ownership.
+  S12-C9; the note that `Create`, `Exec`, `Shell`, `Remove` and `Cancel` re-verify ownership.
 - `specs/008-workspace-sandbox/contracts/command-surface.md`: verbs table row for `shell`; exit-code paragraph.
 - `specs/008-workspace-sandbox/data-model.md` and `contracts/`:
   - the `ready` to `running` trigger "exec started" also covers a shell started (Shell is an operation separate from Exec),
