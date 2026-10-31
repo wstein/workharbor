@@ -39,6 +39,7 @@ var (
 	probeRe     = regexp.MustCompile(`\b(?:destroy_)?probe "?[A-Za-z0-9$_-]+"? ([0-9]+) `)
 	boundedRe   = regexp.MustCompile(`\bbounded ([0-9]+) `)
 	probeCallRe = regexp.MustCompile(`^(?:destroy_)?probe "?[A-Za-z0-9$_-]+"? (\S+)`)
+	dockerCmdRe = regexp.MustCompile(`(^|[^A-Za-z0-9_.-])docker `)
 	timeoutRe   = regexp.MustCompile(`(?m)^\s*timeout-minutes: ([0-9]+)$`)
 )
 
@@ -284,8 +285,32 @@ func colimaViolations(raw string) []string {
 		e += g
 		for _, name := range names {
 			loc := regexp.MustCompile(`(?m)^\s*probe ` + regexp.QuoteMeta(name) + ` `).FindStringIndex(step)
-			if loc != nil && loc[0] < e {
+			switch {
+			case loc == nil:
+				out = append(out, sprintf("docker-only probe %s is missing from the docker branch", name))
+			case loc[0] < e:
 				out = append(out, sprintf("docker-only probe %s is not guarded for non-docker runtimes", name))
+			}
+		}
+	}
+	// A probe that runs a docker command belongs to the guarded docker branch of the measure and whr steps. The
+	// non-default profile step runs on the docker row only (extra_profile), and the cleanup step uses no probes.
+	for _, st := range strings.Split(raw[strings.Index(raw, "\n    steps:\n")+1:], "\n      - ")[1:] {
+		if strings.HasPrefix(st, "name: Measure a non-default profile") || strings.HasPrefix(st, "name: Remove throwaway") {
+			continue
+		}
+		end := len(st)
+		if strings.HasPrefix(st, "name: Measure the runtime") || strings.HasPrefix(st, "name: Measure whr against") {
+			g := strings.Index(st, runtimeGuard)
+			if g < 0 {
+				continue // reported above
+			}
+			end = g + strings.Index(st[g:], "exit 0")
+		}
+		for _, l := range strings.Split(st[:end], "\n") {
+			t := strings.TrimSpace(l)
+			if probeCallRe.MatchString(t) && !strings.Contains(t, " brew ") && dockerCmdRe.MatchString(t) {
+				out = append(out, sprintf("docker command in a probe outside the guarded docker branch: %s", t))
 			}
 		}
 	}
@@ -406,6 +431,8 @@ func TestColimaWorkflowRulesBite(t *testing.T) {
 		{"unguarded colima delete", "on_hosted_runner && bounded 40 colima delete --force", "bounded 40 colima delete --force", "unguarded destructive command"},
 		{"unguarded destroy in the start loop", "destroy_probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "unguarded destructive command"},
 		{"colima stop unguarded", cleanupAnchor, "          unset DOCKER_HOST\n          colima stop --force\n          rm -rf", "unguarded destructive command: colima stop"},
+		{"docker branch probe deleted", "          probe docker-context-ls 10 docker context ls\n", "", "docker-only probe docker-context-ls is missing from the docker branch"},
+		{"docker probe in the start step", "          started=false\n", "          probe docker-version 5 docker version\n          started=false\n", "docker command in a probe outside the guarded docker branch: probe docker-version"},
 		{"nerdctl install", "          probe colima-nerdctl-help 10 colima nerdctl --help\n", "          probe colima-nerdctl-help 10 colima nerdctl --help\n          probe x 60 colima nerdctl install\n", "must not run nerdctl install"},
 		{"prune", cleanupAnchor, "          unset DOCKER_HOST\n          docker system prune -af\n          rm -rf", "must not prune"},
 		{"cleanup without refusal", "if ! on_hosted_runner; then", "if false; then", "cleanup removes things before refusing"},
