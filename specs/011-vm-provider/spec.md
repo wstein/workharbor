@@ -945,8 +945,8 @@ as OD-4 to OD-6.
     --fix --yes` installs other missing selected items); tap-sourced items other than the VM tool are repaired like other
     selected items, with install and upgrade needing the per-item `--confirm` of FR-038. `wizard-flow.md` ("never touches the
     Docker VM") stays true.
-  - **Socket and VM statements (Feature 009 FR-002, D-3, SC-006, Boundaries)**: "the only interaction is connecting to a
-    discovered socket and closing it" (Feature 009 FR-002), "it only connects to verify it" (Boundaries), "it only reads and ..."
+  - **Socket and VM statements (Feature 009 FR-002, D-3, SC-006, Boundaries)**: "the only interactions are connecting to a
+    selected or investigated socket and closing it and the plain file reads of FR-031 and FR-032" (Feature 009 FR-002, as amended by D-12 and D-13), "it only connects to verify it" (Boundaries), "it only reads and ..."
     (D-3) and "the socket is only connected to" (Feature 009 SC-006) are amended: the container checks of FR-039 make read-only
     list and inspect calls on the selected endpoint, and the image build and the removal of owned containers touch only
     containers and images that carry `whr`'s own label and change no VM setting of the container runtime. The socket is still

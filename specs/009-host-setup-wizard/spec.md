@@ -92,12 +92,11 @@ shipped by the project, and the owner confirms each step. The design defends aga
   on the host. Feature 010 FR-002 (no context indirection for selection) stays; its wording is amended so that the read-only detection
   use is explicit. (f) The host profile stores both the resolved endpoint (authoritative) and the context name it came from
   (informational provenance only, may be absent). If the context is later deleted or changed, `whr` keeps working through the stored
-  endpoint. (g) `doctor` reports drift as warnings, never as a failure and never by silently switching: the stored endpoint is not
-  reachable; the stored context name no longer exists or now points to a different endpoint; the active context's endpoint differs from
-  the stored endpoint. Re-recording the stored values is a modify-class repair with preview and per-item `--confirm`. (h) Remote targets
+  endpoint. (g) `doctor` reports provenance and context drift as warnings, never as a failure and never by silently switching: the stored context name no longer exists or now points to a different endpoint; the active context's endpoint differs from
+  the stored endpoint. An unreachable stored endpoint is not drift but an error (D-15 (o)). Re-recording the stored values is a modify-class repair with preview and per-item `--confirm`. (h) Remote targets
   (`ssh://`, `tcp://`, anything that is not a local Unix socket) are not supported: single machine only for now, cluster support would be
   a future feature. Setup and doctor list such contexts transparently as "not supported" with the reason, never offer them for
-  selection and never use them; the ownership and access checks of Feature 008 apply to local sockets only. Explicit non-goal: remote
+  selection and never use them; only local Unix sockets are supported. Explicit non-goal: remote
   sessions. FR-029 to FR-032 carry the details.
 - **D-14 (Docker client entry and never-selected entries, OWNER DECISIONS of 2026-10-31; they resolve OQ-2 and OQ-3)**: (i) The Docker client is a
   separate catalog entry `docker` (the Homebrew core formula `docker`, the client command line tool), not preselected, independent of the Colima
@@ -107,6 +106,14 @@ shipped by the project, and the owner confirms each step. The design defends aga
   reports a check that depends on an unselected entry as `skipped` with a reason, never as a failure, and `setup` offers every
   not-preselected entry, unchecked, on each run. This settles the shared question of Feature 011 FR-040 as well (the VM tool and the two entries of
   the owner's own source). FR-033 and FR-034 carry the details.
+- **D-15 (the former open questions OQ-4 to OQ-7, OWNER DECISIONS of 2026-10-31)**: (k) Only `doctor --fix`, on a terminal, asks the one endpoint question (FR-031); plain `doctor` stays
+  read-only and asks nothing. FR-016 ("never prompts") is amended to "never prompts except for this one question". (l) The investigation and the question start only when nothing is there: `DOCKER_HOST` unset or empty and the
+  standard socket path absent (after following links; a dangling link counts as absent). A standard socket that exists but refuses a connection, or a `DOCKER_HOST` that is set but dead, is specified-but-unreachable: `container.socket` fails with a clear
+  message ("socket present but no answer, is the runtime started?"), nothing is investigated, nothing is asked and no other backend is suggested. (m) The second Colima socket `~/.colima/docker.sock` is not listed among the investigation
+  options (the profile-qualified `~/.colima/default/docker.sock` is); a user may still select it explicitly. (n) Linux: no new place to record the value for now; the option and `DOCKER_HOST` suffice. The Linux failure message, when no default endpoint
+  exists, names the rootless path (`$XDG_RUNTIME_DIR/docker.sock`) and `DOCKER_HOST` (message text only, no behavior). The host profile and the endpoint record are described platform-neutrally ("written by the wizard") so a later Linux wizard can write
+  the same record; a Linux host-setup wizard is wanted eventually and is recorded as future work below. (o) An unreachable stored endpoint is an error, not drift: `container.socket` fails with a clear message and exit 68 as today (Feature 006 FR-063);
+  the warnings of D-13 (g) apply only to provenance and context drift.
 
 Author proposals for D-12 and D-13 (not owner decisions; the owner may change them):
 
@@ -114,23 +121,23 @@ Author proposals for D-12 and D-13 (not owner decisions; the owner may change th
   explicit specification beats the default; the order within that and the position of the config value above `DOCKER_HOST` are
   proposals. A stale config value then wins over an exported `DOCKER_HOST`, which is why drift is reported (D-13 (g), FR-032).
 - **EP-2 (names)**: option `--container-endpoint <endpoint>`; config key `container_endpoint` with the fields `socket` and `context`;
-  reserved profile item id `container-endpoint` for confirmation and opt-out, like `git-config` (not a catalogue entry).
+  reserved profile item id `container-endpoint` for confirmation, like `git-config` (not a catalogue entry).
 - **EP-3 (ordinary commands)**: commands other than `setup` and `doctor --fix` never prompt and never investigate; with no usable
   endpoint they exit 68 (the existing conflict or wrong-state code, the precedent of Feature 010 FR-009) with a `whr:` line naming the
   option, the config value and `whr setup`. No new exit code, refusal code or step kind is introduced anywhere in D-12 and D-13.
-- **EP-4 (interaction)**: the question is asked only on a terminal, on standard error, once, with numbered options and a default `skip`
-  (nothing recorded); the options are the sockets of the candidate list that accept a connection plus the local-socket contexts, with
-  the context name shown. Exit 70 naming `--container-endpoint` when options were found, no terminal is present and nothing answers
-  the question; no question and no 70 when nothing was found.
+- **EP-4 (interaction)**: the question is asked only on a terminal, on standard error, once per run, with numbered options and a default `skip`; `skip` records nothing, so the next run asks again while the default endpoint is still missing
+  (consistent with D-12 (c) and D-14 (j)); the options are the sockets of the candidate list that accept a connection plus the local-socket contexts, with the context name shown. Without a terminal, with `--json` or `--non-interactive`
+  the documented default `skip` applies (Feature 006 FR-045: needs-human only when a required input is missing after documented defaults): no prompt, nothing recorded, no exit 70, and the failing `container.socket` check reports as usual.
 - **EP-5 (reporting)**: drift warnings are evidence entries and `whr: warning` lines of `container.socket`, not a new check status
   (the statuses stay `pass`, `fail`, `skipped`, `unknown`; compare Feature 011 decision 19(a)); the check keeps the status of the
   endpoint itself.
 - **EP-6 (candidate list)**: the investigation list is the documented list of `doctor-checks.json` without its two default entries;
-  the second Colima socket is not added (OQ-6).
+  the second Colima socket is not added (D-15 (m)).
 - **EP-7 (Docker client entry details, D-14 (i))**: id `docker`, kind `tool`, title naming the Docker client only, platforms `darwin-arm64` and `darwin-amd64` (Linux installs nothing, FR-001),
   `selected_by_default` false, `network` host `formulae.brew.sh`, `tool.source` the Homebrew formula `docker` from `homebrew/core`, `may_elevate` false, `command` `docker`; `version_args`, `version_regex`
   and `min_version` are measured at implementation (OG-1) and not fixed here. A `docker` command found outside Homebrew (for example the client that the OrbStack cask provides) is `present_other_source`, which
   counts as "a Docker client is found" and is never replaced (FR-008). The message is a note in the evidence of `host.tool.colima` and a line in the `setup` plan and report; no check status changes.
+- **EP-9 (DOCKER_HOST drift)**: the warning (iii) of FR-032, `DOCKER_HOST` differing from a stored endpoint that takes precedence, is not among the owner's conditions of D-13 (g); it is an author proposal.
 - **EP-8 (skip reason)**: the `skipped` reason text for a check that depends on an unselected entry is `unselected` (a skip reason, not an item state, refusal code or step kind).
 
 OD-1 to OD-5 are in the [plan](plan.md#owner-decisions), confirmed 2026-10-20. Owner H38 (2026-10-20) also confirms the existing DP-1 to DP-5 defaults and the no-op bookkeeping choice in FR-021; AP decisions, measured production minima and AP-6 reason placement remain separate. H37 permits source-only dependents to use exact independently CLEAR local prerequisite parents with per-work-item evidence before owner merge, without treating open task/real-host acceptance as complete.
@@ -291,7 +298,7 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
   reporting checks `host.profile`, `host.tool.<id>`, `host.dotfile.<id>`, `git.global_config` (amendment AP-6). Without a host profile the
   item checks are `skipped: no_host_profile`; an opted-out item is `skipped: opted_out`.
 - **FR-016**: `whr doctor --fix` builds its plan from doctor findings restricted to selected items of the host profile, through the same
-  engine, plan model, preview, backup and confirmation rules as the wizard (equal state, equal plan hash). It never prompts. Without `--yes`
+  engine, plan model, preview, backup and confirmation rules as the wizard (equal state, equal plan hash). It never prompts, except for the single endpoint question of FR-031 on a terminal (D-15 (k)). Without `--yes`
   it prints the preview and exits 70; with `--yes` it applies create-class steps; modify-class and privileged steps need `--confirm <id>`
   (`git-config` for the git move). It does not repair non-host findings and does not touch the Docker VM.
 - **FR-017**: Unattended runs (`--non-interactive`, no terminal on standard input or error, or `--json`) never prompt and never run sudo;
@@ -365,14 +372,14 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
 - **FR-028** (Colima storage location, owner decision D-11; Feature 011 FR-041 gives the generic rule): The Colima profile is found from the
   selected endpoint, not from an environment variable: an endpoint `<dir>/<profile>/docker.sock` whose directory holds `colima.yaml` is the
   profile `<profile>` (measured for the default profile: `~/.colima/default/docker.sock` and `~/.colima/default/colima.yaml` sit in one directory, M-4; other profile layouts are not measured). An endpoint without a profile directory, such as
-  `~/.colima/docker.sock` (M-3), matches no profile, so the first source is absent and the recorded value, else `unknown`, is used (OQ-6). Doctor reads that
+  `~/.colima/docker.sock` (M-3), matches no profile, so the first source is absent and the recorded value, else `unknown`, is used. Doctor reads that
   file as a plain bounded file read (no `colima` process, no runtime API) and uses it as the first source. From the file `whr` reads only
   the virtual disk size settings (the keys `disk` and `rootDisk`; GiB according to the comments of the measured file, M-4): these are the maximum sizes of the VM disk, not free space and
   not used space, and they are information only (Feature 011 FR-041). The measured file states no host path for the VM disk and Docker's data lives inside the VM (M-5); the host location that is
   measured is therefore the volume that holds the Colima home directory (default `~/.colima` according to the file comments; the profile directory lies in it), and the number reported is
   the free space of that host volume. Not measured, and therefore still hedged: a `COLIMA_HOME` override or an XDG location, non-default profile layouts, whether the file exists before the first start, and where the disk image file lies below the Colima home directory; if a real file ever states the location,
   the stated location replaces the directory rule. The wizard determines the same location when `colima.yaml` exists and records it
-  (FR-041). The file exists after the first start and is re-written at later starts (M-4), so nothing is recorded right after the install, the report names the later `whr setup` run, and doctor reads the file afresh each time rather than trusting an earlier read.
+  (FR-041). The file was observed after the first start (M-4); whether it exists before the first start is not measured (OG-1). If it does not exist yet, nothing is recorded, the report names the later `whr setup` run, and doctor reads the file with a plain read each time it runs.
   A runtime without a readable configuration file (for OrbStack none is specified here) gives no first source: the recorded value, else `unknown`.
 
 **Container runtime endpoint selection (D-12, D-13)**
@@ -395,26 +402,27 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
   authoritative endpoint; a path below the home directory is stored home-relative, otherwise absolute, like the other profile paths) and `context` (the name of the Docker context it came from; informational
   provenance only; absent when the endpoint was not taken from a context). Only `socket` is ever used to connect. If the context is deleted or changed later, the stored `socket` keeps working (FR-032). The data-model
   line "No paths or values" is widened for this record, as for the storage and image records of Feature 011.
-- **FR-031** (investigation and question; D-12 (c), D-13 (e), (h); mechanics are EP-4): On macOS, `whr setup` and the interactive `whr doctor` path of OQ-4, when no option is given, no config value is
-  recorded, `DOCKER_HOST` is unset or empty and the standard socket is missing (what "missing" means is OQ-5), investigate which options exist and ask which one to use. The investigation is read-only and
+- **FR-031** (investigation and question; D-12 (c), D-13 (e), (h); D-15 (k), (l); mechanics are EP-4): In the wizard (`whr setup`, macOS today) and in `whr doctor --fix` on a terminal, when no option is given, no config value is
+  recorded, `DOCKER_HOST` is unset or empty and the standard socket path is absent (after following links; a dangling link counts as absent; a socket that exists but refuses, or a dead `DOCKER_HOST`, is not "missing": FR-032), investigate which options exist and ask which one to use. The investigation is read-only and
   bounded: it dials each fixed path of the candidate list (the entries of `doctor-checks.json` `socket_candidates` after `DOCKER_HOST` and `/var/run/docker.sock`: `$XDG_RUNTIME_DIR/docker.sock`,
   `~/.orbstack/run/docker.sock`, `~/.docker/run/docker.sock`, `~/.colima/default/docker.sock`, `~/.rd/docker.sock`) with the dial cap of doctor, sends nothing, lists no directory (no `~/.colima` scan), starts no
   process, and additionally reads the Docker context metadata (plain bounded file reads: the Docker client configuration file for the active context name and the context metadata files for names and
   endpoints; the TLS and key files of a context are never opened; the `docker context` command is never run; the file layout is unmeasured, OG-1). Context endpoints that are local `unix://` sockets are options, listed
   with the context name; a context with any other target (`ssh://`, `tcp://`, ...) is listed as "not supported: remote target" with that reason, is never offered and never used (D-13 (h)). An option found
   twice (a candidate and a context endpoint) is listed once with the context name. The question goes to standard error, offers the options that accept a connection by number and `skip`
-  (default), and a `skip` is recorded as an opt-out of the reserved item `container-endpoint` (FR-005; a rerun does not ask again). An answer is recorded as a `profile_write` step (existing kind; create class when
+  (default); `skip` records nothing and the next run asks again while the default endpoint is still missing (EP-4). `doctor --fix` still needs an existing host profile (`host_setup.profile_absent`), otherwise it points to `whr setup`. An answer is recorded as a `profile_write` step (existing kind; create class when
   no value is recorded, modify class when it replaces one) with the `socket` and, when it came from a context, the `context` name, shown in the preview, confirmed by `yes` or `--yes` (create) or by its own confirmation
   (modify; `--confirm container-endpoint`), and written to the protocol; the storage location of FR-028 is determined from the new endpoint in the same run. `--container-endpoint` answers the question (Feature 006 FR-045: every
   choice has a flag and the same inputs give equal configuration in wizard and unattended modes): with no recorded value its value is used for the run and planned as the same `profile_write`. Prompts go to standard error
-  (Feature 006 FR-014); with `--json`, `--non-interactive` or no terminal the question is not asked and, if options were found and nothing answers it, the run exits 70 naming `--container-endpoint` (FR-017, Feature 006 FR-045); end
-  of input or interrupt at the question exits 72; if nothing was found there is no question and no 70, and the report says so and points to the container-runtime page. Nothing is installed, started or configured by the investigation.
+  (Feature 006 FR-014); with `--json`, `--non-interactive` or no terminal the question is not asked, the documented default `skip` applies and nothing is recorded (FR-017, Feature 006 FR-045: no exit 70, because no required input is missing; EP-4); end
+  of input or interrupt at the question exits 72 as for the wizard question of FR-004; if nothing was found there is no question, and the report says so and points to the container-runtime page. Nothing is installed, started or configured by the investigation.
 - **FR-032** (ordinary commands and doctor reporting; D-12, D-13 (g); EP-3, EP-5): Commands other than `setup` and `doctor --fix` never prompt and never investigate. When the selection yields
   no endpoint or an unusable one they run no `docker` call and exit 68 (EP-3; a malformed option value is 64) with a `whr:` line that names the source concerned and the remedies (the option, the config value, `whr setup`).
-  Plain `doctor` stays read-only and asks nothing: `container.socket` names the source used (`option`, `config`, `DOCKER_HOST`, `standard`) in its evidence; when no endpoint is selected it fails as today and its evidence lists
-  what the investigation of FR-031 found. Doctor also reports drift, as warnings that never change the check status and never switch the endpoint (D-13 (g), EP-5): (i) the stored endpoint is not reachable (the check status itself is
-  then `fail` as for any unreachable endpoint; the warning adds the recorded provenance); (ii) the stored context name no longer exists or now points to a different endpoint; (iii) the active context's endpoint, or the `DOCKER_HOST` endpoint,
-  differs from the used endpoint (the motivating case is OG-1 result M-6 turned around: a stored endpoint kept while the standard socket or the active context points elsewhere). The reads for (ii) and (iii) are the plain file reads of FR-031,
+  Plain `doctor` stays read-only and asks nothing (D-15 (k)): `container.socket` names the source used (`option`, `config`, `DOCKER_HOST`, `standard`) in its evidence. A specified endpoint that does not answer is an error, never drift (D-15 (l), (o)): a standard
+  socket that exists but refuses, a dead `DOCKER_HOST` or an unreachable stored endpoint makes `container.socket` `fail` (exit 68, Feature 006 FR-063) with a clear message such as "socket present but no answer, is the runtime started?"; nothing is investigated or asked and no other backend is suggested.
+  When nothing is selected because nothing is there (FR-031), `container.socket` fails as today, its evidence lists what the investigation found (when plain `doctor` runs it read-only), and on Linux the message also names `$XDG_RUNTIME_DIR/docker.sock` (rootless engine) and `DOCKER_HOST` (message text only, D-15 (n)).
+  Doctor also reports provenance and context drift, as warnings that never change the check status and never switch the endpoint (D-13 (g), EP-5): (i) the stored context name no longer exists or now points to a different endpoint; (ii) the active context's endpoint differs from the stored endpoint
+  (the motivating case is OG-1 result M-6 turned around: a stored endpoint kept while the active context points elsewhere); (iii) author proposal EP-9, not an owner condition: the `DOCKER_HOST` endpoint differs from the used endpoint. The reads for (i) to (iii) are the plain file reads of FR-031,
   draw on the shared 5 s budget and never choose the endpoint. Re-recording the stored values to the current ones is a modify-class `profile_write` repair of the reserved item `container-endpoint` in `doctor --fix`, with preview and the per-item
   `--confirm container-endpoint` (FR-016); `--yes` alone never does it.
 
@@ -437,22 +445,21 @@ Environment: macOS on arm64. User name and home path are not recorded here; `~` 
 
 - **M-1 (versions)**: Colima 0.10.3: `colima version` prints `colima version 0.10.3`, then `git commit: <hash>`. Docker server 29.5.2 inside the VM, `vmType` `vz`, profile `default`. The output
   shape fits a `version_args` of `version` and a pattern on the first line (FR-026); the exact catalog values and `min_version` are still set at implementation. No minimum Colima version is measured.
-- **M-2 (Lima)**: `brew deps colima` prints `lima`: Lima is a hard Homebrew dependency of the Colima formula (Lima 2.2.1 installed). A plain `brew install colima` therefore installs it.
+- **M-2 (Lima)**: `brew deps colima` prints `lima`: Lima is a hard Homebrew dependency of the Colima formula (Lima 2.2.1 installed, from `brew list --versions`). A plain `brew install colima` therefore installs it.
 - **M-3 (sockets)**: with the default profile running, both `~/.colima/docker.sock` and `~/.colima/default/docker.sock` exist as sockets, plus `~/.colima/default/containerd.sock`; `~/.colima` also holds `_lima`, `_store`,
   `_templates` and the profile directory `default`. `docker -H unix://$HOME/.colima/docker.sock info --format '{{.Name}} {{.ServerVersion}}'` printed `colima 29.5.2`, so that socket is Colima's. The documented candidate
-  `~/.colima/default/docker.sock` is correct. Not measured: whether the two are the same socket or independent, and whether both persist across Colima versions (OQ-6).
-- **M-4 (configuration file)**: `~/.colima/default/colima.yaml` exists after the first start and is re-written at later starts (its modification time changed after a start). Keys include `disk` (GiB, default 100: the virtual disk size for container
-  data), `rootDisk` (GiB, default 20), `cpu`, `memory`, `vmType`, `runtime` (`docker`) and `autoActivate`. The file comments mention `$COLIMA_HOME` (default `~/.colima`). Not measured: whether the file exists before the first start,
+  `~/.colima/default/docker.sock` is correct. Not measured: whether the two are the same socket or independent, and whether both persist across Colima versions. Whether to list the second socket is decided by D-15 (m).
+- **M-4 (configuration file)**: `~/.colima/default/colima.yaml` exists after the first start; its modification time was later than that of the sockets (the cause is not measured, so no re-write claim is made). Keys include `disk` (GiB, default 100: the comment in the file says it is the virtual disk size for container data), `rootDisk` (GiB, default 20), `cpu`, `memory`, `vmType`, `runtime` (`docker`) and `autoActivate`. The file comments mention `$COLIMA_HOME` (default `~/.colima`). Not measured: whether the file exists before the first start,
   the effect of a `COLIMA_HOME` override, and the layout of non-default profiles.
 - **M-5 (no host path)**: the file states no host path for the VM disk; Docker's data lives inside the VM (Docker Root Dir `/var/lib/docker` in the guest). The measurable host location is the volume that holds the Colima home
   directory; `disk` is a size setting, never free space. Not measured: where the disk image file lies below the Colima home directory.
 - **M-6 (OrbStack side by side)**: `/var/run/docker.sock` was a symbolic link to OrbStack's socket below `~/.orbstack/run/`; `DOCKER_HOST` was empty; `docker context ls` showed `default` (based on `DOCKER_HOST`, `unix:///var/run/docker.sock`)
   and `orbstack` (active); no `colima` context existed although `autoActivate` is true in the yaml (the reason is not established). With both runtimes installed and running, the standard socket and the active context pointed to OrbStack and Colima was
-  empty. The default of D-12 (a) selects OrbStack there, as the plain `docker` client does; this is the motivating example for D-12 (d).
-- **Still unmeasured**: a `COLIMA_HOME` override or an XDG location, socket paths of non-default profiles, the minimum Colima version, the behavior of a stopped Colima, the Docker context file layout used by FR-031, and the
+  empty (`docker info` inside it showed 0 containers and 0 images). The default of D-12 (a) selects OrbStack there, as the plain `docker` client does; this is the motivating example for D-12 (d).
+- **Still unmeasured**: whether `colima.yaml` is re-written at starts, a `COLIMA_HOME` override or an XDG location, socket paths of non-default profiles, the minimum Colima version, the behavior of a stopped Colima, the Docker context file layout used by FR-031, and the
   behavior of the `docker` client formula (version output, coexistence with the OrbStack client).
 
-Open questions for the owner (none is decided by this text; each states the author proposal):
+No question is open for the owner at this point: OQ-1 to OQ-7 are all resolved by owner decisions (D-12 to D-15) and are kept below as a record.
 
 - **OQ-1 (Docker context and Colima profiles) - RESOLVED by D-12 and D-13 (2026-10-31)**: The question was whether detection, runtime access and the
   image build should use the active Docker context, and how non-default Colima profiles and several running runtimes are handled. Outcome: the default is `DOCKER_HOST`, then the standard socket,
@@ -463,19 +470,15 @@ Open questions for the owner (none is decided by this text; each states the auth
 - **OQ-3 (alternative, not exclusive) - RESOLVED by D-14 (j) (2026-10-31)**: Nothing makes OrbStack and Colima exclusive; both can be selected, installed and detected, and D-12 says which one is used. A never-selected entry leaves no trace in the host profile (FR-034), for
   Colima and for the entries of Feature 011 FR-040 alike. A user who wants only Colima opts out of the preselected `orbstack` in `customize` (FR-005).
 
-- **OQ-4 (who asks in `doctor`)**: D-12 (c) has `whr doctor` ask which endpoint to use and write the answer. Plain `doctor` is read-only and writes nothing (D-2, FR-015, FR-018), and `doctor --fix` never prompts
-  and needs an existing host profile (FR-016, FR-017, `host_setup.profile_absent`). Options: (a) `doctor --fix` on a terminal asks this one question as a narrow exception to "never prompts" and, like the wizard,
-  writes the answer after a preview, while plain `doctor` only lists what the investigation found and names `whr setup`; (b) plain `doctor` itself asks and writes on a terminal (amends the read-only rule of D-2 and
-  FR-015); (c) only `whr setup` asks and `doctor` reports. Author proposal: (a).
-- **OQ-5 (what "missing" means)**: D-12 (c) speaks of a missing default endpoint (no `DOCKER_HOST`, no standard socket). Open: a standard socket that exists but refuses a connection (runtime stopped or a stale file), and a
-  `DOCKER_HOST` that is set but dead. Author proposal: both are specified-but-unreachable, so `container.socket` fails as today, nothing is investigated and nothing is asked; only an absent standard socket path
-  (after following links, so a dangling link counts as absent) with `DOCKER_HOST` unset or empty starts the investigation.
-- **OQ-6 (second Colima socket)**: with the default profile running, `~/.colima/docker.sock` exists next to `~/.colima/default/docker.sock` (M-3). Whether it is an alias of the profile socket, and whether to list it as an
-  investigation option, is not measured or decided. Author proposal: do not list it (the profile-qualified path is the documented one and lets FR-028 find the profile directory); a user can still select it with the option.
-- **OQ-7 (Linux and the unreachable stored endpoint)**: (1) The host profile is written by the macOS wizard only, so on Linux the endpoint is chosen by `--container-endpoint` or `DOCKER_HOST`; a rootless engine at
-  `$XDG_RUNTIME_DIR/docker.sock` is no longer found by default (D-12 (a)). Open: whether Linux gets a way to record the value. Author proposal: no, the option and `DOCKER_HOST` suffice for now. (2) D-13 (g) says drift is reported
-  as a warning that never fails, while an unreachable stored endpoint also makes `container.socket` itself `fail` (as every unreachable endpoint does today and as Feature 006 FR-063 exits 68). Author proposal: keep
-  the `fail` for the unreachable endpoint and add the warning only for the provenance and context drift.
+- **OQ-4 (who asks in `doctor`) - RESOLVED by D-15 (k)**: only `doctor --fix` on a terminal asks; plain `doctor` stays read-only.
+- **OQ-5 (what "missing" means) - RESOLVED by D-15 (l)**: only an absent standard socket path with `DOCKER_HOST` unset or empty; a present but refusing socket or a dead `DOCKER_HOST` is an unreachable specified endpoint and fails.
+- **OQ-6 (second Colima socket) - RESOLVED by D-15 (m)**: not listed; selectable explicitly.
+- **OQ-7 (Linux and the unreachable stored endpoint) - RESOLVED by D-15 (n) and (o)**: no new place to record on Linux, a message hint only; an unreachable stored endpoint is an error.
+
+### Future work (non-goal now): Linux host-setup wizard
+
+The owner wants a Linux host-setup wizard eventually (D-15 (n)); this feature does not specify one, and Linux `setup` stays the Feature 006 enrollment (FR-001). A later feature would write the same host profile and endpoint record. Its open points: the package managers to support,
+rootless Docker (including its `$XDG_RUNTIME_DIR/docker.sock` endpoint), the `sudo` policy against FR-011 (no elevated run by `whr` itself) and detection on Linux hosts.
 
 ### Key Entities
 
@@ -528,9 +531,9 @@ CatalogueItem, DetectionResult, Plan, Step, HostProfile, BackupRecord, Protocol 
   context is read by the selection (FR-029, D-12).
 - **SC-019**: With no option, no config value, `DOCKER_HOST` unset and no standard socket, the investigation dials only the fixed candidate paths and reads context metadata files (no `docker` command, no daemon call, no TLS or key file, no
   `~/.colima` listing), lists options with context names and lists non-`unix` contexts as "not supported" with the reason, never offering them; the question and the preview go to standard error; an answer is recorded as one `profile_write` with `socket` and
-  optional `context`; `skip` records an opt-out; no terminal, `--json` or `--non-interactive` with options found and no answer exits 70 naming `--container-endpoint`; end of input exits 72; nothing found asks nothing (FR-031).
-- **SC-020**: Ordinary commands with no usable endpoint never prompt, run no `docker` call and exit 68 with the `whr:` line; a malformed option value exits 64; no new exit code, refusal code or step kind exists (FR-032, EP-3).
-- **SC-021**: Doctor reports each drift of D-13 (g) as a warning in the evidence and in a `whr: warning` line, never changes a status for it, never switches the endpoint, reads context files only within the shared 5 s budget and never reads them to choose; re-recording is a
+  optional `context`; `skip` records nothing and the next run asks again; no terminal, `--json` or `--non-interactive` applies the default `skip` with no prompt, no record and no exit 70; end of input exits 72; nothing found asks nothing; a present-but-refusing socket or a dead `DOCKER_HOST` starts no investigation (FR-031, FR-032).
+- **SC-020**: Ordinary commands with no usable endpoint never prompt, run no `docker` call and exit 68 with the `whr:` line; a malformed option value exits 64; the Linux failure message names `$XDG_RUNTIME_DIR/docker.sock` and `DOCKER_HOST`; no new exit code, refusal code or step kind exists (FR-032, EP-3).
+- **SC-021**: Doctor reports each provenance and context drift of D-13 (g) (and the proposal EP-9) as a warning in the evidence and in a `whr: warning` line, never changes a status for it, never switches the endpoint, reads context files only within the shared 5 s budget and never reads them to choose; re-recording is a
   modify-class `profile_write` that needs `--confirm container-endpoint` (FR-032).
 - **SC-022**: The shipped catalog has the `docker` entry (not preselected, formula `docker` from `homebrew/core`, darwin only, no `config`, no privileged step, no `requires`); with Colima selected and no Docker client found, the plan, report and `host.tool.colima` evidence name it and
   install nothing; a client from another source counts as found (FR-033).
@@ -610,7 +613,7 @@ Changes to existing documents, on approval, each through the plan and tasks, wit
 - `docs/container-runtime.md` (owner-gated): "Local workspace discovery" ("an explicit `DOCKER_HOST` wins; otherwise the documented doctor candidates are tried in order ... Docker contexts are not consulted") becomes the selection rule with the option and the config value, and states that contexts are read for
   detection and drift only; `docs/design/local-devcontainer-lifecycle.md` line 62 ("same socket and `DOCKER_HOST` rules") is checked.
 - `specs/011-vm-provider/spec.md`: this change edits the wording of FR-039 and FR-041, adds decision 23, states the unselected-entry rule in FR-040 and gives the combined entry counts in a parenthesis (see the Colima section above).
-- `specs/012-container-interactive-shell/spec.md`: its wording "discovered `unix://` endpoint" (step 5 and the exec plan) means the selected endpoint (Terms); a wording edit follows with the implementation. `specs/008-workspace-sandbox/spec.md`: none (ownership and access checks apply to local sockets only, D-13 (h)).
+- `specs/012-container-interactive-shell/spec.md`: its wording "discovered `unix://` endpoint" (step 5 and the exec plan) means the selected endpoint (Terms); a wording edit follows with the implementation. `specs/008-workspace-sandbox/spec.md`: none.
 
 Conformance cases (fakes only; FR-023):
 
@@ -618,13 +621,14 @@ Conformance cases (fakes only; FR-023):
 | --- | --- | --- |
 | CC-11 default `DOCKER_HOST` | `DOCKER_HOST` names a reachable socket, the standard socket also exists | `DOCKER_HOST` used; evidence source `DOCKER_HOST`; no candidate dialed |
 | CC-12 standard socket | `DOCKER_HOST` unset; the standard socket links to runtime A; runtime B socket also present | A used (M-6); B never probed; no documented order |
-| CC-13 precedence | all four sources set to different sockets, then removed top-down | option, config value, `DOCKER_HOST`, standard socket in turn (EP-1); an unreachable specified source gives `fail`/68 with no fallback |
+| CC-13 precedence | all four sources set to different sockets, then removed top-down | option, config value, `DOCKER_HOST`, standard socket in turn (EP-1); an unreachable specified source gives `fail`/68 with no fallback (owner decisions D-15 (l), (o)) |
 | CC-14 authoritative config | config value set; the standard socket appears, later disappears | config value used throughout; drift warning while it differs; nothing switches or is rewritten |
 | CC-15 investigation | no source usable; sockets at three candidate paths; context files for two local and one `ssh://` context | read-only dials in order, context metadata read, options listed once with context names, the remote context shown as not supported with the reason and not offered; question on stderr; answer 2 gives one previewed `profile_write` with `socket` and `context`; no process, no `~/.colima` listing, no TLS file opened |
-| CC-16 unattended | as CC-15 without a terminal, with `--json`, with `--non-interactive`; with end of input; with `skip`; with nothing found | 70 naming `--container-endpoint`; 72; opt-out recorded and no re-ask; no question and no 70 |
+| CC-16 unattended | as CC-15 without a terminal, with `--json`, with `--non-interactive`; with end of input; with `skip`; with nothing found | default `skip`, no prompt, nothing recorded, no 70; 72; nothing recorded and the next run asks again; no question |
 | CC-17 ordinary commands | `ls --local`, `shell --local` with no endpoint; malformed option; `tcp://` option | no prompt, no `docker` call; 68; 64; 68 |
-| CC-18 drift warnings | stored endpoint unreachable; stored context deleted; stored context now elsewhere; active context or `DOCKER_HOST` differs | one warning each in evidence and on stderr; status unchanged by the warning; no switch; `doctor --fix --confirm container-endpoint` re-records; `--yes` alone does not |
+| CC-18 drift warnings | stored context deleted; stored context now elsewhere; active context or `DOCKER_HOST` differs | one warning each in evidence and on stderr; status unchanged by the warning; no switch; `doctor --fix --confirm container-endpoint` re-records; `--yes` alone does not |
 | CC-19 profile by selection | option naming `~/.colima/work/docker.sock` with a fake `colima.yaml` beside it | endpoint used; FR-028 derives profile `work`; no directory listing |
-| CC-20 second Colima socket | `~/.colima/docker.sock` selected | works as an endpoint; FR-028 finds no profile, so recorded value else `unknown` (OQ-6) |
+| CC-20 second Colima socket | `~/.colima/docker.sock` selected; separately, the investigation with both sockets present | works as an endpoint; FR-028 finds no profile, so recorded value else `unknown`; the investigation lists only `~/.colima/default/docker.sock` (D-15 (m)) |
 | CC-21 Docker client message | Colima selected, no `docker` found; then a client from another source | message names the `docker` entry and installs nothing; then no message |
 | CC-22 unselected entries | entries never selected; `customize` declines one; plain `doctor` | profile has no record for them; they are offered unchecked next run; `skipped` with reason `unselected`, never `fail` |
+| CC-23 present but silent | the standard socket exists but refuses; `DOCKER_HOST` set but dead; stored endpoint unreachable; on Linux additionally no default endpoint at all | `container.socket` `fail`, exit 68, message "socket present but no answer, is the runtime started?" (first three); no investigation, no question, no other backend suggested; the Linux message names `$XDG_RUNTIME_DIR/docker.sock` and `DOCKER_HOST` |
