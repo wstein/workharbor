@@ -119,7 +119,7 @@ shipped by the project, and the owner confirms each step. The design defends aga
   FR-045: needs-human only when a required input is missing after documented defaults). (r) The sources are used in this order: the command-line option, then the config value, then `DOCKER_HOST`, then the standard socket; the first source that is specified is the only one used. (s) `doctor`
   warns, and never fails, when `DOCKER_HOST` differs from the stored endpoint; the warning is an evidence entry of `container.socket` and a `whr: warning` line, not a new check status. FR-029 to FR-032 carry the details.
 - **D-17 (plain `doctor` and the investigation, OWNER DECISION of 2026-10-31; it was an author proposal until the owner confirmed it)**: (t) Plain `doctor` runs the investigation of FR-031 read-only whenever its start condition holds (nothing is there, D-15 (l)) and lists what it found in the evidence of `container.socket`: the known sockets that accept a connection (the
-  candidate list of EP-6, so without the second Colima socket) and the detected Docker contexts, unsupported ones with the reason. It stays within the shared 5 s budget (socket probes and file reads only), never asks and records nothing; only `setup` and `doctor --fix`, on a terminal, ask (D-15 (k)). Commands other than `setup` and `doctor` never investigate. FR-031 and FR-032 carry the details.
+  candidate list of EP-6, so without the second Colima socket) and the detected Docker contexts, unsupported ones with the reason. It stays within the shared 5 s budget (socket probes and file reads only), never asks and records nothing; only `setup` and `doctor --fix`, on a terminal, ask (D-15 (k)). FR-031 and FR-032 carry the details; other commands: see EP-3.
 
 Endpoint details EP-1 to EP-9. EP-1, EP-4 (its `skip` and unattended parts) and EP-9 are confirmed by D-16 and kept as a record; the others (EP-2, EP-3, EP-5 to EP-8 and the remaining mechanics of EP-4) are author proposals for D-12 to D-17 (not owner decisions; the owner may change them):
 
@@ -464,7 +464,7 @@ Environment: macOS on arm64. User name and home path are not recorded here; `~` 
 - **Still unmeasured**: whether `colima.yaml` is re-written at starts, a `COLIMA_HOME` override or an XDG location, socket paths of non-default profiles, the minimum Colima version, the behavior of a stopped Colima, the Docker context file layout used by FR-031, and the
   behavior of the `docker` client formula (version output, coexistence with the OrbStack client).
 
-OQ-1 to OQ-7 are all resolved by owner decisions (D-12 to D-17) and are kept below as a record. No owner question remains open; EP-2, EP-3, EP-5 to EP-8 and the remaining mechanics of EP-4 stay author proposals that the owner may change.
+OQ-1 to OQ-7 are all resolved by owner decisions (D-12 to D-15) and are kept below as a record. No owner question remains open; EP-2, EP-3, EP-5 to EP-8 and the remaining mechanics of EP-4 stay author proposals that the owner may change.
 
 - **OQ-1 (Docker context and Colima profiles) - RESOLVED by D-12 and D-13 (2026-10-31)**: The question was whether detection, runtime access and the
   image build should use the active Docker context, and how non-default Colima profiles and several running runtimes are handled. Outcome: the default is `DOCKER_HOST`, then the standard socket,
