@@ -26,7 +26,7 @@ Markers: `[P]` parallelizable with the other `[P]` tasks of the same stage once 
   container values of FR-003, the per-field refusing code, the re-verification sentence, conformance cases 1, 4, 6 and the new
   cases), `contracts/refusal-codes.json` (eight codes appended, `refused.foreign_object` text widened exactly as FR-008).
   Acceptance: `check_repo.py`, `git diff --check`; review CLEAR; owner approval of the exact head. Traces FR-001 to FR-005,
-  FR-008, FR-012, FR-030; decisions 3 and 6. Prerequisite: T001.
+  FR-008, FR-012, FR-030; decisions 3 and 6. Coordination: the draft Feature 012 plan and tasks (PR 297) may add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contract if this task has not landed; whichever lands first adds them, the other verifies they match FR-004 and the refusal table and adds nothing. Prerequisite: T001.
 - [ ] T003 OWNER GATE (OG-5, OG-6), docs only: apply the approved amendments to Feature 006 (FR-060 check ids, budget lists,
   scenario 7, the verdict consequence of decision 22) and `docs/container-runtime.md` (VM backend prerequisite section; the
   Windows statement unchanged). No `contracts/cli/` edit here. Acceptance as T002. Traces FR-018, FR-029, FR-032, FR-039,
@@ -65,7 +65,7 @@ Markers: `[P]` parallelizable with the other `[P]` tasks of the same stage once 
 
 ## Stage 2: vendor-name gate
 
-- [ ] T010 [P] Vendor-name gate in `scripts/check_repo.py` with `tests/test_vendor_name_gate.py` and fixtures under
+- [ ] T010 Vendor-name gate in `scripts/check_repo.py` with `tests/test_vendor_name_gate.py` and fixtures under
   `tests/fixtures/vendor_gate/`. Reviewed constant list (the initial list is the spec's informative note), whole-word and
   case-insensitive match; gated set exactly as FR-022; allowed places; marker comments recognized only when alone on a line;
   uppercase MUST, SHOULD, MAY inside a marked region fail. Failing tests first: `test_listed_name_in_gated_file_fails`,
@@ -92,7 +92,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   renamed), `TestRefusalCodesUniqueAndStable`, `TestWindowsGuestRepresentableNeverDeclared`,
   `TestGuestArchUnknownNeverSatisfiesRequirement`. Traces FR-001, FR-004, FR-030; SC-021; decisions 3, 6. Prerequisites: T002,
   008/T001.
-- [ ] T013 [P] [US3] Regression row set, captured before `Admit` changes: `internal/runtime/admit_regression_test.go` runs
+- [ ] T013 [US3] Regression row set, captured before `Admit` changes: `internal/runtime/admit_regression_test.go` runs
   every row of `TestAdmitTable` against the container values of FR-003. Failing tests first: none can fail on a green baseline;
   the task commits `TestAdmitTableContainerValuesUnchanged` green against the unamended `Admit` and the commit hash is
   recorded, so T014 can prove no row changed. Traces FR-003; SC-002; decision 1 (container `interactive_shell=none`).
@@ -162,7 +162,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   tests first: `TestConformanceGuestAndArchMismatchZeroDriverCalls`, `TestConformanceConcurrencyLimit`,
   `TestConformanceOwnershipWithPrefixCollision`, `TestConformanceBaseImageIdentifierUnchangedAfterRun`,
   `TestConformanceHostileArgvCorpus`, `TestConformanceCleanupAfterKilledRun`, `TestConformanceUnknownNeverSatisfies`,
-  `TestConformanceEnforcedFieldNeedsPassingProbe`, `TestConformanceSuiteSecondFakeDriver`, `TestFakeVMProviderReportsInteractiveShellNoneEnforced` (OQ-11),
+  `TestConformanceEnforcedFieldNeedsPassingProbe`, `TestConformanceSuiteSecondFakeDriver`, `TestFakeVMProviderReportsAllEighteenFieldsWithStatusAndScope` (the full VM provider report: guest `darwin` or per driver, `base_image=read_only_clone_source`, limit, `exec_argv`, `ownership_mechanism`, `tool_mounts`, egress `none`), `TestFakeVMProviderReportsInteractiveShellNoneEnforced` (OQ-11),
   `TestSecondDriverChangesNoProductionContractFile`, `TestNoProviderKindOrVendorBranchesInProductionCode`. Traces FR-025, FR-021,
   FR-023; SC-001, SC-003, SC-021. Prerequisites: T016, T018, T020, T021, T022, T023, 008/T009.
 - [ ] T025 [US3] Boundaries and offline acceptance. Failing tests first: `TestNoCodePathPublishesUploadsSignsOrPullsImages`,
@@ -289,7 +289,7 @@ is unchanged in every task.
 
 ## Dependencies and execution
 
-Stages 1 and 2 start after approval with no provider; T001 and the T005, T006, T010 group are the first PRs. Stage 3 starts when
+Stages 1 and 2 start after approval with no provider; T001, T005 and T010 are independent first PRs (T006 follows T005, T011 follows T010). Stage 3 starts when
 the named Feature 008 tasks are on `main` and T002 is merged. Stage 4 follows Stage 3 and the named Feature 009 tasks. Owner
 gates in this list: OG-1 (real runs, none of T001 to T038 may use one), OG-3 (real builds, evidence only), OG-4 and OG-5
 (`contracts/cli/*`, doctor catalog, `setup`, `container-runtime.md`), OG-6 (Feature 006 text), OG-7 (catalog entries and schema),
@@ -326,7 +326,7 @@ exceptions to the per-PR empty diff on frozen paths.
 | T028 | 006/T027, T003 |
 | T029 | T004, 009/T001 |
 | T030 | T029, 009/T002 |
-| T031 | T029, 009/T003, 009/T006 |
+| T031 | T029, 009/T003, 009/T006, 009/T007, 009/T010 |
 | T032 | T004, 009/T006 |
 | T033 | T028, T032, 009/T010 |
 | T034 | T026, T031, T033, 009/T010 |
