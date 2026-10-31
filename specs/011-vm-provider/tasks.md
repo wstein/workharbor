@@ -38,17 +38,17 @@ Markers: `[P]` parallelizable with the other `[P]` tasks of the same stage once 
 
 ## Stage 1: cross-platform CI evidence (User Story 1; independent of any provider)
 
-- [ ] T005 [P] [US1] Skip-record check in `scripts/check_skips.py` and `scripts/test_check_skips.py`, wired into the acceptance
+- [ ] T005 [US1] Skip-record check in `scripts/check_skips.py` and `scripts/test_check_skips.py`, wired into the acceptance
   manifest `docs/development/ci-acceptance.json` and `scripts/check_ci.py` so that a complete record is the only exemption from
   the existing no-skip rules (OQ-3). Failing tests first: `test_skip_without_platform_fails`, `test_skip_without_reason_fails`,
   `test_skip_without_tracking_reference_fails`, `test_complete_skip_record_passes`,
   `test_classification_must_be_known_value` (`product_defect`, `test_portability_defect`, `host_environment`, with evidence),
   `test_unrecorded_skip_still_fails_acceptance`, plus Go: a `t.Skip` call needs the record on the preceding line. Traces FR-028;
-  SC-012; US1 scenario 2. Prerequisites: none (format per OQ-3).
-- [ ] T006 [P] [US1] No-Windows check in `scripts/check_ci.py` (workflow `runs-on`, `GOOS=windows`, matrix entries) with fixtures
+  SC-012; US1 scenario 2. Prerequisites: none (format per OQ-3). Edits `scripts/check_ci.py`, so not parallel with T006.
+- [ ] T006 [US1] No-Windows check in `scripts/check_ci.py` (workflow `runs-on`, `GOOS=windows`, matrix entries) with fixtures
   in `scripts/test_check_ci.py`. Failing tests first: `test_windows_runner_label_fails`, `test_windows_goos_fails`,
-  `test_negative_statement_in_docs_allowed` (for example the existing "unsupported" lines), `test_archive_copies_excepted`.
-  Documents are covered by review (OQ-10). Traces FR-029, FR-030; SC-024; OD-6. Prerequisites: none.
+  `test_unsupported_comment_in_workflow_allowed`.
+  The check scans workflows and scripts only; documents are covered by review (OQ-10), and the planned tests above are limited to those files. Traces FR-029, FR-030; SC-024; OD-6. Prerequisites: T005 (same file, `scripts/check_ci.py`).
 - [ ] T007 [US1] Measurement, no merge-blocking change: run the Python and Go suites on `macos-15` and `ubuntu-24.04` from a draft
   branch and record `docs/quality/011-vm-provider/platform-baseline.md` (runner architecture, durations, every failing test
   with a classification and evidence, or "none"). Failing tests are fixed in separate PRs or recorded with T005 records; this
@@ -74,7 +74,7 @@ Markers: `[P]` parallelizable with the other `[P]` tasks of the same stage once 
   `test_catalog_asset_and_runtime_built_text_allowed`, `test_current_tree_passes` (spec, Feature 008 contract files and
   `apps/whr` command text are clean today). Docker is not on the list. Traces FR-022; SC-009; decisions 4 and 5; OD-3.
   Prerequisites: none.
-- [ ] T011 [P] Driver support-matrix check in `scripts/check_repo.py` with fixtures: every directory under
+- [ ] T011 Driver support-matrix check in `scripts/check_repo.py` with fixtures: every directory under
   `apps/whr/internal/runtime/drivers/<name>/` needs `docs/drivers/<name>.md` with separate host and guest sections, limits and a
   license note naming the license as the user's concern. Failing tests first: `test_driver_without_matrix_fails`,
   `test_matrix_must_list_host_and_guest_separately`, `test_matrix_must_carry_license_note`, `test_no_driver_no_matrix_passes`.
@@ -162,7 +162,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   tests first: `TestConformanceGuestAndArchMismatchZeroDriverCalls`, `TestConformanceConcurrencyLimit`,
   `TestConformanceOwnershipWithPrefixCollision`, `TestConformanceBaseImageIdentifierUnchangedAfterRun`,
   `TestConformanceHostileArgvCorpus`, `TestConformanceCleanupAfterKilledRun`, `TestConformanceUnknownNeverSatisfies`,
-  `TestConformanceEnforcedFieldNeedsPassingProbe`, `TestConformanceSuiteSecondFakeDriver`,
+  `TestConformanceEnforcedFieldNeedsPassingProbe`, `TestConformanceSuiteSecondFakeDriver`, `TestFakeVMProviderReportsInteractiveShellNoneEnforced` (OQ-11),
   `TestSecondDriverChangesNoProductionContractFile`, `TestNoProviderKindOrVendorBranchesInProductionCode`. Traces FR-025, FR-021,
   FR-023; SC-001, SC-003, SC-021. Prerequisites: T016, T018, T020, T021, T022, T023, 008/T009.
 - [ ] T025 [US3] Boundaries and offline acceptance. Failing tests first: `TestNoCodePathPublishesUploadsSignsOrPullsImages`,
@@ -174,7 +174,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
 
 ## Stage 4: commands and integration (macOS host surface; owner gates)
 
-Stage 4 needs 009 T001 (catalogue), T003 (pkgmgr), T006 (profile and apply), T007 (fix engine), T010 (wizard) and 006/T027.
+Stage 4 needs 009 T001 (catalogue), T002 (detection and plan model), T003 (pkgmgr), T006 (profile and apply), T007 (fix engine), T010 (wizard) and 006/T027.
 Real brew, real builds and real hosts are never used; fakes only (Feature 009 FR-023). Linux `setup` and `doctor --fix` output
 is unchanged in every task.
 
@@ -189,7 +189,7 @@ is unchanged in every task.
   port, reuse of `localdocker` list and inspect. Failing tests first: `TestContainerImagePassFailSkipped` (labeled image, missing or
   unusable, no defined image `no_image_defined`), `TestContainerLeftoversListOwnedOnlyWithSizeOrSizeUnknown`,
   `TestContainerLeftoversNeverFailDoctor`, `TestContainerChecksReadOnlyListAndInspectOnly`,
-  `TestContainerChecksSkippedOnLinuxAndWithoutEndpoint` (`unsupported_platform`, `no_runtime`). Traces FR-039; SC-034 (checks
+  `TestContainerChecksSkippedOnLinuxAndWithoutEndpoint` (`unsupported_platform`, `no_runtime`). The endpoint comes from the selection function of draft PR 299 (OQ-6). Traces FR-039; SC-034 (checks
   half); decision 13; OQ-6 for the real endpoint. Prerequisites: 006/T027, 009/T006, T003.
 - [ ] T028 [P] `disk.container_storage` macOS lookup in `internal/doctor/disk.go`: runtime configuration file (bounded
   plain read), then the recorded value, else `unknown`; the disk-size setting is information only. Failing tests first:
@@ -197,7 +197,7 @@ is unchanged in every task.
   `TestRecordedValueUsedWhenFileAbsentOrUnusable`, `TestNeitherGivesUnknownWithReason`, `TestFreeSpaceIsHostVolumeOfLocation`,
   `TestFailBelowExistingThreshold`, `TestDiskSizeSettingIsInformationOnly`, `TestRecordedValueThatNoLongerExistsIsUnknownNotFail`,
   `TestLookupDrawsOnSharedBudget`, `TestHomeRedactedInEvidence`; Linux `/var/lib/docker` rule unchanged. Traces FR-041; SC-036;
-  decisions 21, 23. Prerequisites: 006/T027, T003.
+  decisions 21, 23. Consumes the Colima storage-location library of draft PR 299, which may already cover this lookup (OQ-6). Prerequisites: 006/T027, T003.
 - [ ] T029 OWNER GATE (OG-7, OG-10): catalog schema and loader for the closed third-party source list: `source.tap` enum grows
   by the two listed sources, the loader rule "tap matches type" amended, optional `note` and `host_requirement`, in
   `specs/009-host-setup-wizard/contracts/host-tool-catalogue.schema.json`, `hostsetup/catalogue/catalogue.go` and tests. Failing
@@ -219,7 +219,7 @@ is unchanged in every task.
   `TestInstallAndUpgradeCallRecordedOnlyAfterSelectionAndItemConfirmation`, `TestYesAloneAndYesWithOnlyRecordNeither`,
   `TestUnattendedWithoutConfirmExits70`, `TestSourceOutsideListRefusedByArgvTable`, `TestNeverReplacesOrRemovesToolFromAnotherSource`,
   `TestDoctorFixInstallsOrUpgradesOnlyWithItemConfirm`, `TestDoctorFixNeverInstallsVMTool`, `TestWizardAsksTapItemsOneByOneDefaultNo`.
-  Traces FR-038, FR-031 (offer a), FR-017; SC-033, SC-025 (install half); decisions 12, 13, 19(c), 20. Prerequisites: T029, 009/T003, 009/T006.
+  Traces FR-038, FR-031 (offer a), FR-017; SC-033, SC-025 (install half); decisions 12, 13, 19(c), 20. Prerequisites: T029, 009/T003, 009/T006, 009/T007, 009/T010.
 - [ ] T032 Image library in `hostsetup/image/`: definition templates (container build file, VM recipe), size preview ("size
   unknown"), offer state machine, build runner ports for the container backend and the VM backend (separate from the driver
   port, OQ-2) with fakes, label and record data. Failing tests first: `TestOfferShowsDefinitionAndSizePreviewBeforeAnyBuild`,
@@ -266,13 +266,13 @@ is unchanged in every task.
   backend-specific command replacing one, same command-level conformance cases for the fake container provider and the fake VM
   provider. Failing tests first: `TestRegistryHasOneEntryPerCoreCommandForBothBackends`,
   `TestNoBackendSpecificCommandReplacesCoreCommand`, `TestCommandConformanceSameForContainerAndVMDifferingOnlyInReport`,
-  `TestRefusalNamesItsReason`. Traces FR-035, FR-016 (command half deferred, D-1); SC-030; decision 9. Prerequisites: T024, 008/T016, 008/T017.
+  `TestRefusalNamesItsReason`. Traces FR-035, FR-016 (command half deferred, D-1); SC-030 (partly: the shell-command half is deferred, D-1); decision 9. Prerequisites: T024, 008/T016, 008/T017.
 
 ## Stage 5: first driver, documentation and acceptance
 
 - [ ] T039 OWNER GATE (OG-1 for any real run): the `<first-driver>` adapter in `internal/runtime/drivers/<first-driver>/` over a
   process-runner port with recorded backend output, its `docs/drivers/<first-driver>.md` support matrix, and the driver tests.
-  Starts only after the owner has done the license and maintenance check of the spec ("Verification before the plan"). Failing
+  Starts only after the owner has done the license and maintenance check of the spec ("Verification before the plan"), which has not been done; the spec places it before the plan. Failing
   tests first: `TestDriverPassesConformanceWithRecordedOutput`, `TestDriverDeclaresOnlyWhatItsProbesProve`,
   `TestProbeAndListParseOptionalSizeAndStorageFields`, `TestDriverRunnerArgvIsFixedNoShell`, `TestDriverNeverInstallsOrChangesHostSettings`,
   `TestSupportMatrixPresentAndCheckedByT011`. Real-VM conformance is owner-run evidence (D-2). Traces FR-021, FR-023, FR-024,
@@ -293,14 +293,15 @@ Stages 1 and 2 start after approval with no provider; T001 and the T005, T006, T
 the named Feature 008 tasks are on `main` and T002 is merged. Stage 4 follows Stage 3 and the named Feature 009 tasks. Owner
 gates in this list: OG-1 (real runs, none of T001 to T038 may use one), OG-3 (real builds, evidence only), OG-4 and OG-5
 (`contracts/cli/*`, doctor catalog, `setup`, `container-runtime.md`), OG-6 (Feature 006 text), OG-7 (catalog entries and schema),
-OG-8 (Feature 008 text), OG-10 and OG-11 (proposed, plan). T002 to T004, T008, T029, T030, T037 and T039 are the only
+OG-8 (Feature 008 text), OG-10 and OG-11 (proposed, plan). T002 to T004, T008, T029, T030 and T037 are the only
 exceptions to the per-PR empty diff on frozen paths.
 
 | Task | Prerequisites |
 | --- | --- |
 | T001 | none |
 | T002, T003, T004 | T001 |
-| T005, T006 | none |
+| T005 | none |
+| T006 | T005 |
 | T007 | T005 |
 | T008 | T005, T006, T007 |
 | T009 | T008 |
@@ -359,7 +360,7 @@ half; the real half is owner-run evidence (D-2 in the plan).
 | FR-013 | T021 |
 | FR-014 | T019 |
 | FR-015 | T021, T024 |
-| FR-016 | T014 (refusal); `pty` path and command: deferred D-1 (no provider reports enforced `pty`; draft Feature 012) |
+| FR-016 | T014 (refusal); `pty` path and command: deferred D-1 (the command belongs to Feature 012 per FR-016 and decision 14) |
 | FR-017 | T015, T025, T026, T031, T035 |
 | FR-018 | T026, T037 |
 | FR-019 | T022, T025 |
@@ -417,7 +418,7 @@ half; the real half is owner-run evidence (D-2 in the plan).
 | SC-027 | T035 |
 | SC-028 | T035 |
 | SC-029 | T032, T033 |
-| SC-030 | T038 (waits for 008/T016, T017) |
+| SC-030 | T038 partly (waits for 008/T016, T017); shell-command half: deferred D-1 |
 | SC-031 | T011, T025, T040 |
 | SC-032 | T036 |
 | SC-033 | T029, T031 |
