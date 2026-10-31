@@ -193,9 +193,11 @@ refusals. Every amendment is generic and additive.
   that no existing row can change: `guest_os=linux` and `guest_arch` equal to the architecture the container runtime
   reports (`unknown` if it cannot be probed; only a request naming `guest_arch` is then affected); `base_image=none`;
   `concurrency_limit=unknown` (FR-009 is a provider check of the VM provider, not an admission row, so `unknown` cannot
-  fail any existing row); `exec_argv=native` (Feature 008 FR-029 and conformance case 6 already require argv as data);
+  fail any existing row); `exec_argv=native` with status `enforced`, proven by conformance case 6 (Feature 008 FR-029 and case 6 already require
+  argv as data);
   `ownership_mechanism=native_labels`; `interactive_shell=none` (the Feature 008 contract defines no interactive
-  shell; conservative). `Admit` reads a new field only when the request names its requirement (`guest_os`,
+  shell; conservative). Each of these values has status `enforced`, except `guest_arch` when it is `unknown`
+  and `concurrency_limit=unknown`, in line with the container report of the Feature 008 contract. `Admit` reads a new field only when the request names its requirement (`guest_os`,
   `guest_arch` or an interactive shell); every `Exec` reads `exec_argv`, and the container value `native` admits all
   existing rows; a request that names none of them is not affected by the new
   fields. Every row of the Feature 008 admission table (`TestAdmitTable`) MUST yield the same decision and code before
@@ -212,7 +214,9 @@ refusals. Every amendment is generic and additive.
 
 - **FR-006**: An instance MUST be created only as a disposable clone of a base image the owner named. The Plan MUST
   record the base image name and the identifier the driver reports for it. The base image MUST NOT be started for a
-  job, written or modified, and removal MUST discard the clone. The offline suite proves this with the fake driver
+  job, written or modified, and removal MUST discard the clone. A request that names a base image against a provider
+  whose `base_image` is not `read_only_clone_source` with status `enforced` MUST be refused with
+  `refused.base_image_unavailable` before any clone call. The offline suite proves this with the fake driver
   (no start, write or delete call targets the base image). For a real image the claim is owner-run evidence: the owner
   compares a host-computed digest of the image files before and after a run. The driver-reported identifier alone is
   not proof. A base image that does not exist, is running or locked, or is not usable as a clone source MUST be refused
@@ -228,7 +232,8 @@ refusals. Every amendment is generic and additive.
   disagrees. `List` MUST return only owned instances. `Create`, `Exec`, `Cancel` and `Remove` MUST re-verify ownership
   before acting, as in the Feature 008 contract, and `Export` resolves its instance only through the owned record. A
   foreign VM, or one that lacks the labels or the record, MUST be refused with `refused.foreign_object` and zero
-  mutations. The "when" text of `refused.foreign_object` becomes exactly: "a target object lacks the ownership labels, or, for
+  mutations. `ownership_mechanism` is not a request requirement: a provider whose `ownership_mechanism` is not `enforced`
+  proves no ownership, so every operation on an instance is refused with `refused.foreign_object`. The "when" text of `refused.foreign_object` becomes exactly: "a target object lacks the ownership labels, or, for
   `name_and_record`, its name or provider record is missing or disagrees". No new code is needed.
 - **FR-009**: The provider MUST declare a concurrency limit derived from the driver and the host. Concurrency is runtime
   state, so it is not an `Admit` input: `Admit` stays a pure function of request and capabilities (Feature 008 FR-013).
@@ -345,7 +350,7 @@ refusals. Every amendment is generic and additive.
 | `refused.guest_arch_unavailable` | the provider does not declare the requested guest architecture as `enforced` |
 | `refused.concurrency_limit_reached` | creating the instance would exceed the declared concurrency limit |
 | `refused.tool_mounts_unavailable` | `ro_bdock` is requested and `tool_mounts` is not `ro_bdock` with status `enforced` |
-| `refused.base_image_unavailable` | the named base image does not exist, is running or locked, or is not usable as a clone source |
+| `refused.base_image_unavailable` | the named base image does not exist, is running or locked, is not usable as a clone source, or `base_image` is not `read_only_clone_source` with status `enforced` |
 | `refused.exec_argv_unavailable` | `exec_argv` is `unavailable` or not `enforced`; every `Exec` under every profile is refused |
 | `refused.driver_unavailable` | no driver is chosen, or the chosen driver is missing or unsupported on this host |
 | `refused.interactive_unavailable` | an interactive shell is requested and `interactive_shell` is not `pty` with status `enforced` |
@@ -370,9 +375,11 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   provider, and a second fake provider (a second fake driver) is added in a test only, with no change to production
   contract code (FR-021 to FR-023, FR-025; terms of Feature 008 SC-010).
 - **SC-004**: The hostile argv corpus round-trips byte-exact for every guest shell model a provider declares, and a
-  provider reporting `exec_argv=unavailable` refuses every `Exec` with `refused.exec_argv_unavailable` (FR-012).
+  provider reporting `exec_argv=unavailable`, or `native` or `quoted_verified` with a status other than `enforced`,
+  refuses every `Exec` with `refused.exec_argv_unavailable` (FR-012).
 - **SC-005**: A foreign VM with the reserved prefix and no record, and an instance whose record lacks any label of the
-  Feature 008 ownership set, are refused with `refused.foreign_object` and zero mutations (FR-008).
+  Feature 008 ownership set, are refused with `refused.foreign_object` and zero mutations, as is every operation of a provider whose
+  `ownership_mechanism` is not `enforced` (FR-008).
 - **SC-006**: After a killed run and `Remove`, zero owned instances remain, leftovers are listed and results are retained
   (FR-011, FR-020).
 - **SC-007**: With the fake driver, no start, write or delete call ever targets the base image, and the driver-reported
@@ -419,8 +426,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   driver calls. With a chosen driver that is missing or unsupported on this host, it is refused with the same code and
   the only driver call is that driver's read-only `probe`. With one supported driver chosen, only that driver records
   calls (FR-023).
-- **SC-023**: A missing, running, locked or unusable base image is refused with `refused.base_image_unavailable` and
-  zero clone calls (FR-006).
+- **SC-023**: A missing, running, locked or unusable base image, and a named base image against a provider whose
+  `base_image` is not `read_only_clone_source` with status `enforced`, are refused with `refused.base_image_unavailable`
+  and zero clone calls (FR-006).
 - **SC-024**: No CI job, check or current document of this repository (the verbatim historical copies under
   `docs/archive/` excepted) declares Windows host support or a Windows runner (FR-029).
 
@@ -471,7 +479,10 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 - `specs/008-workspace-sandbox/data-model.md`: "the eleven fields" becomes eighteen; the ownership description
   covers `name_and_record` (FR-008).
 - `specs/008-workspace-sandbox/contracts/runtime-provider.md`: the new fields with the container provider values of
-  FR-003; the re-verification sentence; conformance cases 1 ("all eleven fields"), 4 (label-based ownership, now per
+  FR-003 and, per field, the code that refuses a request when the field is not `enforced`: `guest_os` and `guest_arch`
+  (FR-001), `tool_mounts` (FR-005), `base_image` (FR-006), `exec_argv` (FR-012), `interactive_shell` (FR-016),
+  `ownership_mechanism` (`refused.foreign_object`, FR-008), and `concurrency_limit` (the provider check of FR-009, not
+  an admission row); the re-verification sentence; conformance cases 1 ("all eleven fields"), 4 (label-based ownership, now per
   `ownership_mechanism`), 6 ("argv as data, no shell": shell transport allowed only under `exec_argv=quoted_verified`
   with the FR-012 corpus round-tripping byte-exact) and the new cases of FR-025.
 - `specs/008-workspace-sandbox/contracts/refusal-codes.json`: append the eight codes above and widen the "when" text of
