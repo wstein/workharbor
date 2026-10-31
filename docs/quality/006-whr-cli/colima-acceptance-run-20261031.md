@@ -14,7 +14,7 @@ trigger, and agents never start it). Source:
 [`.github/workflows/colima-acceptance.yml`](../../../.github/workflows/colima-acceptance.yml).
 It has `contents: read`, four matrix jobs with `continue-on-error`, and never gates
 a merge. `whr` never starts or configures Colima, so the job does it on a throwaway
-runner VM: `brew install colima docker` (Homebrew core only, the Docker CLI only for the docker runtime; plus `brew install qemu` for the qemu rows,
+runner VM: `brew install colima docker` (Homebrew core only, the Docker CLI client on every row; plus `brew install qemu` for the qemu rows,
 because Colima depends on Lima only), then `colima start --runtime "$COLIMA_RUNTIME" --vm-type ... --mount-type ...`
 with two bounded attempts. Destructive Colima commands and removals run only on a GitHub-hosted runner
 (`GITHUB_ACTIONS=true` and `RUNNER_ENVIRONMENT=github-hosted`); elsewhere they refuse.
@@ -89,13 +89,14 @@ appears; it is not measured yet.
 What it does differently (every skipped probe is recorded as `skipped: runtime containerd`, so the
 artifact shows what was not measured):
 
-- Install: no Docker CLI (`docker-cli-install` skipped); `colima nerdctl --help` is recorded to show
-  whether the nerdctl wrapper exists. `colima nerdctl install` is never run.
+- Install: the Docker CLI (client only) is installed on every row, so `whr` can answer if a `docker.sock` does
+  appear; `colima nerdctl --help` is recorded to show whether the nerdctl wrapper exists. `colima nerdctl install` is
+  never run (a test rejects it).
 - Skipped: `docker context ls`, `docker info`, pull, run, the three bind mounts, the named-volume
   round trip and the tar pipe, and the `whr` throwaway workspace, home clone, home backup and recover probes.
 - Recorded instead: `ls -la ~/.colima ~/.colima/default`, `ls -l /var/run/docker.sock`, `colima status`,
-  `colima status --json`, whether `docker.sock` and `containerd.sock` exist and are sockets (`test -S`) plus every
-  socket in the profile directory (`containerd-sockets`), the keys of `colima.yaml` (the `runtime` key and the
+  `colima status --json`, whether `docker.sock` and `containerd.sock` exist and are sockets (`test -S`) in both `~/.colima/default` and
+  `~/.colima/_lima/colima`, plus every socket directly in those two directories (`containerd-sockets`, names only), the keys of `colima.yaml` (the `runtime` key and the
   other top-level keys), `colima nerdctl -- version`, and the Lima host-agent log tail.
 - `whr`: only `doctor --json` and `ls --local --json`, both without `DOCKER_HOST`; exit codes come from the
   probe status, stdout and stderr tails from the job summary and `logs/`.
@@ -126,7 +127,7 @@ The job cap is 50 minutes, which leaves four minutes for runner setup and the po
 has a timeout, and that for each step the sum of its probe and `bounded` bounds, each plus the
 5 s watchdog grace of a call that hits its bound, fits the step timeout. The start loop counts
 twice; the cleanup counts up to 2 containers and 8 volumes. Calls on both sides of the runtime guard are counted
-(worst case, as if a step ran both branches). Per-step worst case in seconds: install 15 of 300 (the nerdctl probe),
+(worst case, as if a step ran both branches). Per-step worst case in seconds: install 15 of 300 (the nerdctl probe; `brew install` is not a bounded call),
 start 590 of 600, measure 465 of 480 (405 plus four containerd probes at 10, 10, 25 and 15 including grace),
 `whr` 325 of 360, second profile 290 of 300, cleanup 226 of 240. There is almost no slack, so a slow runner
 fails a step on its timeout rather than overrunning the job.
