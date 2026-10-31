@@ -64,7 +64,7 @@ shipped by the project, and the owner confirms each step. The design defends aga
   nothing and runs no sudo; plain `doctor` writes nothing and runs no sudo.
 - **D-8 (scope, 2026-10-20)**: the threat model above; this feature is cut to the essentials.
 - **D-9 (OD-1 to OD-5, confirmed 2026-10-20)**: OD-1 (Homebrew only plus the OrbStack cask), OD-3 (dotfile preview, backup, no silent overwrite), OD-4 (Linux enrollment kept) and OD-5 (R-40 superseded) as written in the plan. OD-2 is amended: the host catalogue is a small curated list owned by WorkHarbor (13 initial entries, FR-010; entries are added deliberately), each with a minimum version only. It is not a mirror of the BundleDock toolbox: no host install of toolbox tools, no version equality between host and toolbox, no toolbox sync. The same user experience means the same few DX tools and configs (starship, fish, git), not parity.
-- **D-10 (Colima, owner decision of 2026-10-31)**: Colima is added as a second container-runtime catalogue entry, an alternative next to
+- **D-10 (Colima, owner decision of 2026-10-31)**: Colima is added as a second container-runtime catalog entry, an alternative next to
   `orbstack`. Lima is not its own entry: it comes only as a dependency of Colima. Lima as a VM driver for Linux guests is out of scope here
   (Tart stays the VM driver for macOS guests, Feature 011). Colima is open source and installed from Homebrew core; it is not preselected
   and needs no third-party tap. FR-026 and FR-027 carry the details; the points marked author proposal there, and the open questions after
@@ -276,8 +276,7 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
 
 - **FR-026** (Colima entry): The catalog MUST gain one entry for Colima, in addition to the 13 initial entries of FR-010 (a deliberate
   owner addition under OD-2; it is not part of the initial 13, so `orbstack` stays the only preselected runtime). Its fields follow the
-  existing entries: `id` `colima`, `kind` `runtime`, title naming Colima and, as an author proposal, that installing it also installs its
-  Lima dependency, `platforms` `darwin-arm64` and `darwin-amd64`, `selected_by_default` false, `network` (host `formulae.brew.sh`, the
+  existing entries: `id` `colima`, `kind` `runtime`, title naming Colima only (the Lima dependency is not named in command or preview text, because the Feature 011 FR-022 vendor-name gate lists that name; the informative notes and the PR text mention it), `platforms` `darwin-arm64` and `darwin-amd64`, `selected_by_default` false, `network` (host `formulae.brew.sh`, the
   read-only lookup URL of the formula, purpose as the other formula entries), and `tool` with `source` = Homebrew formula `colima` from
   `homebrew/core`, `may_elevate` false, `command` `colima`, a `version_args` and `version_regex` that read the version of the `colima` command,
   and a `min_version`. No new schema property is needed: `kind` `runtime` is not tied to the OrbStack-only `version_metadata` probe, and the
@@ -306,15 +305,15 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
 
 - **FR-028** (Colima storage location, owner decision D-11; Feature 011 FR-041 gives the generic rule): The Colima profile is found from the
   discovered endpoint, not from an environment variable: an endpoint `<dir>/<profile>/docker.sock` whose directory holds `colima.yaml` is the
-  profile `<profile>` (for the documented candidate, `~/.colima/default/docker.sock` and `~/.colima/default/colima.yaml`). Doctor reads that
+  profile `<profile>` (for the documented candidate, `~/.colima/default/docker.sock`; that `colima.yaml` sits in the same directory as the socket is an assumption measured under OG-1). Doctor reads that
   file as a plain bounded file read (no `colima` process, no runtime API) and uses it as the first source. From the file `whr` reads only
-  the virtual disk size settings (the keys `disk` and `rootDisk`, in GiB): these are the maximum sizes of the VM disk, not free space and
+  the virtual disk size settings (the keys `disk` and `rootDisk`, assumed to be in GiB, OG-1): these are the maximum sizes of the VM disk, not free space and
   not used space, and they are information only (Feature 011 FR-041). The file is not known to state a host path; the host location that is
-  measured is therefore the Colima data directory that holds the profile's directory (the VM disk lives under it), and the number reported is
-  the free space of the host volume that holds that directory. Both facts (the key names and that no path is stated) and the exact subdirectory
-  are unverified here and are measured on the owner's Mac (OG-1) before this FR is implemented; if the real file states the location,
+  measured is therefore the Colima data directory that holds the profile's directory (assumed to hold the VM disk, OG-1), and the number reported is
+  the free space of the host volume that holds that directory. Every Colima fact in this FR (the file name and place, the key names and unit, that no path is stated, the data directory and when the file appears)
+  is unverified here and are measured on the owner's Mac (OG-1) before this FR is implemented; if the real file states the location,
   the stated location replaces the directory rule. The wizard determines the same location when `colima.yaml` exists and records it
-  (FR-041). Colima writes `colima.yaml` on its first `colima start`, so right after the install nothing is recorded and the report names the later `whr setup` run.
+  (FR-041). If `colima.yaml` only appears after the first start of Colima (assumed, OG-1), nothing is recorded right after the install and the report names the later `whr setup` run.
   A runtime without a readable configuration file (for OrbStack none is specified here) gives no first source: the recorded value, else `unknown`.
 
 Open questions for the owner (none is decided by this text; each states the author proposal):
@@ -421,8 +420,10 @@ Changes on approval, each through the plan and tasks, with the owner gates of FR
   only runtime, if any, are checked when this lands.
 - `specs/008-workspace-sandbox/spec.md`: wording only, "Docker VM ... (for example OrbStack)" gains Colima; no requirement changes
   (Feature 008 has no socket path or runtime list).
-- `specs/011-vm-provider/spec.md`: FR-039, FR-040 (16 to 17 entries), SC-035, the `wizard-flow` sentence in its Feature 009 amendment ("seventeenth"),
-  FR-041, SC-036, decision 21 and its changes list entries are in this change; FR-034 and FR-037 gain the explicit `--host=<endpoint>` for the build if P-2 is accepted.
+- `specs/011-vm-provider/spec.md`: this change already adds FR-041, SC-036, decision 21 and the FR-039, decision 13 and changes-list edits for the
+  storage lookup. It does not touch the count edits: FR-040 ("16 entries"), SC-035, decision 12 and the "seventeenth" sentence of its Feature 009
+  amendment count only the entries of Feature 011 and stay as they are. Colima is a separate addition (FR-026), so when both are implemented the
+  totals are 17 entries and "eighteenth" (the 011 numbers plus one); those 011 sentences are updated when the implementation tasks land. FR-034 and FR-037 gain the explicit `--host=<endpoint>` for the build if P-2 is accepted.
 - `specs/012-container-interactive-shell/spec.md`, `specs/010-host-and-workspace-panes/spec.md`: no change if OQ-1(a); amended if OQ-1(c).
 - `apps/whr/internal/doctor/` (`socket.go`, tests) is not reopened for the default profile; reopened for OQ-1(b)/(c) and for the storage lookup.
 
