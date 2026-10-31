@@ -488,18 +488,18 @@ provider and Linux hosts are unchanged.
   doctor`; they are listed for `doctor --fix`, FR-033). The free space of the
   container storage is the existing `disk.container_storage` check, whose location lookup on a macOS host is extended by FR-041
   (runtime configuration file, then a value recorded by the wizard, else `unknown`; still no runtime API call). They use only read-only list and inspect calls of the
-  container runtime on the discovered socket within the shared 5 s budget, start no container and change nothing. The VM
+  container runtime on the selected endpoint (Feature 009 FR-029) within the shared 5 s budget, start no container and change nothing. The VM
   space report of FR-032 has no further container counterpart in this increment: container space is the leftover sizes
   and `disk.container_storage`. On Linux both checks report `skipped` (reason `unsupported_platform`: the image offer and the
-  cleanup are macOS-only), and when no container socket was discovered they report `skipped` (reason `no_runtime`;
+  cleanup are macOS-only), and when no container endpoint could be selected they report `skipped` (reason `no_runtime`;
   `container.socket` already reports that case), never `fail` for those reasons.
 - **FR-040**: The owner's own package source (FR-038) carries two catalog entries, both with `selected_by_default=false`, so
-  the catalog has 16 entries: the 13 existing ones, the VM tool and these two. Each entry carries the data of the existing
+  the catalog has 16 entries on the Feature 011 text alone: the 13 existing ones, the VM tool and these two (18 with the two entries of Feature 009 FR-026 and FR-033, a container runtime entry and a container client entry). Each entry carries the data of the existing
   entries: id, kind `tool`, title, platforms, source (type formula, name, `tap` from the closed list), the version detection
   fields (command, version arguments, version pattern, minimum version), `network` (the hosts, including that of the source,
   and the purpose, as Feature 009 FR-010 requires) and `selected_by_default=false`. They are installed and upgraded only
   after explicit selection and the per-item confirmation of FR-038, with the same rules as the VM tool entry (never
-  replacing or removing a tool from another source, Feature 009 FR-008). (a) A tool for OCI tool bundles, platforms macOS on
+  replacing or removing a tool from another source, Feature 009 FR-008). An entry that was never selected leaves no record in the host profile, is offered unchecked on each `setup` run and is `skipped` with the reason `unselected` in `doctor`, never a failure (Feature 009 FR-034, owner decision D-14 (j); this settles the shared question). (a) A tool for OCI tool bundles, platforms macOS on
   arm64 only (it is not offered elsewhere). It has no hard dependency on a container runtime in the catalog; its entry
   carries a note that the preview shows: its volume subcommand needs one. (b) A tool for read-only overview and stateless
   issue and pull request work on GitHub workspaces, which needs Git 2.46 or newer; its entry carries a host requirement for
@@ -513,8 +513,8 @@ provider and Linux hosts are unchanged.
 - **FR-041** (container storage location, owner decision 21 of 2026-10-31): `disk.container_storage` MUST NOT query the container
   runtime API; Feature 006 FR-060 and the `doctor-checks.json` rule that the check makes no API call stay unchanged. The location is
   looked up in this order, and the evidence names the source used: (1) the runtime's own configuration file, where the runtime keeps a
-  freely readable one that the catalog or driver data of that runtime names; it is found from the discovered endpoint (Feature 009
-  FR-027) and read as a plain bounded file read with the same bounds as the `daemon.json` read, with no process started; (2) if the
+  freely readable one that the catalog or driver data of that runtime names; it is found from the selected endpoint (Feature 009
+  FR-027 and FR-029) and read as a plain bounded file read with the same bounds as the `daemon.json` read, with no process started; (2) if the
   file is absent, unreadable or states nothing usable, the location recorded by the setup wizard (below); (3) otherwise `unknown`
   with the reason, as today. On Linux the existing `/var/lib/docker` rule is unchanged. Free space is then measured on the host
   volume that holds the location, with the normal filesystem free-space call, against the existing threshold of `doctor-checks.json`.
@@ -527,7 +527,7 @@ provider and Linux hosts are unchanged.
   configuration yet (never started), nothing is recorded, the report says so, and a later `whr setup` run records it. Plain `doctor` and
   `doctor --fix` record nothing here (author proposal: `doctor --fix` only removes leftovers and rebuilds the image). The record name
   `container_storage`, its fields (runtime item id, profile name, home-relative location, source) and its place beside the image record of FR-034 are author proposals; the
-  read order is the owner's. Evidence redacts the home directory as in Feature 006 FR-060. A recorded value that no longer exists
+  read order is the owner's. The endpoint chosen in the wizard is a separate profile record `container_endpoint` (Feature 009 FR-030, owner decisions D-12 and D-13; the name is an author proposal in line with `container_storage`); the storage lookup uses the selected endpoint, and the wizard determines and records the storage location in the same run as a newly recorded endpoint. Evidence redacts the home directory as in Feature 006 FR-060. A recorded value that no longer exists
   is `unknown`, not `fail`. The reads of the file and the free-space call draw on the shared 5 s budget.
 
 ### Appended refusal codes
@@ -673,9 +673,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   missing or unusable image and no defined image; `container.leftovers` lists owned instances only with size or "size
   unknown"; with leftovers present it is still `pass` (leftovers are evidence only); the recorded runtime calls are read-only list and inspect calls, none starts or changes anything; and
   `doctor --fix` removes an owned container leftover only with its `--confirm container-instance:<id>`, refuses an
-  unlabeled container with `refused.foreign_object` and leaves it untouched; on Linux and with no runtime discovered the
+  unlabeled container with `refused.foreign_object` and leaves it untouched; on Linux and with no runtime endpoint selected the
   two checks report `skipped` (FR-039, FR-033).
-- **SC-035**: The shipped catalog has 16 entries; the VM tool entry and the two entries of the owner's own source carry
+- **SC-035**: The shipped catalog has 16 entries on this text alone (18 with the two entries of Feature 009 FR-026 and FR-033); the VM tool entry and the two entries of the owner's own source carry
   id, kind, title, platforms, source, version detection fields, `network` (including the source host) and
   `selected_by_default=false`; the tool for OCI tool bundles is not offered on a
   platform other than macOS on arm64 and its preview states the container runtime note; for the other tool, with a fake
@@ -729,7 +729,7 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
     distributed; NC-1 stays valid. Registry-pulled prebuilt images stay out of scope (FR-034, FR-007, SC-029).
 11. **Image definition (NEW)**: `whr` generates the definition (container build file or VM recipe) as a readable file owned
     by the user, shows it before building, builds from it, and never overwrites it without asking (FR-034).
-12. **VM tool installation (NEW)**: the VM tool becomes a catalog entry that is not preselected (decision 18 brings the catalog to 16 entries),
+12. **VM tool installation (NEW)**: the VM tool becomes a catalog entry that is not preselected (decision 18 brings the catalog to 16 entries; 18 with the two entries of Feature 009 FR-026 and FR-033),
     installed through the existing adapter only on explicit selection; a tool from another source is never replaced or
     removed (Feature 009 FR-008). This changes decision 7 (FR-031, SC-025).
 13. **Doctor and cleanup (NEW, corrected)**: on a macOS host, the same rules for both backends (container checks FR-039, container leftovers FR-033; the space report is the VM check FR-032 plus, for containers, leftover sizes and `disk.container_storage`, whose location lookup FR-041 extends without a runtime API call): read-only checks, the space report, and
@@ -777,6 +777,9 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
 22. **Doctor verdict for skipped checks unchanged (2026-10-31, NEW; resolves Open Question 1)**: not-applicable skips are NOT excluded from
     the doctor verdict. Today no host reaches `ok`; this stays. It is revisited as its own Feature 006 change when the control-plane
     checks become measurable. No verdict rule changes in this feature.
+23. **Container runtime endpoint (2026-10-31, NEW)**: decided in Feature 009 (D-12, D-13; owner decisions): the container checks, the storage lookup and the image build use the endpoint selected by the option, a config value,
+    `DOCKER_HOST` or the standard socket, in that order (the order is an author proposal); the host profile stores the resolved endpoint and, informationally, the context name; contexts are read only for detection and
+    drift, never for selection; remote targets are not supported. The record `container_endpoint` sits beside `container_storage` (FR-041).
 
 Author proposals made while recording these decisions (the owner may change them):
 
@@ -831,7 +834,7 @@ Author proposals made while recording these decisions (the owner may change them
 
 ## Open Questions
 
-No question is open for the owner at this point. Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
+No question is open for the owner at this point in this feature (the endpoint selection is decided in Feature 009 D-12 to D-14; its few remaining questions are in that feature). Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
 checks on Linux, on a host without a VM driver or runtime) stay in the doctor verdict (decision 22). (2) Container free space: no runtime API;
 the location comes from a readable runtime configuration file or a wizard record (decision 21, FR-041). NC-1 to NC-3 were decided on 2026-10-31 and are recorded
 as OD-4 to OD-6.
@@ -873,11 +876,11 @@ as OD-4 to OD-6.
   `skipped` reasons (`unsupported_platform`, `no_vm_driver`, `no_image_defined`, `no_runtime`), and amend the rule "start no
   process other than the fixed `git --version` ..." to allow the driver's fixed read-only `probe` and `list` invocations,
   and the socket-discovery note "no Docker API call is made" to allow the read-only list and inspect calls of the two
-  container checks on the discovered socket, within the shared 5 s budget (owner-gated like other contract changes).
+  container checks on the selected endpoint, within the shared 5 s budget (owner-gated like other contract changes).
 - `specs/006-whr-cli/spec.md` (Feature 009 FR-024 gates Feature 006 text, so these are named amendments): FR-060 gains the six new check ids above
   (the four `vm.*` checks and the two container checks); its wording that `container.socket` "connects and sends nothing" stays for
-  that check, while `container.image` and `container.leftovers` make read-only list and inspect calls on the discovered
-  socket; acceptance scenario 7 (plain `doctor` "started no process other than the fixed `git --version`" and the FR-055
+  that check, while `container.image` and `container.leftovers` make read-only list and inspect calls on the selected
+  endpoint; acceptance scenario 7 (plain `doctor` "started no process other than the fixed `git --version`" and the FR-055
   invocations) gains "and, when a VM driver is chosen, the driver's fixed read-only `probe` and `list` invocations of
   Feature 011 FR-018". Consequence, stated plainly: Feature 006 FR-060 already
   reports `control_plane.reachable`, `host.identity`, `host.credentials_permissions` and `service.agent` as `skipped` (and
@@ -896,13 +899,13 @@ as OD-4 to OD-6.
   FR-033, FR-034, FR-037, FR-038 and FR-040, owner-gated like AP-1 to AP-9; Feature 009 FR-024 applies and the frozen contracts
   and their tests are amended when this is implemented):
   - **Catalog**: three new tap-sourced entries (the VM tool and the two of FR-040), none preselected, so Feature 009 FR-010
-    ("exactly 13 entries", "all 13 entries preselected", now 13 of 16), the `x-initial-items` list and the
-    `x-initial-defaults.selected_by_default_false` list of the schema, and the loader tests become 16 (Feature 009 SC-012
+    ("exactly 13 entries", "all 13 entries preselected", now 13 of 16, or 13 of 18 with the two entries of Feature 009 FR-026 and FR-033), the `x-initial-items` list and the
+    `x-initial-defaults.selected_by_default_false` list of the schema, and the loader tests become 16 (18 with those two) (Feature 009 SC-012
     says only that the shipped catalog has the initial items and a minimum version per tool, with no count). The adapter
     installs and upgrades from a listed source only on explicit selection with the per-item confirmation of FR-038, and
     Feature 009 FR-008 (a tool from another source is never replaced or removed) applies; Feature 009 FR-003 gives the
     container runtime as the precedent. The wizard-flow sentence "git-config ... is not a fourteenth catalogue entry" becomes
-    "seventeenth". Each new entry carries id, kind, title, platforms, source, the version detection fields, `network` (hosts
+    "seventeenth" ("nineteenth" with the two entries of Feature 009). Each new entry carries id, kind, title, platforms, source, the version detection fields, `network` (hosts
     including the source host, and purpose) and `selected_by_default=false`.
   - **Schema (decision 17)**: `source.tap` is a required enum; it grows from `homebrew/core` and `homebrew/cask` by the two
     listed sources (the closed list, no wildcard, no pattern). The loader rule "tap matches type (formula: homebrew/core, cask:
@@ -945,7 +948,7 @@ as OD-4 to OD-6.
   - **Socket and VM statements (Feature 009 FR-002, D-3, SC-006, Boundaries)**: "the only interaction is connecting to a
     discovered socket and closing it" (Feature 009 FR-002), "it only connects to verify it" (Boundaries), "it only reads and ..."
     (D-3) and "the socket is only connected to" (Feature 009 SC-006) are amended: the container checks of FR-039 make read-only
-    list and inspect calls on the discovered socket, and the image build and the removal of owned containers touch only
+    list and inspect calls on the selected endpoint, and the image build and the removal of owned containers touch only
     containers and images that carry `whr`'s own label and change no VM setting of the container runtime. The socket is still
     never mounted into an environment. `vm_instance_remove`, `vm_reservation_release` and `image_build` touch only owned VM
     instances, records and images.
@@ -994,6 +997,6 @@ These notes name products. They are not requirements and the vendor-name gate of
   vagrant, multipass, firecracker, wsl.
 - Docker is the container runtime of Feature 008 and is outside the VM backend list of FR-022.
 - Colima (owner decision of 2026-10-31, Feature 009 FR-026 to FR-028) keeps a profile configuration file under its home directory
-  (`~/.colima/<profile>/colima.yaml`, to be measured on the owner's Mac) from which FR-041 reads the virtual disk size setting; Feature 009 FR-028 states what is read there.
+  (`~/.colima/default/colima.yaml` for the default profile, measured on the owner's Mac: Feature 009 OG-1 results M-4) from which FR-041 reads the virtual disk size setting; Feature 009 FR-028 states what is read there.
 - Running Linux tests inside WSL 2 on a Windows host is possible and is not a target (FR-029).
 <!-- informative:end -->
