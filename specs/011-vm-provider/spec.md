@@ -256,8 +256,10 @@ refusals. Every amendment is generic and additive.
 - **FR-013**: Environment filtering, identity variables and git-control variable handling are those of Feature 008
   FR-023. No host credential enters the guest.
 - **FR-014**: The default filesystem mode is `private_copy` through the driver's copy facility. A host directory may be
-  shared with the guest only as a declared Plan mount, read-only by default. Forbidden in every plan: the host home
-  directory, the secret-pattern paths of Feature 008, the primary `.git` for untrusted work, and any host socket.
+  shared with the guest only as a declared Plan mount, read-only by default. Forbidden as a shared mount in every
+  plan: the host home directory, any secret-pattern path of Feature 008, the primary `.git` for untrusted work, and any
+  host socket. The private copy follows the Feature 008 copy policy (FR-009) unchanged: a secret-pattern path is copied
+  only when named and confirmed, otherwise it is refused with `refused.copy_policy_secret_path`.
 - **FR-015**: Egress enforcement is reported `none` unless the provider's tests prove otherwise. A default guest network
   is not a claim.
 - **FR-016**: An interactive shell is offered only where `interactive_shell=pty`, with the terminal-safety rules of the
@@ -324,7 +326,8 @@ refusals. Every amendment is generic and additive.
 - **FR-028**: In this repository, a test that fails on a platform MUST NOT be silently skipped. A skip MUST name
   platform, reason and tracking reference, and a repository script MUST check it. Each failure is classified
   `product_defect`, `test_portability_defect` or `host_environment`, with evidence.
-- **FR-029**: Windows is out of scope (OD-6). CI has no Windows runner, `whr` declares no Windows host support, and no
+- **FR-029**: Windows is out of scope (OD-6). CI has no Windows runner, `whr` declares no Windows host support in any CI job, check or
+  current document (the verbatim historical copies under `docs/archive/` excepted), and no
   Windows guest provider is specified. Running Linux tests in another environment on a Windows host is not a stated
   target and carries no commitment.
 
@@ -394,8 +397,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   refused until `Remove` clears it (FR-009).
 - **SC-014**: A request for an interactive shell against `interactive_shell=none` is refused with
   `refused.interactive_unavailable`; against `pty` it follows the terminal-safety rules (FR-003, FR-016).
-- **SC-015**: Plans containing the host home directory, a secret-pattern path, the primary `.git` for untrusted work or
-  a host socket are refused; a read-write shared mount is not planned by default (FR-014).
+- **SC-015**: Plans that share the host home directory, a secret-pattern path, the primary `.git` for untrusted work or
+  a host socket as a mount are refused; a secret-pattern path in the private copy is refused unless named and confirmed
+  (Feature 008 FR-009); a read-write shared mount is not planned by default (FR-014).
 - **SC-016**: No code path or command of `whr` creates, downloads, builds, publishes or signs a base image, and no
   configuration field holds a guest credential, only a reference (FR-007). No host virtualization, network, firewall or
   security setting is changed and no backend is installed; the recorded mutating calls (start, write, stop, delete) target owned instances only, and the clone call reads the
@@ -416,8 +420,8 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   calls (FR-023).
 - **SC-023**: A missing, running, locked or unusable base image is refused with `refused.base_image_unavailable` and
   zero clone calls (FR-006).
-- **SC-024**: No CI job, check or document of this repository declares Windows host support or a Windows runner
-  (FR-029).
+- **SC-024**: No CI job, check or current document of this repository (the verbatim historical copies under
+  `docs/archive/` excepted) declares Windows host support or a Windows runner (FR-029).
 
 ## Author proposals (owner may change)
 
