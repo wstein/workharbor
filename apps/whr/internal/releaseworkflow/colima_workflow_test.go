@@ -314,6 +314,17 @@ func colimaViolations(raw string) []string {
 			}
 		}
 	}
+	// The Docker CLI is installed on every row, unconditionally: both lines sit at the top level of the install run block.
+	for _, want := range []string{"\n          brew install colima docker\n", "\n          docker --version\n"} {
+		if !strings.Contains(raw, want) {
+			out = append(out, sprintf("install line must be unconditional (top level of the run block): %s", strings.TrimSpace(want)))
+		}
+	}
+	// The socket listing is fixed: two directories, one level, sockets only.
+	if !strings.Contains(raw, `probe containerd-sockets 5 bash -c 'for d in "$HOME/.colima/default" "$HOME/.colima/_lima/colima"; do`) ||
+		!strings.Contains(raw, `find "$d" -maxdepth 1 -type s -print 2>&1; done;`) {
+		out = append(out, "containerd-sockets must list the two fixed directories with find \"$d\" -maxdepth 1 -type s -print")
+	}
 	// Every probe call carries a numeric bound as its second argument.
 	for _, l := range lines {
 		t := strings.TrimSpace(l)
@@ -433,6 +444,10 @@ func TestColimaWorkflowRulesBite(t *testing.T) {
 		{"unguarded colima delete", "on_hosted_runner && bounded 40 colima delete --force", "bounded 40 colima delete --force", "unguarded destructive command"},
 		{"unguarded destroy in the start loop", "destroy_probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "unguarded destructive command"},
 		{"colima stop unguarded", cleanupAnchor, "          unset DOCKER_HOST\n          colima stop --force\n          rm -rf", "unguarded destructive command: colima stop"},
+		{"docker CLI install made conditional", "          docker --version\n", "          if [ \"$COLIMA_RUNTIME\" = docker ]; then\n            docker --version\n          fi\n", "install line must be unconditional"},
+		{"docker CLI brew install made conditional", "          brew install colima docker\n", "          if [ \"$COLIMA_RUNTIME\" = docker ]; then\n            brew install colima docker\n          fi\n", "install line must be unconditional"},
+		{"socket scan too deep", "-maxdepth 1 -type s -print", "-maxdepth 5 -type s -print", "containerd-sockets must list"},
+		{"socket scan of another directory", "\"$HOME/.colima/_lima/colima\"; do echo", "\"$HOME/.colima/_lima\"; do echo", "containerd-sockets must list"},
 		{"docker branch probe deleted", "          probe docker-context-ls 10 docker context ls\n", "", "docker-only probe docker-context-ls is missing from the docker branch"},
 		{"docker probe in the start step", "          started=false\n", "          probe docker-version 5 docker version\n          started=false\n", "docker command in a probe outside the guarded docker branch: probe docker-version"},
 		{"nerdctl install", "          probe colima-nerdctl-help 10 colima nerdctl --help\n", "          probe colima-nerdctl-help 10 colima nerdctl --help\n          probe x 60 colima nerdctl install\n", "must not run nerdctl install"},
