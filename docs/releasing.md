@@ -20,6 +20,24 @@ provenance and writes `SHA256SUMS`.
   `whr_<version without v>_<os>_<arch>.tar.gz`.
 - Never move or re-create a tag. A wrong tag is abandoned and the next version used.
 
+## Release notes
+
+There is no CHANGELOG file. `.github/scripts/release-notes.sh` generates the notes from the commit
+subjects between the previous release tag and the tagged commit, and keeps them short:
+
+- **Features (N)**: every `feat` commit.
+- **Breaking changes (N)**: every commit with `!` after its type (for example `docs!:` or `fix!:`)
+  that is not a `feat`, so nothing breaking is hidden. A `feat!` stays under Features. Only the
+  subject is read; a `BREAKING CHANGE:` footer alone is not detected, so mark the subject with `!`.
+- **Fixes (N)**: every `fix` commit, in a collapsed `<details>` block.
+- **Other changes (N)**: `perf` and `refactor` commits, only when there are any.
+- A closing line counts the documentation commits and all remaining commits (tests, style, build, CI,
+  chores, reverts and subjects that are not Conventional Commits) without listing them, and links the
+  full comparison `https://github.com/wstein/workharbor/compare/<previous>...<tag>`.
+
+A group without commits is omitted. The first release prints "First release." and a range without
+commits prints "No changes."
+
 ## Shipped platforms
 
 linux/amd64, linux/arm64 and darwin/arm64, each built with CGO disabled and run natively on a
