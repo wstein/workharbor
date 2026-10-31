@@ -142,7 +142,7 @@ harness and assert the exact argument vectors, the exit codes and the refusals. 
    runs, **Then** it exits 64 before contacting Docker; no automation path exists.
 7. **Given** a Docker socket that is unreachable or a daemon that does not answer within the 5-second budget of FR-066, **When**
    the command runs, **Then** it exits 68 with the doctor remediation link, and never falls back to the control plane.
-8. **Given** a discovered endpoint that is not `unix://` (for example `DOCKER_HOST=tcp://...` or `ssh://...`), **When** the command runs, **Then** it exits 68 (ADR 0013 conflict, as FR-063 uses for an unsupported
+8. **Given** a selected endpoint that is not `unix://` (for example `DOCKER_HOST=tcp://...` or `ssh://...`), **When** the command runs, **Then** it exits 68 (ADR 0013 conflict, as FR-063 uses for an unsupported
    platform), runs no `docker inspect` and no `docker exec`, and names the endpoint scheme only.
 9. **Given** a running shell, **When** the owner presses ctrl-p, **Then** the shell receives it (Docker's default detach sequence
    ctrl-p ctrl-q does not apply); only the fixed sequence of FR-004 detaches the client, the start notice names that sequence, and
@@ -273,12 +273,15 @@ multiplexer nested in their host pane.
   credentials, and it MUST NOT be selected implicitly: without `--local`, `shell` keeps the Feature 006 behaviour (exit 64 until the
   owner API exists). `--local` MUST NOT be accepted by `console`, `ssh` or `agent attach`, except that `console --local` is refused as
   FR-011 states.
-- **FR-002**: Local mode MUST run only on the Docker host and MUST use the local daemon found by the socket discovery rules of
-  `whr doctor` (FR-060), within the 5-second budget and fixed-argument rule of FR-066. The discovered endpoint MUST be a `unix://`
+- **FR-002**: Local mode MUST run only on the Docker host and MUST use the local daemon at the endpoint selected by the rule of
+  [Feature 009](../009-host-setup-wizard/spec.md) FR-029 (owner decisions D-12 and D-13 of 2026-10-31, which amend this requirement): the option `--container-endpoint`, else the
+  config value of the host profile, else `DOCKER_HOST`, else `/var/run/docker.sock`. The documented candidate list of `whr doctor` (Feature 006 FR-060) is no longer a default search. Selection runs within the 5-second budget and the
+  fixed-argument rule of FR-066 and never prompts; with no usable endpoint it exits 68 (Feature 009 FR-032). The selected endpoint MUST be a `unix://`
   socket; any other scheme (`tcp://`, `ssh://`, `npipe://`) is refused with exit 68 before any
   `docker` call (ADR 0013: conflict or wrong state; FR-063 uses 68 for an unsupported platform). The endpoint MUST be passed
-  explicitly as `--host=<endpoint>` to every `docker` call, so discovery, inspect and exec use the same daemon. FR-060 discovery reads only `DOCKER_HOST` and the documented socket list, never a
-  docker context, and the explicit `--host` makes contexts irrelevant. No remote network endpoint is contacted.
+  explicitly as `--host=<endpoint>` to every `docker` call, so discovery, inspect and exec use the same daemon. Docker contexts are never used for selection or connection: no context indirection exists, and the explicit `--host`
+  makes contexts irrelevant. Contexts are read, as plain files and never through the `docker` command, only by `setup` and `doctor` for detection and drift comparison (Feature 009 FR-031 and FR-032); this local mode reads none.
+  No remote network endpoint is contacted, and remote targets are an explicit non-goal.
 - **FR-003**: The selector `<ws>` MUST be resolved in this order. (1) Among all containers returned by FR-066 discovery, whatever their state,
   match by full container name or by a unique prefix of at least 12 hex characters of the ID; zero matches, or a name that matches only
   a container without a recognised label, exit 65; several matches exit 64 and list the candidates. (2) Only then check the state of the
@@ -483,7 +486,7 @@ This feature amends Feature 006 as follows. The same sentences are applied to
 
 ## Dependencies
 
-- FR-066 discovery (label rules, 5-second budget, socket discovery of FR-060) must exist before `shell --local`; the discovery code
+- FR-066 discovery (label rules, 5-second budget, endpoint selection of Feature 009 FR-029, which replaces the socket discovery of FR-060) must exist before `shell --local`; the discovery code
   is shared, not copied. Feature 006's wave order and the owner's task approval govern when this is built; this text grants no
   implementation or build authority.
 
