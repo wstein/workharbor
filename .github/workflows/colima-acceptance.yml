@@ -6,10 +6,15 @@
 # Runner VMs are throwaway: nothing here touches an owner machine. Whether the Apple Silicon row (vz) can start
 # at all (nested virtualization on GitHub arm runners) is not known; the summary says so either way.
 #
-# Time budget (minutes), job cap 50 (five minutes of slack for runner setup and post steps); the step timeouts below sum to 45 and a test pins: sum <= cap, every step has a
+# The fourth row starts Colima with --runtime containerd and measures what whr meets there (is there a docker.sock,
+# what does colima.yaml say, which sockets exist, what do doctor and ls --local report). Every probe that needs a
+# Docker daemon is skipped for it and recorded as `skipped: runtime containerd`.
+#
+# Time budget (minutes), job cap 50 (four minutes of slack for runner setup and post steps); the step timeouts below sum to 46 and a test pins: sum <= cap, every step has a
 # timeout, and for each step the probe/bounded bounds plus the watchdog grace (5 s per call, worst case) fit it. The start
-# loop counts twice; the cleanup counts up to 2 containers and 8 volumes.
-#   checkout 1, setup-go 2, build 2, helpers 1, install 5, start 10, measure 7, whr 6, extra profile 5,
+# loop counts twice; the cleanup counts up to 2 containers and 8 volumes. Calls on both sides of the runtime guard count
+# (worst case, as if a step ran both branches): measure 465 s of 480, install 15 s of 300.
+#   checkout 1, setup-go 2, build 2, helpers 1, install 5, start 10, measure 8, whr 6, extra profile 5,
 #   cleanup 4, summary 1, upload 1.
 # Every probe is bounded by a process-group watchdog (TERM, then KILL): Go programs ignore SIGALRM, so an alarm is
 # not a bound. Destructive Colima commands and removals run only on a GitHub-hosted runner.
@@ -35,20 +40,29 @@ jobs:
             runner: macos-15-intel
             vm_type: qemu
             mount_type: sshfs
+            runtime: docker
             extra_profile: 'true'
           - name: intel-qemu-9p
             runner: macos-15-intel
             vm_type: qemu
             mount_type: 9p
+            runtime: docker
           - name: arm-vz-virtiofs
             runner: macos-15
             vm_type: vz
             mount_type: virtiofs
+            runtime: docker
+          - name: intel-containerd-qemu-sshfs
+            runner: macos-15-intel
+            vm_type: qemu
+            mount_type: sshfs
+            runtime: containerd
     env:
       MATRIX_NAME: ${{ matrix.name }}
       RUNNER_LABEL: ${{ matrix.runner }}
       VM_TYPE: ${{ matrix.vm_type }}
       MOUNT_TYPE: ${{ matrix.mount_type }}
+      COLIMA_RUNTIME: ${{ matrix.runtime }}
       # The alpine digest that whr pins in apps/whr/internal/localdocker/tools.Dockerfile: whr already uses it, so
       # pulling it proves a reference whr depends on and warms the layer cache for the home clone build. hello-world
       # is not used by whr and would prove less.
@@ -162,6 +176,10 @@ jobs:
             fi
             printf '%s\t%s\t%s\t%s\n' "$p_name" "$p_status" "$((p_end - p_start))" "$p_name" >>"$OUT/probes.tsv"
           }
+          # skipped_runtime NAME: record a probe that does not apply to the runtime of this row.
+          skipped_runtime() {
+            printf '%s\t%s\t%s\t%s\n' "$1" "skipped: runtime $COLIMA_RUNTIME" 0 "$1" >>"$OUT/probes.tsv"
+          }
           # skipped NAME REASON: record a probe that could not run.
           skipped() {
             printf '%s\t%s\t%s\t%s\n' "$1" "failed: $2" 0 "$1" >>"$OUT/probes.tsv"
@@ -222,20 +240,31 @@ jobs:
           TAR
           chmod 0755 "$RUNNER_TEMP/colima-bindtest.sh" "$RUNNER_TEMP/colima-tartest.sh"
           printf 'false\n' >"$out/started"
-      - name: Install Colima and the Docker CLI (Homebrew core only)
+      - name: Install Colima and, for the docker runtime, the Docker CLI (Homebrew core only)
         shell: bash
         timeout-minutes: 5
         run: |
           set -eu
           brew --version
-          brew install colima docker
+          if [ "$COLIMA_RUNTIME" = docker ]; then
+            brew install colima docker
+          else
+            brew install colima
+          fi
           # colima depends on lima only; the qemu VM type needs qemu itself.
           if [ "$VM_TYPE" = qemu ]; then
             brew install qemu
             qemu-img --version
           fi
           colima version
-          docker --version
+          if [ "$COLIMA_RUNTIME" = docker ]; then
+            docker --version
+          else
+            # No Docker CLI for a non-docker runtime. Record whether the nerdctl wrapper exists; never run `colima nerdctl install`.
+            . "$RUNNER_TEMP/colima-lib.sh"
+            skipped_runtime docker-cli-install
+            probe colima-nerdctl-help 10 colima nerdctl --help
+          fi
       - name: Start Colima (the job is the owner here)
         id: start
         shell: bash
@@ -248,7 +277,7 @@ jobs:
           probe pre-start-colima-dirs 15 bash -c 'for d in "$HOME/.colima" "$HOME/.colima/default" "$HOME/.config/colima"; do if test -d "$d"; then echo "RESULT exists dir=$d"; ls -la "$d"; else echo "RESULT absent dir=$d"; fi; done; for f in "$HOME/.colima/default/colima.yaml" "$HOME/.config/colima/default/colima.yaml"; do if test -f "$f"; then echo "RESULT exists file=$f"; else echo "RESULT absent file=$f"; fi; done'
           started=false
           for attempt in 1 2; do
-            probe "colima-start-$attempt" 200 colima start --runtime docker --vm-type "$VM_TYPE" --mount-type "$MOUNT_TYPE" --cpu 2 --memory 4 --disk 30
+            probe "colima-start-$attempt" 200 colima start --runtime "$COLIMA_RUNTIME" --vm-type "$VM_TYPE" --mount-type "$MOUNT_TYPE" --cpu 2 --memory 4 --disk 30
             if [ "$PROBE_RC" -eq 0 ]; then
               started=true
               break
@@ -263,7 +292,7 @@ jobs:
           printf '%s\n' "$started" >"$OUT/started"
           echo "colima started: $started"
           {
-            echo "### Colima start ($MATRIX_NAME on $RUNNER_LABEL, vm-type $VM_TYPE, mount-type $MOUNT_TYPE)"
+            echo "### Colima start ($MATRIX_NAME on $RUNNER_LABEL, runtime $COLIMA_RUNTIME, vm-type $VM_TYPE, mount-type $MOUNT_TYPE)"
             if [ "$started" = true ]; then
               echo "Colima STARTED."
             else
@@ -273,7 +302,7 @@ jobs:
       - name: Measure the runtime
         if: ${{ always() }}
         shell: bash
-        timeout-minutes: 7
+        timeout-minutes: 8
         run: |
           set -eu
           . "$RUNNER_TEMP/colima-lib.sh"
@@ -290,6 +319,18 @@ jobs:
           probe df-colima-volume 5 df -k "$HOME/.colima"
           # Where is the VM disk, and how big is it? Names and sizes only (OG-1, FR-028).
           probe vm-disk-location 15 bash -c 'du -sk "$HOME/.colima/_lima" "$HOME/.colima/_lima"/* 2>&1; find "$HOME/.colima/_lima" -maxdepth 3 -type f -size +1M -exec ls -ls {} + 2>&1; df -k "$HOME/.colima/_lima" 2>&1'
+          if [ "$COLIMA_RUNTIME" != docker ]; then
+            # Not docker: no Docker daemon is expected, so every docker-dependent probe is recorded as skipped and the layout is
+            # measured instead (the shared probes above already recorded ls, docker.sock next to colima.yaml and the colima.yaml keys).
+            for n in docker-context-ls docker-info docker-pull docker-run-pinned bind-runner-temp bind-home bind-tmpdir volume-roundtrip tar-pipe-200mib; do
+              skipped_runtime "$n"
+            done
+            probe containerd-sockets 5 bash -c 'd="$HOME/.colima/default"; for n in docker.sock containerd.sock; do if test -e "$d/$n"; then e=yes; else e=no; fi; if test -S "$d/$n"; then s=yes; else s=no; fi; echo "RESULT $n exists=$e socket=$s"; done; echo "sockets in $d:"; find "$d" -maxdepth 1 -type s -exec ls -l {} + 2>&1; true'
+            probe colima-yaml-top-level-keys 5 bash -c 'grep -E "^[A-Za-z][A-Za-z0-9_]*:" "$HOME/.colima/default/colima.yaml"'
+            probe colima-nerdctl-version 20 colima nerdctl -- version
+            probe lima-host-agent-log-tail 10 bash -c 'for f in "$HOME/.colima/_lima/colima/ha.stderr.log" "$HOME/.colima/_lima/colima/ha.stdout.log"; do echo "== $f"; if test -f "$f"; then tail -n 80 "$f"; else echo absent; fi; done; true'
+            exit 0
+          fi
           if [ "$started" != true ]; then
             for n in docker-context-ls docker-info docker-pull docker-run-pinned bind-runner-temp bind-home bind-tmpdir volume-roundtrip tar-pipe-200mib; do
               skipped "$n" "colima did not start"
@@ -324,10 +365,17 @@ jobs:
           unset DOCKER_HOST
           whr="$RUNNER_TEMP/whr"
           started=$(cat "$OUT/started" 2>/dev/null || echo false)
-          probe whr-env 5 bash -c 'echo "DOCKER_HOST=${DOCKER_HOST-unset}"; echo "COLIMA_HOME=${COLIMA_HOME-unset}"'
+          probe whr-env 5 bash -c 'echo "DOCKER_HOST=${DOCKER_HOST-unset}"; echo "COLIMA_HOME=${COLIMA_HOME-unset}"; echo "COLIMA_RUNTIME=$COLIMA_RUNTIME"'
           # Doctor and ls need no daemon to report; they show what whr finds on its own.
           probe whr-doctor-json 10 "$whr" doctor --json
           probe whr-ls-local-json 10 "$whr" ls --local --json
+          if [ "$COLIMA_RUNTIME" != docker ]; then
+            # Not docker: doctor and ls --local above are the whole measurement; the throwaway workspace needs a Docker daemon.
+            for n in whr-throwaway-setup whr-ls-local-json-throwaway whr-home-clone-dry-run whr-home-clone-apply whr-home-clone-verify whr-home-backup-apply whr-home-backup-verify whr-recover-dry-run; do
+              skipped_runtime "$n"
+            done
+            exit 0
+          fi
           if [ "$started" != true ]; then
             for n in whr-throwaway-setup whr-ls-local-json-throwaway whr-home-clone-dry-run whr-home-clone-apply whr-home-clone-verify whr-home-backup-apply whr-home-backup-verify whr-recover-dry-run; do
               skipped "$n" "colima did not start"
@@ -435,7 +483,7 @@ jobs:
                                  'stderr': tail(out / 'logs' / (name + '.err'), 2000)})
           started_file = out / 'started'
           started = started_file.read_text().strip() if started_file.exists() else 'unknown'
-          keys = ('MATRIX_NAME', 'RUNNER_LABEL', 'VM_TYPE', 'MOUNT_TYPE', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA')
+          keys = ('MATRIX_NAME', 'RUNNER_LABEL', 'COLIMA_RUNTIME', 'VM_TYPE', 'MOUNT_TYPE', 'GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT', 'GITHUB_SHA')
           meta = {key.lower(): os.environ.get(key, '') for key in keys}
           meta['colima_started'] = started
           (out / 'results.json').write_text(json.dumps({'meta': meta, 'probes': probes}, indent=2) + '\n')
@@ -443,8 +491,8 @@ jobs:
           fence = '~~~~'
           lines = ['## Colima acceptance: %s' % meta['matrix_name'],
                    '',
-                   'Runner `%s`, vm-type `%s`, mount-type `%s`. **Colima started: %s.**' % (
-                       meta['runner_label'], meta['vm_type'], meta['mount_type'], started)]
+                   'Runner `%s`, runtime `%s`, vm-type `%s`, mount-type `%s`. **Colima started: %s.**' % (
+                       meta['runner_label'], meta['colima_runtime'], meta['vm_type'], meta['mount_type'], started)]
           if started != 'true':
               lines += ['', '**Colima did NOT start, or the start step did not finish (timeout or crash).** '
                         'See the colima-start probes and the Lima host-agent tail below.']
