@@ -32,7 +32,10 @@ This feature defines:
    capabilities a VM needs;
 3. a **VM provider** built on a vendor-neutral **driver port**, with disposable clones of an owner-supplied base image;
 4. conformance cases and refusal codes for the above; and
-5. a first increment that is library-level and offline, using a fake driver.
+5. a first increment that is library-level and offline, using a fake driver; and
+6. a minimal macOS host surface that stays read-only or removes owned leftovers only: a VM readiness summary at the end of
+   `whr setup` (FR-031), a space report in `whr doctor` (FR-032) and a cleanup of owned leftovers in `whr doctor --fix`
+   (FR-033).
 
 ### Terms
 
@@ -78,11 +81,13 @@ This feature defines:
   contract had no platform dimension. A1 is generic. After it, adding a driver changes no contract text.
 - `whr` does not create, download, build, publish, sign or redistribute base images (FR-007).
 - `whr` does not install a VM backend and changes no host virtualization, network, firewall or security setting
-  (FR-017). Installing a backend on macOS would be a separate Feature 009 decision.
+  (FR-017). Installing a backend on macOS would be a separate Feature 009 decision. `whr setup` and `whr doctor` only
+  check and guide (FR-031, FR-032); `whr doctor --fix` removes owned leftovers only (FR-033).
 - Not in this increment (each needs its own specification): a Windows guest provider, Windows as a product target of
   `whr` (a different tool would be a different specification), a driver for a Linux host, remote VM hosts, snapshots
   and rollback, egress enforcement, credential mediation, a wrapper command for test runs (needs an ADR 0014
-  amendment), and CI for the separate BundleDock and Anchorage repositories.
+  amendment), CI for the separate BundleDock and Anchorage repositories, and the items listed under "Future work (not
+  started)".
 - Windows is out of scope (FR-029). The [container runtime](../../docs/container-runtime.md) statement on Windows hosts
   is unchanged.
 - No claim is made of universal containment, performance or portability. Every protection is stated with its scope.
@@ -139,7 +144,9 @@ tested by the provider check of FR-009 (SC-013).
 **Acceptance Scenarios**:
 
 1. **Given** `guest_os=windows` and a provider reporting `darwin`, **Then** `refused.guest_os_unavailable`.
-2. **Given** a provider at its concurrency limit, **Then** `refused.concurrency_limit_reached` and nothing is created.
+2. **Given** a provider whose declared concurrency limit has status `enforced` and is already reached, **Then**
+   `refused.concurrency_limit_reached` and nothing is created. A provider that states no limit (`unknown`) or whose limit
+   is not `enforced` applies none, so no concurrency refusal occurs (FR-009).
 3. **Given** a request for `ro_bdock` tool mounts and a guest that cannot mount them, **Then**
    `refused.tool_mounts_unavailable`.
 
@@ -153,6 +160,7 @@ suite passes unchanged, and no production contract, data model or admission file
 ### User Story 5 - Interrupted run leaves nothing behind (Priority: P3)
 
 A run is canceled or the host process is killed mid-run. Cleanup removes owned instances only and reports leftovers.
+On the owner's Mac, `whr doctor --fix` can remove those owned leftovers after a preview (FR-033).
 
 **Independent Test**: fake driver with injected failures at each step. After `Remove`, no owned instance remains, results
 are retained, and leftovers are listed by name and id.
@@ -165,7 +173,10 @@ are retained, and leftovers are listed by name and id.
 - Clone succeeds and start fails; the guest never becomes reachable within the deadline.
 - The host sleeps or the VM backend restarts during a run; the driver's state differs from the provider's record.
 - A foreign VM has the reserved name prefix but no provider record.
-- Two runs are requested at once with a limit of one (FR-009: exactly one reservation succeeds).
+- Two runs are requested at once with an enforced declared limit of one (FR-009: exactly one reservation succeeds). With
+  no limit stated both are created, and if the driver or host then refuses the second (for example a license cap of the
+  operating system vendor), that is a failed `Create` under FR-010, not `refused.concurrency_limit_reached`.
+- A leftover clone holds results that were never exported when `whr doctor --fix` is run (FR-033).
 - The guest has no execution agent, so `exec` is unavailable and capability `exec_argv` is `unavailable`.
 - An argument is empty, contains a newline, or is 64 KiB long.
 - Disk is full during clone.
@@ -193,8 +204,8 @@ refusals. Every amendment is generic and additive.
 - **FR-003**: Amendment A1 MUST be additive and name no vendor. The container provider reports these values, chosen so
   that no existing row can change: `guest_os=linux` and `guest_arch` equal to the architecture the container runtime
   reports (`unknown` if it cannot be probed; only a request naming `guest_arch` is then affected); `base_image=none`;
-  `concurrency_limit=unknown` (FR-009 is a provider check of the VM provider, not an admission row, so `unknown` cannot
-  fail any existing row); `exec_argv=native` with status `enforced`, proven by conformance case 6 (Feature 008 FR-029 and case 6 already require
+  `concurrency_limit=unknown` (FR-009 is a provider check of the VM provider, not an admission row, and for `unknown` no
+  limit applies, so it cannot fail any existing row); `exec_argv=native` with status `enforced`, proven by conformance case 6 (Feature 008 FR-029 and case 6 already require
   argv as data);
   `ownership_mechanism=native_labels`; `interactive_shell=none` (the Feature 008 contract defines no interactive
   shell; conservative). Each of these values has status `enforced`, except `guest_arch` when it is `unknown`
@@ -244,16 +255,22 @@ refusals. Every amendment is generic and additive.
   name or provider record is missing or disagrees, or the provider's `ownership_mechanism` is not `enforced`". For
   the container provider, whose `ownership_mechanism` is `native_labels` with status `enforced` (FR-003), its meaning
   is unchanged. No new code is needed.
-- **FR-009**: The provider MUST declare a concurrency limit derived from the driver and the host. Concurrency is runtime
-  state, so it is not an `Admit` input: `Admit` stays a pure function of request and capabilities (Feature 008 FR-013).
-  The limit is an explicit provider check immediately before the driver is touched in `Create`. It MUST be atomic: under
-  an exclusive lock on the local record store the provider counts owned instances that hold resources, and if the count
-  is below the limit it writes a reservation record in the same locked step; otherwise it refuses with
-  `refused.concurrency_limit_reached` and makes no driver call. A reservation counts toward the limit while pending and records the owner process id, start time and a deadline. Under
-  the same lock, a reservation whose process is gone or whose deadline passed is reclaimed if no matching driver
-  instance exists; if one exists it becomes a leftover for `Remove` and keeps counting toward the limit until `Remove` clears it. The reservation is released when `Create` fails and
-  on `Remove`. Only owned instances count; foreign running VMs are reported as information. A driver that declares
-  `unknown`, or a limit whose status is not `enforced`, is treated as a limit of one.
+- **FR-009**: The provider MUST declare a concurrency limit derived from the driver and the host: a non-negative integer,
+  or `unknown` when the driver does not state one. A limit applies only when it is an integer with status `enforced`.
+  When the value is `unknown`, or its status is not `enforced`, no limit is applied (unlimited) and the provider never
+  refuses with `refused.concurrency_limit_reached`. Concurrency is runtime state, so it is not an `Admit` input: `Admit`
+  stays a pure function of request and capabilities (Feature 008 FR-013). The provider takes an exclusive lock on the local
+  record store immediately before the driver is touched in `Create`. Under that lock, when a limit applies, the provider
+  counts owned instances that hold resources; if the count is below the limit it writes a reservation record in the same
+  locked step, otherwise it refuses with `refused.concurrency_limit_reached` and makes no driver call (the check is
+  atomic). A limit of 0 refuses every `Create`. When no limit applies, the provider still writes the reservation record in
+  the locked step, without a count check, so that a killed `Create` leaves a traceable record. A reservation records the
+  owner process id, start time and a deadline; while pending it counts toward an applicable limit. Under the same lock, a
+  reservation whose process is gone or whose deadline passed is reclaimed if no matching driver instance exists; if one
+  exists it becomes a leftover for `Remove` and, when a limit applies, keeps counting toward it until `Remove` clears it.
+  The reservation is released when `Create` fails and on `Remove`. Only owned instances count; foreign running VMs are
+  reported as information. If the driver or host refuses a `Create` for a reason of its own, it is a failed `Create`
+  (FR-010).
 - **FR-010**: An instance is `ready` only after guest reachability is confirmed within a bounded deadline. A failed
   `Create` or start MUST remove only what it created and report leftovers by name and id.
 - **FR-011**: `Cancel` and `Remove` MUST be bounded, idempotent, stop gracefully and then force within the deadline,
@@ -286,9 +303,10 @@ refusals. Every amendment is generic and additive.
   security or system settings, and MUST NOT install or ship a VM backend. The user installs the backend and holds its
   license, as with the container runtime prerequisite (OD-5).
 - **FR-018**: `whr doctor` MUST gain read-only checks `vm.backend` (present, version, supported host), `vm.base_image`
-  (the named image exists) and `vm.limit` (reports the declared concurrency limit, the number of owned instances and pending reservations from
-  the local records, stale reservations, and whether a `Create` would be refused now). They read local records and use only the driver's
-  `probe` and `list`; they never start a VM.
+  (the named image exists) and `vm.limit` (reports the declared concurrency limit, or that no limit is stated or enforced and therefore none is
+  applied, the number of owned instances and pending reservations from the local records, stale reservations, and
+  whether a `Create` would be refused now for the concurrency limit, which is never the case when no limit applies). They read local records and use only the driver's
+  `probe` and `list`; they never start a VM. A fourth read-only check, `vm.space`, is added by FR-032.
 
 **Test run**
 
@@ -351,13 +369,44 @@ refusals. Every amendment is generic and additive.
 - **FR-030**: `guest_os=windows` MUST remain a reserved, representable value in the contract. No provider declares it,
   and a request for it MUST be refused with `refused.guest_os_unavailable` until one does.
 
+**Host surface on macOS (check, guide, clean up owned leftovers)**
+
+These requirements amend Feature 009 and `whr doctor` as listed under "Changes to existing documents". The container
+provider and Linux hosts are unchanged.
+
+- **FR-031**: On a macOS host, `whr setup` MUST end with a read-only "VM readiness" summary built from the same read-only
+  checks as `whr doctor` (`vm.backend`, `vm.base_image`, `vm.limit`, and the report of FR-032), using the same fixed
+  read-only `probe` and `list` invocations of the chosen driver within the shared 5 s budget of the doctor checks, and
+  starting no VM. For each check that is not `pass` it MUST print the exact next steps the user performs: how to install and
+  license the chosen VM tool (the user's own task, NC-2/OD-5, the documented steps of the driver, FR-024) and the documented
+  recipe for building the base image locally (FR-007, OD-4). `whr setup` MUST NOT install a VM tool, build or download a base
+  image, run sudo for this purpose, or add a catalogue entry: the Feature 009 catalogue stays at 13 entries. The summary is
+  not a plan step and writes nothing, so it also appears when the answer is `no` and under `--dry-run`. Linux `whr setup`
+  is unchanged.
+- **FR-032**: `whr doctor` MUST gain a read-only check `vm.space` and report in it: the disk space taken by owned leftover
+  instances, and the free disk space on the volume that holds the VM storage. It MUST report `fail` when that free space
+  is below the size of the base image, and MUST say "size unknown" and report `unknown` rather than guess when the driver
+  cannot state a size or the storage location. Sizes and the storage location are optional fields in the results of the
+  existing driver `probe` and `list` (no new port operation, FR-021); the free space is measured by the host with a file
+  system statistic. The check stays inside the shared 5 s budget and starts no VM.
+- **FR-033**: On a macOS host, `whr doctor --fix` MUST remove owned leftovers only: instances left by a killed or canceled
+  run, and stale reservations (FR-009), through the provider's `Remove` with the ownership check of FR-008 on every item. A
+  foreign or unlabeled object MUST be refused with `refused.foreign_object` and never touched, an instance of a run that
+  is still active is not a leftover, and nothing else is repaired. It uses the mechanics of Feature 009 FR-016, FR-007 and
+  FR-017: the repair is a modify-class step (it removes something present), so without `--yes` it prints the preview
+  (name, id and size if known, per item) and exits 70, and with `--yes` each item is removed only with its own
+  `--confirm <id>`. The preview MUST show, for each leftover, whether its results were exported; a stopped or failed clone
+  whose results were not exported is marked "results not exported" with the Export step to run first (FR-011). Because
+  nothing is removed before the preview and a missing confirmation exits 70, the owner always sees this before any
+  removal, and `--yes` alone never removes an item. Linux `whr doctor --fix` still refuses (Feature 009 FR-001).
+
 ### Appended refusal codes
 
 | Code | When |
 | --- | --- |
 | `refused.guest_os_unavailable` | the provider does not declare the requested guest operating system as `enforced` |
 | `refused.guest_arch_unavailable` | the provider does not declare the requested guest architecture as `enforced` |
-| `refused.concurrency_limit_reached` | creating the instance would exceed the effective concurrency limit of FR-009: the declared integer limit when its status is `enforced`, otherwise one |
+| `refused.concurrency_limit_reached` | creating the instance would exceed the declared integer concurrency limit of FR-009 whose status is `enforced`; it never fires for `unknown` or for a limit that is not `enforced` |
 | `refused.tool_mounts_unavailable` | `ro_bdock` is requested and `tool_mounts` is not `ro_bdock` with status `enforced` |
 | `refused.base_image_unavailable` | no base image is named for a provider whose `base_image` is not `none`, or the named base image does not exist, is running or locked, is not usable as a clone source, or `base_image` is not `read_only_clone_source` with status `enforced` |
 | `refused.exec_argv_unavailable` | `exec_argv` is `unavailable` or not `enforced`; every `Exec` under every profile is refused |
@@ -369,7 +418,7 @@ Codes are appended to `refusal-codes.json` of Feature 008 and never reused or re
 ### Key Entities *(include if feature involves data)*
 
 BaseImageRef, DisposableClone, OwnershipRecord, GuestPlatform (`guest_os`, `guest_arch`), VMDriver (port),
-DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
+DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyReservation, VMReadinessSummary, LeftoverCleanupPlan.
 
 ## Success Criteria *(mandatory)*
 
@@ -405,15 +454,19 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   SHOULD or MAY inside a marked region (FR-022).
 - **SC-010**: The `vm.*` doctor checks start no VM and no process other than the driver's declared read-only `probe`
   and `list`: the recorded driver calls are only those, no `exec` or `start` is recorded, and the file tree is
-  unchanged (FR-018).
+  unchanged. With `unknown` or a non-`enforced` limit, `vm.limit` reports that no limit applies and that a `Create` would
+  not be refused for concurrency (FR-018).
 - **SC-011**: `make check` passes offline with no VM backend installed (FR-026).
 - **SC-012**: The skip-record check fails a skip that lacks platform, reason or tracking reference, and passes a complete
   one (FR-028).
-- **SC-013**: Two simultaneous `Create` requests with a limit of one yield exactly one instance and one
+- **SC-013**: With an `enforced` declared limit of one, two simultaneous `Create` requests yield exactly one instance and one
   `refused.concurrency_limit_reached`; the refused one made zero driver calls; the reservation is released on failed
-  create and on `Remove`; a reservation left by a killed `Create` is reclaimed and the next `Create` succeeds; a stale reservation with a matching driver instance keeps counting and the next `Create` is
-  refused until `Remove` clears it; a provider declaring `unknown` or a limit that is not `enforced` admits exactly one owned
-  instance and the second `Create` is refused with `refused.concurrency_limit_reached` (FR-009).
+  create and on `Remove`; a reservation left by a killed `Create` is reclaimed and the next `Create` succeeds; a stale
+  reservation with a matching driver instance keeps counting and the next `Create` is refused until `Remove` clears it.
+  With the value `unknown`, or an integer limit whose status is not `enforced`, no limit applies: the second `Create` is
+  not refused for concurrency, no `refused.concurrency_limit_reached` is ever produced, and a reservation record is still
+  written and a stale one is still handled as a leftover. A limit of 0 with status `enforced` refuses every `Create`
+  (FR-009).
 - **SC-014**: A request for an interactive shell against `interactive_shell=none`, or against `pty` that is not `enforced`, is
   refused with `refused.interactive_unavailable`; against an `enforced` `pty` it follows the terminal-safety rules (FR-003, FR-016).
 - **SC-015**: Plans that share the host home directory, a secret-pattern path, the primary `.git` for untrusted work or
@@ -443,18 +496,74 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   and zero clone calls (FR-006).
 - **SC-024**: No CI job, check or current document of this repository (the verbatim historical copies under
   `docs/archive/` excepted) declares Windows host support or a Windows runner (FR-029).
+- **SC-025**: On a macOS host, the end of `whr setup` shows the VM readiness summary with the fake driver in each state
+  (no driver chosen, backend missing, base image missing, all ready): the exact next steps appear for every check that
+  is not `pass`; the recorded driver calls are only `probe` and `list`; no VM is started, nothing is installed, built,
+  downloaded or elevated, the catalogue still has 13 entries, and the file tree is unchanged by the summary. It also
+  appears for the answer `no` and for `--dry-run`. Linux `whr setup` output is unchanged (FR-031).
+- **SC-026**: With the fake driver, `vm.space` reports the space of owned leftovers and the free space of the storage volume;
+  it reports `fail` when free space is below the base image size, `unknown` with "size unknown" when the driver states no
+  size or location, and passes otherwise. The recorded driver calls are only `probe` and `list`, no VM is started, and the
+  run stays inside the shared 5 s budget (FR-032).
+- **SC-027**: On macOS with the fake driver and injected leftovers (a killed run, a canceled run, a stale reservation, an
+  active run, a foreign object with the reserved prefix): `doctor --fix --dry-run` writes nothing; `doctor --fix`
+  prints the preview and exits 70; `--yes` alone removes nothing; `--yes --confirm <id>` removes exactly the confirmed owned
+  leftover through `Remove`; the foreign object is refused with `refused.foreign_object` and untouched; the active run is
+  not listed as a leftover; Linux `doctor --fix` is refused (FR-033).
+- **SC-028**: The `doctor --fix` preview marks every leftover whose results were not exported as "results not exported" with
+  the Export step, for a stopped and for a failed clone, and marks exported ones as exported; the marking is present in
+  the preview that precedes any removal (FR-033, FR-011).
 
-## Author proposals (owner may change)
+## Owner decisions (confirmed 2026-10-31)
 
-These choices were made by the author to stay conservative. The owner may change any of them; none alters OD-1 to OD-6.
+The owner decided the six choices that the author had proposed and added two points. The author proposals that remain
+open for the owner are marked below. None alters OD-1 to OD-6.
 
-- The container provider reports `interactive_shell=none`, because the Feature 008 contract defines no interactive shell.
-- The container provider reports `concurrency_limit=unknown`, and a driver declaring `unknown` is treated as a limit of one.
-- `guest_arch` is `unknown` when the runtime architecture cannot be probed.
-- The initial gated name list (FR-022) includes the name of a Linux-on-Windows layer, although Windows is out of scope.
-- The owner decision text is kept inside the informative markers.
-- A missing or unsupported driver is refused with the new `refused.driver_unavailable` (eight new codes in total). ADR
-  0013 has no configuration-error category, so a configuration error exit was not used.
+1. **Interactive shell for the container provider (confirmed, follow-up)**: the owner wants an interactive shell for the
+   container provider in the future. Until a separate feature builds it, the capability report stays honest (FR-025): the
+   container provider reports `interactive_shell=none` (FR-003 unchanged). When that feature lands, the value becomes
+   `pty` with status `enforced`. Follow-up: a separate feature "interactive shell for the container provider", out of
+   scope here and not started.
+2. **Concurrency limit (CHANGED)**: when the driver states no limit (`unknown`), no limit is applied (unlimited).
+   Before, `unknown` was treated as a limit of one. A declared integer limit with status `enforced` still applies, with
+   atomic reservations and reclaimed stale reservations (FR-009, SC-013). Author proposal, owner may change: a limit whose
+   status is not `enforced` is treated like `unknown` (not applied). The operating system vendor's license may cap
+   concurrent macOS VMs; this stays an owner check, unverified and unchanged (see "Verification before the plan").
+3. **`guest_arch=unknown` when the architecture cannot be probed (confirmed, unchanged)**.
+4. **The name of the Linux-on-Windows layer stays on the gated vendor-name list (confirmed, unchanged)**, although Windows
+   is out of scope.
+5. **Owner decision text stays inside the informative markers (confirmed, unchanged)**.
+6. **A missing or unsupported driver is refused with the new `refused.driver_unavailable` (confirmed, unchanged)**, eight new
+   codes in total. ADR 0013 has no configuration-error category.
+7. **`whr setup` on macOS (NEW)**: minimal form "check and guide only". `whr setup` ends with a read-only VM readiness
+   summary and the exact next steps, and installs, builds, downloads and elevates nothing (FR-031, SC-025). Later options
+   (an opt-in catalogue entry for the VM tool, a separate `whr vm setup` command, a guided base image build) are future
+   work only. Linux is unchanged.
+8. **Scope of `whr doctor` VM support (NEW)**: A, B and C. A is read-only diagnosis with `vm.backend`, `vm.base_image` and
+   `vm.limit` (FR-018). B is the read-only space report (FR-032). C is `whr doctor --fix` removing owned leftovers only
+   (FR-033). D (`doctor --deep`, a real clone-start-exec-stop-delete smoke) is future work only. E (`doctor --fix` installs
+   the VM tool or builds the base image) is rejected because it contradicts NC-1 and NC-2.
+
+Author proposals made while recording these decisions (the owner may change them):
+
+- A limit with status not `enforced` is treated like `unknown` (decision 2).
+- `vm.space` reports `fail` below the base image size, like the existing disk checks, so a failing space check makes
+  `whr doctor` exit 68 as for any failed check; the alternative is evidence only (FR-032).
+- Sizes and the storage location are optional fields of the existing `probe` and `list` results, not a new port operation
+  (FR-032).
+- The cleanup keeps the Feature 009 requirement of a host profile (`host_setup.profile_absent`) and treats the removal as
+  a modify-class step with one `--confirm <id>` per item, with the item id `vm-instance:<instance id>` or
+  `vm-reservation:<reservation id>` (FR-033).
+- Results not exported are shown and flagged in the preview, and removed once the owner confirms that item; the cleanup
+  does not add a block or a new flag (FR-033).
+
+## Future work (not started; each needs its own specification and is re-decided after the first real VM run)
+
+- An interactive shell for the container provider (decision 1).
+- For `whr setup`: an opt-in catalogue entry for the VM tool, a separate `whr vm setup` command, a guided base image build
+  (decision 7).
+- `whr doctor --deep`, a real clone-start-exec-stop-delete smoke (decision 8, D).
+- The owner may later configure an explicit concurrency limit for a driver that states none.
 
 ## Assumptions
 
@@ -462,6 +571,8 @@ These choices were made by the author to stay conservative. The owner may change
   T001 and T002 are open), so the before-and-after regression check of FR-003 depends on Feature 008 landing first.
 - The Feature 008 trust profiles and plan model are reused. A test run uses a job profile with a private copy and a
   scratch home. This feature does not redefine them.
+- A driver that states no concurrency limit means no limit is applied (decision 2). The host or the driver can still
+  refuse a `Create` for its own reasons; that is a failed `Create` (FR-010).
 - Real-VM evidence comes from the owner's Mac. Hosted CI runners are not assumed to support nested virtualization.
 - Upstream facts about any VM backend were read from public documentation and secondary sources on 2026-10-31. They are
   not acceptance evidence, and each driver proves its own claims through its tests.
@@ -476,7 +587,9 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
   search excerpts and a summary were read so far. Under OD-5 the license is the user's concern, so this check informs
   the support matrix (FR-024) and the maintenance risk, not the design.
 - The operating system vendor's license terms for running macOS in a VM, including any limit on concurrent VMs. The
-  owner checks this (OD-4). It was not checked here, and the concurrency limit of FR-009 is declared by the driver.
+  owner checks this (OD-4). It was not checked here (unverified, unchanged). Because an unstated limit is not applied
+  (FR-009), the provider does not enforce any such cap; the cap, if any, shows up as a driver or host refusal of a `Create`
+  (FR-010).
 
 ### Follow-up outside this feature (owner)
 
@@ -503,8 +616,20 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 - The Feature 008 conformance suite and `Admit` (`apps/whr/internal/runtime/`): new cases and the admission paths for
   the new refusals. The existing table rows stay unchanged (FR-003).
 - `contracts/cli/doctor-checks.json` and its freeze test `TestDoctorChecksMatchContract`: add `vm.backend`,
-  `vm.base_image` and `vm.limit`, and amend the process rule to allow the driver's fixed read-only `probe` and `list`
-  invocations within the shared 5 s budget (owner-gated like other contract changes).
+  `vm.base_image`, `vm.limit` and `vm.space` (FR-018, FR-032), and amend the process rule to allow the driver's fixed read-only `probe` and `list`
+  invocations within the shared 5 s budget (owner-gated like other contract changes). `whr doctor --fix` for the VM
+  leftovers is covered by the Feature 009 entry below, since `doctor-checks.json` lists only checks.
+- `specs/009-host-setup-wizard/spec.md`, `contracts/wizard-flow.md` and `data-model.md` (amendment for FR-031 and FR-033, owner-gated
+  like AP-1 to AP-9; Feature 009 FR-024 applies): the `host.setup` output on a macOS host gains a read-only
+  `vm_readiness` part (the checks `vm.backend`, `vm.base_image`, `vm.limit`, `vm.space` with status and evidence, and the
+  next steps), shown in every mode and not part of the plan or the protocol; the catalogue stays at 13 entries and
+  FR-003 and FR-008 are untouched. The scope of `doctor --fix` (FR-016, wizard-flow) gains one repair class beyond
+  catalogue items: removal of owned VM leftovers, as a new modify-class step kind in the closed set of step kinds
+  (`vm_instance_remove`, with its protocol record), with the item ids of FR-033, `--confirm <id>` per item, the preview
+  of FR-033 and the existing exit codes. The sentence that a tool from another source is never replaced or removed is
+  unaffected: leftovers are owned instances, not tools. The frozen Feature 009 contracts (`protocol.schema.json` and its
+  fixtures, `wizard-flow.md`, the data model step kinds, the AP-6 result shape) and their tests are amended when this is
+  implemented, and a foreign object is refused with `refused.foreign_object` of Feature 008.
 - `docs/container-runtime.md`: add a VM backend prerequisite section; the Windows host statement stays unchanged.
 - `.github/workflows/check.yml` and `scripts/check_ci.py`: Python and Go suites in a macOS and Linux matrix for this
   repository, aggregate check, skip-record check.
