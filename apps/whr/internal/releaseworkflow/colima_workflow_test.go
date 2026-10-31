@@ -166,6 +166,9 @@ func colimaViolations(raw string) []string {
 			!strings.Contains(t, "destroy_probe ") && !strings.Contains(t, "on_hosted_runner &&") {
 			out = append(out, sprintf("unguarded destructive command: %s", t))
 		}
+		if strings.Contains(t, "nerdctl install") {
+			out = append(out, sprintf("must not run nerdctl install: %s", t))
+		}
 		if strings.Contains(t, " prune") {
 			out = append(out, sprintf("must not prune: %s", t))
 		}
@@ -403,6 +406,7 @@ func TestColimaWorkflowRulesBite(t *testing.T) {
 		{"unguarded colima delete", "on_hosted_runner && bounded 40 colima delete --force", "bounded 40 colima delete --force", "unguarded destructive command"},
 		{"unguarded destroy in the start loop", "destroy_probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "probe \"colima-cleanup-after-start-$attempt\" 45 colima delete --force", "unguarded destructive command"},
 		{"colima stop unguarded", cleanupAnchor, "          unset DOCKER_HOST\n          colima stop --force\n          rm -rf", "unguarded destructive command: colima stop"},
+		{"nerdctl install", "          probe colima-nerdctl-help 10 colima nerdctl --help\n", "          probe colima-nerdctl-help 10 colima nerdctl --help\n          probe x 60 colima nerdctl install\n", "must not run nerdctl install"},
 		{"prune", cleanupAnchor, "          unset DOCKER_HOST\n          docker system prune -af\n          rm -rf", "must not prune"},
 		{"cleanup without refusal", "if ! on_hosted_runner; then", "if false; then", "cleanup removes things before refusing"},
 		{"step without timeout", "        timeout-minutes: 2\n        with:\n          go-version-file", "        with:\n          go-version-file", "step without timeout-minutes"},
