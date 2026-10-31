@@ -67,11 +67,11 @@ reconciliation in [package-a-status-20261024.md](../../docs/quality/package-a-st
 | 008 Stage 2 (T011 to T014) | copy policy (FR-014), result export (FR-020, FR-033), container provider that reports the FR-003 values (SC-002, SC-030), container cleanup (FR-033) | Spec FR-003, FR-014, FR-033; 008 tasks T011 to T014 | Same rule. T023 and T024 need T013. |
 | 008 T016, T017 (command registration, ADR 0014 amendment) | the `sandbox` group that SC-019 and SC-030 count | Spec FR-019, FR-035 (commands `whr sandbox ...`) | T038 waits for them. No 011 task registers a command. |
 | 008 contract and text | A1: FR-012, FR-034, FR-035, data model, `runtime-provider.md`, `refusal-codes.json` | Spec "Changes to existing documents" | Owner gate OG-8, docs only (T002). |
-| 009 catalog, pkgmgr, profile, plan, fix, wizard | tap-sourced entries, new step kinds, profile records, `doctor --fix`, wizard offers (FR-031 to FR-041) | Main has `hostsetup/{catalogue,detect,dotfiles,native,pkgmgr,plan,profile}`; no `fix/`, `gitmove/` or wizard package; 009 T001 and T004 checked, T002, T003, T006 source-only, T005, T007, T010, T011 open (status audit) | Stage 4 waits for 009 T001, T003, T006, T007, T010. T011 registration is shared and owner-gated. |
-| 009 D-12 to D-18 endpoint selection | one container endpoint for `container.image`, `container.leftovers`, the storage lookup and the image build (FR-039, FR-041, spec decision 23) | Spec FR-029 to FR-031 of Feature 009 exist; [009 tasks.md](../009-host-setup-wizard/tasks.md) has no task that mentions an endpoint and the code has no `container_endpoint` | Open question OQ-6. Until a 009 task exists, Stage 4 container tasks take the endpoint through an injected port and are not accepted against the real selection. |
+| 009 catalog, pkgmgr, profile, plan, fix, wizard | tap-sourced entries, new step kinds, profile records, `doctor --fix`, wizard offers (FR-031 to FR-041) | Main has `hostsetup/{adapters,catalogue,detect,dotfiles,native,pkgmgr,plan,profile}` and `route.go`; no `hostsetup/fix/`, `hostsetup/gitmove/` or `hostsetup/wizard/` (`apps/whr/internal/wizard/` is the Feature 006 init wizard); 009 T001 and T004 checked, T002, T003, T006 source-only, T005, T007, T010, T011 open (status audit) | Stage 4 waits for 009 T001, T002, T003, T006, T007, T010. T011 registration is shared and owner-gated. |
+| 009 D-12 to D-18 endpoint selection | one container endpoint for `container.image`, `container.leftovers`, the storage lookup and the image build (FR-039, FR-041, spec decision 23) | Spec FR-029 to FR-031 of Feature 009 exist; [009 tasks.md](../009-host-setup-wizard/tasks.md) on main has no task that mentions an endpoint and the code has no `container_endpoint`. Open draft PR 299 adds those 009 tasks (endpoint selection function, Colima storage location from the endpoint, the Colima and Docker catalog entries, profile record); it is being revised, so only task purposes are cited | OQ-6. T027 consumes the endpoint selection function and T028 the Colima storage location of PR 299 (T028 may overlap its storage-location task; reconcile when both land). Until they exist, Stage 4 container tasks take the endpoint through an injected port and are not accepted against the real selection. |
 | 010 `localdocker` (P1, merged) | bounded, endpoint-pinned, read-only Docker adapter and label ownership gate for container list, inspect and removal | No direct citation in the 011 spec; indirect: 009 FR-027 and FR-029 require every `docker` call to carry `--host=<endpoint>` (Feature 010 FR-002); 008 plan names `localdocker` the reused port for the container provider | Reuse, not duplicate, in T027 and T035. 010 `localshell` is not touched. |
 | 006 (T025 exit/output, T027 doctor port, FR-060, `doctor-checks.json`) | exit table, envelope, doctor runner, six new check ids, budget lists | Spec "Changes to existing documents"; `contracts/cli/doctor-checks.json` has no `vm.*` or `container.image` id | Text edits are owner gates OG-4, OG-5, OG-6 (T003, T037). |
-| 012 (draft, PR 297) | the shared `whr sandbox shell` command and an enforced `pty` for the container provider | Spec FR-016, decisions 1 and 14 | Not a prerequisite. The `pty` path is deferred (D-1). |
+| 012 (spec on main, status Draft; its plan and tasks are the open draft PR 297) | the shared `whr sandbox shell` command and an enforced `pty` for the container provider | Spec FR-016, decisions 1 and 14; Feature 012 spec: "Feature 011 sets its own `interactive_shell` value" | Not a prerequisite. The command and `pty` path are deferred (D-1); the VM provider value is OQ-11. |
 | ADR 0013, ADR 0014 | codes 64, 68, 70, 71, 72, 73; the `sandbox` group | ADR 0013 table; 008 T017 | No change by this plan. |
 | BundleDock, Anchorage | none | Spec "Follow-up outside this feature" | No task edits those repositories. |
 
@@ -162,7 +162,7 @@ operation named.
 | Optional size and storage fields of the backend `probe` and `list` | FR-032 "size unknown" | T039 against recorded output; owner-run confirms |
 | Container configuration file layout, runtime-home overrides, non-default layouts, file before first start | FR-041, 009 FR-028 (unmeasured list) | Feature 009 OG-1; T028 uses fakes and says "unknown" when absent |
 | Docker context file layout | 009 FR-031 | Feature 009 OG-1; not read by 011 |
-| First backend license text and maintenance status | spec "Verification before the plan" | owner check before T039; informs the matrix, not the design |
+| First backend license text and maintenance status | spec "Verification before the plan" | not done yet. The spec places it before the plan; this plan moves it before T039 (the first task that needs a driver choice), so it is still an open owner action. Informs the matrix, not the design |
 | Exact tap name of the VM tool source | spec informative notes: "verified at implementation" | T030 catalog entry, owner-gated OG-7 |
 | Deadlines in the table above | not stated | owner-run observations; defaults change only by owner decision |
 | Hosted-runner nested virtualization | Assumptions: not assumed | not measured; no CI job starts a VM |
@@ -177,14 +177,14 @@ python3 scripts/select_feature.py 011-vm-provider
 python3 -I -B scripts/check_repo.py
 git diff --check
 (cd apps/whr && go vet ./... && go test ./...)          # code PRs only; no VM, network or Docker
-git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr docs/container-runtime.md specs/006-whr-cli specs/008-workspace-sandbox specs/009-host-setup-wizard   # empty except the owner-gated tasks
+git diff --stat $(git merge-base origin/main HEAD) -- .github contracts/cli docs/adr docs/container-runtime.md apps/whr/internal/hostsetup/catalogue/assets specs/006-whr-cli specs/008-workspace-sandbox specs/009-host-setup-wizard   # empty except T002 to T004, T008, T029, T030, T037
 ```
 
 ## Deferred with reason
 
 | ID | Item | Reason |
 | --- | --- | --- |
-| D-1 | FR-016 enforced `pty` path and the terminal-safety rules (second half of SC-014); the `whr sandbox shell` command | no provider reports `pty` as `enforced` in this increment; the command is the draft Feature 012; only the refusal is built here |
+| D-1 | FR-016 enforced `pty` path and the terminal-safety rules (second half of SC-014); the `whr sandbox shell` command and the command-level half of SC-030 | the command belongs to Feature 012 (FR-016, decision 14); FR-019 adds no command here; only the refusal is built |
 | D-2 | Real-VM conformance, base image digest, real image builds, real macOS runs (FR-006, FR-026, FR-034, FR-037 real parts) | owner-run evidence under OG-1 and OG-3, never required CI |
 | D-3 | `whr doctor --deep`, Linux-host driver, Windows guest, remote hosts, snapshots, egress, credential mediation | "Not in this increment" and "Future work" in the spec |
 | D-4 | CI for BundleDock and Anchorage and classification of their failing tests | separate repositories, owner follow-up |
@@ -197,7 +197,7 @@ one task.
 
 1. **OQ-1 Configuration source and record store.** Where is the chosen driver (FR-023, "by configuration or provider id"),
    the base image name, the guest account reference (FR-007) and the optional limit configured, and where does the local
-   record store live? Proposal: the Feature 009 config and state directories. The draft Feature 012 (PR 297) asks the same
+   record store live? Proposal: the Feature 009 config and state directories. The draft Feature 012 plan (PR 297) asks the same
    record-store question; one answer should serve both.
 2. **OQ-2 Who builds a VM image?** FR-034 and FR-037 build a VM image from a recipe, but the driver port (FR-021) has no
    build operation and the provider never builds (FR-007). Proposal: a separate image-builder port per backend, outside the
@@ -210,11 +210,16 @@ one task.
    names Python and Go) and that no Intel macOS runner is wanted.
 5. **OQ-5 Order with Feature 008.** The spec orders A1 after 008. Because no 008 code exists, should A1 instead be folded
    into 008 T001 and T002? Proposal: follow the spec (T013 captures the regression rows first).
-6. **OQ-6 Feature 009 gaps.** Endpoint selection (D-12 to D-18) and the two container-runtime catalog entries have no 009 task.
-   Who writes them, and in which order relative to T029 and T030 (the catalog has 16 or 18 entries depending on it)?
+6. **OQ-6 Feature 009 gaps.** On main, endpoint selection (D-12 to D-18) and the two container-runtime catalog entries have no 009
+   task; the open draft PR 299 adds them. In which order do they land relative to T029 and T030 (the catalog has 16 or 18 entries
+   depending on it), and does PR 299's storage-location task cover T028?
 7. **OQ-7 Numeric values.** Confirm or replace the deadlines in the plan-time table, and supply the `image_build` deadline.
 8. **OQ-8 New gates.** Confirm OG-10 and OG-11 above or map those changes to existing gates.
 9. **OQ-9 Real driver in this feature.** The spec's first increment is the fake driver (Context 5). Confirm Stage 5 belongs
    to this feature's task list, starting only after the license and maintenance check.
 10. **OQ-10 SC-024 scope.** "No current document declares Windows host support" can be automated only for workflows and
     scripts; documents are a review item. Confirm.
+11. **OQ-11 VM provider `interactive_shell` value.** The spec sets the value only for the container provider (FR-003: `none`);
+    the Feature 012 spec leaves the VM value to Feature 011. Proposal: the VM provider and its fake report `interactive_shell=none`
+    with status `enforced` in this increment (no VM `pty` is built, FR-025 honesty rule), so conformance and admission refuse an
+    interactive request with `refused.interactive_unavailable` (implemented by T014 and T024). A VM `pty` needs its own decision.
