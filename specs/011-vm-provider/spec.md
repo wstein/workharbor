@@ -233,8 +233,11 @@ refusals. Every amendment is generic and additive.
   before acting, as in the Feature 008 contract, and `Export` resolves its instance only through the owned record. A
   foreign VM, or one that lacks the labels or the record, MUST be refused with `refused.foreign_object` and zero
   mutations. `ownership_mechanism` is not a request requirement: a provider whose `ownership_mechanism` is not `enforced`
-  proves no ownership, so every operation on an instance is refused with `refused.foreign_object`. The "when" text of `refused.foreign_object` becomes exactly: "a target object lacks the ownership labels, or, for
-  `name_and_record`, its name or provider record is missing or disagrees". No new code is needed.
+  proves no ownership, so it refuses every `Create`, `Exec`, `Export`, `Cancel` and `Remove` with
+  `refused.foreign_object` before any side effect, and its `List` returns no instance. The "when" text of
+  `refused.foreign_object` becomes exactly: "a target object lacks the ownership labels, or, for `name_and_record`, its
+  name or provider record is missing or disagrees, or the provider's `ownership_mechanism` is not `enforced`". For
+  labelled objects of the container provider its meaning is unchanged. No new code is needed.
 - **FR-009**: The provider MUST declare a concurrency limit derived from the driver and the host. Concurrency is runtime
   state, so it is not an `Admit` input: `Admit` stays a pure function of request and capabilities (Feature 008 FR-013).
   The limit is an explicit provider check immediately before the driver is touched in `Create`. It MUST be atomic: under
@@ -244,7 +247,7 @@ refusals. Every amendment is generic and additive.
   the same lock, a reservation whose process is gone or whose deadline passed is reclaimed if no matching driver
   instance exists; if one exists it becomes a leftover for `Remove` and keeps counting toward the limit until `Remove` clears it. The reservation is released when `Create` fails and
   on `Remove`. Only owned instances count; foreign running VMs are reported as information. A driver that declares
-  `unknown` is treated as a limit of one.
+  `unknown`, or a limit whose status is not `enforced`, is treated as a limit of one.
 - **FR-010**: An instance is `ready` only after guest reachability is confirmed within a bounded deadline. A failed
   `Create` or start MUST remove only what it created and report leftovers by name and id.
 - **FR-011**: `Cancel` and `Remove` MUST be bounded, idempotent, stop gracefully and then force within the deadline,
@@ -378,8 +381,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   provider reporting `exec_argv=unavailable`, or `native` or `quoted_verified` with a status other than `enforced`,
   refuses every `Exec` with `refused.exec_argv_unavailable` (FR-012).
 - **SC-005**: A foreign VM with the reserved prefix and no record, and an instance whose record lacks any label of the
-  Feature 008 ownership set, are refused with `refused.foreign_object` and zero mutations, as is every operation of a provider whose
-  `ownership_mechanism` is not `enforced` (FR-008).
+  Feature 008 ownership set, are refused with `refused.foreign_object` and zero mutations. A provider whose `ownership_mechanism` is not `enforced` refuses every `Create`, `Exec`, `Export`,
+  `Cancel` and `Remove` with `refused.foreign_object` before any side effect, and its `List` returns no instance
+  (FR-008).
 - **SC-006**: After a killed run and `Remove`, zero owned instances remain, leftovers are listed and results are retained
   (FR-011, FR-020).
 - **SC-007**: With the fake driver, no start, write or delete call ever targets the base image, and the driver-reported
@@ -402,7 +406,8 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
 - **SC-013**: Two simultaneous `Create` requests with a limit of one yield exactly one instance and one
   `refused.concurrency_limit_reached`; the refused one made zero driver calls; the reservation is released on failed
   create and on `Remove`; a reservation left by a killed `Create` is reclaimed and the next `Create` succeeds; a stale reservation with a matching driver instance keeps counting and the next `Create` is
-  refused until `Remove` clears it (FR-009).
+  refused until `Remove` clears it; a provider declaring `unknown` or a limit that is not `enforced` admits exactly one owned
+  instance and the second `Create` is refused with `refused.concurrency_limit_reached` (FR-009).
 - **SC-014**: A request for an interactive shell against `interactive_shell=none`, or against `pty` that is not `enforced`, is
   refused with `refused.interactive_unavailable`; against an `enforced` `pty` it follows the terminal-safety rules (FR-003, FR-016).
 - **SC-015**: Plans that share the host home directory, a secret-pattern path, the primary `.git` for untrusted work or
