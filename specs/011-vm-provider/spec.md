@@ -114,9 +114,10 @@ and the aggregate check red, and leaves the other jobs green.
 The owner runs a test run against a base image they prepared. A clone is created, sources are copied in, the declared
 command runs, results are exported, and the clone is removed. The host is not modified.
 
-**Independent Test**: a fake driver records every driver call. The sequence is clone, start, ready, copy in, exec, copy
-out, stop, delete, in that order. After the run no owned instance exists, results are present, and the base image content
-id is unchanged. Real-VM evidence is produced by the owner on their Mac (FR-026).
+**Independent Test**: a fake driver records every driver call. Apart from the read-only `probe` and `list`, the calls
+are clone, start, ready, copy in, exec, copy out, stop, delete, in that order, and none of them targets the base image.
+After the run no owned instance exists, results are present, and the base image content id is unchanged. Real-VM
+evidence is produced by the owner on their Mac (FR-026).
 
 **Acceptance Scenarios**:
 
