@@ -18,6 +18,8 @@ Check by scenario (fake package manager, fake sudo, fake network, temporary HOME
 `TestRerunIsNoOp` (managed installations/config/profile/backups unchanged; confirmed protocol/lock bookkeeping retained); 3 `TestMoveLegacyToXDG`, `TestMoveRefusals`; 4 `TestPlainDoctorReadOnly`, `TestFixWithoutYesExit70`; 5
 `TestPrivilegedStepShownConfirmedNeverUnattended`, `TestPrecedence73`; 6 `TestLinuxSetupRoutesToEnrollment`.
 
+Endpoint, Colima and Docker client scenarios (T016 to T032; fakes only, all red first): selection order and authority `TestSelectionOrderOptionConfigDockerHostStandard`, `TestSelectionConfigStaysAuthoritative`; investigation and plain `doctor` listing `TestInvestigationDialsOnlyFixedCandidatesInOrder`, `TestPlainDoctorInvestigationListsInEvidenceAndNeverAsks`; wizard question and unattended `skip` `TestWizardEndpointAnswerIsOnePreviewedProfileWrite`, `TestWizardEndpointUnattendedDefaultSkipOneStderrLineSetupContinues`; drift `TestDriftIsWarningOnlyNeverStatusOrSwitch`; unselected entries `TestUnselectedEntrySkippedWithReasonUnselected`; catalog `TestInitialCatalogueEntries` (13 ids today; 15 after T017, 18 with Feature 011) and `TestNoColimaLifecycleOrContextCall`. Context file layout, Colima files and the new entries' minima are measured by the owner (T016) and are not claimed here.
+
 Intended flow once registered (not available before T011, which is owner-gated):
 
 ```sh
@@ -26,6 +28,8 @@ whr setup                  # wizard: [yes / customize / no]
 whr doctor                 # diagnose, read-only for the host
 whr doctor --fix --dry-run # preview the repair
 whr doctor --fix --yes     # create-class repairs; add --confirm <id> for modify-class or privileged items
+whr setup --container-endpoint unix://$HOME/.colima/default/docker.sock   # answers the endpoint question (macOS; T031)
+whr doctor --fix --confirm container-endpoint   # re-record a drifted endpoint (modify class; T031)
 ```
 
 Real-host checks (Homebrew, the OrbStack cask, the owner's real HOME) need the owner's explicit authorization and are recorded separately; a

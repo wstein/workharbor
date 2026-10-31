@@ -6,6 +6,7 @@ Status: proposed design baseline for Feature 009 (FR-004 to FR-021); not impleme
 ## Flow of `whr setup` (macOS)
 
 1. **Detect** (read-only, FR-006). No question before it ends.
+   **Container endpoint question** (FR-031, D-12 to D-17; macOS today): only when no `--container-endpoint` option is given, no `container_endpoint` is recorded, `DOCKER_HOST` is unset or empty and the standard socket path is absent (a dangling link counts as absent); a present but refusing socket or a dead `DOCKER_HOST` starts no investigation and no question. The read-only investigation dials the fixed candidate list and reads Docker context metadata files (no `docker` command, no TLS or key file, no `~/.colima` listing). The question goes to standard error, once per run, with numbered options (sockets that accept a connection plus local-socket contexts, the context name shown) and `skip` as the default; remote contexts are listed as "not supported: remote target" and are never offered. The answer is one `profile_write` (`socket`, optional `context`) shown in the plan; `skip` records nothing and the next run asks again. Nothing found: no question, the report points to the container-runtime page. End of input or interrupt: exit 72.
 2. **Show** a table: item, state, planned action, source (type, tap, name), minimum version, declared network destinations and
    purpose, any privileged command with its exact `sudo` line, blocked steps with reason; then the git location report (key names only).
 3. **Ask**: `Set up the recommended developer experience on this host? [yes / customize / no]`
@@ -34,6 +35,7 @@ Status: proposed design baseline for Feature 009 (FR-004 to FR-021); not impleme
 6. **Apply** (real run: run lock and protocol start here): the plan hash is rechecked; one status line per step; a failure blocks only dependents.
 7. **Report**: per step status and reason, backup paths with the note that restore is a manual copy, and next steps, for example
    `Open OrbStack once to finish its first start; whr does not start or configure it. Then run whr doctor.`
+   For a selected Colima the next step is to start it yourself (`colima start`); `whr` does not start or configure it (FR-027, wording is an author proposal). With Colima selected or detected and no Docker client found, the plan and the report name the entry `docker` and how to select it; nothing is installed automatically (FR-033).
 
 ## Flags
 
@@ -45,8 +47,9 @@ Status: proposed design baseline for Feature 009 (FR-004 to FR-021); not impleme
 | `--only <id>` / `--skip <id>` | repeatable; restrict the plan / opt an item out and record it |
 | `--confirm <id>` | repeatable; confirm the modify-class or privileged step of this item (`git-config` for the git move) |
 | `--json` | one envelope on stdout; privileged steps are never run |
+| `--container-endpoint <endpoint>` | `unix://` followed by an absolute path; answers the endpoint question (with no recorded value it is used for the run and planned as the same `profile_write`); darwin only, a usage error on Linux `setup` like the other wizard-only flags; empty, relative or malformed is 64. Unattended (no terminal, `--json`, `--non-interactive`) the default `skip` applies: no prompt, nothing recorded, no exit 70, one line on standard error naming this option |
 
-Accepted selection/confirmation IDs are catalogue item IDs plus reserved `git-config`; it is not a fourteenth catalogue entry. Linux enrollment flags on macOS and truly unknown IDs are usage errors (64). DP-3 flags/closed answer sets and DP-4 carrier are confirmed by H38.
+Accepted selection/confirmation IDs are catalog item IDs plus the reserved IDs `git-config` and `container-endpoint`; neither is a catalog entry (with the Colima and Docker client entries of FR-026 and FR-033 the next entry would be the sixteenth, the nineteenth after Feature 011 FR-040). Linux enrollment flags on macOS and truly unknown IDs are usage errors (64). DP-3 flags/closed answer sets and DP-4 carrier are confirmed by H38.
 
 ## `whr doctor`
 
@@ -58,13 +61,13 @@ Accepted selection/confirmation IDs are catalogue item IDs plus reserved `git-co
 | `whr doctor --fix --yes` | real run: create-class repairs; modify-class and privileged steps only with `--confirm <id>` and, for sudo, a terminal |
 | `--dry-run`, `--yes` or `--confirm` without `--fix` | 64 |
 
-`--fix` never prompts, never touches an opted-out item, needs a host profile (`profile_absent`) and never touches the Docker VM.
+`--fix` never prompts except for the endpoint question above, which it asks only on a terminal (D-15 (k)); it never touches an opted-out item, needs a host profile (`profile_absent`) and never touches the Docker VM. Re-recording a drifted `container_endpoint` is a modify-class repair that needs `--confirm container-endpoint`; `--yes` alone never does it. Plain `doctor` runs the investigation read-only, lists the options in the evidence of `container.socket` and never asks (D-17 (t)); a check that depends on a never-selected entry is `skipped` with the reason `unselected`.
 
 ## Exit codes
 
 ADR 0013 table only (FR-020): 0 success, nothing to do, or `no`; 64 usage; 68 unsupported platform, root start, run lock, refused target, git
 refusal, blocked or failed with nothing applied, failed doctor check; 70 unattended without `--yes` or `--confirm`, or privileged step without
-terminal (73 when other steps were applied); 71 deadline with nothing applied; 72 interrupt or cancellation; 73 partial failure after a mutation when selected work failed, was blocked, timed out or was interrupted (precedence over
+terminal (73 when other steps were applied; an unattended run that skips the endpoint question is not 70); 71 deadline with nothing applied; 72 interrupt or cancellation (including end of input or interrupt at the endpoint question); 73 partial failure after a mutation when selected work failed, was blocked, timed out or was interrupted (precedence over
 72, 71, 68); successful opt-outs/declines remain0 unless a selected dependent is actually blocked; 74 invalid catalogue or unclassified failure. Plain `doctor` keeps Feature 006 FR-060 (failed check 68, `incomplete` 0).
 
 ## Brew invocation
