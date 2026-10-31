@@ -31,7 +31,7 @@ This feature defines:
 2. a **one-time, generic amendment (A1) to the Feature 008 contract** that adds the guest operating system and the
    capabilities a VM needs;
 3. a **VM provider** built on a vendor-neutral **driver port**, with disposable clones of an owner-supplied base image;
-4. conformance cases and refusal codes for the above; and
+4. conformance cases and refusal codes for the above;
 5. a first increment that is library-level and offline, using a fake driver; and
 6. a minimal macOS host surface that stays read-only or removes owned leftovers only: a VM readiness summary at the end of
    `whr setup` (FR-031), a space report in `whr doctor` (FR-032) and a cleanup of owned leftovers in `whr doctor --fix`
@@ -312,7 +312,7 @@ refusals. Every amendment is generic and additive.
 
 - **FR-019**: A test run MUST be expressed through the sandbox lifecycle of Feature 008: admit, create, copy in, exec,
   export, remove. No VM-specific command family and no wrapper command are added here.
-- **FR-020**: Results (exit status, logs, declared artifacts) MUST survive removal. After an interrupted run and `Remove`,
+- **FR-020**: Results (exit status, logs, declared artifacts) that are in the result directory MUST survive removal, and no `Remove` or cleanup deletes them. Results still only inside a clone are exported before removal (FR-011) or are deleted only on the explicit confirmation of FR-033. After an interrupted run and `Remove`,
   no owned instance may remain, and leftovers MUST be reported.
 
 **Driver port and vendor neutrality**
@@ -393,12 +393,16 @@ provider and Linux hosts are unchanged.
   run, and stale reservations (FR-009), through the provider's `Remove` with the ownership check of FR-008 on every item. A
   foreign or unlabeled object MUST be refused with `refused.foreign_object` and never touched, an instance of a run that
   is still active is not a leftover, and nothing else is repaired. It uses the mechanics of Feature 009 FR-016, FR-007 and
-  FR-017: the repair is a modify-class step (it removes something present), so without `--yes` it prints the preview
-  (name, id and size if known, per item) and exits 70, and with `--yes` each item is removed only with its own
-  `--confirm <id>`. The preview MUST show, for each leftover, whether its results were exported; a stopped or failed clone
-  whose results were not exported is marked "results not exported" with the Export step to run first (FR-011). Because
-  nothing is removed before the preview and a missing confirmation exits 70, the owner always sees this before any
-  removal, and `--yes` alone never removes an item. Linux `whr doctor --fix` still refuses (Feature 009 FR-001).
+  FR-017: it requires a host profile and otherwise refuses with `host_setup.profile_absent` (Feature 009 FR-016); the repair
+  is a modify-class step (it removes something present) with the item id `vm-instance:<instance id>` or
+  `vm-reservation:<reservation id>`. Without `--yes` it prints the preview (name, id and size if known, per item) and exits
+  70, and with `--yes` each item is removed only with its own `--confirm <id>`. The preview MUST show, for each leftover,
+  whether its results were exported; a stopped or failed clone whose results were not exported is marked "results not
+  exported". Confirming such an item with `--confirm <id>` IS the results-deletion confirmation of Feature 008 FR-008:
+  without it the item is not removed, and `--yes` alone never removes an item. Files already in the result directory are
+  never deleted (FR-020). For such an item the preview names the export of Feature 008 FR-007 as the step to run first;
+  while no export command is registered (FR-019 adds none, and `whr sandbox export` is proposed syntax under Feature 008
+  FR-028), the preview says so instead of naming a command. Linux `whr doctor --fix` still refuses (Feature 009 FR-001).
 
 ### Appended refusal codes
 
@@ -439,7 +443,7 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   Feature 008 ownership set, are refused with `refused.foreign_object` and zero mutations. A provider whose `ownership_mechanism` is not `enforced` refuses every `Create`, `Exec`, `Export`,
   `Cancel` and `Remove` with `refused.foreign_object` before any side effect, and its `List` returns no instance
   (FR-008).
-- **SC-006**: After a killed run and `Remove`, zero owned instances remain, leftovers are listed and results are retained
+- **SC-006**: After a killed run and `Remove`, zero owned instances remain, leftovers are listed and results already in the result directory are retained
   (FR-011, FR-020).
 - **SC-007**: With the fake driver, no start, write or delete call ever targets the base image, and the driver-reported
   base image identifier in the Plan equals the identifier after every run, including failed and canceled ones (FR-006).
@@ -465,7 +469,7 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   reservation with a matching driver instance keeps counting and the next `Create` is refused until `Remove` clears it.
   With the value `unknown`, or an integer limit whose status is not `enforced`, no limit applies: the second `Create` is
   not refused for concurrency, no `refused.concurrency_limit_reached` is ever produced, and a reservation record is still
-  written and a stale one is still handled as a leftover. A limit of 0 with status `enforced` refuses every `Create`
+  written, and a stale one is reclaimed when no matching driver instance exists, or is a leftover for `Remove` when one does. A limit of 0 with status `enforced` refuses every `Create`
   (FR-009).
 - **SC-014**: A request for an interactive shell against `interactive_shell=none`, or against `pty` that is not `enforced`, is
   refused with `refused.interactive_unavailable`; against an `enforced` `pty` it follows the terminal-safety rules (FR-003, FR-016).
@@ -509,10 +513,10 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   active run, a foreign object with the reserved prefix): `doctor --fix --dry-run` writes nothing; `doctor --fix`
   prints the preview and exits 70; `--yes` alone removes nothing; `--yes --confirm <id>` removes exactly the confirmed owned
   leftover through `Remove`; the foreign object is refused with `refused.foreign_object` and untouched; the active run is
-  not listed as a leftover; Linux `doctor --fix` is refused (FR-033).
+  not listed as a leftover; without a host profile `doctor --fix` refuses with `host_setup.profile_absent`; Linux `doctor --fix` is refused (FR-033).
 - **SC-028**: The `doctor --fix` preview marks every leftover whose results were not exported as "results not exported" with
   the Export step, for a stopped and for a failed clone, and marks exported ones as exported; the marking is present in
-  the preview that precedes any removal (FR-033, FR-011).
+  the preview that precedes any removal. An item marked "results not exported" is not removed without its `--confirm <id>`, and after a confirmed removal the files already in the result directory are byte-identical to before (FR-033, FR-011, FR-020).
 
 ## Owner decisions (confirmed 2026-10-31)
 
@@ -532,7 +536,8 @@ open for the owner are marked below. None alters OD-1 to OD-6.
 3. **`guest_arch=unknown` when the architecture cannot be probed (confirmed, unchanged)**.
 4. **The name of the Linux-on-Windows layer stays on the gated vendor-name list (confirmed, unchanged)**, although Windows
    is out of scope.
-5. **Owner decision text stays inside the informative markers (confirmed, unchanged)**.
+5. **Owner decision text OD-1 to OD-6, which names products, stays inside the informative markers (confirmed, unchanged)**.
+   This section names no product and is outside the markers, as the vendor-name gate (FR-022) requires of gated text.
 6. **A missing or unsupported driver is refused with the new `refused.driver_unavailable` (confirmed, unchanged)**, eight new
    codes in total. ADR 0013 has no configuration-error category.
 7. **`whr setup` on macOS (NEW)**: minimal form "check and guide only". `whr setup` ends with a read-only VM readiness
@@ -540,22 +545,23 @@ open for the owner are marked below. None alters OD-1 to OD-6.
    (an opt-in catalogue entry for the VM tool, a separate `whr vm setup` command, a guided base image build) are future
    work only. Linux is unchanged.
 8. **Scope of `whr doctor` VM support (NEW)**: A, B and C. A is read-only diagnosis with `vm.backend`, `vm.base_image` and
-   `vm.limit` (FR-018). B is the read-only space report (FR-032). C is `whr doctor --fix` removing owned leftovers only
+   `vm.limit` (FR-018). B is the read-only space report (FR-032), which warns below the base image size by reporting `fail`
+   (the check statuses have no warning). C is `whr doctor --fix` removing owned leftovers only
    (FR-033). D (`doctor --deep`, a real clone-start-exec-stop-delete smoke) is future work only. E (`doctor --fix` installs
    the VM tool or builds the base image) is rejected because it contradicts NC-1 and NC-2.
 
 Author proposals made while recording these decisions (the owner may change them):
 
 - A limit with status not `enforced` is treated like `unknown` (decision 2).
-- `vm.space` reports `fail` below the base image size, like the existing disk checks, so a failing space check makes
+- The owner asked for a warning below the base image size. `doctor-checks.json` has only the statuses pass, fail,
+  skipped and unknown, so `vm.space` reports `fail` there, like the existing disk checks, and a failing space check makes
   `whr doctor` exit 68 as for any failed check; the alternative is evidence only (FR-032).
 - Sizes and the storage location are optional fields of the existing `probe` and `list` results, not a new port operation
   (FR-032).
-- The cleanup keeps the Feature 009 requirement of a host profile (`host_setup.profile_absent`) and treats the removal as
-  a modify-class step with one `--confirm <id>` per item, with the item id `vm-instance:<instance id>` or
-  `vm-reservation:<reservation id>` (FR-033).
-- Results not exported are shown and flagged in the preview, and removed once the owner confirms that item; the cleanup
-  does not add a block or a new flag (FR-033).
+- The cleanup keeps the Feature 009 requirement of a host profile, as a modify-class step with the item ids
+  `vm-instance:<instance id>` and `vm-reservation:<reservation id>` (FR-033).
+- The per-item `--confirm <id>` of an item marked "results not exported" doubles as the results-deletion confirmation of
+  Feature 008 FR-008, with no new flag. This is an orchestrator-requested design point the owner should confirm (FR-033).
 
 ## Future work (not started; each needs its own specification and is re-decided after the first real VM run)
 
@@ -626,7 +632,11 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
   FR-003 and FR-008 are untouched. The scope of `doctor --fix` (FR-016, wizard-flow) gains one repair class beyond
   catalogue items: removal of owned VM leftovers, as a new modify-class step kind in the closed set of step kinds
   (`vm_instance_remove`, with its protocol record), with the item ids of FR-033, `--confirm <id>` per item, the preview
-  of FR-033 and the existing exit codes. The sentence that a tool from another source is never replaced or removed is
+  of FR-033 and the existing exit codes. The wizard-flow sentence on accepted confirmation ids (catalogue item ids plus
+  `git-config`, unknown ids exit 64) is widened by the VM item ids of FR-033. Feature 009 FR-002 ("none touches the VM")
+  and the matching data-model line keep the Docker VM untouched: `vm_instance_remove` touches only owned VM instances of the
+  VM provider, never the Docker VM. The allowed-argv table of Feature 009 FR-023 admits the driver's read-only `probe` and
+  `list` invocations for FR-031. The sentence that a tool from another source is never replaced or removed is
   unaffected: leftovers are owned instances, not tools. The frozen Feature 009 contracts (`protocol.schema.json` and its
   fixtures, `wizard-flow.md`, the data model step kinds, the AP-6 result shape) and their tests are amended when this is
   implemented, and a foreign object is refused with `refused.foreign_object` of Feature 008.
