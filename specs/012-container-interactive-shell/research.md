@@ -23,8 +23,8 @@ plan" are unverified and stay so until T002. Nothing below reopens an owner deci
   whether the exec process ended is needed; the spec names the engine API as a candidate. If only the engine API works, the adapter
   talks to the already selected `unix://` socket with no SDK (a dependency question for the owner, not decided here). Without a
   query, row 3 of FR-016 cannot be told from row 4 and S12-C7, hence FR-003, cannot be met.
-- **R-6 Reuse of Feature 010.** `localdocker.ResolveEndpoint`, the client environment allowlist and 5-second budget, and the
-  `localshell` TERM validation and exit classification already exist. Reuse by narrow extraction, not copy (as 010 did for
+- **R-6 Reuse of Feature 010.** the client environment allowlist and 5-second budget of `localdocker`, and the
+  `localshell` TERM validation and exit classification already exist. The endpoint comes from the Feature 009 selection function (D-12 to D-18; `localdocker.ResolveEndpoint` is the older rule). Reuse by narrow extraction, not copy (as 010 did for
   `workspacecfg`). Differences stay explicit: detach disabled here; instance records and ownership labels here, container-name
   selection there; confirmation for `untrusted_job` only here.
 - **R-7 Not decided.** A `Shell` operation for a second provider (Feature 011 owns its own value); `exec`; reattach; whr-side
