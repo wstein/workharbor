@@ -65,7 +65,7 @@ This feature defines:
   is the mitigation, so nothing depends on one vendor.
 - **2026-10-31 (OD-6, Windows; resolves NC-3)**: Windows is out of scope. The CI matrix is macOS and Linux, with no
   Windows runner. `windows` stays a reserved `guest_os` value in the contract so that a later tool or a Windows guest
-  needs no further contract change (FR-030). Linux tests may also run under WSL 2, which is not a stated target.
+  needs no further contract change (FR-030). Linux tests can also run under WSL 2, which is not a stated target.
 <!-- informative:end -->
 
 ### Boundaries
@@ -213,7 +213,8 @@ refusals. Every amendment is generic and additive.
   job, written or modified, and removal MUST discard the clone. The offline suite proves this with the fake driver
   (no start, write or delete call targets the base image). For a real image the claim is owner-run evidence: the owner
   compares a host-computed digest of the image files before and after a run. The driver-reported identifier alone is
-  not proof.
+  not proof. A base image that does not exist, is running or locked, or is not usable as a clone source MUST be refused
+  with `refused.base_image_unavailable` before any clone call.
 - **FR-007**: `whr` MUST NOT create, download, build, publish, sign or redistribute base images, and MUST NOT store or
   relay guest login credentials. The guest account the driver uses is part of the owner's base image and appears in
   configuration only as a reference. The documentation MUST describe a reproducible recipe that starts from the operating
@@ -234,7 +235,7 @@ refusals. Every amendment is generic and additive.
   is below the limit it writes a reservation record in the same locked step; otherwise it refuses with
   `refused.concurrency_limit_reached` and makes no driver call. A reservation counts toward the limit while pending and records the owner process id, start time and a deadline. Under
   the same lock, a reservation whose process is gone or whose deadline passed is reclaimed if no matching driver
-  instance exists; if one exists it becomes a leftover for `Remove`. The reservation is released when `Create` fails and
+  instance exists; if one exists it becomes a leftover for `Remove` and keeps counting toward the limit until `Remove` clears it. The reservation is released when `Create` fails and
   on `Remove`. Only owned instances count; foreign running VMs are reported as information. A driver that declares
   `unknown` is treated as a limit of one.
 - **FR-010**: An instance is `ready` only after guest reachability is confirmed within a bounded deadline. A failed
@@ -288,14 +289,15 @@ refusals. Every amendment is generic and additive.
     never matches inside a longer word. The initial list is in the informative notes. It grows when a driver is added.
   - Docker is the container runtime named throughout Feature 008 and is not a VM backend; it is not on the list.
   - Gated files: the Feature 008 contract files and data model, `apps/whr/internal/runtime/` except driver packages,
-    the conformance suite, the command text under `apps/whr/`, and the normative sections of this specification.
+    the conformance suite, the command text under `apps/whr/` (the registry, help, output and error strings in non-test files; test files are
+    not gated), and the normative sections of this specification.
   - Allowed places: driver packages (`apps/whr/internal/runtime/drivers/<name>/`), their tests, adapter documentation
     (`docs/drivers/`), and regions of this specification between the HTML comment markers `informative:begin` and
     `informative:end` (the check recognizes a marker only when the comment stands alone on its line), which hold the owner decisions and the informative notes. Marked regions hold no MUST, SHOULD or MAY; the check
-    fails if one does.
-- **FR-023**: Exactly one driver is chosen explicitly, by configuration or provider id. There is no auto-detection and no
-  fallback or substitution. A missing or unsupported driver is reported by `vm.backend` and the request is refused
-  before any side effect. Swapping the driver changes admission only through declared capability values.
+    looks for these uppercase words, matched case-sensitively, and fails if one occurs.
+- **FR-023**: Exactly one driver MUST be chosen explicitly, by configuration or provider id. There MUST be no
+  auto-detection and no fallback or substitution. A missing or unsupported driver is reported by `vm.backend` and the
+  request MUST be refused with `refused.driver_unavailable` before any side effect. Swapping the driver changes admission only through declared capability values.
 - **FR-024**: Each driver MUST publish a support matrix per release that lists the supported host (OS and architecture)
   and the supported guest (OS and architecture) separately, plus limits and a license note that names the backend's
   license as the user's concern. It states what the driver's tests prove, not portability.
@@ -339,6 +341,7 @@ refusals. Every amendment is generic and additive.
 | `refused.tool_mounts_unavailable` | `ro_bdock` is requested and the guest cannot mount tool bundles |
 | `refused.base_image_unavailable` | the named base image does not exist, is running or locked, or is not usable as a clone source |
 | `refused.exec_argv_unavailable` | `exec_argv` is `unavailable`; every `Exec` under every profile is refused |
+| `refused.driver_unavailable` | no driver is chosen, or the chosen driver is missing or unsupported on this host |
 | `refused.interactive_unavailable` | an interactive shell is requested and `interactive_shell` is `none` |
 
 Codes are appended to `refusal-codes.json` of Feature 008 and never reused or renamed.
@@ -352,9 +355,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
 
 ### Measurable Outcomes
 
-- **SC-001**: The admission table (guest, architecture, tool mount, interactive shell, argv by provider capability)
+- **SC-001**: The admission table (guest, architecture, tool mount, interactive shell by provider capability)
   yields exactly the expected decision and code for every row, with zero driver calls on refusal (FR-001, FR-004,
-  FR-002, FR-005, FR-012, FR-016). The concurrency limit is not an admission row (FR-009, SC-013).
+  FR-002, FR-005, FR-016). The concurrency limit is not an admission row (FR-009, SC-013).
 - **SC-002**: Every Feature 008 admission row, run with the container provider report of FR-003, yields its previous
   decision and code, checked by a regression row set against the unamended `Admit` (FR-003).
 - **SC-003**: The conformance suite passes unchanged for the fake provider, the container provider and the fake VM
@@ -383,7 +386,8 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord.
   one (FR-028).
 - **SC-013**: Two simultaneous `Create` requests with a limit of one yield exactly one instance and one
   `refused.concurrency_limit_reached`; the refused one made zero driver calls; the reservation is released on failed
-  create and on `Remove`; a reservation left by a killed `Create` is reclaimed and the next `Create` succeeds (FR-009).
+  create and on `Remove`; a reservation left by a killed `Create` is reclaimed and the next `Create` succeeds; a stale reservation with a matching driver instance keeps counting and the next `Create` is
+  refused until `Remove` clears it (FR-009).
 - **SC-014**: A request for an interactive shell against `interactive_shell=none` is refused with
   `refused.interactive_unavailable`; against `pty` it follows the terminal-safety rules (FR-003, FR-016).
 - **SC-015**: Plans containing the host home directory, a secret-pattern path, the primary `.git` for untrusted work or
@@ -417,6 +421,8 @@ These choices were made by the author to stay conservative. The owner may change
 - `guest_arch` is `unknown` when the runtime architecture cannot be probed.
 - The initial gated name list (FR-022) includes the name of a Linux-on-Windows layer, although Windows is out of scope.
 - The owner decision text is kept inside the informative markers.
+- A missing or unsupported driver is refused with the new `refused.driver_unavailable` (eight new codes in total). ADR
+  0013 has no configuration-error category, so a configuration error exit was not used.
 
 ## Assumptions
 
@@ -451,10 +457,10 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
 - `specs/008-workspace-sandbox/data-model.md`: "the eleven fields" becomes eighteen; the ownership description
   covers `name_and_record` (FR-008).
 - `specs/008-workspace-sandbox/contracts/runtime-provider.md`: the new fields with the container provider values of
-  FR-004; the re-verification sentence; conformance cases 1 ("all eleven fields"), 4 (label-based ownership, now per
+  FR-003; the re-verification sentence; conformance cases 1 ("all eleven fields"), 4 (label-based ownership, now per
   `ownership_mechanism`), 6 ("argv as data, no shell": shell transport allowed only under `exec_argv=quoted_verified`
   with the FR-012 corpus round-tripping byte-exact) and the new cases of FR-025.
-- `specs/008-workspace-sandbox/contracts/refusal-codes.json`: append the seven codes above and widen the "when" text of
+- `specs/008-workspace-sandbox/contracts/refusal-codes.json`: append the eight codes above and widen the "when" text of
   `refused.foreign_object` generically (FR-008). Codes are not renamed.
 - The Feature 008 conformance suite and `Admit` (`apps/whr/internal/runtime/`): new cases and the admission paths for
   the new refusals. The existing table rows stay unchanged (FR-003).
