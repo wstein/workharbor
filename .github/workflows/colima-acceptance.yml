@@ -6,10 +6,11 @@
 # Runner VMs are throwaway: nothing here touches an owner machine. Whether the Apple Silicon row (vz) can start
 # at all (nested virtualization on GitHub arm runners) is not known; the summary says so either way.
 #
-# Time budget (minutes), job cap 45; the step timeouts below sum to 44 and a test pins sum <= cap, that every
-# step has a timeout and that the probe bounds of a step fit its timeout (the start loop counts twice):
+# Time budget (minutes), job cap 45; the step timeouts below sum to 45 and a test pins: sum <= cap, every step has a
+# timeout, and for each step the probe/bounded bounds plus the watchdog grace (5 s per call, worst case) fit it. The start
+# loop counts twice; the cleanup counts up to 2 containers and 8 volumes.
 #   checkout 1, setup-go 2, build 2, helpers 1, install 5, start 10, measure 7, whr 6, extra profile 5,
-#   cleanup 3, summary 1, upload 1.
+#   cleanup 4, summary 1, upload 1.
 # Every probe is bounded by a process-group watchdog (TERM, then KILL): Go programs ignore SIGALRM, so an alarm is
 # not a bound. Destructive Colima commands and removals run only on a GitHub-hosted runner.
 name: colima-acceptance
@@ -97,9 +98,10 @@ jobs:
           die "fork failed: $!\n" unless defined $pid;
           if ($pid == 0) {
             POSIX::setpgid(0, 0);
-            exec { $ARGV[0] } @ARGV;
-            print STDERR "exec failed: $!\n";
-            POSIX::_exit(127);
+            exec { $ARGV[0] } @ARGV or do {
+              print STDERR "exec failed: $!\n";
+              POSIX::_exit(127);
+            };
           }
           POSIX::setpgid($pid, $pid);
           my $deadline = time + $secs;
@@ -241,9 +243,9 @@ jobs:
         run: |
           set -eu
           . "$RUNNER_TEMP/colima-lib.sh"
-          probe runner-facts 20 bash -c 'uname -m; sw_vers; sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize kern.hv_support kern.hv_vmm_present 2>&1; true'
+          probe runner-facts 15 bash -c 'uname -m; sw_vers; sysctl -n machdep.cpu.brand_string hw.ncpu hw.memsize kern.hv_support kern.hv_vmm_present 2>&1; true'
           # Before the first start: do the Colima directories and colima.yaml exist already (OG-1, FR-028)?
-          probe pre-start-colima-dirs 20 bash -c 'for d in "$HOME/.colima" "$HOME/.colima/default" "$HOME/.config/colima"; do if test -d "$d"; then echo "RESULT exists dir=$d"; ls -la "$d"; else echo "RESULT absent dir=$d"; fi; done; for f in "$HOME/.colima/default/colima.yaml" "$HOME/.config/colima/default/colima.yaml"; do if test -f "$f"; then echo "RESULT exists file=$f"; else echo "RESULT absent file=$f"; fi; done'
+          probe pre-start-colima-dirs 15 bash -c 'for d in "$HOME/.colima" "$HOME/.colima/default" "$HOME/.config/colima"; do if test -d "$d"; then echo "RESULT exists dir=$d"; ls -la "$d"; else echo "RESULT absent dir=$d"; fi; done; for f in "$HOME/.colima/default/colima.yaml" "$HOME/.config/colima/default/colima.yaml"; do if test -f "$f"; then echo "RESULT exists file=$f"; else echo "RESULT absent file=$f"; fi; done'
           started=false
           for attempt in 1 2; do
             probe "colima-start-$attempt" 200 colima start --runtime docker --vm-type "$VM_TYPE" --mount-type "$MOUNT_TYPE" --cpu 2 --memory 4 --disk 30
@@ -251,17 +253,21 @@ jobs:
               started=true
               break
             fi
-            destroy_probe "colima-cleanup-after-start-$attempt" 45 colima delete --force
+            # Capture the evidence BEFORE any delete removes it: the host-agent log answers the vz question.
+            probe "colima-start-diag-$attempt" 15 bash -c 'for f in "$HOME/.colima/_lima/colima/ha.stderr.log" "$HOME/.colima/_lima/colima/ha.stdout.log"; do echo "== $f"; if test -f "$f"; then tail -n 80 "$f"; else echo absent; fi; done; echo "== colima.yaml"; cat "$HOME/.colima/default/colima.yaml" 2>&1; echo "== ls _lima"; ls -la "$HOME/.colima/_lima" 2>&1; echo "== ls default"; ls -la "$HOME/.colima/default" 2>&1; true'
+            # No delete after the last attempt: the failed state stays for the later probes; cleanup removes it.
+            if [ "$attempt" -lt 2 ]; then
+              destroy_probe "colima-cleanup-after-start-$attempt" 45 colima delete --force
+            fi
           done
           printf '%s\n' "$started" >"$OUT/started"
-          probe lima-hostagent-stderr-tail 20 bash -c 'for f in "$HOME"/.colima/_lima/colima/ha.stderr.log; do test -f "$f" && tail -n 80 "$f"; done; true'
           echo "colima started: $started"
           {
             echo "### Colima start ($MATRIX_NAME on $RUNNER_LABEL, vm-type $VM_TYPE, mount-type $MOUNT_TYPE)"
             if [ "$started" = true ]; then
               echo "Colima STARTED."
             else
-              echo "Colima did NOT start after 2 attempts. For the vz row this is the answer to the nested-virtualization question; see the start logs below."
+              echo "Colima did NOT start after 2 attempts. For the vz row this is the answer to the nested-virtualization question; see the colima-start-diag probes below."
             fi
           } >>"$GITHUB_STEP_SUMMARY"
       - name: Measure the runtime
@@ -272,41 +278,41 @@ jobs:
           set -eu
           . "$RUNNER_TEMP/colima-lib.sh"
           started=$(cat "$OUT/started" 2>/dev/null || echo false)
-          probe brew-versions 20 brew list --versions colima lima docker qemu
-          probe colima-version 15 colima version
-          probe colima-status 15 colima status
-          probe colima-status-json 15 colima status --json
-          probe colima-list 15 colima list
-          probe ls-colima-home 10 ls -la "$HOME/.colima" "$HOME/.colima/default"
-          probe ls-var-run-docker-sock 10 ls -l /var/run/docker.sock
-          probe colima-yaml-next-to-socket 10 bash -c 'sock="$HOME/.colima/default/docker.sock"; if test -S "$sock"; then echo "RESULT socket=yes"; else echo "RESULT socket=no"; fi; if test -f "$HOME/.colima/default/colima.yaml"; then echo "RESULT colima.yaml-next-to-socket=yes"; else echo "RESULT colima.yaml-next-to-socket=no"; fi'
-          probe colima-yaml-keys 10 bash -c 'f="$HOME/.colima/default/colima.yaml"; grep -E "^(runtime|vmType|mountType|cpu|memory|disk|rootDisk|arch|autoActivate|rosetta|nestedVirtualization|cpuType|hostname):" "$f"; awk "/^mounts:/{p=1;print;next} /^[A-Za-z]/{p=0} p" "$f"'
-          probe df-colima-volume 10 df -k "$HOME/.colima"
+          probe brew-versions 15 brew list --versions colima lima docker qemu
+          probe colima-version 10 colima version
+          probe colima-status 10 colima status
+          probe colima-status-json 10 colima status --json
+          probe colima-list 10 colima list
+          probe ls-colima-home 5 ls -la "$HOME/.colima" "$HOME/.colima/default"
+          probe ls-var-run-docker-sock 5 ls -l /var/run/docker.sock
+          probe colima-yaml-next-to-socket 5 bash -c 'sock="$HOME/.colima/default/docker.sock"; if test -S "$sock"; then echo "RESULT socket=yes"; else echo "RESULT socket=no"; fi; if test -f "$HOME/.colima/default/colima.yaml"; then echo "RESULT colima.yaml-next-to-socket=yes"; else echo "RESULT colima.yaml-next-to-socket=no"; fi'
+          probe colima-yaml-keys 5 bash -c 'f="$HOME/.colima/default/colima.yaml"; grep -E "^(runtime|vmType|mountType|cpu|memory|disk|rootDisk|arch|autoActivate|rosetta|nestedVirtualization|cpuType|hostname):" "$f"; awk "/^mounts:/{p=1;print;next} /^[A-Za-z]/{p=0} p" "$f"'
+          probe df-colima-volume 5 df -k "$HOME/.colima"
           # Where is the VM disk, and how big is it? Names and sizes only (OG-1, FR-028).
-          probe vm-disk-location 20 bash -c 'du -sk "$HOME/.colima/_lima" "$HOME/.colima/_lima"/* 2>&1; find "$HOME/.colima/_lima" -maxdepth 3 -type f -size +1M -exec ls -ls {} + 2>&1; df -k "$HOME/.colima/_lima" 2>&1'
+          probe vm-disk-location 15 bash -c 'du -sk "$HOME/.colima/_lima" "$HOME/.colima/_lima"/* 2>&1; find "$HOME/.colima/_lima" -maxdepth 3 -type f -size +1M -exec ls -ls {} + 2>&1; df -k "$HOME/.colima/_lima" 2>&1'
           if [ "$started" != true ]; then
             for n in docker-context-ls docker-info docker-pull docker-run-pinned bind-runner-temp bind-home bind-tmpdir volume-roundtrip tar-pipe-200mib; do
               skipped "$n" "colima did not start"
             done
             exit 0
           fi
-          probe docker-context-ls 15 docker context ls
-          probe docker-info 20 docker info --format 'Server Version: {{.ServerVersion}}
+          probe docker-context-ls 10 docker context ls
+          probe docker-info 15 docker info --format 'Server Version: {{.ServerVersion}}
           OperatingSystem: {{.OperatingSystem}}
           Driver: {{.Driver}}
           DockerRootDir: {{.DockerRootDir}}
           Name: {{.Name}}
           Architecture: {{.Architecture}}
           SecurityOptions: {{.SecurityOptions}}'
-          probe docker-pull 50 docker pull --quiet "$PROBE_IMAGE"
-          probe docker-run-pinned 20 docker run --rm --pull never "$PROBE_IMAGE" sh -c 'uname -a; id'
+          probe docker-pull 45 docker pull --quiet "$PROBE_IMAGE"
+          probe docker-run-pinned 15 docker run --rm --pull never "$PROBE_IMAGE" sh -c 'uname -a; id'
           # Bind mounts: RUNNER_TEMP and HOME are both under /Users/runner here; TMPDIR is outside the home.
-          probe bind-runner-temp 25 "$RUNNER_TEMP/colima-bindtest.sh" "$RUNNER_TEMP/colima-bind-probe" "$PROBE_IMAGE"
-          probe bind-home 25 "$RUNNER_TEMP/colima-bindtest.sh" "$HOME/colima-bind-probe-$GITHUB_RUN_ID-$MATRIX_NAME" "$PROBE_IMAGE"
+          probe bind-runner-temp 20 "$RUNNER_TEMP/colima-bindtest.sh" "$RUNNER_TEMP/colima-bind-probe" "$PROBE_IMAGE"
+          probe bind-home 20 "$RUNNER_TEMP/colima-bindtest.sh" "$HOME/colima-bind-probe-$GITHUB_RUN_ID-$MATRIX_NAME" "$PROBE_IMAGE"
           tmpdir=$(mktemp -d "${TMPDIR:-/tmp}/colima-bind.XXXXXX")
           printf '%s\n' "$tmpdir" >"$OUT/bind-tmpdir"
-          probe bind-tmpdir 25 "$RUNNER_TEMP/colima-bindtest.sh" "$tmpdir" "$PROBE_IMAGE"
-          probe volume-roundtrip 20 bash -c 'set -eu; v="$1-roundtrip"; docker volume create "$v"; docker run --rm --pull never --volume "$v:/d" "$2" sh -c "echo roundtrip-ok >/d/f"; docker run --rm --pull never --volume "$v:/d:ro" "$2" cat /d/f' _ "$PFX" "$PROBE_IMAGE"
+          probe bind-tmpdir 20 "$RUNNER_TEMP/colima-bindtest.sh" "$tmpdir" "$PROBE_IMAGE"
+          probe volume-roundtrip 15 bash -c 'set -eu; v="$1-roundtrip"; docker volume create "$v"; docker run --rm --pull never --volume "$v:/d" "$2" sh -c "echo roundtrip-ok >/d/f"; docker run --rm --pull never --volume "$v:/d:ro" "$2" cat /d/f' _ "$PFX" "$PROBE_IMAGE"
           probe tar-pipe-200mib 50 "$RUNNER_TEMP/colima-tartest.sh" "$PROBE_IMAGE" "$PFX"
       - name: Measure whr against the real socket (no DOCKER_HOST)
         if: ${{ always() }}
@@ -320,8 +326,8 @@ jobs:
           started=$(cat "$OUT/started" 2>/dev/null || echo false)
           probe whr-env 5 bash -c 'echo "DOCKER_HOST=${DOCKER_HOST-unset}"; echo "COLIMA_HOME=${COLIMA_HOME-unset}"'
           # Doctor and ls need no daemon to report; they show what whr finds on its own.
-          probe whr-doctor-json 15 "$whr" doctor --json
-          probe whr-ls-local-json 15 "$whr" ls --local --json
+          probe whr-doctor-json 10 "$whr" doctor --json
+          probe whr-ls-local-json 10 "$whr" ls --local --json
           if [ "$started" != true ]; then
             for n in whr-throwaway-setup whr-ls-local-json-throwaway whr-home-clone-dry-run whr-home-clone-apply whr-home-clone-verify whr-home-backup-apply whr-home-backup-verify whr-recover-dry-run; do
               skipped "$n" "colima did not start"
@@ -332,14 +338,14 @@ jobs:
           # marker) and a named volume mounted at /home/captain. Names carry the run id and a non-protected prefix.
           ws="$PFX-ws"
           home="$PFX-home"
-          probe whr-throwaway-setup 45 bash -c 'set -eu; docker volume create --label whr.colima.acceptance=1 "$2"; docker run --rm --pull never --volume "$2:/home/captain" "$3" sh -c "echo seed >/home/captain/seed.txt"; docker create --pull never --name "$1" --label workharbor.workspace=colima-acceptance --label whr.colima.acceptance=1 --volume "$2:/home/captain" "$3" sleep 3600; docker start "$1"' _ "$ws" "$home" "$PROBE_IMAGE"
-          probe whr-ls-local-json-throwaway 15 "$whr" ls --local --json
-          probe whr-home-clone-dry-run 25 "$whr" workspace home clone --local "$ws" --dry-run --json
+          probe whr-throwaway-setup 40 bash -c 'set -eu; docker volume create --label whr.colima.acceptance=1 "$2"; docker run --rm --pull never --volume "$2:/home/captain" "$3" sh -c "echo seed >/home/captain/seed.txt"; docker create --pull never --name "$1" --label workharbor.workspace=colima-acceptance --label whr.colima.acceptance=1 --volume "$2:/home/captain" "$3" sleep 3600; docker start "$1"' _ "$ws" "$home" "$PROBE_IMAGE"
+          probe whr-ls-local-json-throwaway 10 "$whr" ls --local --json
+          probe whr-home-clone-dry-run 20 "$whr" workspace home clone --local "$ws" --dry-run --json
           probe whr-home-clone-apply 90 "$whr" workspace home clone --local "$ws" --to "$PFX-clone" --yes --json
-          probe whr-home-clone-verify 15 docker run --rm --pull never --volume "$PFX-clone:/v:ro" "$PROBE_IMAGE" cat /v/seed.txt
-          probe whr-home-backup-apply 45 "$whr" workspace home backup --local "$ws" --to "$PFX-backup" --yes --json
-          probe whr-home-backup-verify 15 docker run --rm --pull never --volume "$PFX-backup:/v:ro" "$PROBE_IMAGE" cat /v/seed.txt
-          probe whr-recover-dry-run 30 "$whr" workspace recover --local "$ws" --dry-run
+          probe whr-home-clone-verify 10 docker run --rm --pull never --volume "$PFX-clone:/v:ro" "$PROBE_IMAGE" cat /v/seed.txt
+          probe whr-home-backup-apply 40 "$whr" workspace home backup --local "$ws" --to "$PFX-backup" --yes --json
+          probe whr-home-backup-verify 10 docker run --rm --pull never --volume "$PFX-backup:/v:ro" "$PROBE_IMAGE" cat /v/seed.txt
+          probe whr-recover-dry-run 25 "$whr" workspace recover --local "$ws" --dry-run
       - name: Measure a non-default profile (Intel qemu/sshfs row only)
         if: ${{ always() && matrix.extra_profile == 'true' }}
         shell: bash
@@ -350,7 +356,8 @@ jobs:
           unset DOCKER_HOST
           whr="$RUNNER_TEMP/whr"
           # Same flags as the default profile, small resources; one attempt (FR-028, OQ-1: where does a profile put its socket?).
-          probe profile-start 180 colima start -p whr-acc --runtime docker --vm-type "$VM_TYPE" --mount-type "$MOUNT_TYPE" --cpu 1 --memory 2 --disk 10
+          probe profile-start 160 colima start -p whr-acc --runtime docker --vm-type "$VM_TYPE" --mount-type "$MOUNT_TYPE" --cpu 1 --memory 2 --disk 10
+          probe profile-status 20 colima status -p whr-acc
           probe profile-ls 10 ls -la "$HOME/.colima/whr-acc"
           probe profile-socket 10 bash -c 'sock="$HOME/.colima/whr-acc/docker.sock"; echo "path=$sock"; if test -S "$sock"; then echo "RESULT socket=yes"; else echo "RESULT socket=no"; fi'
           probe profile-docker-context-ls 15 docker context ls
@@ -359,7 +366,7 @@ jobs:
       - name: Remove throwaway containers, volumes and directories
         if: ${{ always() }}
         shell: bash
-        timeout-minutes: 3
+        timeout-minutes: 4
         run: |
           set -eu
           . "$RUNNER_TEMP/colima-lib.sh" || true
@@ -370,14 +377,14 @@ jobs:
           # The default profile's daemon holds the throwaway objects, whichever Docker context is active now.
           export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
           # Exact prefix match in the shell; no filter regex, no prune.
-          bounded 10 docker ps -a --format '{{.ID}} {{.Names}}' </dev/null 2>/dev/null | while read -r id name; do
+          bounded 8 docker ps -a --format '{{.ID}} {{.Names}}' </dev/null 2>/dev/null | while read -r id name; do
             case "$name" in
-              "$PFX"-*) bounded 10 docker rm -f -- "$id" </dev/null >/dev/null 2>&1 || true ;;
+              "$PFX"-*) bounded 6 docker rm -f -- "$id" </dev/null >/dev/null 2>&1 || true ;;
             esac
           done || true
-          bounded 10 docker volume ls -q </dev/null 2>/dev/null | while read -r name; do
+          bounded 8 docker volume ls -q </dev/null 2>/dev/null | while read -r name; do
             case "$name" in
-              "$PFX"-*) bounded 10 docker volume rm -- "$name" </dev/null >/dev/null 2>&1 || true ;;
+              "$PFX"-*) bounded 6 docker volume rm -- "$name" </dev/null >/dev/null 2>&1 || true ;;
             esac
           done || true
           unset DOCKER_HOST
