@@ -25,7 +25,7 @@ shipped by the project, and the owner confirms each step. The design defends aga
 ### Terms
 
 - **Mac host**: the owner's macOS machine; the domain of `whr setup` and `whr doctor --fix`.
-- **Docker VM**: the Linux VM of the container runtime (OrbStack). `whr` never changes it.
+- **Docker VM**: the Linux VM of the container runtime (OrbStack, or the Lima VM that Colima manages). `whr` never changes it.
 - **Item**: one catalogue entry: a tool, a container runtime or a dotfile. The reserved profile item `git-config` stands for the git move.
 - **Create class**: adds something absent (install a tool, create a file). **Modify class**: changes something present (upgrade, replace a
   file, move the git configuration, run a privileged command).
@@ -64,6 +64,14 @@ shipped by the project, and the owner confirms each step. The design defends aga
   nothing and runs no sudo; plain `doctor` writes nothing and runs no sudo.
 - **D-8 (scope, 2026-10-20)**: the threat model above; this feature is cut to the essentials.
 - **D-9 (OD-1 to OD-5, confirmed 2026-10-20)**: OD-1 (Homebrew only plus the OrbStack cask), OD-3 (dotfile preview, backup, no silent overwrite), OD-4 (Linux enrollment kept) and OD-5 (R-40 superseded) as written in the plan. OD-2 is amended: the host catalogue is a small curated list owned by WorkHarbor (13 initial entries, FR-010; entries are added deliberately), each with a minimum version only. It is not a mirror of the BundleDock toolbox: no host install of toolbox tools, no version equality between host and toolbox, no toolbox sync. The same user experience means the same few DX tools and configs (starship, fish, git), not parity.
+- **D-10 (Colima, owner decision of 2026-10-31)**: Colima is added as a second container-runtime catalogue entry, an alternative next to
+  `orbstack`. Lima is not its own entry: it comes only as a dependency of Colima. Lima as a VM driver for Linux guests is out of scope here
+  (Tart stays the VM driver for macOS guests, Feature 011). Colima is open source and installed from Homebrew core; it is not preselected
+  and needs no third-party tap. FR-026 and FR-027 carry the details; the points marked author proposal there, and the open questions after
+  FR-027, are not owner decisions.
+- **D-11 (container storage location, owner decision of 2026-10-31)**: `disk.container_storage` does not query the runtime API. The wizard
+  records the storage location; doctor reads it from the runtime's readable configuration file first and falls back to the record
+  (Feature 011 FR-041, decision 21; Colima details in FR-028).
 
 OD-1 to OD-5 are in the [plan](plan.md#owner-decisions), confirmed 2026-10-20. Owner H38 (2026-10-20) also confirms the existing DP-1 to DP-5 defaults and the no-op bookkeeping choice in FR-021; AP decisions, measured production minima and AP-6 reason placement remain separate. H37 permits source-only dependents to use exact independently CLEAR local prerequisite parents with per-work-item evidence before owner merge, without treating open task/real-host acceptance as complete.
 
@@ -186,7 +194,7 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
   the step (`version_below_minimum`), reported, not rolled back.
 - **FR-010**: Every installable item is listed up front, before the question, with type, name, tap, minimum version, declared
   network destinations and purpose, and any privileged command. Each entry has a `selected_by_default` flag and, where it needs a
-  dotfile change, a `config` marker (`dotfile` or `shell_hook`). The initial catalogue has exactly 13 entries. Preselected core: `orbstack` (cask), `git`, `gh`, `jq`, `fish`, `starship`; preselected recommended: `ripgrep` (rg), `fd`, `fzf`, `zoxide`, `bat`, `jj`, `herdr` (all 13 entries preselected, each individually opt-out under FR-005). Entries needing a dotfile or shell hook: `starship`, `fzf`, `zoxide`, `fish`. Nothing else from the toolbox goes on the host (no scanners, linters, language tools, hugo, typst, delta, lazygit, direnv, mise, uv, tmux). More entries are added deliberately by the owner (OD-2, OG-7). The wizard shows the diff of every dotfile config change (git move uses the structural preview of FR-014); it never touches git configuration (except the guided move of FR-014) or the login shell. It MUST NOT contain an entry that installs, configures or
+  dotfile change, a `config` marker (`dotfile` or `shell_hook`). The initial catalogue has exactly 13 entries. Preselected core: `orbstack` (cask), `git`, `gh`, `jq`, `fish`, `starship`; preselected recommended: `ripgrep` (rg), `fd`, `fzf`, `zoxide`, `bat`, `jj`, `herdr` (all 13 entries preselected, each individually opt-out under FR-005). Entries needing a dotfile or shell hook: `starship`, `fzf`, `zoxide`, `fish`. Nothing else from the toolbox goes on the host (no scanners, linters, language tools, hugo, typst, delta, lazygit, direnv, mise, uv, tmux). More entries are added deliberately by the owner (OD-2, OG-7); FR-026 adds the first one, Colima. The wizard shows the diff of every dotfile config change (git move uses the structural preview of FR-014); it never touches git configuration (except the guided move of FR-014) or the login shell. It MUST NOT contain an entry that installs, configures or
   authenticates an AI agent tool (Feature 006 FR-030).
 - **FR-011**: `whr` refuses to start as root or with `SUDO_USER` set (darwin; `host_setup.running_as_root`) and never runs elevated itself.
   In real runs of `setup` and `doctor --fix` a step marked `privileged` in the catalogue runs as `/usr/bin/sudo -- <catalogue argv>`, fixed
@@ -264,6 +272,77 @@ On Linux `whr setup` keeps Feature 006 enrollment; the wizard and `doctor --fix`
 - **FR-025**: `whr` never changes the login shell, edits shell startup files other than catalogue dotfiles, adds Homebrew taps or sends
   telemetry.
 
+**Container runtime alternatives (D-10)**
+
+- **FR-026** (Colima entry): The catalog MUST gain one entry for Colima, in addition to the 13 initial entries of FR-010 (a deliberate
+  owner addition under OD-2; it is not part of the initial 13, so `orbstack` stays the only preselected runtime). Its fields follow the
+  existing entries: `id` `colima`, `kind` `runtime`, title naming Colima and, as an author proposal, that installing it also installs its
+  Lima dependency, `platforms` `darwin-arm64` and `darwin-amd64`, `selected_by_default` false, `network` (host `formulae.brew.sh`, the
+  read-only lookup URL of the formula, purpose as the other formula entries), and `tool` with `source` = Homebrew formula `colima` from
+  `homebrew/core`, `may_elevate` false, `command` `colima`, a `version_args` and `version_regex` that read the version of the `colima` command,
+  and a `min_version`. No new schema property is needed: `kind` `runtime` is not tied to the OrbStack-only `version_metadata` probe, and the
+  closed `source.tap` list stays `homebrew/core` and `homebrew/cask` (so the closed third-party list of Feature 011 FR-038 is unaffected).
+  The exact `version_args`, `version_regex` and `min_version` are measured on the owner's Mac (OG-1), like the other minima, and are not
+  fixed by this text. Behavior is the generic one: detection, `present_*` states, install and upgrade through FR-009, per-item opt-out (FR-005),
+  `host.tool.colima` in plain `doctor` (FR-015) and `doctor --fix` for a selected item (FR-016). Colima is installed only when the owner selects it
+  (`customize`, or the selection flag that names the item); `yes` alone installs the preselected items only. Lima is not a catalog entry,
+  is not detected, is not an item in the host profile and has no step of its own: it arrives only as a Homebrew dependency (FR-009 already
+  forbids `--ignore-dependencies`). Linux is unchanged (FR-001: nothing is installed on Linux).
+- **FR-027** (what `whr` does and does not do with Colima): D-3, FR-002 and FR-003 apply to Colima unchanged: `whr` never runs
+  `colima start`, `stop`, `delete`, `ssh` or `template`, never writes a Colima profile file (`~/.colima`), never creates or switches a Docker context (that would
+  edit the Docker client configuration), never starts or configures the Lima VM and never mounts the Colima socket into an environment;
+  it only connects to the discovered socket (Feature 006 FR-060; Feature 011 FR-039 and Feature 012 add their own read-only calls). The report after a
+  real run (wizard flow, step 7) names the next step for the installed runtime in the same shape as for OrbStack: start the runtime once
+  yourself (for Colima `colima start`); `whr` does not start or configure it; then run `whr doctor` (author proposal for the exact
+  wording). One endpoint rule applies to every consumer of the container runtime, with Colima as the case that exposes it, because
+  its socket is under the user's home and not at `/var/run/docker.sock`: the endpoint is the one that Feature 006 FR-060 discovery
+  selects (`DOCKER_HOST` when set, else the first documented candidate that accepts a connection; the documented list already contains
+  `~/.colima/default/docker.sock`, so the default Colima profile needs no change). No consumer hard-codes a socket path of its own: `container.socket`,
+  `container.image` and `container.leftovers` (Feature 011 FR-039), the runtime-access step of `whr shell` (Feature 012 step 5 and Feature 010
+  FR-002) all use that one endpoint and the `unix://` rule, and each `docker` call names it as `--host=<endpoint>` (Feature 010 FR-002, Feature 012). The
+  image build of Feature 011 FR-034 and FR-037 does the same (author proposal P-2: Feature 011 says today only "the container runtime's normal
+  build command", which would use the Docker client's active context, possibly a different daemon than the one the checks read). Docker contexts stay not
+  consulted (Feature 010 FR-002, `docs/container-runtime.md`) until the owner decides open question OQ-1.
+
+- **FR-028** (Colima storage location, owner decision D-11; Feature 011 FR-041 gives the generic rule): The Colima profile is found from the
+  discovered endpoint, not from an environment variable: an endpoint `<dir>/<profile>/docker.sock` whose directory holds `colima.yaml` is the
+  profile `<profile>` (for the documented candidate, `~/.colima/default/docker.sock` and `~/.colima/default/colima.yaml`). Doctor reads that
+  file as a plain bounded file read (no `colima` process, no runtime API) and uses it as the first source. From the file `whr` reads only
+  the virtual disk size settings (the keys `disk` and `rootDisk`, in GiB): these are the maximum sizes of the VM disk, not free space and
+  not used space, and they are information only (Feature 011 FR-041). The file is not known to state a host path; the host location that is
+  measured is therefore the Colima data directory that holds the profile's directory (the VM disk lives under it), and the number reported is
+  the free space of the host volume that holds that directory. Both facts (the key names and that no path is stated) and the exact subdirectory
+  are unverified here and are measured on the owner's Mac (OG-1) before this FR is implemented; if the real file states the location,
+  the stated location replaces the directory rule. The wizard determines the same location when `colima.yaml` exists and records it
+  (FR-041). Colima writes `colima.yaml` on its first `colima start`, so right after the install nothing is recorded and the report names the later `whr setup` run.
+  A runtime without a readable configuration file (for OrbStack none is specified here) gives no first source: the recorded value, else `unknown`.
+
+Open questions for the owner (none is decided by this text; each states the author proposal):
+
+- **OQ-1 (Docker context and Colima profiles)**: The request was that detection, runtime access and the image build use "the active Docker
+  context/endpoint". Existing, owner-confirmed specs do the opposite on purpose: discovery reads only `DOCKER_HOST` and the documented socket
+  list and never a Docker context (Feature 010 FR-002 and its research and contract, `docs/container-runtime.md`; Feature 006 FR-060 uses the
+  Docker CLI's own rule only for `DOCKER_HOST`). Consequences for Colima: (1) the default profile works via `~/.colima/default/docker.sock`;
+  (2) a non-default profile (`colima start -p <name>`, socket `~/.colima/<name>/docker.sock`) is not found unless the user sets
+  `DOCKER_HOST=unix://...`, which is already a supported sole candidate; (3) when several runtimes are running, the documented order picks the first
+  (OrbStack before Colima), which can differ from the active context of the user's `docker` client; (4) the exact location of the Colima
+  home directory (`~/.colima` or an XDG location, `COLIMA_HOME`) and the socket name per Colima version are not verified here and need the
+  owner's Mac measurement (OG-1). Options: (a) no change beyond FR-027: profiles other than `default` use `DOCKER_HOST` (author proposal: smallest change, no
+  decision of 006/010 reopened); (b) add a bounded probe of `~/.colima/<profile>/docker.sock` (profile names from directory entries,
+  fixed order, no glob into other trees); (c) read the active Docker context endpoint (reverses the decision above, touches
+  `docker context` metadata and the Docker client configuration file, needs the `unix://`-only rule applied to it, and amends Features 006,
+  010 and 012 and the doctor contract).
+- **OQ-2 (Docker client)**: Colima provides the daemon, not the `docker` client; the OrbStack cask ships the client. The Homebrew formula
+  for the client is `docker` (core). Without a client, Feature 012 step 5 refuses with exit 68 and a remediation, and Feature 011
+  image builds cannot run. Options: (a) no extra entry; the report names the client as a prerequisite (smallest change); (b) a second new,
+  not preselected entry `docker` (formula, `homebrew/core`) that the Colima entry `requires` (the loader rule "every `requires` id exists" is
+  there, but 009 defines no selection semantics for `requires`, so they would be specified with it). Author proposal: (b), because a runtime
+  that `whr` cannot talk to is a trap; it adds one more entry to every count below.
+- **OQ-3 (alternative, not exclusive)**: Nothing makes OrbStack and Colima exclusive. Both can be selected, installed and detected; discovery
+  picks the first reachable socket in the documented order. Author proposal: no exclusion rule; a user who wants only Colima opts out of
+  `orbstack` in `customize` (FR-005). A never-selected, not-preselected entry in the host profile (selected, opted out, or absent) is a
+  question 009 does not answer today (all 13 initial entries are preselected) and is shared with Feature 011 FR-040; Colima follows the answer given there.
+
 ### Key Entities
 
 CatalogueItem, DetectionResult, Plan, Step, HostProfile, BackupRecord, Protocol ([data model](data-model.md)).
@@ -297,6 +376,18 @@ CatalogueItem, DetectionResult, Plan, Step, HostProfile, BackupRecord, Protocol 
   (FR-001).
 - **SC-014**: All tests pass offline with `go test` and `python3 scripts/check_repo.py`; the per-PR diff of frozen paths is empty except the
   named gated tasks (FR-023, FR-024).
+- **SC-015**: The shipped catalog has the Colima entry of FR-026 (and, if OQ-2(b) is chosen, the client entry): `selected_by_default` false,
+  Homebrew formula from `homebrew/core`, platforms darwin only, no `config`, no privileged step; the schema and the loader accept it with no
+  change to the `source.tap` enum; `yes` without selecting it plans no Colima step; selecting it plans one `brew_install` (create class)
+  and re-detection afterwards; fake `brew` calls show no `--ignore-dependencies`, no tap and no other formula name than the entry's.
+- **SC-016**: No plan step, argument or path starts, stops, configures or deletes a Colima profile or Lima VM, edits `~/.colima` or the Docker
+  client configuration, or mounts a socket (FR-027, SC-006); the fake exec recorder fails on any such call. With a fake socket only at
+  `~/.colima/default/docker.sock`, `container.socket` passes and the consumers of FR-027 name that same endpoint as `--host=<endpoint>`, with no
+  fallback to `/var/run/docker.sock`.
+- **SC-017**: With a fake endpoint `~/.colima/<profile>/docker.sock` and a fake `colima.yaml` in that directory, the Colima source of FR-028
+  reads the file only (no process, no API call), reports the `disk` and `rootDisk` values as information, and measures the fake free bytes of
+  the volume that holds the Colima data directory; for a non-Colima endpoint it does not read any Colima file; the wizard records the location only
+  when the file exists (Feature 011 SC-036).
 
 ## Assumptions
 
@@ -304,3 +395,48 @@ CatalogueItem, DetectionResult, Plan, Step, HostProfile, BackupRecord, Protocol 
   check) are available when the tasks that need them start; if not, work stops and asks.
 - Homebrew and OrbStack facts (cask names, prefixes, Cellar and Caskroom layout) are measured on the owner's Mac in T002 and T003 (OG-1).
 - DP-1 to DP-5 are confirmed by H38; the plan decision matrix records every consumer. AP-6 reason/result placement remains unselected and blocks only affected JSON-result/schema integration and registration; it does not block independent pure functions or source-only fixtures. AP applications and real Mac measurements keep their separate gates.
+
+## Colima addition: changes to existing documents and conformance cases (D-10, D-11; spec-only, nothing below is implemented)
+
+Catalog count: Colima is one entry more than the catalog holds when it is implemented: 14 on the Feature 009 text alone (13 initial entries),
+17 once the Feature 011 FR-040 entries (16) are in; one more if OQ-2(b) adds the client entry. The reserved item `git-config` keeps being
+no catalog entry: the sentence "it is not a fourteenth catalogue entry" in `wizard-flow.md` becomes "fifteenth" (or "eighteenth" after Feature 011).
+
+Changes on approval, each through the plan and tasks, with the owner gates of FR-024 where they name frozen paths:
+
+- `specs/009-host-setup-wizard/` : `spec.md` (this text; FR-010 keeps "initial catalogue has exactly 13 entries", the additions are named), `plan.md`
+  (decision matrix row for D-10 and D-11, requirement-to-evidence rows for FR-026 to FR-028), `tasks.md` (a catalog task, a wizard-flow and
+  recording task and the OG-1 measurement task; T001 is already checked, so this reopens the catalog work as a new task, not an edit of T001),
+  `contracts/wizard-flow.md` (report line for starting the runtime; the "fourteenth" sentence), `data-model.md` (HostProfile "No paths or
+  values" widened for the storage record; Terms "Docker VM"), `checklists/requirements.md` and `analysis.md` (entry counts, "13 entries").
+- `contracts/host-tool-catalogue.schema.json`: no property or enum change for the Colima entry; `x-initial-items` and
+  `x-initial-defaults.selected_by_default_false` gain the entry (or a new "added items" list, if the owner wants "initial" to keep its meaning).
+- `apps/whr/internal/hostsetup/catalogue/assets/catalogue.json` (new entry; `catalogue_version` bump) and its loader tests,
+  `TestInitialCatalogueEntries` (exact production ids, defaults and minima: reopened), the detection fixtures for a Homebrew-managed
+  `colima` formula path, and the quality record `docs/quality/009-host-setup-wizard/issue176-catalogue-tests.md`.
+- `contracts/cli/doctor-checks.json` and `TestDoctorChecksMatchContract`: the `disk.container_storage` text (lookup order, no API) and the
+  5 s budget rule (file read, filesystem call); the socket candidate list is unchanged for the default profile. `specs/006-whr-cli/spec.md` FR-060: the same two
+  statements, and its `disk.container_storage` sentence. Both are owner-gated (FR-024).
+- `docs/container-runtime.md`: name Colima as a supported alternative next to OrbStack (owner-gated, FR-024); `README.md`/`docs` mentions of "OrbStack" as the
+  only runtime, if any, are checked when this lands.
+- `specs/008-workspace-sandbox/spec.md`: wording only, "Docker VM ... (for example OrbStack)" gains Colima; no requirement changes
+  (Feature 008 has no socket path or runtime list).
+- `specs/011-vm-provider/spec.md`: FR-039, FR-040 (16 to 17 entries), SC-035, the `wizard-flow` sentence in its Feature 009 amendment ("seventeenth"),
+  FR-041, SC-036, decision 21 and its changes list entries are in this change; FR-034 and FR-037 gain the explicit `--host=<endpoint>` for the build if P-2 is accepted.
+- `specs/012-container-interactive-shell/spec.md`, `specs/010-host-and-workspace-panes/spec.md`: no change if OQ-1(a); amended if OQ-1(c).
+- `apps/whr/internal/doctor/` (`socket.go`, tests) is not reopened for the default profile; reopened for OQ-1(b)/(c) and for the storage lookup.
+
+Conformance cases (fakes only; FR-023):
+
+| Case | Setup | Expected |
+| --- | --- | --- |
+| CC-1 catalog entry | shipped catalog | Colima present, `kind` runtime, Homebrew core formula, darwin only, not preselected, no config, no privileged step; schema and loader accept it unchanged; `orbstack` still the only preselected runtime |
+| CC-2 yes plan | `yes` with Colima absent | no Colima step; with Colima selected, one `brew_install`; no `--ignore-dependencies`, tap or other formula name |
+| CC-3 detection | formula path under Cellar; version at, above, below minimum; shim-like or unparseable output | `present_ok`, `present_outdated`, `present_unverifiable`; another source is never replaced |
+| CC-4 boundary | any run | no `colima start/stop/delete/ssh/template`, no write under `~/.colima`, no Docker context change, no socket mount (SC-016) |
+| CC-5 endpoint | socket only at `~/.colima/default/docker.sock` | `container.socket` passes; checks, `whr shell` and the image build use that endpoint as `--host`; no fallback to `/var/run/docker.sock` |
+| CC-6 two runtimes | OrbStack and Colima sockets both accept | documented order decides; the evidence names the selected candidate (OQ-1, OQ-3) |
+| CC-7 profile | endpoint `~/.colima/work/docker.sock` | not found unless `DOCKER_HOST` is set (OQ-1(a)) |
+| CC-8 storage config first | `colima.yaml` and a differing recorded value | file wins; evidence names the source; `disk` shown as information only; free space from the host volume; no API call |
+| CC-9 storage fallback | file absent, recorded value present, then neither | recorded value used; then `unknown` with a reason; never `fail` for a missing location |
+| CC-10 recording | wizard run with and without `colima.yaml` | recorded with preview only when the file exists; `doctor` and `doctor --fix` record nothing; a second `setup` run records after the first start |

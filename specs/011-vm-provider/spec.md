@@ -486,9 +486,8 @@ provider and Linux hosts are unchanged.
   container instances, with their size when the runtime states it and "size unknown" otherwise; `pass` with the leftovers as
   evidence when they are measurable, `unknown` when not, never `fail` for leftovers alone, so leftovers do not fail `whr
   doctor`; they are listed for `doctor --fix`, FR-033). The free space of the
-  container storage is the existing `disk.container_storage` check, which is `unknown` whenever the storage location cannot be
-  found without the runtime API (the normal case on macOS), so container free space is in practice not measured, while
-  `vm.space` can fail on low space. This is a stated limit, not changed here (Open Questions). They use only read-only list and inspect calls of the
+  container storage is the existing `disk.container_storage` check, whose location lookup on a macOS host is extended by FR-041
+  (runtime configuration file, then a value recorded by the wizard, else `unknown`; still no runtime API call). They use only read-only list and inspect calls of the
   container runtime on the discovered socket within the shared 5 s budget, start no container and change nothing. The VM
   space report of FR-032 has no further container counterpart in this increment: container space is the leftover sizes
   and `disk.container_storage`. On Linux both checks report `skipped` (reason `unsupported_platform`: the image offer and the
@@ -511,6 +510,25 @@ provider and Linux hosts are unchanged.
   entry's step depends on it (Feature 009 `requires` and `depends_on`) and Git is detected again after that step, and the step is `blocked` only if Git is still too old. The
   `blocked` is an existing Feature 009 StepResult status; only its use for an unmet host requirement and the reason code are
   new and are author proposals; the reason code is appended to the Feature 009 `refusal-codes.json` (changes list).
+- **FR-041** (container storage location, owner decision 21 of 2026-10-31): `disk.container_storage` MUST NOT query the container
+  runtime API; Feature 006 FR-060 and the `doctor-checks.json` rule that the check makes no API call stay unchanged. The location is
+  looked up in this order, and the evidence names the source used: (1) the runtime's own configuration file, where the runtime keeps a
+  freely readable one that the catalog or driver data of that runtime names; it is found from the discovered endpoint (Feature 009
+  FR-027) and read as a plain bounded file read with the same bounds as the `daemon.json` read, with no process started; (2) if the
+  file is absent, unreadable or states nothing usable, the location recorded by the setup wizard (below); (3) otherwise `unknown`
+  with the reason, as today. On Linux the existing `/var/lib/docker` rule is unchanged. Free space is then measured on the host
+  volume that holds the location, with the normal filesystem free-space call, against the existing threshold of `doctor-checks.json`.
+  What is read and what is measured MUST NOT be conflated: a disk-size setting in a configuration file is the maximum size the
+  runtime lets its virtual disk reach. It is shown as information in the evidence and is not free space, not used space and not a
+  pass or fail criterion (author proposal), and the free space inside the runtime's VM is not measured at all (it needs the runtime API). The
+  measured number is the free space of the host volume, which bounds how far the virtual disk can still grow. The wizard (macOS, `whr setup`, for a
+  selected container runtime whose configuration file exists) determines the location with the same read and records it in the
+  host profile as an existing `profile_write` step (no new step kind), and shows it in the preview. If the runtime has not created its
+  configuration yet (never started), nothing is recorded, the report says so, and a later `whr setup` run records it. Plain `doctor` and
+  `doctor --fix` record nothing here (author proposal: `doctor --fix` only removes leftovers and rebuilds the image). The record name
+  `container_storage`, its fields (runtime item id, profile name, home-relative location, source) and its place beside the image record of FR-034 are author proposals; the
+  read order is the owner's. Evidence redacts the home directory as in Feature 006 FR-060. A recorded value that no longer exists
+  is `unknown`, not `fail`. The reads of the file and the free-space call draw on the shared 5 s budget.
 
 ### Appended refusal codes
 
@@ -665,6 +683,12 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   says so, the step is `blocked`, and no Git install or upgrade call is recorded; with Git 2.46 or newer the step is
   offered; when the catalog `git` item is in the same plan the step depends on it and Git is detected again after it, and
   the step is `blocked` only if Git is still too old (FR-040).
+- **SC-036**: With a fake runtime configuration file, a fake recorded value and a fake filesystem, `disk.container_storage` (macOS)
+  makes no runtime API call and starts no process; with the file present it uses it and says so (a differing recorded value is ignored);
+  with the file absent or unusable it uses the recorded value; with neither it is `unknown`; free space is the fake free bytes of the
+  volume of the location and the status is `fail` below the existing threshold; a disk-size setting in the file appears as information
+  only and changes no status; the wizard records the location only when the file exists, in the preview and as a `profile_write` step, and
+  `doctor` and `doctor --fix` record nothing; the file read and the free-space call draw on the shared 5 s budget (FR-041).
 
 ## Owner decisions (confirmed 2026-10-31)
 
@@ -708,7 +732,7 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
 12. **VM tool installation (NEW)**: the VM tool becomes a catalog entry that is not preselected (decision 18 brings the catalog to 16 entries),
     installed through the existing adapter only on explicit selection; a tool from another source is never replaced or
     removed (Feature 009 FR-008). This changes decision 7 (FR-031, SC-025).
-13. **Doctor and cleanup (NEW, corrected)**: on a macOS host, the same rules for both backends (container checks FR-039, container leftovers FR-033; the space report is the VM check FR-032 plus, for containers, leftover sizes and `disk.container_storage`, which is usually `unknown` on macOS; see Open Questions): read-only checks, the space report, and
+13. **Doctor and cleanup (NEW, corrected)**: on a macOS host, the same rules for both backends (container checks FR-039, container leftovers FR-033; the space report is the VM check FR-032 plus, for containers, leftover sizes and `disk.container_storage`, whose location lookup FR-041 extends without a runtime API call): read-only checks, the space report, and
     `whr doctor --fix` removing only owned leftovers (FR-033) with preview and per-item `--confirm`. `doctor --fix` may also
     rebuild a missing or unusable image locally from the user-owned definition, after a preview with size and effort and a
     per-item `--confirm`; no silent build and no silent download (downloads only after the confirmed preview), nothing distributed (FR-037, SC-032). `doctor --fix` does not install
@@ -745,6 +769,11 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
 20. **Upgrade from allowed third-party sources (NEW)**: `brew upgrade <tap>/<name>` is allowed for the listed sources only,
     as its own modify-class step (`brew_upgrade_source`) with a preview and the per-item `--confirm <item id>`, exactly like
     the install. `doctor --fix` may do it; `--yes` alone never does (FR-038, SC-033).
+21. **Container storage location (2026-10-31, NEW; resolves Open Question 2)**: `disk.container_storage` does not query the runtime
+    API (Feature 006 FR-060 unchanged). The wizard records the storage location during setup; doctor reads it from the runtime's freely
+    readable configuration file first, uses the recorded value as the fallback, else `unknown`; free space is measured on the host volume
+    that holds the location (FR-041). The record name, its fields, the information-only use of a disk-size setting and that
+    `doctor --fix` does not record are author proposals.
 
 Author proposals made while recording these decisions (the owner may change them):
 
@@ -802,8 +831,8 @@ Author proposals made while recording these decisions (the owner may change them
 Two questions for the owner. (1) Should not-applicable skips (the six new checks on Linux, on a host without a VM driver or
 runtime) be left out of the doctor verdict? Today no host reaches `ok`: Feature 006 FR-060 already reports the control-plane
 and host-credential checks as `skipped`. The six permanent skips would keep such hosts at `incomplete` (the exit status stays 0)
-once those checks become measurable. (2) Should container free space be measured through the runtime API, which Feature 006 FR-060 and the
-`doctor-checks.json` note currently forbid, or stay `unknown` (FR-039)? No rule is invented for either. NC-1 to NC-3 were decided on 2026-10-31 and are recorded
+once those checks become measurable. (2) was decided on 2026-10-31 (decision 21, FR-041): no runtime API; the location comes from a readable runtime
+configuration file or a wizard record. NC-1 to NC-3 were decided on 2026-10-31 and are recorded
 as OD-4 to OD-6.
 
 ### Verification before the plan (checks, not decisions)
@@ -856,7 +885,12 @@ as OD-4 to OD-6.
   become measurable such hosts would stay at `incomplete` (exit status 0); whether not-applicable skips should be left out is
   an open question.
   The 5 s budget lists of FR-060 and of the `doctor-checks.json` rules ("each socket dial, `git --version` and
-  `daemon.json` read draws on it") also name the driver `probe` and `list` invocations and the runtime list and inspect calls.
+  `daemon.json` read draws on it") also name the driver `probe` and `list` invocations and the runtime list and inspect calls, and
+  (FR-041) the runtime configuration file read and the filesystem free-space call of `disk.container_storage`. FR-060 and the
+  `doctor-checks.json` entry for `disk.container_storage` (today "measured on `/var/lib/docker` only if readable ... otherwise `unknown`";
+  its `unknown` text "location not discoverable without the runtime API") gain the macOS lookup order of FR-041 (configuration file,
+  recorded value, else `unknown`) and keep the rule that the check calls no runtime API. This is a plain file read in the sense of the
+  existing `daemon.json` read.
 - `specs/009-host-setup-wizard/` (spec, `contracts/wizard-flow.md`, `data-model.md`, the catalog schema
   `host-tool-catalogue.schema.json`, its loader tests, `refusal-codes.json` and the protocol contract; amendment for FR-031,
   FR-033, FR-034, FR-037, FR-038 and FR-040, owner-gated like AP-1 to AP-9; Feature 009 FR-024 applies and the frozen contracts
@@ -886,6 +920,10 @@ as OD-4 to OD-6.
     `git-config`; unknown ids exit 64) are widened by `image:container`, `image:vm`, `vm-instance:<id>`,
     `vm-reservation:<id>` and `container-instance:<id>`, and the `refusal-codes.json` text of `host_setup.unknown_item` ("neither
     a catalogue id nor the reserved git-config item") is widened the same way.
+  - **Container storage record (FR-041)**: the wizard-flow plan gains a `profile_write` that records the storage location when the
+    runtime configuration file exists, with its preview line and report line; the data model sentence "HostProfile ... No paths or
+    values" is widened for this record and for the image record of FR-034 (home-relative path, no value); `host.setup` output shows the
+    recorded location. The record name `container_storage` and its fields are author proposals.
   - **Refusal codes**: `host_setup.host_requirement_unmet` (a step is `blocked` because a declared host requirement is unmet; 68
     when nothing was applied) is appended to Feature 009 `refusal-codes.json` (author proposal).
   - **Host profile**: the data-model line "No paths or values" is amended: the HostProfile gains a record per image offer with
@@ -955,5 +993,7 @@ These notes name products. They are not requirements and the vendor-name gate of
 - Initial list for the gate of FR-022: tart, lima, utm, qemu, parallels, vmware, virtualbox, hyper-v, kvm, libvirt,
   vagrant, multipass, firecracker, wsl.
 - Docker is the container runtime of Feature 008 and is outside the VM backend list of FR-022.
+- Colima (owner decision of 2026-10-31, Feature 009 FR-026 to FR-028) keeps a profile configuration file under its home directory
+  (`~/.colima/<profile>/colima.yaml`, to be measured on the owner's Mac) from which FR-041 reads the virtual disk size setting; Feature 009 FR-028 states what is read there.
 - Running Linux tests inside WSL 2 on a Windows host is possible and is not a target (FR-029).
 <!-- informative:end -->
