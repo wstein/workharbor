@@ -421,7 +421,7 @@ provider and Linux hosts are unchanged.
   is still active is not a leftover, and nothing else is repaired except the image rebuild of FR-037. It uses the mechanics of Feature 009 FR-016, FR-007 and
   FR-017: it requires a host profile and otherwise refuses with `host_setup.profile_absent` (Feature 009 FR-016); the repair
   is a modify-class step (it removes something present) with the item id `vm-instance:<instance id>`,
-  `vm-reservation:<reservation id>` (VM) or `container-instance:<instance id>` (container). Without `--yes` it prints the preview (name, id and size if known, per item) and exits
+  `vm-reservation:<reservation id>` (VM, released by the step kind `vm_reservation_release`) or `container-instance:<instance id>` (container). Without `--yes` it prints the preview (name, id and size if known, per item) and exits
   70, and with `--yes` each item is removed only with its own `--confirm <id>`. The preview MUST show, for each leftover,
   whether its results were exported; a stopped or failed clone whose results were not exported is marked "results not
   exported". Confirming such an item with `--confirm <id>` IS the results-deletion confirmation of Feature 008 FR-008:
@@ -433,16 +433,18 @@ provider and Linux hosts are unchanged.
   alike (the limit to a macOS host holds for both). The offer is its own step, with these rules. The wizard generates the
   image definition (a container build file or a VM recipe) as a readable file owned by the user, shows it, shows a size
   preview (download and disk size, "size unknown" when not stated) and then asks an explicit question with the default
-  `no`. It builds locally only from that file and only after `yes`. The container image is built with the container
+  `no`. The definition is written to disk, and the build starts, only after `yes` to the offer (a `no` writes nothing,
+  Feature 009 FR-004); until then the wizard shows the generated content from memory. It builds locally only from that file. The container image is built with the container
   runtime's normal build command: the build changes no VM setting of the container runtime, writes only images that carry
   `whr`'s own label, and may fetch base layers from a registry as part of the build; that fetch is not a pull of a prebuilt
-  image (FR-007). A build never starts silently, `--yes` alone does not approve it, and an unattended run without
-  confirmation exits 70. Any download the build needs is named in the preview and happens only after the confirmation. An
+  image (FR-007). A build never starts silently, `--yes` alone approves neither the definition write nor the build (both belong to the offer and are modify-class steps
+  with the per-item `--confirm image:<backend>`), and an unattended run without confirmation exits 70. Any download the build needs is named in the preview and happens only after the confirmation. An
   existing definition file is never overwritten without asking: the diff, its own confirmation and a verified backup, as for a
   dotfile in Feature 009 FR-013. The generated definition is not a catalog dotfile: its content comes from a template of
   the release that the wizard shows, and its target path is chosen by the wizard and shown; the catalog-template and SHA-256
   rule of Feature 009 FR-013 applies to catalog dotfiles only (Feature 009 amendment below). The wizard records the
-  definition path and the image name and label it uses, so that doctor can find them (FR-039). The built image stays local and is never distributed (FR-007). Feature 009 and ADR 0009
+  definition path (home-relative) and the image name and label it uses in a record of the host profile, so that doctor can
+  find them (FR-039; Feature 009 amendment below). The built image stays local and is never distributed (FR-007). Feature 009 and ADR 0009
   define no image creation today, so this is new for both backends and is delivered through the Feature 009 amendment below.
   Real image builds are owner gates (Feature 008 FR-032, plan OG-3) and owner-run evidence; FR-034 is tested offline with
   fake runners (SC-029). Linux `whr setup` is unchanged.
@@ -463,20 +465,23 @@ provider and Linux hosts are unchanged.
   install the VM tool (FR-031). Real builds are owner-run evidence and FR-037 is tested with fake runners (SC-032). Linux
   `whr doctor --fix` still refuses.
 - **FR-038**: The catalog definition MUST carry a closed, named list of allowed third-party package sources (taps), exactly
-  two: the source that carries the VM tool and the owner's own source (decision 17). Every catalog entry names its source
-  in the required `tap` field of the catalog schema: either one of the two core sources of Feature 009 or one source of
-  this list. Wildcards, a source supplied by the user and a source outside the list are rejected, and every other
-  third-party source stays forbidden (Feature 009 FR-025). The preview shows the source per item. A tool from a listed
-  third-party source is installed by a modify-class step (the new kind `brew_install_source`): the wizard asks for it one
-  by one with default `no`, `--yes` alone never approves it, and an unattended run needs `--confirm <item id>`, so
-  `--yes --only <tool>` cannot install it. This applies to every entry from a listed third-party source (FR-031, FR-040).
-  Where the closed list is defined (the catalog file or the code) and the step kind name are author proposals. The
-  concrete source names are in the informative notes, the catalog and the driver documentation, not in this
-  specification's normative text.
+  two: the source that carries the VM tool and the owner's own source (decision 17). The list is the `source.tap` enum of the
+  catalog schema, which every entry names in the required `tap` field: either one of the two core sources of Feature 009 or
+  one source of this list. Wildcards, a source supplied by the user and a source outside the list are rejected, and every
+  other third-party source stays forbidden (Feature 009 FR-025). The preview shows the source per item and states that
+  installing from it makes Homebrew add that source permanently to its configuration. A tool from a listed third-party
+  source is installed by the modify-class step `brew_install_source` and upgraded by the modify-class step
+  `brew_upgrade_source` (`brew install <tap>/<name>` and `brew upgrade <tap>/<name>`, for the listed sources only, decisions
+  19 and 20). The wizard asks for each one by one with default `no`, `--yes` alone never approves either, and an unattended
+  run needs `--confirm <item id>`, so `--yes --only <tool>` cannot install or upgrade it. `doctor --fix` may upgrade such an
+  item with the same preview and per-item `--confirm`, and never installs the VM tool (FR-031). The concrete source names
+  are in the informative notes, the catalog and the driver documentation, not in this specification's normative text.
 - **FR-039**: `whr doctor` MUST gain read-only checks for the container backend: `container.image` (the image recorded by FR-034 exists and
   carries `whr`'s label: `pass`; missing or unusable: `fail`; no recorded image definition: `skipped`, reason
   `no_image_defined`) and `container.leftovers` (owned
-  container instances, with their size when the runtime states it and "size unknown" otherwise). The free space of the
+  container instances, with their size when the runtime states it and "size unknown" otherwise; `pass` with the leftovers as
+  evidence when they are measurable, `unknown` when not, never `fail` for leftovers alone, so leftovers do not fail `whr
+  doctor`; they are listed for `doctor --fix`, FR-033). The free space of the
   container storage is the existing `disk.container_storage` check. They use only read-only list and inspect calls of the
   container runtime on the discovered socket within the shared 5 s budget, start no container and change nothing. The VM
   space report of FR-032 has no further container counterpart in this increment: container space is the leftover sizes
@@ -485,14 +490,21 @@ provider and Linux hosts are unchanged.
   `container.socket` already reports that case), never `fail` for those reasons.
 - **FR-040**: The owner's own package source (FR-038) carries two catalog entries, both with `selected_by_default=false`, so
   the catalog has 16 entries: the 13 existing ones, the VM tool and these two. Each entry carries the data of the existing
-  entries: id, kind `tool`, title, platforms, source (type formula, name, `tap` from the closed list), a minimum version and
-  `selected_by_default=false`. They are installed only after explicit selection and the per-item confirmation of FR-038,
-  with the same rules as the VM tool entry (never replacing or removing a tool from another source, Feature 009 FR-008). (a) A
-  tool for OCI tool bundles, platforms macOS on arm64 only (it is not offered elsewhere). It has no hard dependency on a
-  container runtime in the catalog; its entry and preview state that its volume subcommand needs one. (b) A tool for
-  read-only overview and stateless issue and pull request work on GitHub workspaces, which needs Git 2.46 or newer. Before
-  the install, setup checks the installed Git version with the existing detection and shows the result in the preview; if
-  Git is older it says so, the step is `blocked` with that reason, and Git is neither installed nor upgraded silently.
+  entries: id, kind `tool`, title, platforms, source (type formula, name, `tap` from the closed list), the version detection
+  fields (command, version arguments, version pattern, minimum version), `network` (the hosts, including that of the source,
+  and the purpose, as Feature 009 FR-010 requires) and `selected_by_default=false`. They are installed and upgraded only
+  after explicit selection and the per-item confirmation of FR-038, with the same rules as the VM tool entry (never
+  replacing or removing a tool from another source, Feature 009 FR-008). (a) A tool for OCI tool bundles, platforms macOS on
+  arm64 only (it is not offered elsewhere). It has no hard dependency on a container runtime in the catalog; its entry
+  carries a note that the preview shows: its volume subcommand needs one. (b) A tool for read-only overview and stateless
+  issue and pull request work on GitHub workspaces, which needs Git 2.46 or newer; its entry carries a host requirement for
+  Git. Before the install, setup detects Git with the existing detection (Feature 009 FR-006) and shows the result in the
+  preview. If Git is absent, is only the Command Line Tools shim (counted as absent by Feature 009 FR-006) or is older than
+  2.46, the preview says so, the step is `blocked` with the reason `host_setup.host_requirement_unmet`, and Git is neither
+  installed nor upgraded silently for this entry. If the catalog `git` item is installed or upgraded in the same plan, the
+  entry's step depends on it (Feature 009 `requires` and `depends_on`) and Git is detected again after that step. The
+  `blocked` state and its reason code are author proposals; the reason code is appended to the Feature 009
+  `refusal-codes.json` (changes list).
 
 ### Appended refusal codes
 
@@ -627,25 +639,30 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   build is a failed step that points to `whr setup`; the same holds for the container and the VM backend, and the VM
   tool is not installed (FR-037).
 - **SC-033**: The catalog loader accepts an entry whose `tap` is one of the two core sources or one of the two listed
-  third-party sources, and shows it in the preview; it rejects a `tap` outside the closed list, a wildcard, a user-supplied
-  source and a list of sources. For every entry from a listed third-party source, the fake adapter records an install call
-  only after explicit selection and the per-item confirmation: `--yes` alone, and `--yes` with only a selection of the tool,
-  record no install call, and an unattended run without `--confirm` exits 70 (FR-038).
+  third-party sources, and shows it in the preview with the statement that the source is added permanently; it rejects a
+  `tap` outside the closed list, a wildcard, a user-supplied source and a list of sources. For every entry from a listed
+  third-party source, the fake adapter records an install call (`brew install <tap>/<name>`) or an upgrade call
+  (`brew upgrade <tap>/<name>`) only after explicit selection and the per-item confirmation: `--yes` alone, and `--yes` with
+  only a selection of the tool, record neither, an unattended run without `--confirm` exits 70, and `doctor --fix` upgrades
+  such an item only with its `--confirm <item id>`. A call with a source outside the list is refused by the argv table (FR-038).
 - **SC-034**: With a fake container runtime, `container.image` reports `pass`, `fail` and `skipped` for a labeled image, a
   missing or unusable image and no defined image; `container.leftovers` lists owned instances only with size or "size
-  unknown"; the recorded runtime calls are read-only list and inspect calls, none starts or changes anything; and
+  unknown"; with leftovers present it is still `pass` (leftovers are evidence only); the recorded runtime calls are read-only list and inspect calls, none starts or changes anything; and
   `doctor --fix` removes an owned container leftover only with its `--confirm container-instance:<id>`, refuses an
   unlabeled container with `refused.foreign_object` and leaves it untouched; on Linux and with no runtime discovered the
   two checks report `skipped` (FR-039, FR-033).
 - **SC-035**: The shipped catalog has 16 entries; the VM tool entry and the two entries of the owner's own source carry
-  id, kind, title, platforms, source and `selected_by_default=false`; the tool for OCI tool bundles is not offered on a
+  id, kind, title, platforms, source, version detection fields, `network` (including the source host) and
+  `selected_by_default=false`; the tool for OCI tool bundles is not offered on a
   platform other than macOS on arm64 and its preview states the container runtime note; for the other tool, with a fake
   Git older than 2.46 the preview says so, the step is `blocked`, and no Git install or upgrade call is recorded, while with
-  Git 2.46 or newer the step is offered (FR-040).
+  Git 2.46 or newer the step is offered; with Git absent or only the Command Line Tools shim it is `blocked` the same way; and
+  when the catalog `git` item is installed in the same plan the step depends on it and Git is detected again after it
+  (FR-040).
 
 ## Owner decisions (confirmed 2026-10-31)
 
-The owner decided the six choices that the author had proposed and then added decisions 7 to 18. The author proposals that remain
+The owner decided the six choices that the author had proposed and then added decisions 7 to 20. The author proposals that remain
 open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of OD-4 and decisions 12 and 17 parts of OD-5, as noted there; none alters OD-1 to OD-3 or OD-6.
 
 1. **Interactive shell for the container provider (confirmed, follow-up)**: the owner wants an interactive shell for the
@@ -711,6 +728,17 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
     (needs Git 2.46 or newer). Both are not preselected and installed only after explicit selection and the per-item
     confirmation of decision 17. For the second, setup checks the installed Git version before the install, shows the result
     in the preview, and does not silently install or upgrade Git (FR-040, SC-035).
+19. **Four former author proposals confirmed (NEW)**: (a) `vm.space` reports `fail`, not a warning, when space is
+    insufficient, because the check statuses are only pass, fail, skipped and unknown (a failed check makes `whr doctor`
+    exit 68); the owner's original wording was "warn" (FR-032). (b) Confirming a cleanup item marked "results not exported"
+    is the results-deletion confirmation of Feature 008 FR-008, and files already in the result directory are never deleted
+    (FR-033, FR-020). (c) Installing from an allowed third-party source asks each item one by one with default `no`,
+    unattended only with `--confirm <item id>`, and `--yes` alone never installs it (`brew_install_source`, FR-038).
+    (d) The VM image build may download the platform vendor's operating system image, only after the confirmed preview
+    (the Feature 009 FR-012 amendment; OD-4 and decision 10).
+20. **Upgrade from allowed third-party sources (NEW)**: `brew upgrade <tap>/<name>` is allowed for the listed sources only,
+    as its own modify-class step (`brew_upgrade_source`) with a preview and the per-item `--confirm <item id>`, exactly like
+    the install. `doctor --fix` may do it; `--yes` alone never does (FR-038, SC-033).
 
 Author proposals made while recording these decisions (the owner may change them):
 
@@ -718,15 +746,14 @@ Author proposals made while recording these decisions (the owner may change them
 - Command names other than those the owner named are not settled. `whr sandbox shell <id>` is proposed syntax of the draft
   Feature 012; the item ids `image:container`, `image:vm` and `container-instance:<id>` are author proposals (FR-037, FR-033). The check ids
   `container.image` and `container.leftovers` are specified in FR-039 and need the doctor contract amendment.
-- Confirmation path (Major 2): a tap-sourced install is the new modify-class step `brew_install_source`, asked one by one with
-  default `no` and needing `--confirm <item id>` unattended; where the closed source list lives (catalog file or code) is open
-  (FR-038).
-- The VM image build downloads the platform vendor's official operating system image; Feature 009 FR-012 ("downloads of
-  software are done by Homebrew") is extended for it, only after the confirmation of FR-034 or FR-037 (the owner should confirm).
-- Applying decisions 16 and 17 to `doctor --fix` (rebuild with base-layer fetch or official-source download after the confirmed
-  preview) goes beyond the recorded wording of decision 13 and is an author proposal.
-- Image naming (Terms): the wizard records the definition path and the image name and label in the host profile; the form of
-  that record is part of the Feature 009 amendment.
+- Applying decision 16 and the OS image download of OD-4 to `doctor --fix` (rebuild with base-layer fetch or official-source
+  download after the confirmed preview) goes beyond the recorded wording of decision 13 and is an author proposal.
+- Image naming: the wizard records the definition path (home-relative) and the image name and label in a record of the host
+  profile; the form of that record is part of the Feature 009 amendment.
+- `container.leftovers` is `pass` with the leftovers as evidence (never `fail` for leftovers alone), so leftovers do not make
+  `whr doctor` exit 68 (FR-039).
+- The step kinds `brew_upgrade_source`, `vm_reservation_release` and the reason code `host_setup.host_requirement_unmet`, and
+  the `blocked` state for an unmet Git requirement, are author proposals (FR-038, FR-040, FR-033).
 - Decisions 12 and 13 read together: the VM tool entry is checked by `whr doctor` like any item, but `whr doctor --fix` does
   not install the VM tool (an explicit exception to Feature 009 FR-016; every other selected catalog item is repaired as
   before, including per-item confirmation for tap-sourced items), although Feature 009 FR-016 repairs other selected catalog
@@ -734,9 +761,6 @@ Author proposals made while recording these decisions (the owner may change them
 - If the definition is missing or no longer builds, doctor reports it and points to `whr setup` and never regenerates it
   (FR-037). An unusable existing image is replaced by the rebuild after the per-item confirmation.
 - The default location of the definition file is a user-owned path shown by the wizard; the choice is not fixed here.
-- The owner asked for a warning below the base image size. `doctor-checks.json` has only the statuses pass, fail,
-  skipped and unknown, so `vm.space` reports `fail` there, like the existing disk checks, and a failing space check makes
-  `whr doctor` exit 68 as for any failed check; the alternative is evidence only (FR-032).
 - Sizes and the storage location are optional fields of the existing `probe` and `list` results, not a new port operation
   (FR-032).
 - The cleanup keeps the Feature 009 requirement of a host profile, as a modify-class step with the item ids
@@ -814,58 +838,75 @@ None. NC-1 to NC-3 were decided on 2026-10-31 and are recorded as OD-4 to OD-6.
   invocations) gains "and, when a VM driver is chosen, the driver's fixed read-only `probe` and `list` invocations of
   Feature 011 FR-018".
 - `specs/009-host-setup-wizard/` (spec, `contracts/wizard-flow.md`, `data-model.md`, the catalog schema
-  `host-tool-catalogue.schema.json`, its loader tests and the protocol contract; amendment for FR-031, FR-033, FR-034,
-  FR-037, FR-038 and FR-040, owner-gated like AP-1 to AP-9; Feature 009 FR-024 applies and the frozen contracts and their
-  tests are amended when this is implemented):
-  - **Catalog**: three new tap-sourced entries (the VM tool and the two of FR-040), none preselected, so the count in
-    Feature 009 FR-010 ("exactly 13 entries"), the Feature 009 wording "all 13 entries preselected" (now 13 of 16), SC-012 and the
-    loader tests become 16. The adapter installs from a listed source only on explicit selection with the per-item confirmation
-    of FR-038, and Feature 009 FR-008 (a tool from another source is never replaced or removed) applies. Feature 009 FR-003
-    gives the container runtime as the precedent. The wizard-flow sentence "git-config ... is not a fourteenth catalogue
-    entry" becomes "seventeenth". Each new entry carries id, kind, title, platforms, source and `selected_by_default=false`; an
-    entry can declare a note for the preview (the container runtime note) and a host requirement checked before the install (Git
-    2.46, FR-040).
+  `host-tool-catalogue.schema.json`, its loader tests, `refusal-codes.json` and the protocol contract; amendment for FR-031,
+  FR-033, FR-034, FR-037, FR-038 and FR-040, owner-gated like AP-1 to AP-9; Feature 009 FR-024 applies and the frozen contracts
+  and their tests are amended when this is implemented):
+  - **Catalog**: three new tap-sourced entries (the VM tool and the two of FR-040), none preselected, so Feature 009 FR-010
+    ("exactly 13 entries", "all 13 entries preselected", now 13 of 16), the `x-initial-items` list and the
+    `x-initial-defaults.selected_by_default_false` list of the schema, and the loader tests become 16 (Feature 009 SC-012
+    says only that the shipped catalog has the initial items and a minimum version per tool, with no count). The adapter
+    installs and upgrades from a listed source only on explicit selection with the per-item confirmation of FR-038, and
+    Feature 009 FR-008 (a tool from another source is never replaced or removed) applies; Feature 009 FR-003 gives the
+    container runtime as the precedent. The wizard-flow sentence "git-config ... is not a fourteenth catalogue entry" becomes
+    "seventeenth". Each new entry carries id, kind, title, platforms, source, the version detection fields, `network` (hosts
+    including the source host, and purpose) and `selected_by_default=false`.
   - **Schema (decision 17)**: `source.tap` is a required enum; it grows from `homebrew/core` and `homebrew/cask` by the two
-    listed sources (a closed list, no wildcard, no pattern). The loader rule "tap matches type (formula: homebrew/core, cask:
+    listed sources (the closed list, no wildcard, no pattern). The loader rule "tap matches type (formula: homebrew/core, cask:
     homebrew/cask)" is amended: an entry from a listed source is a formula entry. The `name` pattern has no `/`; the adapter
-    composes `<tap>/<name>` from the two validated fields.
-  - **Wizard flow and `host.setup` output**: after detection the wizard may ask the image offer of FR-034 (definition shown,
-    size preview, default `no`) and shows the read-only `vm_readiness` part (checks `vm.backend`, `vm.base_image`,
-    `vm.limit`, `vm.space` with status and evidence, and the next steps) in every mode, not part of the plan or the protocol.
-    The closed answer sets and the accepted confirmation ids (catalog item ids plus `git-config`; unknown ids exit 64) are
-    widened by `image:container`, `image:vm`, `vm-instance:<id>`, `vm-reservation:<id>` and `container-instance:<id>`.
-  - **Plan steps (closed set of kinds)**: new kinds `image_definition_write` (create; modify when the file exists, with diff and
-    its own confirmation), `image_build` (modify class, so `--yes` alone never approves it), `vm_instance_remove` and
-    `container_instance_remove` (modify), and `brew_install_source` (modify, FR-038), each with a protocol record. The data-model
-    line "There is no kind for ... a tap" is amended: the only tap-related kind is `brew_install_source`, for the closed list.
-  - **`doctor --fix`**: gains three repair classes beyond catalog items: removal of owned VM leftovers (FR-033), removal of owned
-    container leftovers (FR-033) and image rebuild (FR-037), with the preview fields of those FRs, `--confirm <id>` per item,
-    exit 70 without confirmation and 68 for a refusal such as `host_setup.profile_absent` or `refused.foreign_object`; a failed
-    build is a failed step (73 when something was applied, 68 when nothing was). The VM tool item is checked by `doctor` but
-    not installed by `--fix` (author proposal, an exception to Feature 009 FR-016); tap-sourced items other than the VM tool are
-    repaired like other selected items but need the per-item `--confirm` of FR-038.
-  - **Feature 009 FR-016 and `wizard-flow.md`**: the sentence "It does not repair non-host findings" is amended: the image
-    rebuild and the owned-leftover removal repair VM and container findings; "never touches the Docker VM" stays true.
-  - **Feature 009 FR-002**: "the only interaction is connecting to a discovered socket and closing it" is amended: the
-    container checks of FR-039 make read-only list and inspect calls on the discovered socket, and the image build and the
-    removal of owned containers touch only containers and images that carry `whr`'s own label and change no VM setting of the
-    container runtime. The socket is still never mounted into an environment. `vm_instance_remove` and `image_build` touch
-    only owned VM instances and images.
-  - **Feature 009 FR-012 (decisions 16 and 17, author proposals for the owner to confirm)**: "downloads of software are done by
-    Homebrew" also allows (a) the base-layer fetch that the container runtime's own build command performs during an image
-    build and (b) the download of the platform vendor's official operating system image during the VM image build (names only
-    in the driver documentation), both only after the confirmation of FR-034 or FR-037 and never silently.
+    composes `<tap>/<name>` from the two validated fields. Because the schema has `additionalProperties: false`, two optional
+    entry properties are added: `note` (text the preview shows, for the container runtime note) and `host_requirement` (a
+    tool id and a minimum version checked before the install, for Git 2.46, FR-040).
+  - **Terms (Create and Modify class)**: the definition "Create class: adds something absent" is amended: a step that adds
+    something absent but needs its own per-item confirmation because of its source or cost is Modify class
+    (`brew_install_source`, `image_definition_write`, `image_build`).
+  - **Wizard flow and `host.setup` output**: after detection the wizard may ask the image offer of FR-034 (definition shown from
+    memory, size preview, default `no`; the file is written only after `yes`) and shows the read-only `vm_readiness` part
+    (checks `vm.backend`, `vm.base_image`, `vm.limit`, `vm.space` with status and evidence, and the next steps) in every mode,
+    not part of the plan or the protocol. The closed answer sets and the accepted confirmation ids (catalog item ids plus
+    `git-config`; unknown ids exit 64) are widened by `image:container`, `image:vm`, `vm-instance:<id>`,
+    `vm-reservation:<id>` and `container-instance:<id>`, and the `refusal-codes.json` text of `host_setup.unknown_item` ("neither
+    a catalogue id nor the reserved git-config item") is widened the same way.
+  - **Refusal codes**: `host_setup.host_requirement_unmet` (a step is `blocked` because a declared host requirement is unmet; 68
+    when nothing was applied) is appended to Feature 009 `refusal-codes.json` (author proposal).
+  - **Host profile**: the data-model line "No paths or values" is amended: the HostProfile gains a record per image offer with
+    the definition path (home-relative), the image name and the label (author proposal).
+  - **Plan steps (closed set of kinds)**: new kinds `image_definition_write` and `image_build` (modify class, written and run
+    only after `yes` to the offer or the per-item `--confirm`), `vm_instance_remove`, `vm_reservation_release` and
+    `container_instance_remove` (modify), `brew_install_source` and `brew_upgrade_source` (modify, FR-038), each with a
+    protocol record. The data-model line "There is no kind for ... a tap" is amended: the only tap-related kinds are those two,
+    for the closed list.
+  - **`doctor --fix` and Feature 009 FR-016**: the sentence "It does not repair non-host findings" (Feature 009 FR-016) is
+    amended: three repair classes beyond catalog items are added: removal of owned VM leftovers and reservations, removal of
+    owned container leftovers (FR-033) and image rebuild (FR-037), with the preview fields of those FRs, `--confirm <id>` per
+    item, exit 70 without confirmation and 68 for a refusal such as `host_setup.profile_absent` or `refused.foreign_object`; a
+    failed build is a failed step (73 when something was applied, 68 when nothing was). The VM tool item is checked by `doctor`
+    but not installed by `--fix` (author proposal, an exception to Feature 009 FR-016 and to `wizard-flow.md`, where `doctor
+    --fix --yes` installs other missing selected items); tap-sourced items other than the VM tool are repaired like other
+    selected items, with install and upgrade needing the per-item `--confirm` of FR-038. `wizard-flow.md` ("never touches the
+    Docker VM") stays true.
+  - **Socket and VM statements (Feature 009 FR-002, D-3, SC-006, Boundaries)**: "the only interaction is connecting to a
+    discovered socket and closing it" (Feature 009 FR-002), "it only connects to verify it" (Boundaries), "it only reads and ..."
+    (D-3) and "the socket is only connected to" (Feature 009 SC-006) are amended: the container checks of FR-039 make read-only
+    list and inspect calls on the discovered socket, and the image build and the removal of owned containers touch only
+    containers and images that carry `whr`'s own label and change no VM setting of the container runtime. The socket is still
+    never mounted into an environment. `vm_instance_remove`, `vm_reservation_release` and `image_build` touch only owned VM
+    instances, records and images.
+  - **Feature 009 FR-012 (decisions 16 and 19(d))**: "downloads of software are done by Homebrew" also allows (a) the
+    base-layer fetch that the container runtime's own build command performs during an image build and (b) the download of the
+    platform vendor's official operating system image during the VM image build (names only in the driver documentation), both
+    only after the confirmation of FR-034 or FR-037 and never silently.
   - **Feature 009 FR-013**: the catalog-template and SHA-256 rule applies to catalog dotfiles; the generated image definition
     follows the preview, diff, verified backup and no-silent-overwrite rules but not the catalog-template rule (FR-034).
   - **Feature 009 FR-009, FR-025 and the brew forms**: FR-009 ("only taps homebrew/core and homebrew/cask"), FR-025 ("adds no
-    taps") and the brew invocation forms in `wizard-flow.md` ("tap" not used; `brew install <name>`) admit `brew install
-    <tap>/<name>` for the listed sources, nothing else.
+    taps") and the brew invocation forms in `wizard-flow.md` ("tap" not used; `brew install <name>`, `brew upgrade <name>`)
+    admit `brew install <tap>/<name>` and `brew upgrade <tap>/<name>` for the listed sources, and nothing else. Because Homebrew
+    adds the named source permanently on such an install, FR-025 is amended for the listed sources only and the preview says so.
   - **Feature 009 FR-023**: the allowed-argv table admits the driver's read-only `probe` and `list` (FR-031), the runtime's
-    read-only list and inspect calls, the fixed image build invocation of each backend, the removal calls of owned instances and
-    the tap-sourced install.
+    read-only list and inspect calls, the fixed image build invocation of each backend, the removal calls of owned instances,
+    and the tap-sourced install and upgrade.
   - **Step deadline**: the deadline of `image_build` is a plan-time value, not the 900 s of the package-manager steps (DP-2).
   - **Boundaries**: "installing anything on Linux" and the Linux enrollment stay unchanged; the image offer is a macOS host
-    feature. Feature 009 FR-025 is amended only by FR-038.
+    feature.
 - `docs/container-runtime.md`: add a VM backend prerequisite section; the Windows host statement stays unchanged.
 - `.github/workflows/check.yml` and `scripts/check_ci.py`: Python and Go suites in a macOS and Linux matrix for this
   repository, aggregate check, skip-record check.
