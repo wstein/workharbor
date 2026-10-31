@@ -2,9 +2,10 @@
 
 Agents may push their own topic branches and open pull requests for work within
 an owner's requested task. They may update those PRs and their descriptions.
-Draft PRs must name a blocker. Ready means the owner can merge: independent
-review must be CLEAR for the exact current head, required checks must be green,
-and no named blocker may remain.
+Draft PRs must name a blocker. Ready for review is set only after independent
+review is CLEAR for the exact current head, required checks are green, and no
+named blocker remains; it is the owner's signal to accept and merge. Agents
+never merge.
 
 Agents may rewrite only their own PR commits. Run the affected checks and obtain
 independent review of the exact rewritten SHA before pushing. Use an explicit
