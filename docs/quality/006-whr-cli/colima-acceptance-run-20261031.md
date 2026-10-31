@@ -41,6 +41,9 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
 `logs/`, 14 days).
 
 - Runner facts: architecture, macOS version, CPU, memory, `kern.hv_support`.
+- After each failed start, before anything is deleted: the tail of the Lima host-agent logs,
+  `colima.yaml`, and listings of `~/.colima/_lima` and `~/.colima/default`. No delete follows
+  the last attempt, so the later probes see the failed state.
 - Before the first start: whether `~/.colima`, `~/.colima/default`, `~/.config/colima` and a
   `colima.yaml` exist at all.
 - Colima: `colima version`, `status`, `status --json`, `list`; Homebrew versions of
@@ -68,7 +71,7 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
   All throwaway objects carry the run id and are removed in an `always()` step, which
   also deletes the Colima VM (hosted runners only).
 - On the Intel qemu/sshfs row only, a second profile: `colima start -p whr-acc` with the same flags and
-  small resources, then `ls ~/.colima/whr-acc`, the socket path, `docker context ls`, and
+  small resources, then `colima status -p whr-acc`, `ls ~/.colima/whr-acc`, the socket path, `docker context ls`, and
   `whr doctor --json` once without `DOCKER_HOST` and once with `DOCKER_HOST` set to that profile's socket.
 
 ## Mapping to the results
@@ -91,18 +94,21 @@ to the job summary and to the artifact `colima-acceptance-<job>` (`results.json`
 
 ## Time budget
 
-The job cap is 45 minutes. The step timeouts add up to 44, and a test pins that sum, that every
-step has a timeout, and that the probe bounds of each step fit it (the start loop counts twice).
+The job cap is 45 minutes. The step timeouts add up to 45. A test pins that sum, that every step
+has a timeout, and that for each step the sum of its probe and `bounded` bounds, each plus the
+5 s watchdog grace of a call that hits its bound, fits the step timeout. The start loop counts
+twice; the cleanup counts up to 2 containers and 8 volumes. There is no slack, so a slow runner
+fails a step on its timeout rather than overrunning the job.
 
 | Step | Minutes |
 | --- | --- |
 | checkout, setup-go, build, helpers | 1, 2, 2, 1 |
 | install (colima, docker, qemu on qemu rows) | 5 |
-| start (two attempts of 200 s, cleanup between) | 10 |
+| start (two attempts of 200 s, diagnostics, one delete between) | 10 |
 | measure the runtime | 7 |
 | measure `whr` | 6 |
 | second profile (one row) | 5 |
-| cleanup, summary, upload | 3, 1, 1 |
+| cleanup, summary, upload | 4, 1, 1 |
 
 ## Limits
 
