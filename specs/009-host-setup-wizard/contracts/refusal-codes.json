@@ -16,7 +16,7 @@
     {"code": "host_setup.protocol_unwritable", "exit_alone": 68, "when": "the protocol cannot be created; no mutation happens"},
     {"code": "host_setup.confirmation_missing", "exit_alone": 70, "when": "unattended run lacks --yes, --confirm <id> or input; names the flags"},
     {"code": "host_setup.sudo_requires_terminal", "exit_alone": 70, "when": "privileged step without a terminal, with --json or --non-interactive, or unconfirmed; sudo not run"},
-    {"code": "host_setup.unknown_item", "exit_alone": 64, "when": "--only, --skip or --confirm names neither a catalogue id nor the reserved git-config item"},
+    {"code": "host_setup.unknown_item", "exit_alone": 64, "when": "--only, --skip or --confirm names neither a catalog id nor a reserved item (git-config, container-endpoint)"},
     {"code": "host_setup.flag_not_valid_here", "exit_alone": 64, "when": "a flag of another platform or mode"},
     {"code": "host_setup.catalogue_invalid", "exit_alone": 74, "when": "schema or loader rule violated"},
     {"code": "host_setup.plan_changed", "exit_alone": 68, "when": "plan hash differs between confirmation and apply"},

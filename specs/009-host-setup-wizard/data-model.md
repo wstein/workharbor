@@ -9,7 +9,8 @@ Status: proposed; implements the entities of [spec.md](spec.md). Catalogue: [hos
 | Plan | `plan_hash`, `platform`, `catalogue_version`, ordered `steps`, `mode` (`setup`, `fix`). |
 | Step | `step_id` (`<item>.<kind>`), `item`, `kind` ([step kinds](#step-kinds)), `class` (`create`, `modify`, `read_only`), `depends_on`, `preview`, rollback data. |
 | StepResult | `step_id`, `status` (`applied`, `unchanged`, `declined`, `opted_out`, `blocked`, `failed`, `skipped`, `rolled_back`), `reason`, `exit_status`, bounded output tail. |
-| HostProfile | `catalogue_version`, `updated`, `items`: id to `selected` or `opted_out`; includes the reserved id `git-config`. No paths or values. |
+| HostProfile | `catalogue_version`, `updated`, `items`: id to `selected` or `opted_out`; includes the reserved ids `git-config` and `container-endpoint`. Nothing is stored for a catalog entry that was never selected (no `not_selected` state or value; FR-034). No paths or values, except the records of [container endpoint](#container-endpoint-record) and the storage and image records of Feature 011. |
+| ContainerEndpoint | optional record `container_endpoint` in the HostProfile (FR-030): `socket` (the authoritative endpoint, home-relative below the home directory, otherwise absolute) and optional `context` (informational provenance only). |
 | BackupRecord | `<state>/backups/<run-id>/` (0700) with `manifest.json` (0600): per file original path (`~`-relative), backup name, SHA-256, size, mode, reason, time. Byte copy verified by hash; never deleted by `whr`; restore is a manual copy. |
 | Protocol | `<state>/protocols/<run-id>.jsonl` and `.txt` per real run ([protocol.schema.json](contracts/protocol.schema.json)); `<state>/run.lock` for the run lock. `<state>` is `~/.local/state/whr` (DP-1, confirmed H38); the host profile is `~/.config/whr/host-profile.json`. |
 
@@ -36,11 +37,11 @@ Closed set; any other kind is an internal error (74).
 | `brew_install` / `brew_upgrade` | create / modify | `brew install` / `brew upgrade` (`--cask` for casks) |
 | `dotfile_create` / `dotfile_replace` | create / modify | write a new file / back up then replace |
 | `git_config_move` | modify | back up, stage, verify, rename, remove legacy |
-| `socket_verify` | read_only | connect to a discovered socket and close it |
+| `socket_verify` | read_only | connect to the selected endpoint (FR-029) and close it |
 | `privileged_exec` | modify | `/usr/bin/sudo -- <catalogue argv>`; real runs only |
 | `profile_write` | create or modify | write the host profile |
 
-There is no kind for the Docker VM, the runtime application, a login shell or a tap.
+There is no kind for the Docker VM, the runtime application, a login shell or a tap. Recording the endpoint uses the existing `profile_write` (create class when no value is recorded, modify class when it replaces one); the investigation and the context reads are not steps.
 
 ## Run states
 
@@ -48,3 +49,7 @@ There is no kind for the Docker VM, the runtime application, a login shell or a 
 `no` and cancel before confirmation leave `previewed` with no write. A rerun starts at `detected`. A confirmed no-op run still takes the lock and writes its protocol; installations, managed configuration/profile and backups remain unchanged (H38). Each protocol record kind has required payload and no unrelated-kind fields; sequence, redaction and filesystem durability remain behavioral acceptance.
 
 The closed `orbstack_app` probe means the application metadata key `CFBundleShortVersionString` in `/Applications/OrbStack.app/Contents/Info.plist`. The read-only owner measurement used `/usr/bin/plutil -extract CFBundleShortVersionString raw -o - /Applications/OrbStack.app/Contents/Info.plist`; this is evidence for the route, not a generic catalogue argv allowance. T002 owns detection and path/source checks. Compare the application version (observed `2.2.4`) against the approved minimum `2.2.3`; Homebrew registration `2.2.3,20963` describes package provenance separately and is never the application-version parser input. Catalogue loading executes no probe.
+
+## Container endpoint record
+
+Selection order (FR-029, D-16 (r)): option `--container-endpoint`, then the record `container_endpoint`, then `DOCKER_HOST`, then `/var/run/docker.sock`; the first source that is specified is the only one used. Only `socket` is used to connect; `context` is provenance. The option itself is never recorded outside the answer to the endpoint question (FR-031). A deleted or changed context leaves the stored `socket` working; drift is a warning of `container.socket`, not a status (FR-032). Only local `unix://` sockets are supported.
