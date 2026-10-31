@@ -834,7 +834,7 @@ Author proposals made while recording these decisions (the owner may change them
 
 ## Open Questions
 
-No question is open for the owner at this point in this feature (the endpoint selection is decided in Feature 009 D-12 to D-16 and has no open question). Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
+No question is open for the owner in this feature (the endpoint selection is decided in Feature 009 D-12 to D-16; only the author proposal EP-10 of Feature 009, plain `doctor` and the investigation, still awaits owner confirmation). Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
 checks on Linux, on a host without a VM driver or runtime) stay in the doctor verdict (decision 22). (2) Container free space: no runtime API;
 the location comes from a readable runtime configuration file or a wizard record (decision 21, FR-041). NC-1 to NC-3 were decided on 2026-10-31 and are recorded
 as OD-4 to OD-6.
