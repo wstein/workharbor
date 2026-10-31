@@ -148,8 +148,8 @@ against the request; each is refused with the stable code and zero provider call
 2. **Given** `--json`, a trailing command or any further positional argument, **Then** exit 64 (FR-007).
 3. **Given** an `untrusted_job` instance, no `--confirm <id>` and standard error not a terminal, **Then** no prompt is shown
    and the command exits 70 with a `whr:` line naming `--confirm` (FR-023).
-4. **Given** `--container-endpoint` with a malformed value (empty, relative, or not `unix://` followed by an absolute path),
-   **Then** exit 64 before any provider call (FR-007, Feature 009 FR-030); **Given** a well-formed value, **Then** it is the one
+4. **Given** `--container-endpoint` with a malformed value (empty, relative or otherwise malformed, Feature 009 FR-030),
+   **Then** exit 64 before any provider call (FR-007); **Given** a well-formed value with another scheme (for example `tcp://`), **Then** exit 68 at step 5; **Given** a well-formed `unix://` value, **Then** it is the one
    endpoint used at step 5 and no lower source replaces it (FR-005, Feature 009 FR-029).
 
 ### User Story 4 - The container disappears during the session (Priority: P2)

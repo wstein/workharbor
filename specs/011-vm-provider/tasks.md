@@ -26,7 +26,7 @@ Markers: `[P]` parallelizable with the other `[P]` tasks of the same stage once 
   container values of FR-003, the per-field refusing code, the re-verification sentence, conformance cases 1, 4, 6 and the new
   cases), `contracts/refusal-codes.json` (the eight codes of the spec appended relative to the 008 baseline, or seven if Feature 012 landed first and already added `refused.interactive_unavailable`; `refused.foreign_object` text widened exactly as FR-008).
   Acceptance: `check_repo.py`, `git diff --check`; review CLEAR; owner approval of the exact head. Traces FR-001 to FR-005,
-  FR-008, FR-012, FR-030; decisions 3 and 6. Coordination: the Feature 012 plan and tasks (on main, merged as PR 297; its T022) add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contract if this task has not landed; whichever lands first adds them, the other verifies they match FR-004 and the refusal table and adds nothing. Prerequisite: T001.
+  FR-008, FR-012, FR-030; decisions 3 and 6. Coordination: the Feature 012 plan and tasks (on main, merged as PR 297; its T022 (a)) add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contract if this task has not landed; whichever lands first adds them, the other verifies they match FR-004 and the refusal table and adds nothing. Prerequisite: T001.
 - [ ] T003 OWNER GATE (OG-5, OG-6), docs only: apply the approved amendments to Feature 006 (FR-060 check ids, budget lists,
   scenario 7, the verdict consequence of decision 22) and `docs/container-runtime.md` (VM backend prerequisite section; the
   Windows statement unchanged). No `contracts/cli/` edit here. Acceptance as T002. Traces FR-018, FR-029, FR-032, FR-039,
