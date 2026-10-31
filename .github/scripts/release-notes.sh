@@ -8,8 +8,13 @@
 #
 # Run in a repository with full history and tags. The change list is the non-merge commit
 # subjects between the nearest earlier release tag (by version order; a final release sorts above
-# its own pre-releases) and COMMIT, grouped by Conventional Commit type, or just "First release."
-# when no earlier release tag exists (the first release is v0.1.0).
+# its own pre-releases) and COMMIT, or just "First release." when no earlier release tag exists
+# (the first release is v0.1.0).
+#
+# Listed: every feat commit (Features), every breaking commit (!) of any other type (Breaking
+# changes), every fix commit (Fixes, in a collapsed <details> block) and perf and refactor commits
+# (Other changes, only when present). Documentation and all remaining commits (test, style, build,
+# ci, chore, revert) are only counted, followed by a link to the full comparison.
 
 set -eu
 
@@ -65,19 +70,45 @@ if [ -z "$subjects" ]; then
 	printf 'No changes.\n'
 	exit 0
 fi
-section() { # section TITLE ERE
-	lines=$(printf '%s\n' "$subjects" | grep -E "$2" || true)
-	if [ -n "$lines" ]; then
-		printf '### %s\n\n' "$1"
-		printf '%s\n' "$lines" | sed 's/^/- /'
-		printf '\n'
+pick() { # pick ERE: the subjects matching ERE, empty when none
+	printf '%s\n' "$subjects" | grep -E "$1" || true
+}
+count() { # count LINES: the number of lines, 0 for none
+	if [ -z "$1" ]; then
+		printf '0'
+	else
+		printf '%s\n' "$1" | wc -l | tr -d ' '
 	fi
 }
-section Features '^feat(\(.+\))?!?:'
-section Fixes '^fix(\(.+\))?!?:'
-section Documentation '^docs(\(.+\))?!?:'
-rest=$(printf '%s\n' "$subjects" | grep -Ev '^(feat|fix|docs)(\(.+\))?!?:' || true)
-if [ -n "$rest" ]; then
-	printf '### Other\n\n'
-	printf '%s\n' "$rest" | sed 's/^/- /'
+bullets() { # bullets LINES
+	printf '%s\n' "$1" | sed 's/^/- /'
+}
+feats=$(pick '^feat(\(.+\))?!?:')
+breaking=$(pick '^(fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!:')
+fixes=$(pick '^fix(\(.+\))?:')
+tidy=$(pick '^(perf|refactor)(\(.+\))?:')
+docs=$(pick '^docs(\(.+\))?:')
+ndocs=$(count "$docs")
+nall=$(count "$subjects")
+nother=$((nall - $(count "$feats") - $(count "$breaking") - $(count "$fixes") - $(count "$tidy") - ndocs))
+if [ -n "$feats" ]; then
+	printf '### Features (%s)\n\n' "$(count "$feats")"
+	bullets "$feats"
+	printf '\n'
 fi
+if [ -n "$breaking" ]; then
+	printf '### Breaking changes (%s)\n\n' "$(count "$breaking")"
+	bullets "$breaking"
+	printf '\n'
+fi
+if [ -n "$fixes" ]; then
+	printf '<details><summary>Fixes (%s)</summary>\n\n' "$(count "$fixes")"
+	bullets "$fixes"
+	printf '\n</details>\n\n'
+fi
+if [ -n "$tidy" ]; then
+	printf '### Other changes (%s)\n\n' "$(count "$tidy")"
+	bullets "$tidy"
+	printf '\n'
+fi
+printf 'Not listed here: %s documentation and %s other commits (tests, style, CI, chores). Full comparison: https://github.com/wstein/workharbor/compare/%s...%s\n' "$ndocs" "$nother" "$prev" "$tag"

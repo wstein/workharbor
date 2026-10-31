@@ -477,13 +477,14 @@ func TestNotes(t *testing.T) {
 		"linux/amd64, linux/arm64, darwin/arm64", "Windows, the BSDs and darwin/amd64 are not shipped",
 		"sha256sum --check --ignore-missing SHA256SUMS", "gh attestation verify ARCHIVE --repo wstein/workharbor", "not signed with a certificate or notarized",
 		"`whr version`, which prints `whr 0.1.0-alpha.6`",
-		"Changes since v0.1.0-alpha.5", "### Features\n\n- feat(cli): third (", "### Fixes\n\n- fix: fourth (", "### Documentation\n\n- docs: fifth (",
-		"### Other\n\n- chore: sixth ("} {
+		"Changes since v0.1.0-alpha.5", "### Features (1)\n\n- feat(cli): third (",
+		"<details><summary>Fixes (1)</summary>\n\n- fix: fourth (", ")\n\n</details>\n",
+		"Not listed here: 1 documentation and 1 other commits (tests, style, CI, chores). Full comparison: https://github.com/wstein/workharbor/compare/v0.1.0-alpha.5...v0.1.0-alpha.6\n"} {
 		if !strings.Contains(r.stdout, want) {
 			t.Errorf("notes lack %q:\n%s", want, r.stdout)
 		}
 	}
-	for _, unwanted := range []string{"- fix: second", "First release", "v0.1.5-dryrun", "Changes since v0.1.0-alpha.4"} {
+	for _, unwanted := range []string{"- fix: second", "- docs: fifth", "- chore: sixth", "### Documentation", "### Other\n", "### Breaking", "### Other changes", "First release", "v0.1.5-dryrun", "Changes since v0.1.0-alpha.4"} {
 		if strings.Contains(r.stdout, unwanted) {
 			t.Errorf("notes must not contain %q:\n%s", unwanted, r.stdout)
 		}
@@ -503,6 +504,65 @@ func TestNotes(t *testing.T) {
 	}
 	if r := sh(t, first, nil, "release-notes.sh", "v0.1.0"); r.code != 2 {
 		t.Errorf("usage error must exit 2: %+v", r)
+	}
+}
+
+func TestNotesCountDocsAndOtherCommitsInsteadOfListingThem(t *testing.T) {
+	dir := newRepo(t, "feat: a")
+	git(t, dir, "tag", "-a", "-m", "r", "v0.1.0")
+	for i, s := range []string{"docs: d1", "docs(x): d2", "test: t1", "style: s1", "ci: c1", "chore: h1", "build: b1", "fix: f1", "fix(y): f2", "feat: f3", "perf: p1", "refactor(z): r1", "wip not conventional"} {
+		commitFile(t, dir, "g"+string(rune('a'+i)), s)
+	}
+	git(t, dir, "tag", "-a", "-m", "r", "v0.2.0")
+	r := sh(t, dir, nil, "release-notes.sh", "v0.2.0", git(t, dir, "rev-parse", "HEAD"), "1.27.2")
+	if r.code != 0 {
+		t.Fatalf("notes failed: %+v", r)
+	}
+	for _, want := range []string{"### Features (1)\n\n- feat: f3 (", "<details><summary>Fixes (2)</summary>\n\n- fix(y): f2 (", "- fix: f1 (",
+		"### Other changes (2)\n\n- refactor(z): r1 (", "- perf: p1 (",
+		"Not listed here: 2 documentation and 6 other commits (tests, style, CI, chores). Full comparison: https://github.com/wstein/workharbor/compare/v0.1.0...v0.2.0\n"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("notes lack %q:\n%s", want, r.stdout)
+		}
+	}
+	for _, unwanted := range []string{"docs: d1", "docs(x): d2", "test: t1", "style: s1", "ci: c1", "chore: h1", "build: b1", "wip not", "### Breaking", "- feat: a"} {
+		if strings.Contains(r.stdout, unwanted) {
+			t.Errorf("notes must not list %q:\n%s", unwanted, r.stdout)
+		}
+	}
+}
+
+func TestNotesListEveryBreakingChange(t *testing.T) {
+	dir := newRepo(t, "feat: a")
+	git(t, dir, "tag", "-a", "-m", "r", "v0.1.0")
+	for i, s := range []string{"docs!: drop the old guide", "chore(deps)!: raise the floor", "feat(cli)!: rename a flag", "fix!: change an exit code"} {
+		commitFile(t, dir, "g"+string(rune('a'+i)), s)
+	}
+	git(t, dir, "tag", "-a", "-m", "r", "v0.2.0")
+	r := sh(t, dir, nil, "release-notes.sh", "v0.2.0", git(t, dir, "rev-parse", "HEAD"), "1.27.2")
+	if r.code != 0 {
+		t.Fatalf("notes failed: %+v", r)
+	}
+	for _, want := range []string{"### Features (1)\n\n- feat(cli)!: rename a flag (", "### Breaking changes (3)\n\n",
+		"- docs!: drop the old guide (", "- chore(deps)!: raise the floor (", "- fix!: change an exit code (",
+		"Not listed here: 0 documentation and 0 other commits"} {
+		if !strings.Contains(r.stdout, want) {
+			t.Errorf("notes lack %q:\n%s", want, r.stdout)
+		}
+	}
+	if strings.Contains(r.stdout, "<details>") || strings.Contains(r.stdout, "Other changes") {
+		t.Errorf("no fixes block or other changes section without those commits:\n%s", r.stdout)
+	}
+}
+
+func TestNotesWithoutFixesOrFeaturesPrintNoEmptyBlock(t *testing.T) {
+	dir := newRepo(t, "feat: a")
+	git(t, dir, "tag", "-a", "-m", "r", "v0.1.0")
+	commitFile(t, dir, "g", "docs: only docs")
+	r := sh(t, dir, nil, "release-notes.sh", "v0.1.1", git(t, dir, "rev-parse", "HEAD"), "1.27.2")
+	if r.code != 0 || strings.Contains(r.stdout, "<details>") || strings.Contains(r.stdout, "### ") || strings.Contains(r.stdout, "(0)") ||
+		!strings.Contains(r.stdout, "Not listed here: 1 documentation and 0 other commits") {
+		t.Errorf("an empty group must print nothing: %+v", r)
 	}
 }
 
