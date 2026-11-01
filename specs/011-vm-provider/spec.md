@@ -844,7 +844,8 @@ Author proposals made while recording these decisions (the owner may change them
 No question is open for the owner in this feature (the endpoint selection is decided in Feature 009 D-12, D-13, D-15 and D-16, its details are confirmed by D-18, and no owner question is open). Both former questions were decided on 2026-10-31. (1) Not-applicable skips (the six new
 checks on Linux, on a host without a VM driver or runtime) stay in the doctor verdict (decision 22). (2) Container free space: no runtime API;
 the location comes from a readable runtime configuration file or a wizard record (decision 21, FR-041). NC-1 to NC-3 were decided on 2026-10-31 and are recorded
-as OD-4 to OD-6.
+as OD-4 to OD-6. No owner question is open, but the inputs and result of the build operation of the driver port (decision 24, FR-021)
+are an open design item, proposed in the pull request of task T015 for owner review.
 
 ### Verification before the plan (checks, not decisions)
 
