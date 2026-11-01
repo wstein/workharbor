@@ -692,9 +692,9 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   only and changes no status; the wizard records the location only when the file exists, in the preview and as a `profile_write` step, and
   `doctor` and `doctor --fix` record nothing; the file read and the free-space call draw on the shared 5 s budget (FR-041).
 
-## Owner decisions (confirmed 2026-10-31)
+## Owner decisions (confirmed 2026-10-31; decision 24 added 2026-11-01)
 
-The owner decided the six choices that the author had proposed and then added decisions 7 to 22. The author proposals that remain
+The owner decided the six choices that the author had proposed and then added decisions 7 to 23, and on 2026-11-01 decision 24. The author proposals that remain
 open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of OD-4 and decisions 12 and 17 parts of OD-5, as noted there; none alters OD-1 to OD-3 or OD-6.
 
 1. **Interactive shell for the container provider (confirmed, follow-up)**: the owner wants an interactive shell for the

@@ -52,7 +52,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   `TestRecordHoldsClientAndShellStatus` (D8d), `TestDiscardRefusesRunningCleanSkipsRunning`, `TestKilledWhrLeavesRunningUntilReconciled`
   (discard refused, new shell refused, export refused, FR-017), `TestExportAllowedFromFailedPartial`,
   `TestRecordNeverHoldsSessionContent`. Traces FR-005 (state), FR-014, FR-017, D5, D8b, D8c, D8d; S12-C5; SC-005. The store
-  mechanism is open question 2 and [research.md](research.md#r-1); tests assert the contract, not a mechanism.
+  location is settled (the Feature 009 state directory); the mechanism is the plan's choice ([research.md](research.md#r-1)); tests assert the contract, not a mechanism.
   Prerequisites: 008/T003.
 - [ ] T006 [P] [US1] Plan additions in `internal/runtime/plan.go` (extends 008/T006): working directory (rule of plan decision 2; literal values asserted once the 008 Plan exists, open question 10) and login shell fields (D3);
   `/bin/sh` default for the two job profiles, the `human_shell` of the workspace manifest for `developer` via `internal/workspacecfg`.
@@ -87,7 +87,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   `TestUntrustedWithoutConfirmationStartsNothing`, `TestYesAloneStillPrompts`, `TestPromptAnswerOtherThanIdExit72`,
   `TestPromptEndOfInputExit72`, `TestConfirmValueMismatchExit64`, `TestConfirmFlagWithIdProceeds`,
   `TestDeveloperAndCooperativeNeverAsked`, `TestSignalDuringPromptExit72NoStateChange`, `TestPromptOnStderrStdoutEmpty`,
-  `TestStderrNotTerminalNoConfirmExit72NamesConfirmFlag`, `TestNoTerminalNeverReachesConfirmation`. Traces FR-023, D1;
+  `TestStderrNotTerminalNoConfirmExit70NamesConfirmFlag`, `TestNoTerminalNeverReachesConfirmation`. Traces FR-023, D1;
   S12-C8; SC-012. Prerequisites: T008, T009.
 - [ ] T011 [P] [US1] Notice and help text in `sandbox/shellsession/notice.go`: one escaped line before hand-over when stderr is a
   terminal (byte-exact text fixed in plan decision 1, modeled on Feature 010 FR-010, names profile and instance id, escaped per
@@ -107,7 +107,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   (exit code, instance state, reason, `whr:` line per row), `TestEndOfSessionQueryBudget5sIsTransportLost`,
   `TestStatusPassThrough0_1_2_126_127_130_255`, `TestContainerLostPassesStatusRecordsFailed` (D8a),
   `TestKilledClientRowsClientStatusPassedShellStatusRecorded` (D8d), `TestMissingShellExecutableStatusFinishedOrRow4`,
-  `TestCLIFailureWritesWhrLineShellStatusDoesNot`, `TestNoDetachKeySequenceInPlan`, `TestOnlyCodes64_65_68_72_74FromCLI`,
+  `TestCLIFailureWritesWhrLineShellStatusDoesNot`, `TestNoDetachKeySequenceInPlan`, `TestOnlyCodes64_65_68_70_72_74FromCLI`,
   `TestNoSessionBytesOrEnvironmentLogged`. Traces FR-014, FR-015, FR-016, FR-017, D8a, D8d; S12-C6, S12-C7; SC-007, SC-008.
   The production query is T017 (V5). Prerequisites: T005, T012, 008/T004 (`ExitFor`).
 - [ ] T014 [US4] Reconciliation in `sandbox/reconcile.go` (FR-024, D7): before acting on a `running` record, check through a port
@@ -190,7 +190,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   FR-003, SC-002. Prerequisites: T015 to T018, T022, T025.
 - [ ] T027 Acceptance and handoff: evidence table in `plan.md` completed with test names and revisions; the coverage table below
   checked with cited evidence; `python3 scripts/check_repo.py`, `git diff --check` and the Go tests recorded; frozen-path diffs
-  (`contracts/cli/`, `docs/adr/`, Feature 006, 008, 010, 011 text) empty for every PR of T004 to T018 and T024; the held items
+  (`contracts/cli/`, `docs/adr/`, Feature 006, 008, 010, 011 text) empty for every PR of T004 to T018, T024 and T029; the held items
   (T014, FR-024, SC-013) and anything unmet listed as such. Independent exact-head review CLEAR. Prerequisites: T001 to T026, T028, T029
   (T014 may remain open and is then listed as deferred).
 
@@ -199,7 +199,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 - [ ] T028 OWNER GATE (design decision), docs only: design for the terminal restore after a killed client (FR-025, owner decision of
   2026-11-01), in `specs/012-container-interactive-shell/terminal-restore.md`. A killed client cannot restore the terminal itself, so
   the task states the questions of the owner decision and the owner's answers; it chooses no mechanism on its own. It uses the V4
-  record of T002 (what a killed client leaves behind) and names the failing tests and the files of T029. Acceptance:
+  record of T002 (client behavior and exit status after a kill; V4 does not record the terminal state, which only T025 observes) and names the failing tests and the files of T029. Acceptance:
   `python3 scripts/check_repo.py`, `git diff --check`; independent review CLEAR; owner approval of the exact head. Traces FR-025.
   Prerequisites: T002.
 - [ ] T029 [US4] Terminal restore after a killed client in the packages and files that T028 names, with offline tests using
@@ -214,8 +214,8 @@ together (T004 needs 008/T001, T002 and the gated T022 (a) only; T005 needs 008/
 T005; T009 is independent of them (needs 006/T025 and T031); T010 follows T008 and T009; T011 follows T007; T012 follows T005, T007
 to T011; T013 follows T012; T014 follows T005 and T002; T015 follows T004, T007, T008, T010, T012, T013. Stage 2 needs 008/T013
 and the T002 record. Stage 3 amendments T019 to T022 depend only on T003 (T019 also on 008/T017) and are owner gates. T023 needs
-T012, T013 and T019 to T021 plus 008/T016. Stage 4 follows. Owner gates: real Docker (OG-1: none of T004 to T015, T016 to T018,
-T023, T024 may use one), `contracts/cli/*`, ADR 0013, ADR 0014 (OG-4), Feature 006 text (OG-6), Feature 008 text (OG-8).
+T012, T013 and T019 to T021 plus 008/T016. Stage 4 follows. Stage 5 (T028, T029) follows T002 (T028), then T028, T012 and T013 (T029); T028 is an owner decision gate. Owner gates: real Docker (OG-1: none of T004 to T015, T016 to T018,
+T023, T024, T029 may use one), `contracts/cli/*`, ADR 0013, ADR 0014 (OG-4), Feature 006 text (OG-6), Feature 008 text (OG-8).
 T019 to T023 and T026 (T022 (a) is the conditional contract append) are the only exceptions to the empty frozen-path diff.
 
 | Task | Prerequisites |
@@ -272,7 +272,7 @@ Every requirement, success criterion and decision maps to at least one task, or 
 | FR-014 state and record | T005, T012, T013, T022 | |
 | FR-015 exit codes | T009, T010, T012, T013, T020, T021, T023 | |
 | FR-016 end of session | T013, T017, T025 | |
-| FR-017 killed client, orphans | T005, T013 | no reaper by design (spec) |
+| FR-017 killed client, orphans | T005, T013, T029 | no reaper by design (spec) |
 | FR-018 no widening | T007, T008, T016 | |
 | FR-019 credentials | T007, T016 | |
 | FR-020 no agent launcher | T007 | |
