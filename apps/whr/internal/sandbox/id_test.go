@@ -80,7 +80,7 @@ func TestIDFormatAndUniqueness(t *testing.T) {
 			t.Errorf("ValidName(%q) = %v", ok, err)
 		}
 	}
-	for _, bad := range []string{"-x", ".x", "a b", "a/b", "a\nb", "sbx-abcdefghijklmnop", strings.Repeat("a", 64), "ä"} {
+	for _, bad := range []string{"-x", ".x", "a b", "a/b", "a\nb", "sbx-abcdefghijklmnop", strings.Repeat("a", 64), "\xc3\xa4"} {
 		if err := sandbox.ValidName(bad); !errors.Is(err, sandbox.ErrInvalidName) {
 			t.Errorf("ValidName(%q) = %v, want ErrInvalidName", bad, err)
 		}
