@@ -313,7 +313,7 @@ refusals. Every amendment is generic and additive.
 - **FR-016**: An interactive shell is offered only where `interactive_shell=pty` with status `enforced`, with the terminal-safety rules of
   the local shell of Feature 006. Otherwise (value `none`, or `pty` not `enforced`) a request for one is refused with
   `refused.interactive_unavailable`. The command is the same one for every backend (FR-035; proposed syntax
-  `whr sandbox shell <id>` in the draft Feature 012, pull request 291, not merged).
+  `whr sandbox shell <id>` in Feature 012, status Draft, merged in pull request 291).
 
 **Host boundary**
 
@@ -699,7 +699,7 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
    container provider in the future. Until a separate feature builds it, the capability report stays honest (FR-025): the
    container provider reports `interactive_shell=none` (FR-003 unchanged). When that feature lands, the value becomes
    `pty` with status `enforced`. Follow-up: a separate feature "interactive shell for the container provider", out of
-   scope here (the draft Feature 012, pull request 291, not merged).
+   scope here (Feature 012, status Draft, merged in pull request 291).
 2. **Concurrency limit (CHANGED)**: when the driver states no limit (`unknown`), no limit is applied (unlimited).
    Before, `unknown` was treated as a limit of one. A declared integer limit with status `enforced` still applies, with
    atomic reservations and reclaimed stale reservations (FR-009, SC-013). Author proposal, owner may change: a limit whose
@@ -738,7 +738,7 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
     per-item `--confirm`; no silent build and no silent download (downloads only after the confirmed preview), nothing distributed (FR-037, SC-032). `doctor --fix` does not install
     the VM tool; only the wizard does. The rest of Feature 009 FR-016 (repairing other selected catalog items) is unchanged.
 14. **One interactive shell command (NEW)**: one command with the same behavior for both backends (proposed syntax
-    `whr sandbox shell <id>`, draft Feature 012, pull request 291, not merged). A backend without an enforced `pty`
+    `whr sandbox shell <id>`, Feature 012, status Draft, merged in pull request 291). A backend without an enforced `pty`
     refuses with `refused.interactive_unavailable` (FR-016).
 15. **Licensing (NEW)**: license terms of host software (the VM tool, the host operating system in a VM, concurrency caps from
     licenses, third-party package sources) are the user's responsibility, as for all user-installed host software; `whr`
