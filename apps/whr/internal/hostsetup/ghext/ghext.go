@@ -9,8 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 const (
@@ -165,10 +167,33 @@ func ParseVersion(list, repo string) (version string, installed bool) {
 	return "", false
 }
 
-// ExecGH runs the real gh command. LookPath and Run default to os/exec; tests inject both.
+// ExecGH runs the real gh command. All fields are optional; tests inject them.
 type ExecGH struct {
 	LookPath func(string) (string, error)
-	Run      func(ctx context.Context, name string, args ...string) (stdout, stderr []byte, err error)
+	// Environ returns the parent environment (default os.Environ). The child gets cleanEnv of it.
+	Environ func() []string
+	Run     func(ctx context.Context, env []string, name string, args ...string) (stdout, stderr []byte, err error)
+	// ListTimeout and InstallTimeout bound one call (defaults 15s and 120s).
+	ListTimeout, InstallTimeout time.Duration
+}
+
+const (
+	defaultListTimeout    = 15 * time.Second
+	defaultInstallTimeout = 120 * time.Second
+	defaultHost           = "github.com"
+)
+
+// cleanEnv drops GH_HOST and GH_REPO and pins GH_HOST to github.com, so OWNER/REPO always
+// resolves against github.com, the host that `gh extension list` output is checked for.
+func cleanEnv(base []string) []string {
+	out := make([]string, 0, len(base)+1)
+	for _, kv := range base {
+		if strings.HasPrefix(kv, "GH_HOST=") || strings.HasPrefix(kv, "GH_REPO=") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return append(out, "GH_HOST="+defaultHost)
 }
 
 // Available reports ErrGHMissing when gh is not on PATH.
@@ -185,7 +210,7 @@ func (g ExecGH) Available(context.Context) error {
 
 // ExtensionList returns the output of `gh extension list`.
 func (g ExecGH) ExtensionList(ctx context.Context) (string, error) {
-	out, errOut, err := g.run(ctx, "extension", "list")
+	out, errOut, err := g.run(ctx, orDefault(g.ListTimeout, defaultListTimeout), "extension", "list")
 	if err != nil {
 		return "", commandError(err, errOut)
 	}
@@ -194,7 +219,7 @@ func (g ExecGH) ExtensionList(ctx context.Context) (string, error) {
 
 // ExtensionInstall runs `gh extension install <repo>`; network failures become *NetworkError.
 func (g ExecGH) ExtensionInstall(ctx context.Context, repo string) error {
-	_, errOut, err := g.run(ctx, "extension", "install", repo)
+	_, errOut, err := g.run(ctx, orDefault(g.InstallTimeout, defaultInstallTimeout), "extension", "install", repo)
 	if err == nil {
 		return nil
 	}
@@ -204,14 +229,33 @@ func (g ExecGH) ExtensionInstall(ctx context.Context, repo string) error {
 	return commandError(err, errOut)
 }
 
-func (g ExecGH) run(ctx context.Context, args ...string) ([]byte, []byte, error) {
+func orDefault(d, def time.Duration) time.Duration {
+	if d > 0 {
+		return d
+	}
+	return def
+}
+
+func (g ExecGH) run(ctx context.Context, timeout time.Duration, args ...string) ([]byte, []byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	environ := g.Environ
+	if environ == nil {
+		environ = os.Environ
+	}
+	env := cleanEnv(environ())
 	if g.Run != nil {
-		return g.Run(ctx, "gh", args...)
+		return g.Run(ctx, env, "gh", args...)
 	}
 	cmd := exec.CommandContext(ctx, "gh", args...)
+	cmd.Env = env
+	cmd.WaitDelay = 100 * time.Millisecond
 	var so, se bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &so, &se
 	err := cmd.Run()
+	if ctx.Err() != nil && err != nil {
+		err = fmt.Errorf("gh %s: %w", strings.Join(args[:2], " "), ctx.Err())
+	}
 	return so.Bytes(), se.Bytes(), err
 }
 
@@ -235,7 +279,7 @@ func firstLine(s string) string {
 
 func isNetwork(stderr string) bool {
 	s := strings.ToLower(stderr)
-	for _, m := range []string{"no such host", "could not resolve host", "i/o timeout", "network is unreachable", "connection refused", "tls handshake timeout", "temporary failure in name resolution", "dial tcp"} {
+	for _, m := range []string{"no such host", "could not resolve host", "i/o timeout", "network is unreachable", "connection refused", "tls handshake timeout", "temporary failure in name resolution", "dial tcp", "error connecting to", "check your internet connection"} {
 		if strings.Contains(s, m) {
 			return true
 		}

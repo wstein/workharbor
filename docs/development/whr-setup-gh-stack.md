@@ -20,7 +20,11 @@ The wizard calls `ghext.Describe()` and `ghext.Run()` when it is built.
   explicit yes flag of the caller confirms; otherwise the result is `blocked`
   (`confirmation_required`). After the install the list is read again and the version is reported.
 - Without `gh`: result `blocked` (`gh_missing`) with a message; nothing else runs.
-- Without network: result `failed` (`network_unavailable`) with a message. Other failures are
+- `gh` runs with `GH_REPO` removed and `GH_HOST` set to `github.com`, so `OWNER/REPO` always resolves
+  against github.com. Each call has a timeout (list 15 s, install 120 s) and a 100 ms wait delay.
+- Without network: result `failed` (`network_unavailable`) with a message. gh reports DNS and
+  connection problems with texts such as `error connecting to <host>` and `check your internet connection`;
+  these count as network failures. Other failures are
   `install_failed`, `detect_failed` or `not_detected_after_install`. No panic, no traceback.
 - Host and container run the same code; there is no platform branch.
 
