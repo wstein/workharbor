@@ -173,7 +173,8 @@ type CleanupCapability struct {
 }
 
 // Capabilities is the report of one provider for one trust profile. Its zero
-// value claims nothing: every status is unknown.
+// value claims nothing: every status is the empty string, which is not
+// "enforced" and is rejected by Validate; it is read as unknown.
 type Capabilities struct {
 	Profile             TrustProfile      `json:"profile"`
 	KernelIsolation     Capability        `json:"kernel_isolation"`

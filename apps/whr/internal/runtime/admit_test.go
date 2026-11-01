@@ -103,6 +103,9 @@ func TestAdmitTable(t *testing.T) {
 			row{n + "/repeated requirement refuses once", p,
 				req(p, need(runtime.FieldHostTools, "gateway"), need(runtime.FieldHostTools, "gateway")), nil,
 				codes{runtime.RefusedHostToolsUnavailable}},
+			row{n + "/force_only cleanup on graceful provider", p, req(p, need(runtime.FieldCancellationCleanup, "force_only")), nil, nil},
+			row{n + "/cooperative proxy on enforced deny", p, req(p, need(runtime.FieldEgressEnforcement, "cooperative_proxy")),
+				setEgress(runtime.StatusEnforced, "enforced_deny"), nil},
 			row{n + "/ide access is informational", p, req(p, need(runtime.FieldIDEAccess, "attach")), nil, nil},
 		)
 	}
@@ -270,7 +273,7 @@ func TestAdmitUnknownNeverSatisfies(t *testing.T) {
 	}{
 		{runtime.FieldKernelIsolation, "shared_kernel", runtime.RefusedKernelIsolationUnavailable},
 		{runtime.FieldKernelIsolation, "microvm", runtime.RefusedKernelIsolationUnavailable},
-		{runtime.FieldFilesystemAccess, "bind_ro", runtime.RefusedProfileUnsupported},
+		{runtime.FieldFilesystemAccess, "private_copy", runtime.RefusedProfileUnsupported},
 		{runtime.FieldGitConfigProfile, "agent_policy_ro", runtime.RefusedGitConfigProfileUnavailable},
 		{runtime.FieldHomeState, "scratch", runtime.RefusedProfileUnsupported},
 		{runtime.FieldToolMounts, "ro_bdock", runtime.RefusedProfileUnsupported},
@@ -296,14 +299,18 @@ func TestAdmitUnknownNeverSatisfies(t *testing.T) {
 			// Unknown, with the value listed, never satisfies it.
 			caps = fullCaps(p)
 			setField(&caps, c.field, capability(runtime.StatusUnknown, "test", c.value))
+			code := c.code
+			if c.field == runtime.FieldCancellationCleanup && p == runtime.ProfileDeveloper {
+				code = runtime.RefusedProfileUnsupported // the cleanup code is job-only
+			}
 			got := runtime.Admit(req(p, need(c.field, c.value)), caps)
-			if got.Allowed || !slices.Contains(got.Refusals, c.code) {
+			if got.Allowed || !slices.Contains(got.Refusals, code) {
 				t.Errorf("%s/%s=%s unknown: want refusal %s, got %+v", p, c.field, c.value, c.code, got)
 			}
 			// The zero report (everything unknown) refuses too.
 			zero := runtime.Capabilities{Profile: p}
 			got = runtime.Admit(req(p, need(c.field, c.value)), zero)
-			if got.Allowed || !slices.Contains(got.Refusals, c.code) {
+			if got.Allowed || !slices.Contains(got.Refusals, code) {
 				t.Errorf("%s/%s=%s zero report: want refusal %s, got %+v", p, c.field, c.value, c.code, got)
 			}
 		}
@@ -473,6 +480,27 @@ func TestAdmitRefusesUntrustedWorktree(t *testing.T) {
 			}
 		}
 	}
+	// The workspace bind mount carries the primary .git (config, hooks,
+	// refs, object store): never for an untrusted job (FR-010, FR-001).
+	for _, mode := range []runtime.MountMode{runtime.MountRW, runtime.MountRO, ""} {
+		r := withMounts(req(runtime.ProfileUntrustedJob), mount(runtime.MountWorkspace, "/work/repo", mode))
+		if got := runtime.Admit(r, fullCaps(runtime.ProfileUntrustedJob)); got.Allowed || !slices.Equal(got.Refusals, want) {
+			t.Errorf("untrusted workspace mount %q: %+v", mode, got)
+		}
+	}
+	for _, v := range []string{"bind_rw", "bind_ro", "linked_worktree"} {
+		r := req(runtime.ProfileUntrustedJob, need(runtime.FieldFilesystemAccess, v))
+		if got := runtime.Admit(r, fullCaps(runtime.ProfileUntrustedJob)); got.Allowed || !slices.Equal(got.Refusals, want) {
+			t.Errorf("untrusted filesystem_access=%s: %+v", v, got)
+		}
+	}
+	if got := runtime.Admit(req(runtime.ProfileUntrustedJob, need(runtime.FieldFilesystemAccess, "private_copy")), fullCaps(runtime.ProfileUntrustedJob)); !got.Allowed {
+		t.Errorf("private copy must be admitted: %+v", got)
+	}
+	dev := withMounts(req(runtime.ProfileDeveloper), mount(runtime.MountWorkspace, "/work/repo", runtime.MountRW))
+	if got := runtime.Admit(dev, fullCaps(runtime.ProfileDeveloper)); !got.Allowed {
+		t.Errorf("developer workspace mount must be admitted: %+v", got)
+	}
 	for _, v := range []string{"linked_worktree", "primary_rw"} {
 		r := req(runtime.ProfileUntrustedJob, need(runtime.FieldGitAccess, v))
 		if got := runtime.Admit(r, fullCaps(runtime.ProfileUntrustedJob)); !slices.Equal(got.Refusals, want) {
@@ -544,5 +572,83 @@ func TestAdmitRefusesHostSocketAndWritableToolMount(t *testing.T) {
 	r := withMounts(req(runtime.ProfileDeveloper), mount(runtime.MountScratch, "/opt/bdock-extra/x", runtime.MountRW))
 	if got := runtime.Admit(r, fullCaps(runtime.ProfileDeveloper)); !got.Allowed {
 		t.Errorf("/opt/bdock-extra is not a tool root: %+v", got)
+	}
+}
+
+func TestAdmitOrderedRequirements(t *testing.T) {
+	cleanup := func(status runtime.Status, values ...string) edit {
+		return func(c *runtime.Capabilities) {
+			c.CancellationCleanup.Capability = capability(status, "test", values...)
+		}
+	}
+	egress := func(status runtime.Status, values ...string) edit {
+		return func(c *runtime.Capabilities) { c.EgressEnforcement = capability(status, "test", values...) }
+	}
+	type row struct {
+		name  string
+		field runtime.FieldName
+		value string
+		edit  edit
+		// job and dev are the expected refusals for job profiles and developer.
+		job, dev codes
+	}
+	jobCleanup := codes{runtime.RefusedCleanupCapabilityInsufficient}
+	unsupported := codes{runtime.RefusedProfileUnsupported}
+	egressNo := codes{runtime.RefusedEgressEnforcementUnavailable}
+	E := runtime.StatusEnforced
+	rows := []row{
+		{"force_only asked, graceful enforced", runtime.FieldCancellationCleanup, "force_only", cleanup(E, "graceful_then_force"), nil, nil},
+		{"force_only asked, force_only enforced", runtime.FieldCancellationCleanup, "force_only", cleanup(E, "force_only"), nil, nil},
+		{"graceful asked, force_only enforced", runtime.FieldCancellationCleanup, "graceful_then_force", cleanup(E, "force_only"), jobCleanup, unsupported},
+		{"none asked, nothing enforced", runtime.FieldCancellationCleanup, "none", cleanup(E, "none"), jobCleanup, nil},
+		{"force_only asked, graceful unknown", runtime.FieldCancellationCleanup, "force_only", cleanup(runtime.StatusUnknown, "graceful_then_force"), jobCleanup, unsupported},
+		{"force_only asked, graceful not enforced", runtime.FieldCancellationCleanup, "force_only", cleanup(runtime.StatusNotEnforced, "graceful_then_force"), jobCleanup, unsupported},
+		{"cooperative_proxy asked, allowlist enforced", runtime.FieldEgressEnforcement, "cooperative_proxy", egress(E, "enforced_allowlist"), nil, nil},
+		{"cooperative_proxy asked, deny enforced", runtime.FieldEgressEnforcement, "cooperative_proxy", egress(E, "enforced_deny"), nil, nil},
+		{"cooperative_proxy asked, deny unknown", runtime.FieldEgressEnforcement, "cooperative_proxy", egress(runtime.StatusUnknown, "enforced_deny"), egressNo, egressNo},
+		{"cooperative_proxy asked, none", runtime.FieldEgressEnforcement, "cooperative_proxy", egress(E, "none"), egressNo, egressNo},
+		{"allowlist asked, only proxy", runtime.FieldEgressEnforcement, "enforced_allowlist", egress(E, "cooperative_proxy"), egressNo, egressNo},
+		{"allowlist asked, deny is a different policy", runtime.FieldEgressEnforcement, "enforced_allowlist", egress(E, "enforced_deny"), egressNo, egressNo},
+		{"deny asked, allowlist is a different policy", runtime.FieldEgressEnforcement, "enforced_deny", egress(E, "enforced_allowlist"), egressNo, egressNo},
+	}
+	for _, r := range rows {
+		for _, p := range allProfiles {
+			want := r.job
+			if p == runtime.ProfileDeveloper {
+				want = r.dev
+			}
+			caps := fullCaps(p)
+			r.edit(&caps)
+			// A matrix gap from the edited cleanup field is expected for jobs
+			// whose provider is below force_only; the requirement adds no code of its own.
+			got := runtime.Admit(req(p, need(r.field, r.value)), caps)
+			if !slices.Equal(got.Refusals, want) && !(len(got.Refusals) == 0 && len(want) == 0) {
+				t.Errorf("%s/%s: refusals %v, want %v", p, r.name, got.Refusals, want)
+			}
+			if p == runtime.ProfileDeveloper && slices.Contains(got.Refusals, runtime.RefusedCleanupCapabilityInsufficient) {
+				t.Errorf("%s/%s: the cleanup code is job-only", p, r.name)
+			}
+		}
+	}
+}
+
+func TestAdmitUnknownMountSourceFailsClosed(t *testing.T) {
+	for _, src := range []runtime.MountSource{"", "mystery", "Workspace", "tmpfs"} {
+		for _, mode := range []runtime.MountMode{runtime.MountRW, runtime.MountRO, ""} {
+			for _, p := range allProfiles {
+				got := runtime.Admit(withMounts(req(p), mount(src, "/x", mode)), fullCaps(p))
+				if got.Allowed || !slices.Equal(got.Refusals, codes{runtime.RefusedProfileUnsupported}) {
+					t.Errorf("%s source %q mode %q: %+v", p, src, mode, got)
+				}
+			}
+		}
+	}
+	// Every declared source kind is known.
+	for _, src := range []runtime.MountSource{runtime.MountWorkspace, runtime.MountPrivateCopy, runtime.MountScratch,
+		runtime.MountPrimaryHome, runtime.MountAgentGitProfile} {
+		got := runtime.Admit(withMounts(req(runtime.ProfileDeveloper), mount(src, "/x", runtime.MountRO)), fullCaps(runtime.ProfileDeveloper))
+		if slices.Contains(got.Refusals, runtime.RefusedProfileUnsupported) {
+			t.Errorf("declared source %q treated as unknown", src)
+		}
 	}
 }
