@@ -11,7 +11,9 @@ The wizard calls `ghext.Describe()` and `ghext.Run()` when it is built.
 
 - Item: id `gh-stack`, preselected, individually skippable, requires `gh`.
 - Order: deselected means no `gh` call. Then check that `gh` is on PATH, run
-  `gh extension list`, and match the exact repository `github/gh-stack`.
+  `gh extension list`, and match the exact repository `github/gh-stack` in column 2. The list is
+  TAB-separated (name, repository, version; the name may contain a space, e.g. `gh stack`),
+  measured on gh 2.103.3 with gh-stack v0.3.0. Space-separated output is not recognized.
 - Installed: report the version, run nothing, ask nothing (no second install).
 - Missing: show the step `gh extension install github/gh-stack` (it changes the user's `gh`
   profile) before running it. Interactive runs need a yes. Without a terminal only the

@@ -213,7 +213,13 @@ func TestParseVersion(t *testing.T) {
 		ok              bool
 	}{
 		{"tab", stackLine, "v0.3.0", true},
-		{"spaces", "gh stack  github/gh-stack  v0.3.0\n", "v0.3.0", true},
+		{"measured gh 2.103.3 gh-stack 0.3.0", "gh stack\tgithub/gh-stack\tv0.3.0\n", "v0.3.0", true},
+		{"space separated is not the gh format", "gh stack  github/gh-stack  v0.3.0\n", "", false},
+		{"crlf", "gh stack\tgithub/gh-stack\tv0.3.0\r\n", "v0.3.0", true},
+		{"crlf without version", "gh stack\tgithub/gh-stack\r\n", "", true},
+		{"several extensions", "gh dash\tdlvhdr/gh-dash\tv4.0.0\ngh stack\tgithub/gh-stack\tv0.3.0\n", "v0.3.0", true},
+		{"blank lines", "\n\ngh stack\tgithub/gh-stack\tv0.3.0\n\n", "v0.3.0", true},
+		{"repo in name column only", "github/gh-stack\tgh stack\tv0.3.0\n", "", false},
 		{"pinned marker", "gh stack\tgithub/gh-stack\tv0.3.0\tpinned\n", "v0.3.0", true},
 		{"no version", "gh stack\tgithub/gh-stack\n", "", true},
 		{"sha version", "gh stack\tgithub/gh-stack\t1a2b3c4d\n", "1a2b3c4d", true},

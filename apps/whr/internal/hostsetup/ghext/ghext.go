@@ -147,27 +147,20 @@ func versionText(v string) string {
 	return v
 }
 
-// ParseVersion returns the version column of repo in `gh extension list` output
-// (empty when the column is absent) and whether the exact repository is listed.
+// ParseVersion reads `gh extension list` output: one line per extension, columns
+// separated by TAB (name, repository, version, optional further columns). The name may
+// contain a space ("gh stack"), so lines are never split at spaces. It returns the
+// version column of repo (empty when absent) and whether the exact repository is listed.
 func ParseVersion(list, repo string) (version string, installed bool) {
 	for _, line := range strings.Split(list, "\n") {
-		fields := strings.Fields(line)
-		if strings.Contains(line, "\t") {
-			fields = nil
-			for _, f := range strings.Split(line, "\t") {
-				if f = strings.TrimSpace(f); f != "" {
-					fields = append(fields, f)
-				}
-			}
+		cols := strings.Split(line, "\t")
+		if len(cols) < 2 || !strings.EqualFold(strings.TrimSpace(cols[1]), repo) {
+			continue
 		}
-		for i, f := range fields {
-			if strings.EqualFold(f, repo) {
-				if i+1 < len(fields) {
-					return fields[i+1], true
-				}
-				return "", true
-			}
+		if len(cols) > 2 {
+			return strings.TrimSpace(cols[2]), true
 		}
+		return "", true
 	}
 	return "", false
 }
