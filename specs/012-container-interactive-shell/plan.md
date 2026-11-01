@@ -107,8 +107,8 @@ Stage 2 (T016 to T018): container provider `Shell` over the fake `DockerAPI`, th
 and the capability report that stays `none` until the gate. Needs 008/T013 and the T002 results.
 Stage 3 (T019 to T024): owner-gated docs amendments (ADR 0014, ADR 0013 and `exit-codes.json`, Feature 006, Features 008 and
 011 text), then registration of the command and the native terminal tests.
-Stage 4 (T025 to T027): the SC-010 owner gate on a real host; the owner-gated flip of the capability report to `pty` with
-status `enforced`; acceptance and handoff. Each task is one PR of at most about 1,500 changed lines, targeting `main`.
+Stage 4 (T025 to T027): the SC-010 owner gate on both real hosts (Linux with Docker Engine, macOS with OrbStack); the owner-gated flip of the capability report to `pty` with
+status `enforced`; acceptance and handoff. Stage 5 (T028, T029, appended 2026-11-01): the design decision for the terminal restore after a killed client (FR-025) and its implementation; T027 waits for both. Each task is one PR of at most about 1,500 changed lines, targeting `main`.
 
 ## Requirements to evidence
 
@@ -123,6 +123,7 @@ Full FR/SC/decision mapping is in [tasks.md](tasks.md#coverage). Test names ther
 | FR-023; S12-C8; SC-012 | T010 | `internal/sandbox/shellsession/confirm_test.go` |
 | FR-024; S12-C9; SC-013 | T014 (held on V5) | `internal/sandbox/reconcile_test.go` |
 | FR-003; SC-002 | T018, T026 | capability report tests; flip PR |
+| FR-025 | T028, T029 | design decision first (owner), then implementation and tests |
 | SC-010, FR-011/FR-012 live parts | T025 | `docs/quality/012-container-interactive-shell/` owner record |
 
 ## Risks and handling
@@ -132,7 +133,7 @@ Full FR/SC/decision mapping is in [tasks.md](tasks.md#coverage). Test names ther
 | **PTY handling.** `whr` must not relay the stream: the client child owns the terminal (FR-010, FR-011). A `whr` that proxies or logs bytes breaks the safety statement. | One child with the real descriptors, no copy loop, no recording; test that `whr` writes nothing while the client runs (T012) and that no pty is requested for a non-terminal (T009). Resize is expected from the client (FR-012); unverified until V1 and SC-010; if SC-010 fails, own resize handling is a new owner decision, deferred. |
 | **Detach key.** The runtime must be able to disable its detach sequence (FR-008); if not, no `pty`/`enforced`. | V2 in T002 before T016; T007 asserts the flag in the recorded vector; failing V2 blocks T026. |
 | **Signals.** Client reaction to SIGINT, SIGTERM and SIGHUP after hand-over is unverified (FR-013). The SIGHUP rule is an author proposal. | V4 in T002; T012 tests `whr`'s own rules with a fake child; SC-010 covers the live part. Exit 72 and `interrupted` as the spec states; no claim that the in-container shell ended. |
-| **Terminal restore.** Neither the spec nor Feature 010 requires `whr` to restore terminal modes, because it never puts the terminal in raw mode itself and the client owns the tty. If the client is killed while holding raw mode, the terminal can stay raw. | Not claimed. Spec states nothing on restore; plan adds no requirement. SC-010 should observe the terminal state after a killed client and record it; whether restore becomes a requirement is open question 5. |
+| **Terminal restore.** Feature 010 does not require `whr` to restore terminal modes, because it never puts the terminal in raw mode itself and the client owns the tty. If the client is killed while holding raw mode, the terminal can stay raw. | Decided 2026-11-01 (open question 5, a deviation from the earlier plan of adding nothing): a restore mechanism is built (FR-025, T028, T029). A killed client cannot restore itself, so the design needs an owner decision (T028); no mechanism is chosen here. Until built nothing is claimed, and SC-010 observes the terminal state after a killed client and records it. |
 | **Atomic start** (D8c) has no mechanism in Feature 008. | research R-1 options; T005 tests the contract (exactly one winner, no return to `ready`) against any mechanism; the choice is open question 2. |
 | **End-of-exec and reconciliation queries** are unverified (V5). `docker exec` prints no exec id. | T002 decides; adapter in T017 sits behind a port; FR-003 cannot claim without the end-of-exec query (S12-C7 is in the gate), FR-024 can lag (T014, S12-C9 not a gate). |
 | **Environment route.** Values must not appear in the argument vector or process list (FR-009). Route unverified (V3). | T007 asserts no value in argv with a fake route; SC-010 checks the process list on a real host. |
@@ -151,15 +152,15 @@ platform, `docs/container-runtime.md`: macOS recommends OrbStack, Linux uses Doc
 and terminal evidence exist (`docs/container-runtime.md`). `internal/ptytest` has Linux and macOS back ends and a stub for others,
 so native terminal tests (T024) run where it does. Differences in pty size propagation, signal delivery to the client and the
 status of a killed client between Docker Engine on Linux and a macOS runtime are not stated by the spec and are not assumed:
-SC-010 says "a real Docker host", and which hosts it covers is open question 4.
+SC-010 covers both Linux with Docker Engine and macOS with OrbStack (open question 4, answered 2026-11-01); the macOS evidence comes from the owner's Mac.
 
 ## Departure from the spec's verification order
 
-The spec lists V1 to V5 under "Verification before the plan". This plan is written before they are run and schedules them as T002 after approval, with the outcomes binding later tasks (T014, T016, T017, T026). The owner accepts this order or asks for T002 to precede plan approval (open question 8).
+The spec lists V1 to V5 under "Verification before the plan". This plan is written before they are run and schedules them as T002 after approval, with the outcomes binding later tasks (T014, T016, T017, T026). The owner accepted this order on 2026-11-01 (open question 8).
 
 ## Plan decisions the spec assigns to the plan
 
-Proposals the owner confirms with approval of this plan; each is also an open question.
+Proposals the owner confirms with approval of this plan; each is also an open question. Confirmed as written on 2026-11-01 (open question 10); the literal per-profile working directories of decision 2 are still to be supplied once the 008 Plan exists.
 
 1. Notice text (FR-010), one line on standard error only when it is a terminal, fixed bytes (`<id>` and `<profile>` escaped per Feature 006 FR-022): `whr: sandbox shell in <id> (<profile>; no grant; host container runtime access)`. Modeled on `whr: local shell in <name> (no grant; host Docker access; detach keys ...)` of Feature 010 FR-010; no detach keys exist to name. T011 tests these bytes.
 2. Working directory per profile (Plan field, D3): the plan fixes the rule, not literal paths, because the mount targets belong to the Feature 008 Plan (008/T006, T011), which is not built: `developer` the target of the workspace bind mount; `cooperative_job` the target of the linked worktree mount; `untrusted_job` the target of the private copy mount; each an absolute path of at most 4096 bytes. Literal values are asserted by T006 against the 008 Plan once it exists (open question 10).
@@ -180,21 +181,29 @@ query; behavior of the 5-second budget of FR-016 when the daemon stalls; termina
 
 ## Open questions for the owner
 
-This list is the record of the questions; PR #297 is merged, its description numbered some items differently and is no longer the reference. None blocks reviewing the spec; items 2, 3, 4 and 10 affect task scope (item 9 is resolved). These are plan questions; the spec's own
-open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or lost client) is carried here unchanged as item 1.
-
+This list is the record of the questions and of the owner's answers of 2026-11-01 (issue #317, comment 6559753902); PR #297 is merged, its description numbered some items differently and is no longer the reference. DEVIATION marks an answer that differs from the plan's recommendation (items 1a and 5). These are plan questions; the spec's own
+open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or lost client) is carried here as item 1.
 1. Spec open question 1: exit 70 for a declined, unanswered or impossible confirmation and exit 72 for a killed or lost client
    stream (FR-015, FR-016, FR-023). T010, T012 and T013 test the spec text as written; a different answer is an ADR 0013 decision.
+   **RESOLVED 2026-11-01**: (a) DEVIATION: a declined, unanswered or impossible confirmation exits 72, not 70, like Feature 006 and Feature 009; the spec, T010 and T013 follow. (b) Accepted: 72 for a killed or lost client stream.
 2. Mechanism and home of the instance record store for the atomic `ready` to `running` update (D8c) and the owner process id and
    start time (FR-024). Feature 008 defines none; Feature 011 FR-009 (draft) has a locked local record store. Proposal in research
    R-1: use the Feature 011 store if it lands first, otherwise a minimal store with a conditional update in 008/T003.
+   **RESOLVED 2026-11-01**: the store is the one of Feature 011 OQ-1, below the Feature 009 state directory (`~/.local/state/whr/`, one lock file). The update mechanism stays the plan's choice (research R-1).
 3. Landing order and ownership: Feature 011 is a draft and amendment A1 is not applied to Feature 008, whose T001 to T003 are merged (PR #303) and T004 to T017 are open; the 009 selection function (tasks merged in PR #299) is unbuilt too. This feature's tasks depend on all three. Confirm that T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to Feature 008 contracts only if 011 has not landed them first (FR-004).
+   **RESOLVED 2026-11-01**: accepted. T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contracts only if Feature 011 has not landed them first.
 4. Which real hosts must SC-010 cover (Linux Docker Engine, macOS with OrbStack, both)? The spec says "a real Docker host" only.
+   **RESOLVED 2026-11-01**: both. SC-010 covers Linux with Docker Engine and macOS with OrbStack; the macOS evidence comes from the owner's Mac (SC-010, T025, quickstart).
 5. Terminal restore: should `whr` verify or restore the terminal mode after a killed client? The spec requires nothing; the plan
    adds nothing; this lists the risk only.
+   **RESOLVED 2026-11-01, DEVIATION**: a terminal restore mechanism after a killed client is built (earlier plan: add nothing). It is not designed; a killed client cannot restore itself, so the design needs an owner decision (FR-025, T028, T029).
 6. Whether the reconciliation (FR-024, T014) is built before V5 verifies a query. The plan holds it; it does not block FR-003.
+   **RESOLVED 2026-11-01**: accepted. The reconciliation (FR-024, T014) is held until V5.
 7. Author proposals the spec still marks for confirmation and the plan tests as written: `WHR_SANDBOX_ID`, the SIGHUP rule, the
    failure `reason` field and values, the owner process id and start time, the `--confirm <id>` form, the widened trigger text.
+   **RESOLVED 2026-11-01**: accepted. The author proposals are tested as written.
 8. Whether V1 to V5 (T002) may follow plan approval, as scheduled, or must precede it as the spec section title says.
+   **RESOLVED 2026-11-01**: accepted. V1 to V5 (T002) follow plan approval as scheduled.
 9. RESOLVED (owner decision D9, 2026-10-31): endpoint option conflict between spec 012 FR-007 and 009 FR-030. FR-007 now also accepts `--container-endpoint <endpoint>` (a malformed value exits 64), consistent with 009 FR-029, FR-030 and FR-032; Feature 009 is unchanged. T008 and T009 are no longer held.
 10. Confirm plan decisions 1 to 4 above (notice bytes, working directory rule, S12 label numbering, client-disappears reading), and supply the literal per-profile working directories once the 008 Plan exists.
+   **RESOLVED 2026-11-01**: accepted as written (plan decisions 1 to 4). The literal per-profile working directories are still to be supplied once the 008 Plan exists.

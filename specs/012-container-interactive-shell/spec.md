@@ -106,9 +106,16 @@ This feature defines that behavior for the container provider:
   (FR-007). This resolves the conflict between the earlier text of FR-007 (global options, `--confirm` and `--yes` only) and
   Feature 009 FR-030; Feature 009 is unchanged. The tracker or PR link is added with the other decisions when the text is
   approved at an exact head.
-- Author proposals that remain (marked where they appear): the environment variable `WHR_SANDBOX_ID` (FR-009); the SIGHUP
-  rule (FR-013); the structure of the failure `reason` field and its values (FR-014); the reading of a client stream that ends
-  while the remote side did not exit as a transport loss with exit 72 (FR-015, FR-016); the exact confirmation form of D1
+- **2026-11-01 (owner answers to the plan questions, issue #317)**: (1a) a declined, unanswered or impossible confirmation exits 72,
+  not 70 (FR-015, FR-023); (1b) a killed or lost client stream exits 72 (FR-015, FR-016); (2) the instance record store is the one
+  of Feature 011 (answer to its OQ-1): the Feature 009 state directory below `~/.local/state/whr/` with one lock file; (3) task T022
+  may add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contracts only if Feature 011 has not landed
+  them first; (4) SC-010 covers both Linux with Docker Engine and macOS with OrbStack; (5) a terminal restore mechanism after a
+  killed client is built (FR-025), its design is not decided; (6) the reconciliation (FR-024, T014) is held until V5; (7) the author
+  proposals are tested as written; (8) V1 to V5 (T002) follow plan approval as scheduled; (10) plan decisions 1 to 4 stand as written.
+- Author proposals that remain (marked where they appear), tested as written (owner answer 7 of 2026-11-01): the environment
+  variable `WHR_SANDBOX_ID` (FR-009); the SIGHUP rule (FR-013); the structure of the failure `reason` field and its values
+  (FR-014); the exact confirmation form of D1
   (FR-023); the owner process id and start time recorded for D7 (FR-024); the widened `running` to `failed` trigger text.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -149,7 +156,7 @@ against the request; each is refused with the stable code and zero provider call
    provider call that allocates anything, and no fallback to a piped shell exists (FR-007).
 2. **Given** `--json`, a trailing command or any further positional argument, **Then** exit 64 (FR-007).
 3. **Given** an `untrusted_job` instance, no `--confirm <id>` and standard error not a terminal, **Then** no prompt is shown
-   and the command exits 70 with a `whr:` line naming `--confirm` (FR-023).
+   and the command exits 72 with a `whr:` line naming `--confirm` (FR-023).
 4. **Given** `--container-endpoint` with a malformed value (empty, relative or otherwise malformed, Feature 009 FR-030),
    **Then** exit 64 before any provider call (FR-007); **Given** a well-formed value with another scheme (for example `tcp://`), **Then** exit 68 at step 5; **Given** a well-formed `unix://` value, **Then** it is the one
    endpoint used at step 5 and no lower source replaces it (FR-005, Feature 009 FR-029).
@@ -171,7 +178,7 @@ against the request; each is refused with the stable code and zero provider call
 
 1. **Given** a `ready` `untrusted_job` instance, **When** the command runs without confirmation, **Then** a warning about
    unfiltered terminal control sequences is shown on standard error, which must be a terminal for the prompt (otherwise see
-   User Story 3 scenario 3), and without an explicit confirmation no shell starts (exit 70) (FR-023).
+   User Story 3 scenario 3), and without an explicit confirmation no shell starts (exit 72) (FR-023).
 2. **Given** `--yes` alone, **Then** it does not count as confirmation. A `developer` instance asks for nothing.
 
 ### Edge Cases
@@ -285,7 +292,7 @@ against the request; each is refused with the stable code and zero provider call
   well-formed value with another scheme is refused at step 5 of FR-005 with exit 68), and MUST reject `--json` as a usage error (exit 64), as Feature 010 FR-006
   does for `shell --local`. A pty MUST be allocated only in this case; no pty is requested when either stream is not a
   terminal, and there is no documented fallback to a piped shell, because that mode is the deferred `exec` (Feature 008
-  OD-1). Standard error need not be a terminal, except that an `untrusted_job` without `--confirm <id>` then exits 70 (FR-023).
+  OD-1). Standard error need not be a terminal, except that an `untrusted_job` without `--confirm <id>` then exits 72 (FR-023).
 - **FR-008** (exec form): For the container provider the hand-over MUST be one invocation of the container runtime client
   with a fixed argument vector (no shell, no string evaluation) built only from validated values, addressing the
   container by full id and passing the selected `unix://` endpoint explicitly, as Feature 010 FR-002 and FR-004 state
@@ -381,14 +388,15 @@ against the request; each is refused with the stable code and zero provider call
   - 68 for any `refused.*` (including `refused.interactive_unavailable`, `refused.foreign_object`,
     `refused.invalid_state`), a non-running container, no usable endpoint (Feature 009 FR-032), an absent client, an unreachable
     socket or a non-`unix://` endpoint (the mapping of Feature 008 FR-035 and Feature 010 FR-009), all before the hand-over;
-  - 72 only where the ADR 0013 definition ("user interrupt, or transport lost during an interactive command") holds:
+  - 72 where the ADR 0013 definition ("user interrupt, or transport lost during an interactive command") holds:
     SIGINT, SIGTERM or SIGHUP before or after the commit point, daemon unreachable after the client ends, and a client stream
-    that ended while the remote side did not exit (a killed or lost client). Reading that last case as a transport loss
-    is an author proposal for the owner to confirm; it needs no new code;
-  - 70 for a confirmation prompt (FR-023) that is declined or left unanswered, or a missing confirmation when standard error is not a terminal (ADR 0013: a required human decision refused
-    or not given; command-surface.md already lists "unattended confirmation missing" under 70);
+    that ended while the remote side did not exit (a killed or lost client). The owner confirmed on 2026-11-01 that reading
+    that last case as a transport loss is right; it needs no new code. Also 72, by owner decision of 2026-11-01, for a
+    confirmation prompt (FR-023) that is declined, left unanswered or impossible (a missing confirmation when standard error is
+    not a terminal), as Feature 006 and Feature 009 give 72 for a declined or unanswered wizard prompt; the ADR 0013 text of 72
+    does not name that case (see "Changes to existing documents");
   - 74 for an unclassified failure, including a client that cannot be launched (`start_failed`, FR-014).
-  Exit codes 66 and 67 are not used (no remote authority), 71 and 73 are not used by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
+  Exit codes 66 and 67 are not used (no remote authority); 70, 71 and 73 are not used by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
   and a status coming from the shell MUST NOT (Feature 010 FR-008, ADR 0013). `--json` is rejected, so the `kind`
   field of the JSON exit event is not available for this command. The `whr:` line is advisory (ADR 0013), so for
   `sandbox shell` a status in 64 to 79 is ambiguous by design, as ADR 0013 and `contracts/cli/exit-codes.json` state for
@@ -410,8 +418,8 @@ against the request; each is refused with the stable code and zero provider call
   nevertheless recorded `failed` with reason `container_lost`, because the shell did not end by itself, and the status alone
   (for example 137 or 143, or 0) cannot tell the two apart. A stop or removal caused by the shell's own commands falls in the
   same row. Because no key sequence detaches (FR-008), a deliberate detach does not exist. A client stream that ends while
-  the remote side did not exit is read as a transport loss (exit 72, ADR 0013); that reading is an author proposal, and if
-  the owner wants another code for it, that is an ADR 0013 decision. Signals sent to `whr` are FR-013.
+  the remote side did not exit is read as a transport loss (exit 72, ADR 0013); the owner confirmed that reading on
+  2026-11-01. Signals sent to `whr` are FR-013.
 - **FR-017** (killed client, orphans and a killed `whr`): With detaching disabled (FR-008), the session ends when the shell
   ends or when the client is interrupted or killed. A killed client can leave the in-container shell running (Feature 010
   FR-007 accepts this for `shell --local`). This feature does not track or reap such a process. When the client ended while
@@ -434,6 +442,11 @@ against the request; each is refused with the stable code and zero provider call
   `whr` between the commit point and the launch is not marked. The query that tells whether the exec process runs is not
   verified (Verification before the plan). Until it is, no provider may claim this behavior, and the gap of FR-017 remains
   listed under "Not enforced". Case S12-C9 is not a gate for `pty`/`enforced` (FR-003).
+- **FR-025** (terminal restore after a killed client; owner decision of 2026-11-01): The feature MUST design and implement a mechanism
+  that restores the owner's terminal to a usable state after the container runtime client was killed (FR-017). The mechanism is not
+  designed yet. A killed client cannot restore the terminal itself, so the design needs an owner decision (task T028) before the
+  implementation (task T029). Until the mechanism is built nothing is claimed about the terminal state after a killed client, and
+  the SC-010 run observes and records it. FR-010, FR-011 and FR-015 continue to apply to the mechanism.
 
 **Security**
 
@@ -477,13 +490,11 @@ against the request; each is refused with the stable code and zero provider call
   terminal, FR-007). No exception to Feature 006 FR-014 is made: the shell session's own terminal stream is the interactive
   channel that Feature 006 FR-022a and Feature 010 FR-014 already treat as outside `whr`'s relay, not a prompt. If no
   `--confirm <id>` is given and standard error is not a terminal, no prompt is shown, nothing is started and the command
-  exits 70 with a `whr:` line naming `--confirm`. A run without a terminal on standard input or output never reaches this
-  step (exit 64 at step 1). Exit codes use the existing conventions: a prompt that is declined (any answer other than the
-  instance id) or left unanswered (end of input), or the missing confirmation just described, is 70 (needs-human; ADR 0013
-  "required human decision refused in unattended or answer-file mode, or not given"; Feature 008 command-surface.md says
-  "70 unattended confirmation missing"; Feature 006 treats a missing or declined normal confirmation as 70). The precedent is
-  mixed, since Feature 006 treats a declined interactive wizard prompt as a cancellation, exit 72; 70 is an author proposal
-  for the owner to confirm (Open question 1). A `--confirm` value that does not equal the instance id is 64 (usage). The exact
+  exits 72 with a `whr:` line naming `--confirm`. A run without a terminal on standard input or output never reaches this
+  step (exit 64 at step 1). Exit code (owner decision of 2026-11-01, Open question 1a, a deviation from the earlier author
+  proposal of 70): a prompt that is declined (any answer other than the instance id), left unanswered (end of input), or a
+  confirmation that is impossible (the missing confirmation just described) is 72, like the declined wizard prompt of Feature 006
+  (a cancellation, 72) and the end of input at the wizard question of Feature 009 FR-004 (72). A `--confirm` value that does not equal the instance id is 64 (usage). The exact
   form is an author proposal under D1: a prompt that requires typing the instance id, and a flag `--confirm <id>` that, with a
   value equal to the instance id, skips the prompt (the per-item `--confirm <id>` pattern of Feature 009; Feature 011 FR-033
   in the merged PR #290 uses it too). The confirmation is not part of `Admit` (it is not a capability) and adds no
@@ -520,11 +531,11 @@ S12-C7. End of session: each row of the FR-016 table with its exit code, instanc
     process already ended is row 3 with the client's own signal status passed through and the shell's status also recorded
     when readable and different (FR-013, FR-014, FR-016, FR-017).
 S12-C8. Confirmation: an `untrusted_job` without confirmation starts nothing; a prompt answered with anything other than the
-    instance id, or left unanswered, gives 70; `--yes` alone still shows the prompt and starts nothing without the answer;
+    instance id, or left unanswered, gives 72; `--yes` alone still shows the prompt and starts nothing without the answer;
     a `--confirm` value other than the instance id gives 64; `--confirm <id>` with the right id, or the right answer, proceeds;
     `developer` and `cooperative_job` are never asked; a signal during the prompt exits 72 with no state change; the
     warning and prompt go to standard error with standard output left as command data only; an `untrusted_job` without
-    `--confirm <id>` and with standard error not a terminal shows no prompt, starts nothing and exits 70 with a `whr:` line
+    `--confirm <id>` and with standard error not a terminal shows no prompt, starts nothing and exits 72 with a `whr:` line
     naming `--confirm`; without a terminal on standard input or output the run exits 64 at step 1 (FR-007, FR-023, FR-013).
 S12-C9. Reconciliation (needs the verified query): a `running` record whose exec process is gone or was never started becomes
     `failed`/`session_lost` on a later `whr sandbox` invocation; a `running` record whose owner process is alive is untouched;
@@ -547,6 +558,7 @@ This feature enforces nothing about what happens inside the shell. In particular
   `egress_enforcement=none` for the container provider) or credentials already present;
 - provide kernel isolation beyond the shared-kernel claim of the container provider (`kernel_isolation=shared_kernel`);
 - end, track or reap an in-container shell after the client or `whr` is killed (FR-017);
+- restore the owner's terminal after a killed client, until the mechanism of FR-025 is designed and built;
 - recover an instance left `running` when `whr` died without a handler after the commit point, until the reconciliation
   query of FR-024 is verified and built;
 - make the confirmation of FR-023 anything but an informed consent: it does not filter terminal sequences, and it is not
@@ -573,17 +585,18 @@ This feature enforces nothing about what happens inside the shell. In particular
   `refused.invalid_state` and unchanged; of two concurrent starts exactly one proceeds (FR-014, MUST); a `finished` record gets no second shell; a `ready` record with a missing container exits 68 naming `missing`, not
   `refused.foreign_object` (FR-005, FR-014).
 - **SC-006**: Non-terminal use, `--json`, trailing arguments and a malformed `--container-endpoint` value exit 64 without allocating a pty (FR-007).
-- **SC-007**: Shell statuses 0 to 255 pass through unchanged and CLI failures use only 64, 65, 68, 70, 72, 74 with a `whr:` line
+- **SC-007**: Shell statuses 0 to 255 pass through unchanged and CLI failures use only 64, 65, 68, 72, 74 with a `whr:` line
   (FR-015); the exit mapping function of Feature 008 T004 (`ExitFor`) gains no new code and its freeze test is unchanged
   except for the `sandbox shell` passthrough entry once the ADR 0013 amendment lands.
 - **SC-008**: Signals, loss, container stop or removal, and a killed client produce exactly the exit code, state, reason and `whr:`
   line of the FR-016 table and FR-013 (case S12-C7), with no recorded session content (FR-014).
 - **SC-009**: A second provider fixture declaring `pty` passes cases S12-C1 to S12-C8 with no change to production contract code
   (FR-022, Feature 008 SC-010).
-- **SC-010** (owner gate, real host): on a real Docker host with a terminal, evidence recorded in the PR or tracker shows:
+- **SC-010** (owner gate, real hosts): on both real Docker hosts, Linux with Docker Engine and macOS with OrbStack (the macOS evidence
+  comes from the owner's Mac), each with a terminal, evidence recorded in the PR or tracker shows, for each host:
   a shell starts and its status passes through; resize reaches the pty; job control (suspend, resume, interrupt) acts
   in the container; stopping the container from another terminal gives the `container_lost` row of the FR-016 table (status passed through, instance `failed`), and a killed client with the shell still running gives the `end_undetermined` row; no key sequence detaches; the environment passing route of
-  FR-009 does not expose values in the process list. Until this evidence exists FR-003 keeps `none`.
+  FR-009 does not expose values in the process list. Until this evidence exists for both hosts FR-003 keeps `none`.
 - **SC-011**: FR-001, FR-002, FR-010, FR-011, FR-012, FR-020 and the notice and help text parts of FR-022 are checked
   by independent review of the spec and, at implementation, by the tests named in the plan: FR-001 and FR-002 by the
   command table freeze test after T016; FR-010 by a byte-exact notice test; FR-011 by a help-text test and the owner gate
@@ -592,17 +605,18 @@ This feature enforces nothing about what happens inside the shell. In particular
   statement of scope covered by SC-003 and case S12-C2 and has no separate test.
 
 - **SC-012**: An `untrusted_job` shell starts only after the explicit confirmation of FR-023, `--yes` alone never starts it,
-  the exit codes are 70 (prompt declined or unanswered, or no prompt possible because standard error is not a terminal and no `--confirm` is given) and 64 (wrong `--confirm` value) as FR-023 states, with the prompt on standard error, and `developer` is never asked (case S12-C8).
+  the exit codes are 72 (prompt declined or unanswered, or no prompt possible because standard error is not a terminal and no `--confirm` is given) and 64 (wrong `--confirm` value) as FR-023 states, with the prompt on standard error, and `developer` is never asked (case S12-C8).
 - **SC-013**: With the verified query, reconciliation marks gone or never-started `running` records `failed`/`session_lost`
   and leaves live ones alone (case S12-C9). Before the query is verified this criterion is not claimed and the gap stays
   under "Not enforced".
 
 ## Open questions for the owner
 
-1. **Exit codes of two author-proposed readings.** (a) Exit 70 for a declined, unanswered or impossible confirmation
-   (FR-023), where Feature 006 treats a declined interactive wizard prompt as a cancellation, exit 72, and Feature 009 FR-004 gives exit 72 for end of input or an interrupt at its wizard question, whereas FR-023 gives 70 for end of input; both merged cases should be in view for the decision. (b) Exit 72 for a killed or lost client stream. For (b), when the container runtime client ends while the
-   remote side did not exit, this text reads it as a transport loss, exit 72 (FR-015, FR-016). Both are author proposals
-   awaiting the owner's confirmation; if the owner wants another code for (b), that is an ADR 0013 decision.
+1. **Exit codes of two author-proposed readings.** RESOLVED 2026-11-01 (owner answers, issue #317). (a) DEVIATION from the author
+   proposal: a declined, unanswered or impossible confirmation (FR-023) exits 72, not 70, like Feature 006 (a declined wizard prompt
+   is a cancellation, 72) and Feature 009 FR-004 (end of input, 72). (b) Accepted: exit 72 for a killed or lost client stream
+   (FR-015, FR-016). Neither needs a new code; whether the ADR 0013 text of 72 is widened for (a) is raised under "Changes to
+   existing documents".
 
 The open questions 1 to 7 of earlier drafts were decided by the owner on 2026-10-31 (D1 to D7), and four author proposals
 became D8. What is otherwise left is for the plan, not for a decision: the mechanism of the atomic start transition (D8c),
@@ -663,9 +677,11 @@ the exact confirmation form (FR-023), and the verification items below.
 - `specs/008-workspace-sandbox/tasks.md` and `plan.md`: new tasks and evidence rows for cases S12-C1 to S12-C9, after T001 and T002.
 - `docs/adr/0013-whr-exit-codes.md` and `contracts/cli/exit-codes.json` (passthrough `commands`): add `sandbox shell`; no new code or category. The passthrough text states the one exception of FR-015: for a killed client the
   passed-through status is the client's own signal status, not the shell's. The ambiguity note is extended to `sandbox shell`
-  (text only; the ADR and `exit-codes.json` name only `ssh` today, and `shell --local` has the same gap). The owner confirms
-  the author reading that a client stream ending while the remote side did not exit (a killed or lost client) is a transport
-  loss (72); if not, that is an ADR 0013 decision.
+  (text only; the ADR and `exit-codes.json` name only `ssh` today, and `shell --local` has the same gap). The owner confirmed
+  (2026-11-01) the author reading that a client stream ending while the remote side did not exit (a killed or lost client) is a
+  transport loss (72). The owner also decided (2026-11-01) 72 for a declined, unanswered or impossible confirmation (FR-023); the
+  ADR 0013 text of 72 ("user interrupt, or transport lost during an interactive command") does not name that case, so whether
+  the ADR text is widened is an owner decision for the amendment (T020). This change edits neither ADR 0013 nor `exit-codes.json`.
   `docs/adr/0014-whr-command-structure.md` (T017 amendment, group `sandbox`) and `contracts/cli/commands.json`
   (T016): register the verb with its flag list (`--confirm`, `--container-endpoint`, FR-007). Feature 008 tasks.md scopes T016 to the seven existing verbs, so T016 and T017 must be
   extended to cover `shell`, or a new task added, before the freeze test of SC-011 can name it. These are owner-gated.

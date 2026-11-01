@@ -4,7 +4,8 @@
 **Baseline**: `main` at `e46897133726f6ba39ba4915d8dcf4ef1233a5b1` (the merge of PR #299; PRs #297, #298 and #299 are merged). The plan was first written against `f00885c6a6cc440225b6cf90b8f072a69e0265d9`; the rows below that depended on the pre-merge state of PR #297 and #299 are corrected.
 **Status**: Draft, proposed for independent review and owner approval. Nothing here approves the spec, binds a revision or
 authorizes source work (WORKFLOW.md). The spec is unchanged by this plan. Every value this plan chooses where the spec
-delegates a choice is marked "proposal" and listed in [Open questions for the owner](#open-questions-for-the-owner).
+delegates a choice is marked "proposal" and listed in [Open questions for the owner](#open-questions-for-the-owner). The owner answered all
+eleven questions on 2026-11-01 (issue #317); the answers are recorded in that section and in the rows and tasks they affect.
 
 ## Summary
 
@@ -67,11 +68,11 @@ reconciliation in [package-a-status-20261024.md](../../docs/quality/package-a-st
 | 008 Stage 2 (T011 to T014) | copy policy (FR-014), result export (FR-020, FR-033), container provider that reports the FR-003 values (SC-002, SC-030), container cleanup (FR-033) | Spec FR-003, FR-014, FR-033; 008 tasks T011 to T014 | Same rule. T023 and T024 need T013. |
 | 008 T016, T017 (command registration, ADR 0014 amendment) | the `sandbox` group that SC-019 and SC-030 count | Spec FR-019, FR-035 (commands `whr sandbox ...`) | T038 waits for them. No 011 task registers a command. |
 | 008 contract and text | A1: FR-012, FR-034, FR-035, data model, `runtime-provider.md`, `refusal-codes.json` | Spec "Changes to existing documents"; the Feature 012 plan and tasks (on main, merged as PR 297) may add `interactive_shell` and `refused.interactive_unavailable` to the same contract | Owner gate OG-8, docs only (T002). Whichever of T002 and the 012 task lands first adds those two items; the other verifies and adds nothing, so T002 appends eight codes or seven. |
-| 009 catalog, pkgmgr, profile, plan, fix, wizard | tap-sourced entries, new step kinds, profile records, `doctor --fix`, wizard offers (FR-031 to FR-041) | Main has `hostsetup/{adapters,catalogue,detect,dotfiles,native,pkgmgr,plan,profile}` and `route.go`; no `hostsetup/fix/`, `hostsetup/gitmove/` or `hostsetup/wizard/` (`apps/whr/internal/wizard/` is the Feature 006 init wizard); 009 T001 and T004 checked, T002, T003, T006 source-only, T005, T007, T010, T011 open (status audit) | Stage 4 waits for 009 T001, T002, T003, T006, T007, T010. T011 registration is shared and owner-gated. |
-| 009 D-12 to D-18 endpoint selection | one container endpoint for `container.image`, `container.leftovers`, the storage lookup and the image build (FR-039, FR-041, spec decision 23) | Spec FR-029 to FR-031 of Feature 009 exist; [009 tasks.md](../009-host-setup-wizard/tasks.md) on main has the endpoint tasks T016 to T032, but the code has no `container_endpoint`. PR 299 (merged) added those 009 tasks (endpoint selection function T020, Colima storage location from the endpoint T023, the Colima and Docker catalog entries T017, profile record T019); they are unbuilt, and only task purposes are cited | OQ-6. T027 consumes the endpoint selection function and T028 the Colima storage location of the 009 tasks added by PR 299 (T028 may overlap its storage-location task T023; reconcile when both land). Until they exist, Stage 4 container tasks take the endpoint through an injected port and are not accepted against the real selection. |
+| 009 catalog, pkgmgr, profile, plan, fix, wizard | tap-sourced entries, new step kinds, profile records, `doctor --fix`, wizard offers (FR-031 to FR-041) | Main has `hostsetup/{adapters,catalogue,detect,dotfiles,native,pkgmgr,plan,profile}` and `route.go`; no `hostsetup/fix/`, `hostsetup/gitmove/` or `hostsetup/wizard/` (`apps/whr/internal/wizard/` is the Feature 006 init wizard); 009 T001 and T004 checked, T002, T003, T006 source-only, T005, T007, T010, T011 open (status audit) | Stage 4 waits for 009 T001, T002, T003, T006, T007, T010; T029 and T030 also wait for 009 T017 and T020 (OQ-6). T011 registration is shared and owner-gated. |
+| 009 D-12 to D-18 endpoint selection | one container endpoint for `container.image`, `container.leftovers`, the storage lookup and the image build (FR-039, FR-041, spec decision 23) | Spec FR-029 to FR-031 of Feature 009 exist; [009 tasks.md](../009-host-setup-wizard/tasks.md) on main has the endpoint tasks T016 to T032, but the code has no `container_endpoint`. PR 299 (merged) added those 009 tasks (endpoint selection function T020, Colima storage location from the endpoint T023, the Colima and Docker catalog entries T017, profile record T019); they are unbuilt, and only task purposes are cited | OQ-6, decided 2026-11-01: 009 first. The endpoint selection function (009 T020) and the two container-runtime catalog entries (009 T017) land before T029 and T030, which list them as prerequisites. T027 consumes the endpoint selection function and T028 the Colima storage location of the 009 tasks added by PR 299 (T028 may overlap its storage-location task T023; reconcile when both land). The injected endpoint port is only a transition: until the 009 code exists, Stage 4 container tasks take the endpoint through it and are not accepted against the real selection. |
 | 010 `localdocker` (P1, merged) | bounded, endpoint-pinned, read-only Docker adapter and label ownership gate for container list, inspect and removal | No direct citation in the 011 spec; indirect: 009 FR-027 and FR-029 require every `docker` call to carry `--host=<endpoint>` (Feature 010 FR-002); 008 plan names `localdocker` the reused port for the container provider | Reuse, not duplicate, in T027 and T035. 010 `localshell` is not touched. |
 | 006 (T025 exit/output, T027 doctor port, FR-060, `doctor-checks.json`) | exit table, envelope, doctor runner, six new check ids, budget lists | Spec "Changes to existing documents"; `contracts/cli/doctor-checks.json` has no `vm.*` or `container.image` id | Text edits are owner gates OG-4, OG-5, OG-6 (T003, T037). |
-| 012 (spec on main, status Draft; its plan and tasks are on main, merged as PR 297) | the shared `whr sandbox shell` command and an enforced `pty` for the container provider | Spec FR-016, decisions 1 and 14; Feature 012 spec: "Feature 011 sets its own `interactive_shell` value" | Not a prerequisite. The command and `pty` path are deferred (D-1); the VM provider value is OQ-11. |
+| 012 (spec on main, status Draft; its plan and tasks are on main, merged as PR 297) | the shared `whr sandbox shell` command and an enforced `pty` for the container provider | Spec FR-016, decisions 1 and 14; Feature 012 spec: "Feature 011 sets its own `interactive_shell` value" | Not a prerequisite. The command and `pty` path are deferred (D-1); the VM provider value is decided by OQ-11 (`none` with status `enforced` until a VM `pty` is built). |
 | ADR 0013, ADR 0014 | codes 64, 68, 70, 71, 72, 73; the `sandbox` group | ADR 0013 table; 008 T017 | No change by this plan. |
 | BundleDock, Anchorage | none | Spec "Follow-up outside this feature" | No task edits those repositories. |
 
@@ -114,24 +115,24 @@ Each task is one pull request of at most about 1,500 changed lines (split when l
 real-host runs are owner gates, not tasks. Stages 1 and 2 are independent of the provider and can ship first; Stage 1 is the
 authoritative cross-platform evidence path (OD-1).
 
-## Plan-time values (spec delegates; all proposals, none measured)
+## Plan-time values (spec delegates; confirmed by the owner on 2026-11-01, OQ-7; none measured)
 
 | Value | Spec says | Proposal |
 | --- | --- | --- |
 | Runner images (FR-027: "pinned in the plan") | exact images pinned in the plan | `ubuntu-24.04` and `macos-15`, the labels the workflows already use; [releasing.md](../../docs/releasing.md) records `macos-15` as the native darwin/arm64 runner and states darwin/amd64 is not shipped. Confirm the architecture from the first job log (T007). No Windows runner (FR-029). |
 | Aggregate records the head SHA (US1, SC-008) | "records the head SHA" | each job verifies and prints the tested head as the existing macOS jobs do; the aggregate job prints the SHA it gated |
 | Reserved instance-name prefix (FR-008) | "a reserved prefix plus the instance id" | `whr-` followed by the Feature 008 id (`sbx-` plus 16 base32), one constant in `runtime/vm` |
-| Local record store (FR-008, FR-009) | "local record store" with an exclusive lock | a directory below the Feature 009 state directory (`~/.local/state/whr/`, DP-1) with one lock file; OQ-1 |
+| Local record store (FR-008, FR-009) | "local record store" with an exclusive lock | a directory below the Feature 009 state directory (`~/.local/state/whr/`, DP-1) with one lock file; OQ-1, decided 2026-11-01 |
 | Bounded deadlines (FR-009, FR-010, FR-011) | "bounded", "deadline" | injected options, defaults: ready 300 s, graceful stop 30 s then force within 60 s total, reservation deadline ready plus stop plus 60 s margin. Unmeasured; tests use a fake clock |
-| `image_build` deadline (spec: plan-time value, not 900 s) | plan-time value | no default set; the owner supplies it before T032 (OQ-7) |
-| Skip record format (FR-028) | name platform, reason and tracking reference | one structured comment line per skip, parsed by `scripts/check_skips.py`; OQ-3 |
+| `image_build` deadline (spec: plan-time value, not 900 s) | plan-time value | 30 minutes (1800 s), an injected option; owner value of 2026-11-01 (OQ-7), unmeasured, tests use a fake clock |
+| Skip record format (FR-028) | name platform, reason and tracking reference | one structured comment line per skip, parsed by `scripts/check_skips.py`; OQ-3, decided 2026-11-01 |
 
 ## Owner gates
 
 Existing: OG-1 any real run on the owner's Mac or real Docker; OG-2 host mutation outside a temporary HOME; OG-3 image or
 documentation builds and releases (a real image build is OG-3 evidence, spec FR-034); OG-4 `contracts/cli/*`, ADR 0013/0014;
 OG-5 doctor catalog, `setup`, `container-runtime.md`; OG-6 Feature 006 text; OG-7 a new catalog entry; OG-8 Feature 008 text.
-Proposed here, owner to confirm (OQ-8): OG-10 Feature 009 text, schema and contract changes (the spec calls them "owner-gated
+New in this plan, confirmed by the owner on 2026-11-01 (OQ-8): OG-10 Feature 009 text, schema and contract changes (the spec calls them "owner-gated
 like AP-1 to AP-9"); OG-11 any change to the required CI checks or the aggregate `check` job. An approval covers the one
 operation named.
 
@@ -142,8 +143,8 @@ operation named.
 | Feature 008 is only partly built (T001 to T003 merged in PR #303, T004 to T017 open) | library work that needs the open tasks is blocked; A1 regression rows need the unamended `Admit` first | order by dependency; T013 captures the container rows before A1 changes `Admit` (spec Assumptions) |
 | Unknown macOS Python results | enabling the macOS job could turn the aggregate red on first merge | measure on a draft first (T007), classify (FR-028), then enable (T008); OQ-4 |
 | Existing no-skip rules | `check_ci` rejects skips and the macOS jobs fail on any `SKIP`; FR-028 allows a recorded platform skip | reconcile in T005 and T008 with an exemption for a complete record only; OQ-3 |
-| 009 gaps | endpoint selection, Colima and Docker catalog entries have 009 tasks (merged PR 299) but no code; catalog count is 16 or 18 | tests assert the exact id set, not a literal count; OQ-6 |
-| VM image build has no port | the driver port (FR-021) has no build operation, yet setup and `doctor --fix` build VM images | separate image-builder port proposed; OQ-2 |
+| 009 gaps | endpoint selection, Colima and Docker catalog entries have 009 tasks (merged PR 299) but no code; catalog count is 16 or 18 | 009 lands first (OQ-6, decided 2026-11-01); the injected endpoint port is only a transition; tests assert the exact id set, not a literal count |
+| VM image build goes through the driver port | the driver port gains a build operation (OQ-2, owner decision of 2026-11-01), which changes FR-021 and the "provider never builds" wording of FR-007; its inputs and result are not designed yet | only `whr setup` and `whr doctor --fix` call it; the provider's lifecycle operations never build (spec decision 24, T015, T025); the design is proposed in the T015 PR for owner review |
 | First backend maintenance and license unverified | the support matrix and driver choice may change | spec "Verification before the plan"; the port is the mitigation; T039 starts only after the check |
 | Cross-platform skew in tests | fake-driver and file-lock tests may differ on macOS | T008 runs every Go package on both platforms; no test assumes Linux paths |
 | Concurrency races | a flaky lock test hides a real race | tests drive the lock with a deterministic barrier and a fake clock and process-liveness port |
@@ -184,7 +185,7 @@ git diff --stat $(git merge-base origin/main HEAD) -- .github contracts/cli docs
 
 | ID | Item | Reason |
 | --- | --- | --- |
-| D-1 | FR-016 enforced `pty` path and the terminal-safety rules (second half of SC-014); the `whr sandbox shell` command and the command-level half of SC-030 | the command belongs to Feature 012 (FR-016, decision 14); FR-019 adds no command here; only the refusal is built |
+| D-1 | FR-016 enforced `pty` path and the terminal-safety rules (second half of SC-014); the `whr sandbox shell` command and the command-level half of SC-030 | the command belongs to Feature 012 (FR-016, decision 14); FR-019 adds no command here; only the refusal is built. Decided with OQ-11 (2026-11-01, "pty once built"): in this increment the VM provider and its fake report `interactive_shell=none` with status `enforced` (no VM `pty` exists, FR-025 honesty rule), so an interactive request against them is refused with `refused.interactive_unavailable`; they report `pty` only once a VM `pty` is built, which no task of this feature does. The `pty` half of SC-014 therefore stays deferred for the VM provider until that build (a later decision or feature) and for the container provider until Feature 012 T026 |
 | D-2 | Real-VM conformance, base image digest, real image builds, real macOS runs (FR-006, FR-026, FR-034, FR-037 real parts) | owner-run evidence under OG-1 and OG-3, never required CI |
 | D-3 | `whr doctor --deep`, Linux-host driver, Windows guest, remote hosts, snapshots, egress, credential mediation | "Not in this increment" and "Future work" in the spec |
 | D-4 | CI for BundleDock and Anchorage and classification of their failing tests | separate repositories, owner follow-up |
@@ -192,34 +193,56 @@ git diff --stat $(git merge-base origin/main HEAD) -- .github contracts/cli docs
 
 ## Open questions for the owner
 
-Unsettled points. None is decided by this plan; where a proposal is given, tasks are written so a different answer changes
-one task, except OQ-11, on which deferral D-1 depends.
+All eleven questions were answered by the owner on 2026-11-01 (issue #317, comment 6559753902). Each item keeps its question and
+records the answer; DEVIATION marks an answer that differs from the proposal made here. Where a proposal is given, tasks were
+written so that a different answer changes one task, except OQ-11, on which deferral D-1 depends.
 
 1. **OQ-1 Configuration source and record store.** Where is the chosen driver (FR-023, "by configuration or provider id"),
    the base image name, the guest account reference (FR-007) and the optional limit configured, and where does the local
    record store live? Proposal: the Feature 009 config and state directories. The merged Feature 012 plan (PR 297) asks the same
    record-store question; one answer should serve both.
+   **RESOLVED 2026-11-01**: accepted. The Feature 009 config and state directories; the record store is below `~/.local/state/whr/` with one lock file. This also answers Feature 012 question 2.
+
 2. **OQ-2 Who builds a VM image?** FR-034 and FR-037 build a VM image from a recipe, but the driver port (FR-021) has no
    build operation and the provider never builds (FR-007). Proposal: a separate image-builder port per backend, outside the
    driver port, with the recipe format in the driver documentation.
+   **RESOLVED 2026-11-01, DEVIATION**: the driver port (FR-021) gains a build operation; there is no separate image-builder port for the VM backend. FR-021, the "provider never builds" wording of FR-007 and SC-016 change (spec decision 24); T015, T025, T032 and T039 follow. The provider's own lifecycle operations still never build. The inputs and result of the operation are not decided.
+
 3. **OQ-3 Skip record.** Format and location of the FR-028 record and of the failure classification, and its relation to the
    existing rules that fail any skip (`scripts/check_ci.py` acceptance, the `--- SKIP` greps in `check.yml`). Proposal: a
    structured comment per skip; a complete record is the only exemption.
+   **RESOLVED 2026-11-01**: accepted. One structured comment per skip, parsed by `scripts/check_skips.py`; a complete record is the only exemption.
+
 4. **OQ-4 Rollout and scope of the matrix.** FR-027 makes the aggregate require both platforms, but macOS Python results are
    unmeasured. Proposal: measure on a draft first (T007). Also confirm the Elixir and Node suites stay Linux-only (FR-027
    names Python and Go) and that no Intel macOS runner is wanted.
+   **RESOLVED 2026-11-01**: accepted. Measure on a draft first (T007); the Elixir and Node suites stay Linux-only; no Intel macOS runner.
+
 5. **OQ-5 Order with Feature 008.** The spec orders A1 after 008. Because no 008 code exists, should A1 instead be folded
    into 008 T001 and T002? Proposal: follow the spec (T013 captures the regression rows first).
+   **RESOLVED 2026-11-01**: accepted. Follow the spec; T013 captures the regression rows first; A1 is not folded into the merged 008 T001 and T002.
+
 6. **OQ-6 Feature 009 gaps.** On main, endpoint selection (D-12 to D-18) and the two container-runtime catalog entries have 009
    tasks (merged PR 299) but no code. In which order do they land relative to T029 and T030 (the catalog has 16 or 18 entries
    depending on it), and does the 009 storage-location task (T023) cover T028?
+   **RESOLVED 2026-11-01**: 009 first. Endpoint selection and the two container-runtime catalog entries land before T029 and T030 (listed as prerequisites there); the injected endpoint port is only a transition. The owner did not say whether 009 T023 covers T028; T028 is unchanged and keeps its reconcile note.
+
 7. **OQ-7 Numeric values.** Confirm or replace the deadlines in the plan-time table, and supply the `image_build` deadline.
+   **RESOLVED 2026-11-01**: the plan-time table is accepted; the `image_build` deadline is 30 minutes (set in the table).
+
 8. **OQ-8 New gates.** Confirm OG-10 and OG-11 above or map those changes to existing gates.
+   **RESOLVED 2026-11-01**: accepted. OG-10 and OG-11 are new gates.
+
 9. **OQ-9 Real driver in this feature.** The spec's first increment is the fake driver (Context 5). Confirm Stage 5 belongs
    to this feature's task list, starting only after the license and maintenance check.
+   **RESOLVED 2026-11-01**: accepted. Stage 5 (real driver) stays in this feature, only after the license and maintenance check.
+
 10. **OQ-10 SC-024 scope.** "No current document declares Windows host support" can be automated only for workflows and
     scripts; documents are a review item. Confirm.
+   **RESOLVED 2026-11-01**: accepted. SC-024 is automated for workflows and scripts; documents are a review item.
+
 11. **OQ-11 VM provider `interactive_shell` value.** The spec sets the value only for the container provider (FR-003: `none`);
     the Feature 012 spec leaves the VM value to Feature 011. Proposal: the VM provider and its fake report `interactive_shell=none`
     with status `enforced` in this increment (no VM `pty` is built, FR-025 honesty rule), so conformance and admission refuse an
     interactive request with `refused.interactive_unavailable` (the full VM provider capability report, all eighteen values and statuses, is owned by T024; T014 is the generic `Admit`). OD-2 calls the target "the interactive local VM provider" for macOS guests first; `none` reads against it as: the provider is the interactive target of that decision, but the `pty` capability is not built or claimed in this increment, and it flips to `pty` only with a later decision. D-1's deferral of the `pty` half depends on this answer. A VM `pty` needs its own decision.
+   **RESOLVED 2026-11-01**: chosen "pty once built". In this increment the VM provider and its fake report `interactive_shell=none` with status `enforced` (no VM `pty` exists, FR-025 honesty rule); they report `pty` once a VM `pty` is built. Consequence for deferral D-1: it is unchanged in kind and now covers the VM provider too (see D-1).

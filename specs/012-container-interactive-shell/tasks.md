@@ -1,7 +1,7 @@
 # Feature 012 work items
 
 Status: proposed with the plan; not approved or started. A task starts only after the spec, plan and this file are approved at
-one exact head (WORKFLOW.md) and its prerequisites have implementation and test evidence. IDs `T001` to `T027` are Feature 012's
+one exact head (WORKFLOW.md) and its prerequisites have implementation and test evidence. IDs `T001` to `T029` are Feature 012's
 own; other features' items are written `006/T0nn`, `008/T0nn`. Each task is one pull request of at most about 1,500 changed lines
 (split when larger), targeting `main`. Write the named failing tests first, show them failing, then implement. All tests are
 offline with a fake provider, a fake Docker client and daemon, fake clocks and signals, and controlled PTYs; no real Docker,
@@ -84,10 +84,10 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   `TestShellNonTerminalExit64NoPtyRequested`, `TestShellRejectsJSONAndTrailingArguments`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal` (any other option is a usage error, exit 64), `TestShellContainerEndpointValueReachesSelection` (a well-formed value is handed unchanged to an injected selection-function port, a fake, so T009 needs no 009 code and keeps its prerequisites; the malformed-value exit 64 is T008's, which also checks that no pty is requested), `TestShellUsageChecksPrecedeProviderCalls`. The non-terminal test `TestShellNonTerminalExit64NoPtyRequested` checks that no pty is requested. Traces FR-007, D9; S12-C6; SC-006. Prerequisites: 006/T025, 006/T031.
 - [ ] T010 [US5] Confirmation for `untrusted_job` in `sandbox/shellsession/confirm.go` (form per FR-023, author proposal):
   warning and prompt on standard error, answer from standard input, answer must equal the instance id. Failing tests first:
-  `TestUntrustedWithoutConfirmationStartsNothing`, `TestYesAloneStillPrompts`, `TestPromptAnswerOtherThanIdExit70`,
-  `TestPromptEndOfInputExit70`, `TestConfirmValueMismatchExit64`, `TestConfirmFlagWithIdProceeds`,
+  `TestUntrustedWithoutConfirmationStartsNothing`, `TestYesAloneStillPrompts`, `TestPromptAnswerOtherThanIdExit72`,
+  `TestPromptEndOfInputExit72`, `TestConfirmValueMismatchExit64`, `TestConfirmFlagWithIdProceeds`,
   `TestDeveloperAndCooperativeNeverAsked`, `TestSignalDuringPromptExit72NoStateChange`, `TestPromptOnStderrStdoutEmpty`,
-  `TestStderrNotTerminalNoConfirmExit70NamesConfirmFlag`, `TestNoTerminalNeverReachesConfirmation`. Traces FR-023, D1;
+  `TestStderrNotTerminalNoConfirmExit72NamesConfirmFlag`, `TestNoTerminalNeverReachesConfirmation`. Traces FR-023, D1;
   S12-C8; SC-012. Prerequisites: T008, T009.
 - [ ] T011 [P] [US1] Notice and help text in `sandbox/shellsession/notice.go`: one escaped line before hand-over when stderr is a
   terminal (byte-exact text fixed in plan decision 1, modeled on Feature 010 FR-010, names profile and instance id, escaped per
@@ -107,7 +107,7 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   (exit code, instance state, reason, `whr:` line per row), `TestEndOfSessionQueryBudget5sIsTransportLost`,
   `TestStatusPassThrough0_1_2_126_127_130_255`, `TestContainerLostPassesStatusRecordsFailed` (D8a),
   `TestKilledClientRowsClientStatusPassedShellStatusRecorded` (D8d), `TestMissingShellExecutableStatusFinishedOrRow4`,
-  `TestCLIFailureWritesWhrLineShellStatusDoesNot`, `TestNoDetachKeySequenceInPlan`, `TestOnlyCodes64_65_68_70_72_74FromCLI`,
+  `TestCLIFailureWritesWhrLineShellStatusDoesNot`, `TestNoDetachKeySequenceInPlan`, `TestOnlyCodes64_65_68_72_74FromCLI`,
   `TestNoSessionBytesOrEnvironmentLogged`. Traces FR-014, FR-015, FR-016, FR-017, D8a, D8d; S12-C6, S12-C7; SC-007, SC-008.
   The production query is T017 (V5). Prerequisites: T005, T012, 008/T004 (`ExitFor`).
 - [ ] T014 [US4] Reconciliation in `sandbox/reconcile.go` (FR-024, D7): before acting on a `running` record, check through a port
@@ -175,12 +175,12 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 
 ## Stage 4: acceptance
 
-- [ ] T025 OWNER GATE (OG-1), real host, not CI: SC-010 runbook ([quickstart.md](quickstart.md#sc-010-owner-gate)) on a real
-  Docker host with a terminal; record exact product SHA, OS, architecture, Docker and terminal versions and the owner's acceptance
+- [ ] T025 OWNER GATE (OG-1), real host, not CI: SC-010 runbook ([quickstart.md](quickstart.md#sc-010-owner-gate)) on both real
+  Docker hosts, Linux with Docker Engine and macOS with OrbStack (the macOS evidence comes from the owner's Mac), each with a terminal; record for each host the exact product SHA, OS, architecture, Docker (or OrbStack) and terminal versions and the owner's acceptance
   link in `docs/quality/012-container-interactive-shell/sc010.md`: a shell starts and its status passes through; resize reaches
   the pty; suspend, resume and interrupt act in the container; stopping the container from another terminal gives the
   `container_lost` row; a killed client with the shell running gives the `end_undetermined` row; no key sequence detaches; the
-  environment route does not expose values in the process list. Also observe, outside SC-010's pass condition, the terminal state after a killed client (plan risk, open question 5). Failure of the
+  environment route does not expose values in the process list. Also observe, outside SC-010's pass condition, the terminal state after a killed client (plan risk; the restore itself is T028 and T029). Failure of the
   resize or signal checks returns to the owner (FR-012 says `whr` adds handling only if the check fails; that is a new decision).
   Traces SC-010, FR-011, FR-012, FR-013, FR-016, FR-009. Prerequisites: T016, T017, T023.
 - [ ] T026 OWNER GATE (OG-8, as it edits `runtime-provider.md`; it also edits Feature 011 text): flip the container provider report to `interactive_shell=pty`, status `enforced` for each supported profile
@@ -191,8 +191,21 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
 - [ ] T027 Acceptance and handoff: evidence table in `plan.md` completed with test names and revisions; the coverage table below
   checked with cited evidence; `python3 scripts/check_repo.py`, `git diff --check` and the Go tests recorded; frozen-path diffs
   (`contracts/cli/`, `docs/adr/`, Feature 006, 008, 010, 011 text) empty for every PR of T004 to T018 and T024; the held items
-  (T014, FR-024, SC-013) and anything unmet listed as such. Independent exact-head review CLEAR. Prerequisites: T001 to T026
+  (T014, FR-024, SC-013) and anything unmet listed as such. Independent exact-head review CLEAR. Prerequisites: T001 to T026, T028, T029
   (T014 may remain open and is then listed as deferred).
+
+## Stage 5: terminal restore after a killed client (appended 2026-11-01, FR-025)
+
+- [ ] T028 OWNER GATE (design decision), docs only: design for the terminal restore after a killed client (FR-025, owner decision of
+  2026-11-01), in `specs/012-container-interactive-shell/terminal-restore.md`. A killed client cannot restore the terminal itself, so
+  the task states the questions of the owner decision and the owner's answers; it chooses no mechanism on its own. It uses the V4
+  record of T002 (what a killed client leaves behind) and names the failing tests and the files of T029. Acceptance:
+  `python3 scripts/check_repo.py`, `git diff --check`; independent review CLEAR; owner approval of the exact head. Traces FR-025.
+  Prerequisites: T002.
+- [ ] T029 [US4] Terminal restore after a killed client in the packages and files that T028 names, with offline tests using
+  `internal/ptytest` and a fake client that is killed while the terminal is in a changed mode. Failing tests first: the planned
+  names are fixed by the T028 decision. Traces FR-025, FR-017. The real-host check of the restore is part of the SC-010 run once the
+  T028 decision says so. Prerequisites: T028, T012, T013.
 
 ## Dependencies and execution
 
@@ -233,7 +246,9 @@ T019 to T023 and T026 (T022 (a) is the conditional contract append) are the only
 | T024 | T023 |
 | T025 | T016, T017, T023 |
 | T026 | T015, T016, T017, T018, T022, T025 |
-| T027 | T001 to T026 |
+| T027 | T001 to T026, T028, T029 |
+| T028 | T002 |
+| T029 | T028, T012, T013 |
 
 ## Coverage
 
@@ -265,6 +280,7 @@ Every requirement, success criterion and decision maps to at least one task, or 
 | FR-022 neutrality | T004, T011, T015 | vendor-name gate list of Feature 011 FR-022 not extended (spec) |
 | FR-023 confirmation | T010 | |
 | FR-024 reconciliation | T014 | held on V5; not a gate for FR-003; stays under "Not enforced" until built |
+| FR-025 terminal restore after a killed client | T028, T029 | design needs an owner decision first (T028); stays under "Not enforced" until built |
 | SC-001 | T004 | |
 | SC-002 | T018, T026 | |
 | SC-003 | T007, T016 | |

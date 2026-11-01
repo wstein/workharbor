@@ -105,9 +105,9 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   `TestAdmitTableContainerValuesUnchanged` stays green. The `interactive_shell` admission rows share `admit.go` with Feature 012 T004 (`TestAdmitInteractiveShellTable` and its siblings): whichever lands first adds the rows, the other verifies them and adds nothing, and the assertions must not diverge. Traces FR-001, FR-002, FR-003, FR-005, FR-006 (admission rows), FR-016
   (refusal only), FR-030; SC-001, SC-002, SC-014 (refusal half), SC-021; decision 14 (refusal part). Prerequisites: T012, T013.
 - [ ] T015 [P] [US4] Driver port and recording fake driver in `internal/runtime/vm/driver.go` and `internal/runtime/vm/fake/`:
-  closed operation set (probe, list, clone, start, address and readiness, exec, copy in, copy out, stop, delete), optional size
+  closed operation set (probe, list, clone, start, address and readiness, exec, copy in, copy out, stop, delete, build), optional size
   and storage-location fields in `probe` and `list` results, call recorder, failure injection at each operation. Failing tests
-  first: `TestDriverPortOperationSetIsClosed` (method set equals the FR-021 list: no build, publish, pull, setting or install
+  first: `TestDriverPortOperationSetIsClosed` (method set equals the FR-021 list, where build is the only image operation: no publish, pull, setting or install
   operation), `TestFakeDriverRecordsEveryCall`, `TestFakeDriverInjectsFailureAtEachOperation`,
   `TestProbeAndListResultsHaveOptionalSizeFields`. Traces FR-021, FR-017, FR-032 (port part); SC-016 (port part). Prerequisite: 008/T001.
 - [ ] T016 [US3] Explicit driver selection in `internal/runtime/vm/select.go`. Failing tests first: `TestNoDriverChosenRefusedZeroCalls`,
@@ -166,7 +166,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   `TestSecondDriverChangesNoProductionContractFile`, `TestNoProviderKindOrVendorBranchesInProductionCode`. Traces FR-025, FR-021,
   FR-023; SC-001, SC-003, SC-021. Prerequisites: T016, T018, T020, T021, T022, T023, 008/T009.
 - [ ] T025 [US3] Boundaries and offline acceptance. Failing tests first: `TestNoCodePathPublishesUploadsSignsOrPullsImages`,
-  `TestProviderPackageHasNoBuildOperation`, `TestConfigHoldsOnlyGuestAccountReference` (no credential field),
+  `TestProviderLifecycleHasNoBuildOperation` (the build operation exists only on the driver port, T015), `TestConfigHoldsOnlyGuestAccountReference` (no credential field),
   `TestMutatingCallsTargetOnlyOwnedInstancesAndCloneReadsBaseOnlyAsSource`, `TestNoHostSettingOrInstallCalls`,
   `TestNoLicenseReadingOrEnforcementInSource` (source scan), `TestRegistryAddsNoCommandFor011` (command table and
   `contracts/cli/commands.json` unchanged), `TestMakeCheckPassesWithNoBackendInstalled` (recorded in the PR). Traces FR-007,
@@ -174,7 +174,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
 
 ## Stage 4: commands and integration (macOS host surface; owner gates)
 
-Stage 4 needs 009 T001 (catalogue), T002 (detection and plan model), T003 (pkgmgr), T006 (profile and apply), T007 (fix engine), T010 (wizard) and 006/T027.
+Stage 4 needs 009 T001 (catalogue), T002 (detection and plan model), T003 (pkgmgr), T006 (profile and apply), T007 (fix engine), T010 (wizard) and 006/T027; T029 and T030 also need 009 T017 and T020 (OQ-6, 009 first).
 Real brew, real builds and real hosts are never used; fakes only (Feature 009 FR-023). Linux `setup` and `doctor --fix` output
 is unchanged in every task.
 
@@ -204,7 +204,7 @@ is unchanged in every task.
   tests first: `TestCatalogAcceptsCoreAndListedThirdPartyTap`, `TestCatalogRejectsTapOutsideListWildcardUserSourceAndSourceList`,
   `TestPreviewShowsSourceAndPermanentAddStatement`, `TestNoteAndHostRequirementPropertiesValidate`,
   `TestInitialCatalogueEntries` is updated to assert the exact id set (OQ-6), not a literal count. Reopens 009/T001. Traces
-  FR-038, FR-040; SC-033 (loader half), SC-035; decisions 17, 18. Prerequisites: T004, 009/T001.
+  FR-038, FR-040; SC-033 (loader half), SC-035; decisions 17, 18. Prerequisites: T004, 009/T001, 009/T017, 009/T020 (OQ-6: 009 first).
 - [ ] T030 OWNER GATE (OG-7): the three catalog entries (VM tool, the OCI-bundle tool for macOS arm64 only, the GitHub overview
   tool with the Git 2.46 `host_requirement`), none preselected, in `hostsetup/catalogue/assets/catalogue.json` and templates;
   `host_setup.host_requirement_unmet` with the existing `blocked` status. Failing tests first:
@@ -212,7 +212,7 @@ is unchanged in every task.
   `TestOverviewToolBlockedWhenGitAbsentShimOrOlderAndNoGitInstallCall`, `TestOverviewToolOfferedWithGit246`,
   `TestOverviewToolDependsOnCatalogGitInSamePlanAndRedetects`, `TestNeverSelectedEntryLeavesNoProfileRecordAndIsSkippedUnselected`.
   The exact source name of the VM tool is verified here (plan, measurement needs). Traces FR-040; SC-035; decisions 12, 18.
-  Prerequisites: T029, 009/T002.
+  Prerequisites: T029, 009/T002, 009/T017, 009/T020.
 - [ ] T031 Tap-sourced install and upgrade steps in `hostsetup/pkgmgr/` and `hostsetup/plan/`: `brew_install_source`,
   `brew_upgrade_source` (modify class), per-item confirmation, argv table form `<tap>/<name>` for the listed sources only, and
   `doctor --fix` install of a missing selected item except the VM tool. Failing tests first:
@@ -221,13 +221,13 @@ is unchanged in every task.
   `TestDoctorFixInstallsOrUpgradesOnlyWithItemConfirm`, `TestDoctorFixNeverInstallsVMTool`, `TestWizardAsksTapItemsOneByOneDefaultNo`.
   Traces FR-038, FR-031 (offer a), FR-017; SC-033, SC-025 (install half); decisions 12, 13, 19(c), 20. Prerequisites: T029, 009/T003, 009/T006, 009/T007, 009/T010.
 - [ ] T032 Image library in `hostsetup/image/`: definition templates (container build file, VM recipe), size preview ("size
-  unknown"), offer state machine, build runner ports for the container backend and the VM backend (separate from the driver
-  port, OQ-2) with fakes, label and record data. Failing tests first: `TestOfferShowsDefinitionAndSizePreviewBeforeAnyBuild`,
+  unknown"), offer state machine, a build runner port for the container backend and, for the VM backend, the build operation of the driver port (T015, OQ-2),
+  with fakes, label and record data. Failing tests first: `TestOfferShowsDefinitionAndSizePreviewBeforeAnyBuild`,
   `TestNoBuildOrDownloadBeforeYes`, `TestNoWritesAndNoBuildOnNo`, `TestYesAloneApprovesNeitherWriteNorBuild`,
   `TestUnattendedWithoutConfirmExits70NoBuildCall`, `TestExistingDefinitionByteIdenticalUnlessDiffConfirmedWithVerifiedBackup`,
   `TestContainerBuildUsesOnlyNormalBuildInvocationLabelOnlyNoVMSettingCall`, `TestBaseLayerFetchAllowedPrebuiltPullAndPublishFail`,
   `TestDefinitionIsNotACatalogDotfile`, `TestImageBuildDeadlineIsInjected`, `TestContainerBuildUsesSelectedEndpoint` (the build invocation carries `--host=<selected endpoint>`, taken from the endpoint port of OQ-6, never the Docker client's active context). Traces FR-034, FR-007, FR-037 (shared mechanics);
-  SC-029, SC-016; decisions 10, 11, 16, 19(d), 23. Prerequisites: T004, 009/T006. Needs the `image_build` deadline (OQ-7).
+  SC-029, SC-016; decisions 10, 11, 16, 19(d), 23. Prerequisites: T004, T015, 009/T006. The `image_build` deadline is 30 minutes (OQ-7).
 - [ ] T033 Wizard image offer and profile records: the `image_definition_write` and `image_build` steps (modify class), the
   host profile records for the image (home-relative path, name, label), `container_storage` and the `container_endpoint`
   neighbor, accepted confirmation ids `image:container` and `image:vm`. Failing tests first:
@@ -271,7 +271,7 @@ is unchanged in every task.
 ## Stage 5: first driver, documentation and acceptance
 
 - [ ] T039 OWNER GATE (OG-1 for any real run): the `<first-driver>` adapter in `internal/runtime/drivers/<first-driver>/` over a
-  process-runner port with recorded backend output, its `docs/drivers/<first-driver>.md` support matrix, and the driver tests.
+  process-runner port with recorded backend output, including its implementation of the driver port's build operation (OQ-2), its `docs/drivers/<first-driver>.md` support matrix, and the driver tests.
   Starts only after the owner has done the license and maintenance check of the spec ("Verification before the plan"), which has not been done; the spec places it before the plan. Failing
   tests first: `TestDriverPassesConformanceWithRecordedOutput`, `TestDriverDeclaresOnlyWhatItsProbesProve`,
   `TestProbeAndListParseOptionalSizeAndStorageFields`, `TestDriverRunnerArgvIsFixedNoShell`, `TestDriverNeverInstallsOrChangesHostSettings`,
@@ -293,7 +293,7 @@ Stages 1 and 2 start after approval with no provider; T001, T005 and T010 are in
 the named Feature 008 tasks are on `main` and T002 is merged. Stage 4 follows Stage 3 and the named Feature 009 tasks. Owner
 gates in this list: OG-1 (real runs, none of T001 to T038 may use one), OG-3 (real builds, evidence only), OG-4 and OG-5
 (`contracts/cli/*`, doctor catalog, `setup`, `container-runtime.md`), OG-6 (Feature 006 text), OG-7 (catalog entries and schema),
-OG-8 (Feature 008 text), OG-10 and OG-11 (proposed, plan). T002 to T004, T008, T029, T030 and T037 are the only
+OG-8 (Feature 008 text), OG-10 and OG-11 (new gates, confirmed 2026-11-01, plan). T002 to T004, T008, T029, T030 and T037 are the only
 exceptions to the per-PR empty diff on frozen paths.
 
 | Task | Prerequisites |
@@ -324,10 +324,10 @@ exceptions to the per-PR empty diff on frozen paths.
 | T026 | T016, T017, T018, 006/T027, T003 |
 | T027 | 006/T027, 009/T006, T003 |
 | T028 | 006/T027, T003 |
-| T029 | T004, 009/T001 |
-| T030 | T029, 009/T002 |
+| T029 | T004, 009/T001, 009/T017, 009/T020 |
+| T030 | T029, 009/T002, 009/T017, 009/T020 |
 | T031 | T029, 009/T003, 009/T006, 009/T007, 009/T010 |
-| T032 | T004, 009/T006 |
+| T032 | T004, T015, 009/T006 |
 | T033 | T028, T032, 009/T010 |
 | T034 | T026, T031, T033, 009/T010 |
 | T035 | T020, T027, 008/T014, 009/T007 |
@@ -365,7 +365,7 @@ half; the real half is owner-run evidence (D-2 in the plan).
 | FR-018 | T026, T037 |
 | FR-019 | T022, T025 |
 | FR-020 | T020, T022, T035 |
-| FR-021 | T015, T024, T025 |
+| FR-021 | T015, T024, T025, T032, T039 |
 | FR-022 | T010 |
 | FR-023 | T016, T024 |
 | FR-024 | T011, T039 |
@@ -452,4 +452,5 @@ half; the real half is owner-run evidence (D-2 in the plan).
 | 21 | T028, T033 |
 | 22 | T003, T026 |
 | 23 | T027, T028, T032 (image build endpoint); selection itself: Feature 009, OQ-6 |
+| 24 | T015, T025, T032, T039 (build operation of the driver port) |
 | Follow-up outside the feature (BundleDock, Anchorage CI) | deferred D-4 |

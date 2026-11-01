@@ -8,7 +8,7 @@ plan" are unverified and stay so until T002. Nothing below reopens an owner deci
   local record store taken under an exclusive lock. Options: (a) reuse that store and lock, and update under it; (b) one record file
   per instance with an exclusive create/rename compare-and-swap on a version field; (c) a single lock file plus read-check-write.
   The choice is the plan's per D8c; this document proposes (a) if Feature 011 lands first, otherwise (b) inside Feature 008/T003, and
-  asks the owner (plan open question 2). T005 tests only the contract: exactly one winner, loser gets `refused.invalid_state`,
+  asks the owner (plan open question 2). Owner answer (2026-11-01): the store location is the Feature 009 state directory (`~/.local/state/whr/`, one lock file), as for Feature 011 OQ-1; a minimal store in 008/T003 writes there too. The update mechanism is still the plan's choice. T005 tests only the contract: exactly one winner, loser gets `refused.invalid_state`,
   no mechanism named in a test.
 - **R-2 Why one client child and no relay.** The spec follows Feature 010: `whr` supervises one container runtime client with the
   real descriptors, so it can run the FR-016 query after the client ends; replacing the process by exec would prevent it, and a
@@ -28,4 +28,4 @@ plan" are unverified and stay so until T002. Nothing below reopens an owner deci
   `workspacecfg`). Differences stay explicit: detach disabled here; instance records and ownership labels here, container-name
   selection there; confirmation for `untrusted_job` only here.
 - **R-7 Not decided.** A `Shell` operation for a second provider (Feature 011 owns its own value); `exec`; reattach; whr-side
-  resize handling; terminal-mode restore after a killed client (plan open question 5).
+  resize handling; terminal-mode restore after a killed client (decided on 2026-11-01 to be built, FR-025; the mechanism is not decided, task T028).
