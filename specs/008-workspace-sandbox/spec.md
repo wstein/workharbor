@@ -14,7 +14,7 @@ amendment nor main inclusion approves full spec/plan/tasks or 008 implementation
 **Feature identifier**: `008-workspace-sandbox`
 **Feature Branch**: `docs/spec008-workspace-sandbox`
 **Created**: 2026-10-20
-**Status**: Draft, proposed for independent review and owner approval; nothing is implemented. Approval of this text
+**Status**: Draft, proposed for independent review and owner approval; T001 to T003 are merged (PR #303) and T004 to T017 are not implemented. Approval of this text
 needs an independent review CLEAR for its exact head and explicit owner approval of that head, evidenced by a tracker
 or PR link (WORKFLOW.md). Research input: `IDEAS_NOTES.md` sections 4 to 11 of the Anchorage umbrella repository (branch
 `docs/ideas-codex-delivery-plan`, unmerged; not in this repository; research, not requirements; the points this feature relies on are
