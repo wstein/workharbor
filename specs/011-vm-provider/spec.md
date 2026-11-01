@@ -255,7 +255,8 @@ refusals. Every amendment is generic and additive.
   Base layers that the container runtime's own build command fetches from a registry while building the image from the
   user-owned definition are not a pull of a prebuilt image (FR-034, decision 16). The only commands that build an image
   are `whr setup` and `whr doctor --fix`, locally, from the user-owned definition, after an explicit prompt or per-item
-  confirmation (FR-034, FR-037); the provider never builds. The guest account the driver uses is part of the user's image
+  confirmation (FR-034, FR-037); the provider's lifecycle operations never build, and a VM image is built only through the
+  build operation of the driver port (FR-021), which only those two commands call. The guest account the driver uses is part of the user's image
   and appears in configuration only as a reference. The documentation MUST also describe a reproducible recipe that starts
   from the operating system vendor's official download and keeps the VM image local, so the user can build it without `whr`.
 - **FR-008**: Every instance name MUST be a reserved prefix plus the instance id. For `name_and_record`, ownership is
@@ -338,7 +339,8 @@ refusals. Every amendment is generic and additive.
 **Driver port and vendor neutrality**
 
 - **FR-021**: A driver port is the only seam to a VM backend: probe, list, clone, start (headless, resources, declared
-  shares), address and readiness, exec, copy in and out, stop, delete. Drivers hold no policy. Admission, plans,
+  shares), address and readiness, exec, copy in and out, stop, delete, build (builds a VM image locally from the user-owned recipe; called only by
+  `whr setup` and `whr doctor --fix`, FR-007, FR-034, FR-037). Drivers hold no policy. Admission, plans,
   ownership and refusals live in the provider.
 - **FR-022**: VM backend names MUST NOT appear in the contract, data model, admission function, refusal codes,
   conformance suite or user-facing command text. A repository check (`scripts/check_repo.py`) enforces it:
@@ -413,7 +415,7 @@ provider and Linux hosts are unchanged.
   instances, and the free disk space on the volume that holds the VM storage. It MUST report `fail` when that free space
   is below the size of the base image, and MUST say "size unknown" and report `unknown` rather than guess when the driver
   cannot state a size or the storage location. Sizes and the storage location are optional fields in the results of the
-  existing driver `probe` and `list` (no new port operation, FR-021); the free space is measured by the host with a file
+  existing driver `probe` and `list` (no port operation is added for it, FR-021); the free space is measured by the host with a file
   system statistic. The check stays inside the shared 5 s budget and starts no VM.
 - **FR-033**: On a macOS host, `whr doctor --fix` MUST remove only owned leftovers of the VM and the container backend
   (the rest of Feature 009 FR-016 is unchanged), for both alike: VM or container instances left by a killed or canceled run, and stale VM reservations (FR-009), through the
@@ -603,7 +605,7 @@ DriverSupportMatrix, TestRunResult, PlatformVerdict, SkipRecord, ConcurrencyRese
   a host socket as a mount are refused; a secret-pattern path in the private copy is refused unless named and confirmed
   (Feature 008 FR-009); a read-write shared mount is not planned by default (FR-014).
 - **SC-016**: No code path or command of `whr` publishes, uploads, signs, redistributes or registry-pulls a base image, the
-  provider never builds one, only `whr setup` and `whr doctor --fix` build, locally, after confirmation, and no
+  provider's lifecycle operations never build one, only `whr setup` and `whr doctor --fix` build, through the build operation of the driver port, locally, after confirmation, and no
   configuration field holds a guest credential, only a reference (FR-007). No host virtualization, network, firewall or
   security setting is changed and neither the provider nor `whr doctor` (including `--fix`) installs a VM backend; the recorded mutating calls (start, write, stop, delete) target owned instances only, and the clone call reads the
   base image only as its source (FR-017).
@@ -780,6 +782,11 @@ open for the owner are marked below. Decisions 10, 11 and 15 supersede parts of 
 23. **Container runtime endpoint (2026-10-31, NEW)**: decided in Feature 009 (D-12, D-13, D-15, D-16; owner decisions): the container checks, the storage lookup and the image build use the endpoint selected by the option, a config value,
     `DOCKER_HOST` or the standard socket, in that order (the order is owner decision D-16 (r)); the host profile stores the resolved endpoint and, informationally, the context name; contexts are read only for detection and
     drift, never for selection; remote targets are not supported. The record `container_endpoint` sits beside `container_storage` (FR-041).
+24. **VM image build is an operation of the driver port (2026-11-01, DEVIATION from the plan's proposal; plan OQ-2)**: the driver port
+    (FR-021) gains a build operation, so there is no separate image-builder port for the VM backend. FR-021 lists it, and FR-007 and
+    SC-016 no longer say that the provider never builds: the provider's lifecycle operations (`Create`, `Exec`, `Export`, `Cancel`,
+    `Remove`) never build, and only `whr setup` and `whr doctor --fix` call the build operation, after confirmation (FR-034, FR-037),
+    under the `image_build` deadline of 30 minutes (plan, plan-time values). The inputs and result of the operation are not decided here.
 
 Author proposals made while recording these decisions (the owner may change them):
 
@@ -806,7 +813,7 @@ Author proposals made while recording these decisions (the owner may change them
 - If the definition is missing or no longer builds, doctor reports it and points to `whr setup` and never regenerates it
   (FR-037). An unusable existing image is replaced by the rebuild after the per-item confirmation.
 - The default location of the definition file is a user-owned path shown by the wizard; the choice is not fixed here.
-- Sizes and the storage location are optional fields of the existing `probe` and `list` results, not a new port operation
+- Sizes and the storage location are optional fields of the existing `probe` and `list` results and need no port operation of their own
   (FR-032).
 - The cleanup keeps the Feature 009 requirement of a host profile, as a modify-class step with the item ids
   `vm-instance:<instance id>` and `vm-reservation:<reservation id>` (FR-033).

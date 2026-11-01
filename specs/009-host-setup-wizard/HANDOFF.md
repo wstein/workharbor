@@ -5,7 +5,7 @@ reporting; it restates no requirement. Where it and `tasks.md` differ, `tasks.md
 
 ## Common brief
 
-**Read first, do not skip:** the workspace `AGENTS.md` (owner workflow, delegation, git identity), `AGENTS.md` and `WORKFLOW.md` of this
+**Read first, do not skip:** the global rules (the owner's `~/.claude/CLAUDE.md` and skill `agent-workflow`: owner workflow, delegation, git identity), `AGENTS.md` and `WORKFLOW.md` of this
 repository, `spec.md`, `plan.md`, `tasks.md`, the files in `contracts/`, Feature 006 FR-009, FR-026, FR-043 to FR-046, FR-060, FR-063 and tasks
 T015, T025, T027, T031, T032, Feature 008 FR-019 to FR-026 and T005, ADR 0013, ADR 0014, `docs/container-runtime.md`. Use CrewBook split mode
 where the workspace instructions require it; each author works in its own git worktree on its own topic branch.
@@ -13,9 +13,8 @@ where the workspace instructions require it; each author works in its own git wo
 **Rules:**
 
 1. Test-driven: write the named failing tests first, show them failing, then the smallest implementation, then refactor. Atomic Conventional
-   Commits, one logical change each; trailer `Co-Authored-By: <your agent identity>`.
-2. Never write git configuration (`git config user.*` leaks into every worktree); the owner's global identity applies. Before every push,
-   `git log --format='%an <%ae> | %cn <%ce>' origin/main..HEAD` shows only the owner.
+   Commits, one logical change each.
+2. Commit trailers, git configuration, authorship checks before a push and session links: see the global rules (the owner's `~/.claude/CLAUDE.md` and skill `agent-workflow`, to which `AGENTS.md` points); this file does not repeat them.
 3. Run checks with `umask 022`; never run tests inside `git rebase --exec`. Required: `python3 scripts/check_repo.py`, `git diff --check`, `go vet`
    and `go test` for the touched packages in `apps/whr`; record exact commands and results in the PR.
 4. PRs target `main`, are at most about 1,500 changed lines, name task IDs, prerequisites, tests, commands and review state. Draft only with a

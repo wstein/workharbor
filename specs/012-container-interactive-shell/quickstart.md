@@ -15,7 +15,7 @@ git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr spe
 ```
 
 Scenario to test map: US1 `TestShellExecPlanFullIdEndpointPty`, `TestEndOfSessionTableFourRows`; US2 `TestAdmitInteractiveShellTable`;
-US3 `TestShellNonTerminalExit64NoPtyRequested`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal`, `TestShellMalformedContainerEndpointExit64`, `TestStderrNotTerminalNoConfirmExit70NamesConfirmFlag`; US4
+US3 `TestShellNonTerminalExit64NoPtyRequested`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal`, `TestShellMalformedContainerEndpointExit64`, `TestStderrNotTerminalNoConfirmExit72NamesConfirmFlag`; US4
 `TestContainerLostPassesStatusRecordsFailed`, `TestKilledClientRowsClientStatusPassedShellStatusRecorded`; US5
 `TestYesAloneStillPrompts`.
 
@@ -32,10 +32,10 @@ an exec process gone or never started.
 ## SC-010 owner gate
 
 <a id="sc-010-owner-gate"></a>
-After T016, T017 and T023, on a real host (T025; which hosts is plan open question 4): start a shell and check its status passes
+After T016, T017 and T023, on both real hosts, Linux with Docker Engine and macOS with OrbStack (T025; the macOS run is on the owner's Mac; plan open question 4), and record each host separately: start a shell and check its status passes
 through; resize the terminal; suspend, resume and interrupt a job; stop the container from another terminal (expect the
 `container_lost` row: status passed through, instance `failed`); kill the client with the shell running (expect `end_undetermined`,
 exit 72); confirm no key sequence detaches; confirm no environment value in the process list; note the terminal state after the
 killed client. Record product SHA, OS, architecture, Docker and terminal versions and the owner's acceptance link under
-`docs/quality/012-container-interactive-shell/`. Until then FR-003 keeps `interactive_shell=none`. A missing tool or host is a
+`docs/quality/012-container-interactive-shell/`. Until both hosts are recorded FR-003 keeps `interactive_shell=none`. A missing tool or host is a
 blocker, not a pass.
