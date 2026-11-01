@@ -77,11 +77,11 @@ ADR 0014, OG-6 Feature 006 text, OG-8 Feature 008 text.
   mutations), `TestShellMissingContainerNamesMissingNotForeign`, `TestShellStoppedPausedRestartingNamedNeverStarted` (D4),
   `TestShellForbiddenMountRecheckExistingCodes`, `TestShellEndpointAndClientRefusalsExit68` (non-`unix://`, absent client,
   unreachable socket), `TestShellEndpointFromFeature009SelectionFunction` (no own search; the first specified source is the only one
-  used), `TestShellNoEndpointExit68RemediationNamesOptionConfigSetup` (009 FR-032 EP-3), `TestShellMalformedContainerEndpointExit64` (usage error at step 1, owner decision D9). The spec wording "discovered endpoint" (FR-005 step 5, FR-008) is replaced by "selected endpoint" by the D9 spec amendment; this task's tests use the selected endpoint of the 009 function. Traces FR-002, FR-005, FR-006, FR-007 (option), FR-018 (re-check), D4, D5, D9; S12-C4,
-  S12-C5; SC-004, SC-005. Prerequisites: T004, T005, 008/T003, the Feature 009 endpoint selection function (unbuilt; plan and tasks merged in PR #299).
+  used), `TestShellNoEndpointExit68RemediationNamesOptionConfigSetup` (009 FR-032 EP-3), `TestShellMalformedContainerEndpointExit64` (usage error at step 1, owner decision D9; it also asserts that no pty is requested and no later step runs). The spec wording "discovered endpoint" (FR-005 step 5, FR-008) is replaced by "selected endpoint" by the D9 spec amendment; this task's tests use the selected endpoint of the 009 function. Traces FR-002, FR-005, FR-006, FR-007 (option), FR-018 (re-check), D4, D5, D9; S12-C4,
+  S12-C5, S12-C6; SC-004, SC-005, SC-006. Prerequisites: T004, T005, 008/T003, the Feature 009 endpoint selection function (unbuilt; plan and tasks merged in PR #299).
 - [ ] T009 [P] [US3] Terminal and usage gate in `sandbox/shellsession/usage.go`: stdin and stdout must be terminals; no
   `--json`, trailing command or extra positional; only `--confirm <id>`, `--container-endpoint <endpoint>` (owner decision D9), `--yes` and global options accepted. Failing tests first:
-  `TestShellNonTerminalExit64NoPtyRequested`, `TestShellRejectsJSONAndTrailingArguments`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal` (any other option is a usage error, exit 64), `TestShellContainerEndpointValueReachesSelection` (a well-formed value is handed unchanged to an injected selection-function port, a fake, so T009 needs no 009 code and keeps its prerequisites; the malformed-value exit 64 is T008's), `TestShellUsageChecksPrecedeProviderCalls`. Traces FR-007, D9; S12-C6; SC-006. Prerequisites: 006/T025, 006/T031.
+  `TestShellNonTerminalExit64NoPtyRequested`, `TestShellRejectsJSONAndTrailingArguments`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal` (any other option is a usage error, exit 64), `TestShellContainerEndpointValueReachesSelection` (a well-formed value is handed unchanged to an injected selection-function port, a fake, so T009 needs no 009 code and keeps its prerequisites; the malformed-value exit 64 is T008's, which also checks that no pty is requested), `TestShellUsageChecksPrecedeProviderCalls`. The non-terminal test `TestShellNonTerminalExit64NoPtyRequested` checks that no pty is requested. Traces FR-007, D9; S12-C6; SC-006. Prerequisites: 006/T025, 006/T031.
 - [ ] T010 [US5] Confirmation for `untrusted_job` in `sandbox/shellsession/confirm.go` (form per FR-023, author proposal):
   warning and prompt on standard error, answer from standard input, answer must equal the instance id. Failing tests first:
   `TestUntrustedWithoutConfirmationStartsNothing`, `TestYesAloneStillPrompts`, `TestPromptAnswerOtherThanIdExit70`,
@@ -270,7 +270,7 @@ Every requirement, success criterion and decision maps to at least one task, or 
 | SC-003 | T007, T016 | |
 | SC-004 | T008, T016 | |
 | SC-005 | T005, T008 | |
-| SC-006 | T009, T024 | |
+| SC-006 | T008, T009, T024 | |
 | SC-007 | T013, T020, T023 | |
 | SC-008 | T012, T013, T017 | |
 | SC-009 | T015 | |
@@ -287,4 +287,4 @@ Every requirement, success criterion and decision maps to at least one task, or 
 | D7 | T014 | |
 | D8 (a), (b), (c), (d) | T013, T012, T005, T013 | |
 | D9 | T008, T009, T023 | `--container-endpoint` on `sandbox shell` |
-| S12-C1 to S12-C9 | C1 T004; C2, C3 T007, T016; C4 T008; C5 T005, T008; C6 T009, T013; C7 T012, T013, T017; C8 T010; C9 T014; all in T015 | |
+| S12-C1 to S12-C9 | C1 T004; C2, C3 T007, T016; C4 T008; C5 T005, T008; C6 T008, T009, T013; C7 T012, T013, T017; C8 T010; C9 T014; all in T015 | |

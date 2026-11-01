@@ -3,7 +3,7 @@
 **Feature identifier**: `012-container-interactive-shell`
 **Feature Branch**: `docs/spec012-container-interactive-shell`
 **Created**: 2026-10-31
-**Input**: Owner decision 1 of 2026-10-31, recorded in the unmerged PR #290 (`docs(spec): record owner decisions for
+**Input**: Owner decision 1 of 2026-10-31, recorded in the merged PR #290 (`docs(spec): record owner decisions for
 Feature 011`): the container provider should get an interactive shell in the future; until a separate feature builds it,
 the container provider keeps `interactive_shell=none`. This feature is that separate feature.
 **Status**: Draft, proposed for independent review and owner approval; nothing is implemented. Approval of this text
@@ -13,10 +13,11 @@ or PR link (WORKFLOW.md).
 FR-028 to FR-030, FR-034, FR-035, [refusal codes](../008-workspace-sandbox/contracts/refusal-codes.json),
 [runtime provider contract](../008-workspace-sandbox/contracts/runtime-provider.md),
 [command surface](../008-workspace-sandbox/contracts/command-surface.md)),
+[Feature 009](../009-host-setup-wizard/spec.md) (endpoint selection FR-029, FR-030, FR-032; `--confirm <id>` pattern; D9, FR-005, FR-007),
 [Feature 011](../011-vm-provider/spec.md) (capability field `interactive_shell`, FR-003, FR-004, FR-016, refusal code
 `refused.interactive_unavailable`; a VM backend is expected to use the same `whr sandbox shell` command under that rule,
 and a backend without an enforced `pty` is refused with that code; this is owner decision 14 (with 9, "one shared set of
-core commands for all backends") in the unmerged draft PR #290, not in any merged text),
+core commands for all backends") in the merged PR #290, now in `specs/011-vm-provider/spec.md` on `main`),
 [Feature 010](../010-host-and-workspace-panes/spec.md) (`shell --local`, FR-001 to
 FR-015), [Feature 006](../006-whr-cli/spec.md) (FR-007, FR-019, FR-022, FR-022a, FR-030),
 [ADR 0013](../../docs/adr/0013-whr-exit-codes.md), [ADR 0014](../../docs/adr/0014-whr-command-structure.md).
@@ -58,7 +59,7 @@ This feature defines that behavior for the container provider:
   are not built (Feature 008 T001 and T002 are open, tasks.md), the `sandbox` command group is not registered (T016, T017
   are open) and Feature 011 is itself a draft. This feature writes no implementation code and registers no command.
 - Out of scope: a VM provider (Feature 011 sets its own `interactive_shell` value and conformance; the owner's 2026-10-31
-  direction, recorded as decisions 9 and 14 in the unmerged draft PR #290, is that `whr sandbox shell <id>` is one command
+  direction, recorded as decisions 9 and 14 in the merged PR #290, is that `whr sandbox shell <id>` is one command
   with the same behavior for container and VM backends, a backend without an enforced `pty` being refused under
   Feature 011 FR-016), a non-interactive
   `exec` (Feature 008 OD-1), attaching to a process that is already running (no reattach), a persistent or multiplexed
@@ -69,11 +70,11 @@ This feature defines that behavior for the container provider:
 
 ### Owner decisions
 
-- **2026-10-31 (decision 1 of PR #290, not yet on `main`)**: the container provider should also get an interactive shell in
+- **2026-10-31 (decision 1 of PR #290, merged)**: the container provider should also get an interactive shell in
   the future; until a separate feature builds it, the container provider keeps `interactive_shell=none`. This feature is
   the separate feature. Its approval does not change what `main` says today; the change takes effect only through the
   tasks of a later plan (see "Changes to existing documents").
-- **2026-10-31 (decisions 9 and 14 of PR #290, unmerged draft)**: one shared set of core commands for all backends, and one
+- **2026-10-31 (decisions 9 and 14 of PR #290, merged)**: one shared set of core commands for all backends, and one
   shell command that refuses with `refused.interactive_unavailable` where `pty` is not enforced. Feature 012 is referenced
   there as a draft. Nothing from #290 is relied on as merged.
 - **2026-10-31 (decisions D1 to D8 for this feature)**, as the owner gave them to the author through the orchestrating
@@ -377,7 +378,7 @@ against the request; each is refused with the stable code and zero provider call
   - 64 for usage, no terminal, `--json`, a trailing command or further argument;
   - 65 for an unknown instance;
   - 68 for any `refused.*` (including `refused.interactive_unavailable`, `refused.foreign_object`,
-    `refused.invalid_state`), a non-running container, an absent client, an unreachable
+    `refused.invalid_state`), a non-running container, no usable endpoint (Feature 009 FR-032), an absent client, an unreachable
     socket or a non-`unix://` endpoint (the mapping of Feature 008 FR-035 and Feature 010 FR-009), all before the hand-over;
   - 72 only where the ADR 0013 definition ("user interrupt, or transport lost during an interactive command") holds:
     SIGINT, SIGTERM or SIGHUP before or after the commit point, daemon unreachable after the client ends, and a client stream
@@ -484,7 +485,7 @@ against the request; each is refused with the stable code and zero provider call
   for the owner to confirm (Open question 1). A `--confirm` value that does not equal the instance id is 64 (usage). The exact
   form is an author proposal under D1: a prompt that requires typing the instance id, and a flag `--confirm <id>` that, with a
   value equal to the instance id, skips the prompt (the per-item `--confirm <id>` pattern of Feature 009; Feature 011 FR-033
-  in the unmerged draft PR #290 uses it too). The confirmation is not part of `Admit` (it is not a capability) and adds no
+  in the merged PR #290 uses it too). The confirmation is not part of `Admit` (it is not a capability) and adds no
   refusal code. It does not remove the risk; see "Not enforced".
 
 **Conformance (cases added to the Feature 008 suite)**
@@ -631,7 +632,7 @@ the exact confirmation form (FR-023), and the verification items below.
 ## Changes to existing documents (on approval; each lands through the plan and tasks, none is made by this change)
 
 - `specs/011-vm-provider/spec.md`: FR-003 (container provider report `interactive_shell` from `none` to `pty`/`enforced`
-  once this feature is implemented), the "Author proposals" entry on `interactive_shell` or, if PR #290 has merged, "Owner decisions" entry 1 (on `main` the line is "The container provider reports `interactive_shell=none`" under
+  once this feature is implemented), the "Author proposals" entry on `interactive_shell` or, since PR #290 has merged, "Owner decisions" entry 1 (on `main` the line is "The container provider reports `interactive_shell=none`" under
   "Author proposals"); the Feature 011 FR-016 text stays unchanged. Feature 011 A1 (capability field
   `interactive_shell`) is a prerequisite of this feature; if A1 is not approved first, this feature has to add that field
   itself.

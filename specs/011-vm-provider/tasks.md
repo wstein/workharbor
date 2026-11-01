@@ -189,7 +189,7 @@ is unchanged in every task.
   port, reuse of `localdocker` list and inspect. Failing tests first: `TestContainerImagePassFailSkipped` (labeled image, missing or
   unusable, no defined image `no_image_defined`), `TestContainerLeftoversListOwnedOnlyWithSizeOrSizeUnknown`,
   `TestContainerLeftoversNeverFailDoctor`, `TestContainerChecksReadOnlyListAndInspectOnly`,
-  `TestContainerChecksSkippedOnLinuxAndWithoutEndpoint` (`unsupported_platform`, `no_runtime`). The endpoint comes from the selection function of draft PR 299 (OQ-6). Traces FR-039; SC-034 (checks
+  `TestContainerChecksSkippedOnLinuxAndWithoutEndpoint` (`unsupported_platform`, `no_runtime`). The endpoint comes from the selection function of merged PR 299 (OQ-6). Traces FR-039; SC-034 (checks
   half); decisions 13, 23; OQ-6 for the real endpoint. Prerequisites: 006/T027, 009/T006, T003.
 - [ ] T028 [P] `disk.container_storage` macOS lookup in `internal/doctor/disk.go`: runtime configuration file (bounded
   plain read), then the recorded value, else `unknown`; the disk-size setting is information only. Failing tests first:
@@ -197,7 +197,7 @@ is unchanged in every task.
   `TestRecordedValueUsedWhenFileAbsentOrUnusable`, `TestNeitherGivesUnknownWithReason`, `TestFreeSpaceIsHostVolumeOfLocation`,
   `TestFailBelowExistingThreshold`, `TestDiskSizeSettingIsInformationOnly`, `TestRecordedValueThatNoLongerExistsIsUnknownNotFail`,
   `TestLookupDrawsOnSharedBudget`, `TestHomeRedactedInEvidence`; Linux `/var/lib/docker` rule unchanged. Traces FR-041; SC-036;
-  decisions 21, 23. Consumes the Colima storage-location library of draft PR 299, which may already cover this lookup (OQ-6). Prerequisites: 006/T027, T003.
+  decisions 21, 23. Consumes the Colima storage-location library of merged PR 299, which may already cover this lookup (OQ-6). Prerequisites: 006/T027, T003.
 - [ ] T029 OWNER GATE (OG-7, OG-10): catalog schema and loader for the closed third-party source list: `source.tap` enum grows
   by the two listed sources, the loader rule "tap matches type" amended, optional `note` and `host_requirement`, in
   `specs/009-host-setup-wizard/contracts/host-tool-catalogue.schema.json`, `hostsetup/catalogue/catalogue.go` and tests. Failing
