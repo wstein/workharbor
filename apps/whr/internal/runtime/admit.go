@@ -14,7 +14,8 @@ type Requirement struct {
 }
 
 // MountSource classifies where a planned mount comes from. Admission reasons
-// about kinds, never about provider-specific paths.
+// about kinds, never about provider-specific paths. A kind not listed below is
+// refused (fail closed).
 type MountSource string
 
 // The mount source kinds Admit knows.
@@ -197,26 +198,87 @@ func admitRequirement(profile TrustProfile, r Requirement, caps Capabilities, fo
 		found[RefusedProfileUnsupported] = true
 		return
 	}
-	if profile == ProfileUntrustedJob && r.Field == FieldGitAccess &&
-		(r.Value == GitLinkedWorktree || r.Value == GitPrimaryRW) {
+	if profile == ProfileUntrustedJob && untrustedSharedRequirement(r) {
 		found[RefusedSharedGitMetadataUntrusted] = true
 		return
 	}
 	switch r.Field {
-	case FieldEgressEnforcement, FieldCredentialMediation, FieldHostTools:
+	case FieldEgressEnforcement, FieldCredentialMediation, FieldHostTools, FieldCancellationCleanup:
 		if r.Value == ValueNone {
 			return // no protection is asked for
 		}
 	}
 	field, _ := caps.Field(r.Field)
-	if !field.Provides(r.Value) {
-		found[fieldCode[r.Field]] = true
+	if satisfies(r, field) {
+		return
 	}
+	code := fieldCode[r.Field]
+	if r.Field == FieldCancellationCleanup && !profile.IsJob() {
+		// The cleanup code is for job profiles only (contract).
+		code = RefusedProfileUnsupported
+	}
+	found[code] = true
+}
+
+// untrustedSharedRequirement reports whether the requirement asks an
+// untrusted job for the primary checkout or shared git metadata: bind modes
+// expose the primary .git, a linked worktree or primary_rw share it (FR-010).
+func untrustedSharedRequirement(r Requirement) bool {
+	switch r.Field {
+	case FieldGitAccess:
+		return r.Value == GitLinkedWorktree || r.Value == GitPrimaryRW
+	case FieldFilesystemAccess:
+		return r.Value == FilesystemBindRW || r.Value == FilesystemBindRO || r.Value == FilesystemLinkedWorktree
+	}
+	return false
+}
+
+// cleanupRank orders cancellation_cleanup ("below force_only" in the
+// contract). Values outside the map rank 0 and never satisfy (fail closed).
+var cleanupRank = map[string]int{ValueNone: 0, CleanupForceOnly: 1, CleanupGracefulThenForce: 2}
+
+// satisfies applies the comparison of the field to an enforced capability.
+// cancellation_cleanup is ordered (graceful_then_force covers force_only).
+// egress_enforcement: cooperative_proxy is covered by any enforcement;
+// enforced_allowlist and enforced_deny are different policies, matched
+// exactly. All other fields match the exact value.
+func satisfies(r Requirement, field Capability) bool {
+	if !field.Enforced() {
+		return false
+	}
+	switch r.Field {
+	case FieldCancellationCleanup:
+		if r.Value == ValueNone {
+			return true
+		}
+		need := cleanupRank[r.Value]
+		for _, v := range field.Values {
+			if need > 0 && cleanupRank[v] >= need {
+				return true
+			}
+		}
+		return false
+	case FieldEgressEnforcement:
+		if r.Value == EgressCooperativeProxy {
+			return field.ProvidesAny(EgressCooperativeProxy, EgressEnforcedAllowlist, EgressEnforcedDeny)
+		}
+	}
+	return field.Provides(r.Value)
 }
 
 func admitMount(profile TrustProfile, m MountIntent, found map[RefusalCode]bool) {
 	writable := m.Mode != MountRO
 	switch m.Source {
+	case MountWorkspace:
+		// The workspace bind mount carries the primary .git (FR-010).
+		if profile == ProfileUntrustedJob {
+			found[RefusedSharedGitMetadataUntrusted] = true
+		}
+	case MountPrivateCopy, MountScratch:
+		// Always allowed by kind; the tool-root and socket rules below still apply.
+	case MountPrimaryHome:
+		// "Primary home volume in a job" is forbidden by runtime-provider.md
+		// but has no stable refusal code; Plan validation (T006/T008) owns it.
 	case MountHostDockerSocket, MountHostControlSocket:
 		found[RefusedHostSocketMount] = true
 	case MountHostGitConfigDir:
@@ -242,6 +304,9 @@ func admitMount(profile TrustProfile, m MountIntent, found map[RefusalCode]bool)
 		if profile == ProfileUntrustedJob {
 			found[RefusedSharedGitMetadataUntrusted] = true
 		}
+	default:
+		// An empty or unrecognized kind cannot be judged: refuse, whatever its mode.
+		found[RefusedProfileUnsupported] = true
 	}
 	if path.Base(m.Target) == "docker.sock" || path.Base(m.Name) == "docker.sock" {
 		found[RefusedHostSocketMount] = true

@@ -90,6 +90,16 @@ func TestLabelsRoundTrip(t *testing.T) {
 	}
 }
 
+// act is the shape of every mutating operation: the gate first, the
+// mutation only when it passes.
+func act(obj sandbox.Object, id sandbox.ID, mutate func()) error {
+	if _, err := sandbox.CheckOwned(obj, id, sandbox.PrimaryEnvironment{}); err != nil {
+		return err
+	}
+	mutate()
+	return nil
+}
+
 func TestForeignObjectRefused(t *testing.T) {
 	base := goodLabels().Map()
 	mutate := func(f func(map[string]string)) map[string]string {
@@ -124,16 +134,12 @@ func TestForeignObjectRefused(t *testing.T) {
 	for name, labels := range cases {
 		t.Run(name, func(t *testing.T) {
 			mutations := 0
-			mutate := func() { mutations++ }
-			_, err := sandbox.CheckOwned(sandbox.Object{Kind: sandbox.KindContainer, Name: "c1", Labels: labels}, "sbx-aaaaaaaaaaaaaaaa", sandbox.PrimaryEnvironment{})
+			err := act(sandbox.Object{Kind: sandbox.KindContainer, Name: "c1", Labels: labels}, "sbx-aaaaaaaaaaaaaaaa", func() { mutations++ })
 			if code, ok := runtime.RefusalCodeOf(err); !ok || code != runtime.RefusedForeignObject {
 				t.Fatalf("want refused.foreign_object, got %v", err)
 			}
-			if err == nil {
-				mutate()
-			}
 			if mutations != 0 {
-				t.Errorf("a foreign object was mutated")
+				t.Errorf("a foreign object was mutated %d times", mutations)
 			}
 			if _, perr := sandbox.ParseLabels(labels); name != "another id" && perr == nil {
 				t.Errorf("ParseLabels accepted %v", labels)
@@ -141,6 +147,11 @@ func TestForeignObjectRefused(t *testing.T) {
 		})
 	}
 
+	// An owned object runs its mutation exactly once.
+	n := 0
+	if err := act(sandbox.Object{Kind: sandbox.KindVolume, Name: "v1", Labels: base}, "sbx-aaaaaaaaaaaaaaaa", func() { n++ }); err != nil || n != 1 {
+		t.Errorf("owned object: err=%v mutations=%d", err, n)
+	}
 	// An owned object of this instance passes the gate and returns its labels.
 	got, err := sandbox.CheckOwned(sandbox.Object{Kind: sandbox.KindVolume, Name: "v1", Labels: base}, "sbx-aaaaaaaaaaaaaaaa", sandbox.PrimaryEnvironment{})
 	if err != nil || got != goodLabels() {
