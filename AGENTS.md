@@ -48,6 +48,8 @@ Source: `.github/workflows/check.yml` (workflow `repository-checks`), read on 20
 - Deviation from the global rule (heavy checks only at the stack tip via label `ci-full`): today the workflows do not
   evaluate `ci-full`. The heavy jobs run on every non-docs pull request, drafts included, and there is no separate E2E job.
   Until the workflow changes, the reviewer's label has no effect here.
+- Informative: `.github/workflows/colima-acceptance.yml` runs only when the owner starts it (`workflow_dispatch`); every job is
+  `continue-on-error`, so it gates nothing.
 - Release: `.github/workflows/release.yml` runs on owner-pushed tags; a manual run is a dry run that never publishes.
 
 Write all English text in US spelling: documentation, comments, commit messages, pull
