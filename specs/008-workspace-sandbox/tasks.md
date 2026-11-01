@@ -12,9 +12,9 @@ through `sandbox.ExitFor` (T004).
 
 ## Implementation status audit (2026-10-24)
 
-At main `c71890d27c3d415e50fe15610a6f8f044b313142`, none of T001–T017 had full
+At main `c71890d27c3d415e50fe15610a6f8f044b313142`, none of T001 to T017 had full
 implementation/test acceptance evidence. T010 has only the recorded OD-5 resolution;
-its remaining proposal work is open. Update (2026-11-01): T001–T003 are since merged (PR #303) and
+its remaining proposal work is open. Update (2026-11-01): T001 to T003 are since merged (PR #303) and
 ticked; the audit above describes them as of the audit date only. The checkboxes of T004 to T017 and
 their issues remain open.
 The [task-by-task evidence audit](../../docs/quality/package-a-status-20261024.md#feature-008-no-completed-implementation-tasks)
