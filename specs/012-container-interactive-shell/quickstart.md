@@ -15,7 +15,7 @@ git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr spe
 ```
 
 Scenario to test map: US1 `TestShellExecPlanFullIdEndpointPty`, `TestEndOfSessionTableFourRows`; US2 `TestAdmitInteractiveShellTable`;
-US3 `TestShellNonTerminalExit64NoPtyRequested`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal`, `TestShellMalformedContainerEndpointExit64`, `TestStderrNotTerminalNoConfirmExit72NamesConfirmFlag`; US4
+US3 `TestShellNonTerminalExit64NoPtyRequested`, `TestShellAcceptsOnlyConfirmEndpointYesGlobal`, `TestShellMalformedContainerEndpointExit64`, `TestStderrNotTerminalNoConfirmExit70NamesConfirmFlag`; US4
 `TestContainerLostPassesStatusRecordsFailed`, `TestKilledClientRowsClientStatusPassedShellStatusRecorded`; US5
 `TestYesAloneStillPrompts`.
 

@@ -109,7 +109,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   and storage-location fields in `probe` and `list` results, call recorder, failure injection at each operation. Failing tests
   first: `TestDriverPortOperationSetIsClosed` (method set equals the FR-021 list, where build is the only image operation: no publish, pull, setting or install
   operation), `TestFakeDriverRecordsEveryCall`, `TestFakeDriverInjectsFailureAtEachOperation`,
-  `TestProbeAndListResultsHaveOptionalSizeFields`. Traces FR-021, FR-017, FR-032 (port part); SC-016 (port part). Prerequisite: 008/T001.
+  `TestProbeAndListResultsHaveOptionalSizeFields`. Traces FR-021, FR-017, FR-032 (port part); SC-016 (port part); decision 24. Prerequisite: 008/T001.
 - [ ] T016 [US3] Explicit driver selection in `internal/runtime/vm/select.go`. Failing tests first: `TestNoDriverChosenRefusedZeroCalls`,
   `TestChosenDriverMissingOrUnsupportedOnlyProbeCalled`, `TestOnlyChosenDriverRecordsCalls`,
   `TestNoAutoDetectNoFallbackNoSubstitution`, `TestSwapDriverChangesAdmissionOnlyThroughCapabilityValues`. Two fake drivers; the
@@ -170,7 +170,7 @@ named. If absent, stop and ask; do not reimplement. No task here edits `contract
   `TestMutatingCallsTargetOnlyOwnedInstancesAndCloneReadsBaseOnlyAsSource`, `TestNoHostSettingOrInstallCalls`,
   `TestNoLicenseReadingOrEnforcementInSource` (source scan), `TestRegistryAddsNoCommandFor011` (command table and
   `contracts/cli/commands.json` unchanged), `TestMakeCheckPassesWithNoBackendInstalled` (recorded in the PR). Traces FR-007,
-  FR-017, FR-019, FR-021, FR-026, FR-036; SC-011, SC-016, SC-019, SC-031 (code half). Prerequisite: T024.
+  FR-017, FR-019, FR-021, FR-026, FR-036; SC-011, SC-016, SC-019, SC-031 (code half); decision 24. Prerequisite: T024.
 
 ## Stage 4: commands and integration (macOS host surface; owner gates)
 
@@ -226,8 +226,8 @@ is unchanged in every task.
   `TestNoBuildOrDownloadBeforeYes`, `TestNoWritesAndNoBuildOnNo`, `TestYesAloneApprovesNeitherWriteNorBuild`,
   `TestUnattendedWithoutConfirmExits70NoBuildCall`, `TestExistingDefinitionByteIdenticalUnlessDiffConfirmedWithVerifiedBackup`,
   `TestContainerBuildUsesOnlyNormalBuildInvocationLabelOnlyNoVMSettingCall`, `TestBaseLayerFetchAllowedPrebuiltPullAndPublishFail`,
-  `TestDefinitionIsNotACatalogDotfile`, `TestImageBuildDeadlineIsInjected`, `TestContainerBuildUsesSelectedEndpoint` (the build invocation carries `--host=<selected endpoint>`, taken from the endpoint port of OQ-6, never the Docker client's active context). Traces FR-034, FR-007, FR-037 (shared mechanics);
-  SC-029, SC-016; decisions 10, 11, 16, 19(d), 23. Prerequisites: T004, T015, 009/T006. The `image_build` deadline is 30 minutes (OQ-7).
+  `TestDefinitionIsNotACatalogDotfile`, `TestImageBuildDeadlineIsInjected`, `TestContainerBuildUsesSelectedEndpoint` (the build invocation carries `--host=<selected endpoint>`, taken from the endpoint port of OQ-6, never the Docker client's active context). Traces FR-034, FR-007, FR-021, FR-037 (shared mechanics);
+  SC-029, SC-016; decisions 10, 11, 16, 19(d), 23, 24. Prerequisites: T004, T015, 009/T006. The `image_build` deadline is 30 minutes (OQ-7).
 - [ ] T033 Wizard image offer and profile records: the `image_definition_write` and `image_build` steps (modify class), the
   host profile records for the image (home-relative path, name, label), `container_storage` and the `container_endpoint`
   neighbor, accepted confirmation ids `image:container` and `image:vm`. Failing tests first:
@@ -276,7 +276,7 @@ is unchanged in every task.
   tests first: `TestDriverPassesConformanceWithRecordedOutput`, `TestDriverDeclaresOnlyWhatItsProbesProve`,
   `TestProbeAndListParseOptionalSizeAndStorageFields`, `TestDriverRunnerArgvIsFixedNoShell`, `TestDriverNeverInstallsOrChangesHostSettings`,
   `TestSupportMatrixPresentAndCheckedByT011`. Real-VM conformance is owner-run evidence (D-2). Traces FR-021, FR-023, FR-024,
-  FR-026; SC-003, SC-016, SC-020; OD-2, OD-5. Prerequisites: T011, T025, plan open question OQ-9.
+  FR-026; SC-003, SC-016, SC-020; OD-2, OD-5; decision 24. Prerequisites: T011, T025, and the license and maintenance check (OQ-9, accepted 2026-11-01).
 - [ ] T040 Documentation, docs only: the reproducible base image recipe from the operating system vendor's official download with a
   local image and no `whr` involvement (FR-007), the user's responsibility for licenses in the driver documentation and the
   prerequisite section (FR-036), and the owner-run evidence procedure (host digest of the image files before and after a run).

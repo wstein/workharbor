@@ -106,9 +106,11 @@ This feature defines that behavior for the container provider:
   (FR-007). This resolves the conflict between the earlier text of FR-007 (global options, `--confirm` and `--yes` only) and
   Feature 009 FR-030; Feature 009 is unchanged. The tracker or PR link is added with the other decisions when the text is
   approved at an exact head.
-- **2026-11-01 (owner answers to the plan questions, issue #317)**: (1a) a declined, unanswered or impossible confirmation exits 72,
-  not 70 (FR-015, FR-023); (1b) a killed or lost client stream exits 72 (FR-015, FR-016); (2) the instance record store is the one
-  of Feature 011 (answer to its OQ-1): the Feature 009 state directory below `~/.local/state/whr/` with one lock file; (3) task T022
+- **2026-11-01 (owner answers to the plan questions, issue #317)**: (1a) SPLIT: a declined confirmation or an unanswered prompt (end of input)
+  exits 72, not 70; an impossible or unattended confirmation (standard error not a terminal and no `--confirm`, unattended or
+  answer-file mode) stays 70 as ADR 0013 row 70 says, so no ADR change is needed (FR-015, FR-023); (1b) a killed or lost client stream exits 72 (FR-015, FR-016); (2) the location of the instance record store is
+  the one decided for Feature 011 (its OQ-1): the Feature 009 state directory below `~/.local/state/whr/` with one lock file; the
+  mechanism stays the plan's choice (research R-1); (3) task T022
   may add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contracts only if Feature 011 has not landed
   them first; (4) SC-010 covers both Linux with Docker Engine and macOS with OrbStack; (5) a terminal restore mechanism after a
   killed client is built (FR-025), its design is not decided; (6) the reconciliation (FR-024, T014) is held until V5; (7) the author
@@ -156,7 +158,7 @@ against the request; each is refused with the stable code and zero provider call
    provider call that allocates anything, and no fallback to a piped shell exists (FR-007).
 2. **Given** `--json`, a trailing command or any further positional argument, **Then** exit 64 (FR-007).
 3. **Given** an `untrusted_job` instance, no `--confirm <id>` and standard error not a terminal, **Then** no prompt is shown
-   and the command exits 72 with a `whr:` line naming `--confirm` (FR-023).
+   and the command exits 70 with a `whr:` line naming `--confirm` (FR-023).
 4. **Given** `--container-endpoint` with a malformed value (empty, relative or otherwise malformed, Feature 009 FR-030),
    **Then** exit 64 before any provider call (FR-007); **Given** a well-formed value with another scheme (for example `tcp://`), **Then** exit 68 at step 5; **Given** a well-formed `unix://` value, **Then** it is the one
    endpoint used at step 5 and no lower source replaces it (FR-005, Feature 009 FR-029).
@@ -178,7 +180,7 @@ against the request; each is refused with the stable code and zero provider call
 
 1. **Given** a `ready` `untrusted_job` instance, **When** the command runs without confirmation, **Then** a warning about
    unfiltered terminal control sequences is shown on standard error, which must be a terminal for the prompt (otherwise see
-   User Story 3 scenario 3), and without an explicit confirmation no shell starts (exit 72) (FR-023).
+   User Story 3 scenario 3), and without an explicit confirmation no shell starts (exit 72 when the prompt is declined or left unanswered, FR-023).
 2. **Given** `--yes` alone, **Then** it does not count as confirmation. A `developer` instance asks for nothing.
 
 ### Edge Cases
@@ -292,7 +294,7 @@ against the request; each is refused with the stable code and zero provider call
   well-formed value with another scheme is refused at step 5 of FR-005 with exit 68), and MUST reject `--json` as a usage error (exit 64), as Feature 010 FR-006
   does for `shell --local`. A pty MUST be allocated only in this case; no pty is requested when either stream is not a
   terminal, and there is no documented fallback to a piped shell, because that mode is the deferred `exec` (Feature 008
-  OD-1). Standard error need not be a terminal, except that an `untrusted_job` without `--confirm <id>` then exits 72 (FR-023).
+  OD-1). Standard error need not be a terminal, except that an `untrusted_job` without `--confirm <id>` then exits 70 (FR-023).
 - **FR-008** (exec form): For the container provider the hand-over MUST be one invocation of the container runtime client
   with a fixed argument vector (no shell, no string evaluation) built only from validated values, addressing the
   container by full id and passing the selected `unix://` endpoint explicitly, as Feature 010 FR-002 and FR-004 state
@@ -392,11 +394,22 @@ against the request; each is refused with the stable code and zero provider call
     SIGINT, SIGTERM or SIGHUP before or after the commit point, daemon unreachable after the client ends, and a client stream
     that ended while the remote side did not exit (a killed or lost client). The owner confirmed on 2026-11-01 that reading
     that last case as a transport loss is right; it needs no new code. Also 72, by owner decision of 2026-11-01, for a
-    confirmation prompt (FR-023) that is declined, left unanswered or impossible (a missing confirmation when standard error is
-    not a terminal), as Feature 006 and Feature 009 give 72 for a declined or unanswered wizard prompt; the ADR 0013 text of 72
-    does not name that case (see "Changes to existing documents");
+    confirmation prompt (FR-023) that is declined or left unanswered (end of input), as Feature 006 gives 72 for a declined
+    wizard prompt (a cancellation) and Feature 009 FR-004 for end of input at its wizard question;
+  - 70 for a confirmation that is impossible: no prompt can be shown because standard error is not a terminal and no `--confirm`
+    is given, or the run is unattended or in answer-file mode (ADR 0013 row 70: a required human decision refused in unattended
+    or answer-file mode, or not given; command-surface.md already lists "unattended confirmation missing" under 70). The split of
+    the three confirmation cases (owner decision of 2026-11-01):
+
+    | Confirmation case (FR-023) | Exit |
+    | --- | --- |
+    | prompt shown and declined (any answer other than the instance id) | 72 |
+    | prompt shown and left unanswered (end of input) | 72 |
+    | no prompt possible (standard error not a terminal, no `--confirm`), unattended or answer-file mode | 70 |
+    | `--confirm` value that does not equal the instance id | 64 |
+
   - 74 for an unclassified failure, including a client that cannot be launched (`start_failed`, FR-014).
-  Exit codes 66 and 67 are not used (no remote authority); 70, 71 and 73 are not used by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
+  Exit codes 66 and 67 are not used (no remote authority), 71 and 73 are not used by this command. Because remote statuses overlap 64 to 79, CLI failures MUST also write a `whr:` line to standard error
   and a status coming from the shell MUST NOT (Feature 010 FR-008, ADR 0013). `--json` is rejected, so the `kind`
   field of the JSON exit event is not available for this command. The `whr:` line is advisory (ADR 0013), so for
   `sandbox shell` a status in 64 to 79 is ambiguous by design, as ADR 0013 and `contracts/cli/exit-codes.json` state for
@@ -490,11 +503,13 @@ against the request; each is refused with the stable code and zero provider call
   terminal, FR-007). No exception to Feature 006 FR-014 is made: the shell session's own terminal stream is the interactive
   channel that Feature 006 FR-022a and Feature 010 FR-014 already treat as outside `whr`'s relay, not a prompt. If no
   `--confirm <id>` is given and standard error is not a terminal, no prompt is shown, nothing is started and the command
-  exits 72 with a `whr:` line naming `--confirm`. A run without a terminal on standard input or output never reaches this
-  step (exit 64 at step 1). Exit code (owner decision of 2026-11-01, Open question 1a, a deviation from the earlier author
-  proposal of 70): a prompt that is declined (any answer other than the instance id), left unanswered (end of input), or a
-  confirmation that is impossible (the missing confirmation just described) is 72, like the declined wizard prompt of Feature 006
-  (a cancellation, 72) and the end of input at the wizard question of Feature 009 FR-004 (72). A `--confirm` value that does not equal the instance id is 64 (usage). The exact
+  exits 70 with a `whr:` line naming `--confirm`. A run without a terminal on standard input or output never reaches this
+  step (exit 64 at step 1). Exit codes (owner decision of 2026-11-01, Open question 1a, a split; the table is in FR-015): a
+  prompt that is declined (any answer other than the instance id) or left unanswered (end of input) is 72, like the declined
+  interactive wizard prompt of Feature 006 (a cancellation, 72) and the end of input at the wizard question of Feature 009 FR-004
+  (72); the missing confirmation just described is 70 (needs-human; ADR 0013 "required human decision refused in unattended or
+  answer-file mode, or not given"; Feature 008 command-surface.md says "70 unattended confirmation missing"; Feature 006 treats
+  a missing normal confirmation as 70). A `--confirm` value that does not equal the instance id is 64 (usage). The exact
   form is an author proposal under D1: a prompt that requires typing the instance id, and a flag `--confirm <id>` that, with a
   value equal to the instance id, skips the prompt (the per-item `--confirm <id>` pattern of Feature 009; Feature 011 FR-033
   in the merged PR #290 uses it too). The confirmation is not part of `Admit` (it is not a capability) and adds no
@@ -535,7 +550,7 @@ S12-C8. Confirmation: an `untrusted_job` without confirmation starts nothing; a 
     a `--confirm` value other than the instance id gives 64; `--confirm <id>` with the right id, or the right answer, proceeds;
     `developer` and `cooperative_job` are never asked; a signal during the prompt exits 72 with no state change; the
     warning and prompt go to standard error with standard output left as command data only; an `untrusted_job` without
-    `--confirm <id>` and with standard error not a terminal shows no prompt, starts nothing and exits 72 with a `whr:` line
+    `--confirm <id>` and with standard error not a terminal shows no prompt, starts nothing and exits 70 with a `whr:` line
     naming `--confirm`; without a terminal on standard input or output the run exits 64 at step 1 (FR-007, FR-023, FR-013).
 S12-C9. Reconciliation (needs the verified query): a `running` record whose exec process is gone or was never started becomes
     `failed`/`session_lost` on a later `whr sandbox` invocation; a `running` record whose owner process is alive is untouched;
@@ -585,7 +600,7 @@ This feature enforces nothing about what happens inside the shell. In particular
   `refused.invalid_state` and unchanged; of two concurrent starts exactly one proceeds (FR-014, MUST); a `finished` record gets no second shell; a `ready` record with a missing container exits 68 naming `missing`, not
   `refused.foreign_object` (FR-005, FR-014).
 - **SC-006**: Non-terminal use, `--json`, trailing arguments and a malformed `--container-endpoint` value exit 64 without allocating a pty (FR-007).
-- **SC-007**: Shell statuses 0 to 255 pass through unchanged and CLI failures use only 64, 65, 68, 72, 74 with a `whr:` line
+- **SC-007**: Shell statuses 0 to 255 pass through unchanged and CLI failures use only 64, 65, 68, 70, 72, 74 with a `whr:` line
   (FR-015); the exit mapping function of Feature 008 T004 (`ExitFor`) gains no new code and its freeze test is unchanged
   except for the `sandbox shell` passthrough entry once the ADR 0013 amendment lands.
 - **SC-008**: Signals, loss, container stop or removal, and a killed client produce exactly the exit code, state, reason and `whr:`
@@ -605,18 +620,19 @@ This feature enforces nothing about what happens inside the shell. In particular
   statement of scope covered by SC-003 and case S12-C2 and has no separate test.
 
 - **SC-012**: An `untrusted_job` shell starts only after the explicit confirmation of FR-023, `--yes` alone never starts it,
-  the exit codes are 72 (prompt declined or unanswered, or no prompt possible because standard error is not a terminal and no `--confirm` is given) and 64 (wrong `--confirm` value) as FR-023 states, with the prompt on standard error, and `developer` is never asked (case S12-C8).
+  the exit codes are 72 (prompt declined or unanswered), 70 (no prompt possible because standard error is not a terminal and no `--confirm` is given) and 64 (wrong `--confirm` value) as FR-023 states, with the prompt on standard error, and `developer` is never asked (case S12-C8).
 - **SC-013**: With the verified query, reconciliation marks gone or never-started `running` records `failed`/`session_lost`
   and leaves live ones alone (case S12-C9). Before the query is verified this criterion is not claimed and the gap stays
   under "Not enforced".
 
 ## Open questions for the owner
 
-1. **Exit codes of two author-proposed readings.** RESOLVED 2026-11-01 (owner answers, issue #317). (a) DEVIATION from the author
-   proposal: a declined, unanswered or impossible confirmation (FR-023) exits 72, not 70, like Feature 006 (a declined wizard prompt
-   is a cancellation, 72) and Feature 009 FR-004 (end of input, 72). (b) Accepted: exit 72 for a killed or lost client stream
-   (FR-015, FR-016). Neither needs a new code; whether the ADR 0013 text of 72 is widened for (a) is raised under "Changes to
-   existing documents".
+1. **Exit codes of two author-proposed readings.** RESOLVED 2026-11-01 (owner answers, issue #317). (a) SPLIT, a deviation from the
+   author proposal for the first two cases: a declined confirmation or an unanswered prompt (end of input) exits 72, not 70, like
+   Feature 006 (a declined wizard prompt is a cancellation, 72) and Feature 009 FR-004 (end of input, 72); an impossible or
+   unattended confirmation (no prompt possible) stays 70, as ADR 0013 row 70, command-surface.md and Feature 008 FR-035 say
+   (FR-015, FR-023). (b) Accepted: exit 72 for a killed or lost client stream (FR-015, FR-016). Neither needs a new code or an
+   ADR 0013 change.
 
 The open questions 1 to 7 of earlier drafts were decided by the owner on 2026-10-31 (D1 to D7), and four author proposals
 became D8. What is otherwise left is for the plan, not for a decision: the mechanism of the atomic start transition (D8c),
@@ -679,9 +695,10 @@ the exact confirmation form (FR-023), and the verification items below.
   passed-through status is the client's own signal status, not the shell's. The ambiguity note is extended to `sandbox shell`
   (text only; the ADR and `exit-codes.json` name only `ssh` today, and `shell --local` has the same gap). The owner confirmed
   (2026-11-01) the author reading that a client stream ending while the remote side did not exit (a killed or lost client) is a
-  transport loss (72). The owner also decided (2026-11-01) 72 for a declined, unanswered or impossible confirmation (FR-023); the
-  ADR 0013 text of 72 ("user interrupt, or transport lost during an interactive command") does not name that case, so whether
-  the ADR text is widened is an owner decision for the amendment (T020). This change edits neither ADR 0013 nor `exit-codes.json`.
+  transport loss (72). The owner also decided (2026-11-01) 72 for a declined confirmation or an unanswered prompt (a user
+  cancellation, as for the wizard prompts of Features 006 and 009) and 70 for an impossible or unattended confirmation (FR-023,
+  FR-015), which is what ADR 0013 row 70 and command-surface.md already say: no ADR 0013 change and no change of the 70 text of
+  command-surface.md or Feature 008 FR-035 is needed for the confirmation. This change edits neither ADR 0013 nor `exit-codes.json`.
   `docs/adr/0014-whr-command-structure.md` (T017 amendment, group `sandbox`) and `contracts/cli/commands.json`
   (T016): register the verb with its flag list (`--confirm`, `--container-endpoint`, FR-007). Feature 008 tasks.md scopes T016 to the seven existing verbs, so T016 and T017 must be
   extended to cover `shell`, or a new task added, before the freeze test of SC-011 can name it. These are owner-gated.

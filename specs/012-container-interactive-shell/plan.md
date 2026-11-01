@@ -22,7 +22,7 @@ S12-C1 to S12-C8 and the real-host gate SC-010 pass. Until then the provider kee
 client as a child process (Feature 010 OQ-1). No new module dependency and no Docker SDK. Whether the end-of-exec query needs the
 engine API is open (research R-5); a direct engine API call over the selected Unix socket needs no SDK but is not decided here.
 **Storage**: the instance record of Feature 008. Feature 008 defines no store, location or lock (spec FR-014); Feature 011
-FR-009 (draft) names a local record store with an exclusive lock. See research R-1 and open question 2.
+FR-009 (draft) names a local record store with an exclusive lock. See research R-1 (the location is decided, open question 2; the mechanism is not).
 **Testing**: Go table and property tests; the fake provider and conformance suite of Feature 008 T008; fake Docker client and
 daemon as in Feature 010; `internal/ptytest` for native terminal wiring. No real Docker, container, credential or host mutation
 in any task except the owner gates T002 and T025.
@@ -134,7 +134,7 @@ Full FR/SC/decision mapping is in [tasks.md](tasks.md#coverage). Test names ther
 | **Detach key.** The runtime must be able to disable its detach sequence (FR-008); if not, no `pty`/`enforced`. | V2 in T002 before T016; T007 asserts the flag in the recorded vector; failing V2 blocks T026. |
 | **Signals.** Client reaction to SIGINT, SIGTERM and SIGHUP after hand-over is unverified (FR-013). The SIGHUP rule is an author proposal. | V4 in T002; T012 tests `whr`'s own rules with a fake child; SC-010 covers the live part. Exit 72 and `interrupted` as the spec states; no claim that the in-container shell ended. |
 | **Terminal restore.** Feature 010 does not require `whr` to restore terminal modes, because it never puts the terminal in raw mode itself and the client owns the tty. If the client is killed while holding raw mode, the terminal can stay raw. | Decided 2026-11-01 (open question 5, a deviation from the earlier plan of adding nothing): a restore mechanism is built (FR-025, T028, T029). A killed client cannot restore itself, so the design needs an owner decision (T028); no mechanism is chosen here. Until built nothing is claimed, and SC-010 observes the terminal state after a killed client and records it. |
-| **Atomic start** (D8c) has no mechanism in Feature 008. | research R-1 options; T005 tests the contract (exactly one winner, no return to `ready`) against any mechanism; the choice is open question 2. |
+| **Atomic start** (D8c) has no mechanism in Feature 008. | research R-1 options; T005 tests the contract (exactly one winner, no return to `ready`) against any mechanism; the location is decided (Feature 009 state directory, open question 2), the mechanism is the plan's choice (research R-1). |
 | **End-of-exec and reconciliation queries** are unverified (V5). `docker exec` prints no exec id. | T002 decides; adapter in T017 sits behind a port; FR-003 cannot claim without the end-of-exec query (S12-C7 is in the gate), FR-024 can lag (T014, S12-C9 not a gate). |
 | **Environment route.** Values must not appear in the argument vector or process list (FR-009). Route unverified (V3). | T007 asserts no value in argv with a fake route; SC-010 checks the process list on a real host. |
 | **Unfiltered control sequences** from the instance act on the owner's terminal. Not preventable here. | Stated in help and "Not enforced"; confirmation for `untrusted_job` only (D1, FR-023); nothing is claimed beyond informed consent. |
@@ -185,11 +185,11 @@ This list is the record of the questions and of the owner's answers of 2026-11-0
 open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or lost client) is carried here as item 1.
 1. Spec open question 1: exit 70 for a declined, unanswered or impossible confirmation and exit 72 for a killed or lost client
    stream (FR-015, FR-016, FR-023). T010, T012 and T013 test the spec text as written; a different answer is an ADR 0013 decision.
-   **RESOLVED 2026-11-01**: (a) DEVIATION: a declined, unanswered or impossible confirmation exits 72, not 70, like Feature 006 and Feature 009; the spec, T010 and T013 follow. (b) Accepted: 72 for a killed or lost client stream.
+   **RESOLVED 2026-11-01**: (a) SPLIT, a deviation for the first two cases: a declined confirmation or an unanswered prompt (end of input) exits 72, not 70; an impossible or unattended confirmation stays 70 (ADR 0013 row 70), so no ADR change is needed; the spec and T010 follow. (b) Accepted: 72 for a killed or lost client stream.
 2. Mechanism and home of the instance record store for the atomic `ready` to `running` update (D8c) and the owner process id and
    start time (FR-024). Feature 008 defines none; Feature 011 FR-009 (draft) has a locked local record store. Proposal in research
    R-1: use the Feature 011 store if it lands first, otherwise a minimal store with a conditional update in 008/T003.
-   **RESOLVED 2026-11-01**: the store is the one of Feature 011 OQ-1, below the Feature 009 state directory (`~/.local/state/whr/`, one lock file). The update mechanism stays the plan's choice (research R-1).
+   **RESOLVED 2026-11-01**: the location is the one decided for Feature 011 OQ-1, the Feature 009 state directory (`~/.local/state/whr/`, one lock file). Whether the Feature 011 store is reused (R-1 option a) or a minimal store is built is not decided; the update mechanism stays the plan's choice (research R-1).
 3. Landing order and ownership: Feature 011 is a draft and amendment A1 is not applied to Feature 008, whose T001 to T003 are merged (PR #303) and T004 to T017 are open; the 009 selection function (tasks merged in PR #299) is unbuilt too. This feature's tasks depend on all three. Confirm that T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to Feature 008 contracts only if 011 has not landed them first (FR-004).
    **RESOLVED 2026-11-01**: accepted. T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contracts only if Feature 011 has not landed them first.
 4. Which real hosts must SC-010 cover (Linux Docker Engine, macOS with OrbStack, both)? The spec says "a real Docker host" only.
