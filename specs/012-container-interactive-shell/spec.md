@@ -13,7 +13,7 @@ or PR link (WORKFLOW.md).
 FR-028 to FR-030, FR-034, FR-035, [refusal codes](../008-workspace-sandbox/contracts/refusal-codes.json),
 [runtime provider contract](../008-workspace-sandbox/contracts/runtime-provider.md),
 [command surface](../008-workspace-sandbox/contracts/command-surface.md)),
-[Feature 009](../009-host-setup-wizard/spec.md) (endpoint selection FR-029, FR-030, FR-032; `--confirm <id>` pattern; D9, FR-005, FR-007),
+[Feature 009](../009-host-setup-wizard/spec.md) (endpoint selection FR-029, FR-030, FR-032 and the `--confirm <id>` pattern, cited by D9, FR-005, FR-007),
 [Feature 011](../011-vm-provider/spec.md) (capability field `interactive_shell`, FR-003, FR-004, FR-016, refusal code
 `refused.interactive_unavailable`; a VM backend is expected to use the same `whr sandbox shell` command under that rule,
 and a backend without an enforced `pty` is refused with that code; this is owner decision 14 (with 9, "one shared set of
@@ -55,9 +55,10 @@ This feature defines that behavior for the container provider:
 
 ### Boundaries
 
-- Spec only. No runtime code exists: `apps/whr/internal/runtime/`, `Admit`, the capability types and the conformance suite
-  are not built (Feature 008 T001 and T002 are open, tasks.md), the `sandbox` command group is not registered (T016, T017
-  are open) and Feature 011 is itself a draft. This feature writes no implementation code and registers no command.
+- Spec only. No code of this feature exists. Of the shared pieces, the capability types and `Admit` (`apps/whr/internal/runtime/`)
+  and the sandbox model exist (Feature 008 T001 to T003, merged in PR #303); the Plan, the conformance suite and Feature 008
+  T004 to T017 are open (tasks.md), the `sandbox` command group is not registered (T016, T017 are open) and Feature 011 is
+  itself a draft. This feature writes no implementation code and registers no command.
 - Out of scope: a VM provider (Feature 011 sets its own `interactive_shell` value and conformance; the owner's 2026-10-31
   direction, recorded as decisions 9 and 14 in the merged PR #290, is that `whr sandbox shell <id>` is one command
   with the same behavior for container and VM backends, a backend without an enforced `pty` being refused under
@@ -75,8 +76,8 @@ This feature defines that behavior for the container provider:
   the separate feature. Its approval does not change what `main` says today; the change takes effect only through the
   tasks of a later plan (see "Changes to existing documents").
 - **2026-10-31 (decisions 9 and 14 of PR #290, merged)**: one shared set of core commands for all backends, and one
-  shell command that refuses with `refused.interactive_unavailable` where `pty` is not enforced. Feature 012 is referenced
-  there as a draft. Nothing from #290 is relied on as merged.
+  shell command that refuses with `refused.interactive_unavailable` where `pty` is not enforced. Feature 012 was referenced
+  there as a draft; both decisions are now on `main`.
 - **2026-10-31 (decisions D1 to D8 for this feature)**, as the owner gave them to the author through the orchestrating
   session; a tracker or PR link is added when the text is approved at an exact head:
   - **D1**: a shell in an `untrusted_job` instance is allowed only after explicit confirmation with a warning that
