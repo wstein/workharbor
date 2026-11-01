@@ -8,6 +8,7 @@
 ## Development
 
 - [Harness](development/harness.md), [Symphony](development/symphony.md)
+- [gh-stack setup step](development/whr-setup-gh-stack.md)
 - [Releasing whr](releasing.md)
 
 ## Planning and evidence
