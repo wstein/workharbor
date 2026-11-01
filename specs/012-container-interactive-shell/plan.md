@@ -181,11 +181,11 @@ query; behavior of the 5-second budget of FR-016 when the daemon stalls; termina
 
 ## Open questions for the owner
 
-This list is the record of the questions and of the owner's answers of 2026-11-01 (issue #317, comment 6559753902); PR #297 is merged, its description numbered some items differently and is no longer the reference. DEVIATION marks an answer that differs from the plan's recommendation (items 1a and 5). These are plan questions; the spec's own
+This list is the record of the questions and of the owner's answers of 2026-11-01 (issue #317, comment 6559753902 and its addendum 6560732494, which supersedes only the "impossible -> 72" half of item 1a); PR #297 is merged, its description numbered some items differently and is no longer the reference. DEVIATION marks an answer that differs from the plan's recommendation (items 1a and 5). These are plan questions; the spec's own
 open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or lost client) is carried here as item 1.
 1. Spec open question 1: exit 70 for a declined, unanswered or impossible confirmation and exit 72 for a killed or lost client
    stream (FR-015, FR-016, FR-023). T010, T012 and T013 test the spec text as written; a different answer is an ADR 0013 decision.
-   **RESOLVED 2026-11-01**: (a) SPLIT, a deviation for the first two cases: a declined confirmation or an unanswered prompt (end of input) exits 72, not 70; an impossible or unattended confirmation stays 70 (ADR 0013 row 70), so no ADR change is needed; the spec and T010 follow. (b) Accepted: 72 for a killed or lost client stream.
+   **RESOLVED 2026-11-01**: (a) SPLIT, a deviation for the first two cases: a declined confirmation or an unanswered prompt (end of input) exits 72, not 70; an impossible confirmation (stderr not a terminal, no `--confirm`) stays 70 (ADR 0013 row 70), so no ADR change is needed; the spec and T010 follow (the addendum comment 6560732494 supersedes the "impossible -> 72" half of the first answer). (b) Accepted: 72 for a killed or lost client stream.
 2. Mechanism and home of the instance record store for the atomic `ready` to `running` update (D8c) and the owner process id and
    start time (FR-024). Feature 008 defines none; Feature 011 FR-009 (draft) has a locked local record store. Proposal in research
    R-1: use the Feature 011 store if it lands first, otherwise a minimal store with a conditional update in 008/T003.

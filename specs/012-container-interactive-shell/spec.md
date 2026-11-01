@@ -106,9 +106,9 @@ This feature defines that behavior for the container provider:
   (FR-007). This resolves the conflict between the earlier text of FR-007 (global options, `--confirm` and `--yes` only) and
   Feature 009 FR-030; Feature 009 is unchanged. The tracker or PR link is added with the other decisions when the text is
   approved at an exact head.
-- **2026-11-01 (owner answers to the plan questions, issue #317)**: (1a) SPLIT: a declined confirmation or an unanswered prompt (end of input)
-  exits 72, not 70; an impossible or unattended confirmation (standard error not a terminal and no `--confirm`, unattended or
-  answer-file mode) stays 70 as ADR 0013 row 70 says, so no ADR change is needed (FR-015, FR-023); (1b) a killed or lost client stream exits 72 (FR-015, FR-016); (2) the location of the instance record store is
+- **2026-11-01 (owner answers to the plan questions, issue #317, comment 6559753902 and its addendum 6560732494, which supersedes only the "impossible -> 72" half of item 1a)**: (1a) SPLIT: a declined confirmation or an unanswered prompt (end of input)
+  exits 72, not 70; an impossible confirmation (standard error not a terminal and no `--confirm`) stays 70 as ADR 0013 row 70
+  says, so no ADR change is needed (FR-015, FR-023); (1b) a killed or lost client stream exits 72 (FR-015, FR-016); (2) the location of the instance record store is
   the one decided for Feature 011 (its OQ-1): the Feature 009 state directory below `~/.local/state/whr/` with one lock file; the
   mechanism stays the plan's choice (research R-1); (3) task T022
   may add `interactive_shell` and `refused.interactive_unavailable` to the Feature 008 contracts only if Feature 011 has not landed
@@ -393,19 +393,21 @@ against the request; each is refused with the stable code and zero provider call
   - 72 where the ADR 0013 definition ("user interrupt, or transport lost during an interactive command") holds:
     SIGINT, SIGTERM or SIGHUP before or after the commit point, daemon unreachable after the client ends, and a client stream
     that ended while the remote side did not exit (a killed or lost client). The owner confirmed on 2026-11-01 that reading
-    that last case as a transport loss is right; it needs no new code. Also 72, by owner decision of 2026-11-01, for a
-    confirmation prompt (FR-023) that is declined or left unanswered (end of input), as Feature 006 gives 72 for a declined
-    wizard prompt (a cancellation) and Feature 009 FR-004 for end of input at its wizard question;
+    that last case as a transport loss is right; it needs no new code. A confirmation prompt (FR-023) that is declined or left
+    unanswered (end of input) is also read as a cancellation, which command-surface.md lines 41 and 42 list under 72 ("interrupt or
+    cancellation") and which Feature 006 (a declined wizard prompt) and Feature 009 FR-004 (end of input at its wizard question)
+    give 72; the owner chose this reading on 2026-11-01 rather than the "not given" of ADR 0013 row 70;
   - 70 for a confirmation that is impossible: no prompt can be shown because standard error is not a terminal and no `--confirm`
-    is given, or the run is unattended or in answer-file mode (ADR 0013 row 70: a required human decision refused in unattended
-    or answer-file mode, or not given; command-surface.md already lists "unattended confirmation missing" under 70). The split of
-    the three confirmation cases (owner decision of 2026-11-01):
+    is given (ADR 0013 row 70: a required human decision refused in unattended or answer-file mode, or not given; command-surface.md
+    lists "unattended confirmation missing" under 70; this command has no unattended or answer-file mode of its own, and a run
+    without a terminal on standard input or output is 64, FR-007). The split of the confirmation cases (owner decision of
+    2026-11-01):
 
     | Confirmation case (FR-023) | Exit |
     | --- | --- |
     | prompt shown and declined (any answer other than the instance id) | 72 |
     | prompt shown and left unanswered (end of input) | 72 |
-    | no prompt possible (standard error not a terminal, no `--confirm`), unattended or answer-file mode | 70 |
+    | no prompt possible (standard error not a terminal, no `--confirm`) | 70 |
     | `--confirm` value that does not equal the instance id | 64 |
 
   - 74 for an unclassified failure, including a client that cannot be launched (`start_failed`, FR-014).
@@ -505,11 +507,13 @@ against the request; each is refused with the stable code and zero provider call
   `--confirm <id>` is given and standard error is not a terminal, no prompt is shown, nothing is started and the command
   exits 70 with a `whr:` line naming `--confirm`. A run without a terminal on standard input or output never reaches this
   step (exit 64 at step 1). Exit codes (owner decision of 2026-11-01, Open question 1a, a split; the table is in FR-015): a
-  prompt that is declined (any answer other than the instance id) or left unanswered (end of input) is 72, like the declined
-  interactive wizard prompt of Feature 006 (a cancellation, 72) and the end of input at the wizard question of Feature 009 FR-004
-  (72); the missing confirmation just described is 70 (needs-human; ADR 0013 "required human decision refused in unattended or
-  answer-file mode, or not given"; Feature 008 command-surface.md says "70 unattended confirmation missing"; Feature 006 treats
-  a missing normal confirmation as 70). A `--confirm` value that does not equal the instance id is 64 (usage). The exact
+  prompt that is declined (any answer other than the instance id) or left unanswered (end of input) is 72 (a
+  cancellation: command-surface.md "72 interrupt or cancellation"; Feature 006 gives 72 for a declined wizard prompt and Feature 009
+  FR-004 for end of input at its wizard question); the missing confirmation just described is 70 (needs-human; ADR 0013 "required
+  human decision refused in unattended or answer-file mode, or not given"; Feature 008 command-surface.md says "70 unattended
+  confirmation missing"). The precedent is not uniform: Feature 006 and Feature 008 put a missing confirmation at 70, and
+  Feature 006 also a declined normal confirmation (throwaway staging) at 70; this feature deliberately sets a declined or
+  unanswered prompt to 72 by the owner decision, and keeps a missing confirmation at 70. A `--confirm` value that does not equal the instance id is 64 (usage). The exact
   form is an author proposal under D1: a prompt that requires typing the instance id, and a flag `--confirm <id>` that, with a
   value equal to the instance id, skips the prompt (the per-item `--confirm <id>` pattern of Feature 009; Feature 011 FR-033
   in the merged PR #290 uses it too). The confirmation is not part of `Admit` (it is not a capability) and adds no
@@ -627,16 +631,17 @@ This feature enforces nothing about what happens inside the shell. In particular
 
 ## Open questions for the owner
 
-1. **Exit codes of two author-proposed readings.** RESOLVED 2026-11-01 (owner answers, issue #317). (a) SPLIT, a deviation from the
-   author proposal for the first two cases: a declined confirmation or an unanswered prompt (end of input) exits 72, not 70, like
-   Feature 006 (a declined wizard prompt is a cancellation, 72) and Feature 009 FR-004 (end of input, 72); an impossible or
-   unattended confirmation (no prompt possible) stays 70, as ADR 0013 row 70, command-surface.md and Feature 008 FR-035 say
+1. **Exit codes of two author-proposed readings.** RESOLVED 2026-11-01 (owner answers, issue #317, comment 6559753902 and its addendum 6560732494, which supersedes only the "impossible -> 72" half of item 1a). (a) SPLIT, a deviation from the
+   author proposal for the first two cases: a declined confirmation or an unanswered prompt (end of input) exits 72, not 70
+   (a cancellation: command-surface.md lines 41 and 42, the wizard prompt of Feature 006, end of input at the Feature 009 FR-004
+   question); an impossible confirmation (no prompt possible: standard error not a terminal and no `--confirm`) stays 70, as ADR 0013 row 70, command-surface.md and Feature 008 FR-035 say
    (FR-015, FR-023). (b) Accepted: exit 72 for a killed or lost client stream (FR-015, FR-016). Neither needs a new code or an
    ADR 0013 change.
 
 The open questions 1 to 7 of earlier drafts were decided by the owner on 2026-10-31 (D1 to D7), and four author proposals
 became D8. What is otherwise left is for the plan, not for a decision: the mechanism of the atomic start transition (D8c),
-the exact confirmation form (FR-023), and the verification items below.
+the exact confirmation form (FR-023), and the verification items below. The design of the terminal restore (FR-025) needs an owner
+decision (task T028).
 
 ## Assumptions
 
@@ -695,9 +700,9 @@ the exact confirmation form (FR-023), and the verification items below.
   passed-through status is the client's own signal status, not the shell's. The ambiguity note is extended to `sandbox shell`
   (text only; the ADR and `exit-codes.json` name only `ssh` today, and `shell --local` has the same gap). The owner confirmed
   (2026-11-01) the author reading that a client stream ending while the remote side did not exit (a killed or lost client) is a
-  transport loss (72). The owner also decided (2026-11-01) 72 for a declined confirmation or an unanswered prompt (a user
-  cancellation, as for the wizard prompts of Features 006 and 009) and 70 for an impossible or unattended confirmation (FR-023,
-  FR-015), which is what ADR 0013 row 70 and command-surface.md already say: no ADR 0013 change and no change of the 70 text of
+  transport loss (72). The owner also decided (2026-11-01) 72 for a declined confirmation or an unanswered prompt (a
+  cancellation, as for the Feature 006 wizard prompt and the end of input at the Feature 009 FR-004 question) and 70 for an
+  impossible confirmation (FR-023, FR-015), which is what ADR 0013 row 70 and command-surface.md already say: no ADR 0013 change and no change of the 70 text of
   command-surface.md or Feature 008 FR-035 is needed for the confirmation. This change edits neither ADR 0013 nor `exit-codes.json`.
   `docs/adr/0014-whr-command-structure.md` (T017 amendment, group `sandbox`) and `contracts/cli/commands.json`
   (T016): register the verb with its flag list (`--confirm`, `--container-endpoint`, FR-007). Feature 008 tasks.md scopes T016 to the seven existing verbs, so T016 and T017 must be
