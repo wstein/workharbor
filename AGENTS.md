@@ -36,7 +36,7 @@ Follow the tracker-comment guidance in [WORKFLOW.md](WORKFLOW.md).
 
 ## Light and heavy checks
 
-Source: `.github/workflows/check.yml` (job `repository-checks`), read on 2026-11-01.
+Source: `.github/workflows/check.yml` (workflow `repository-checks`), read on 2026-11-01.
 
 - Light, on every pull request: job `changes` (path classification, 5 min), job `docs` for docs-only changes
   (`scripts/check_repo.py`, `git diff --check`, 10 min), and the aggregate gate `check`. Locally:
