@@ -652,3 +652,28 @@ func TestAdmitUnknownMountSourceFailsClosed(t *testing.T) {
 		}
 	}
 }
+
+func TestAdmitRefusesHostGlobalGitConfigRequirementForJobs(t *testing.T) {
+	want := codes{runtime.RefusedHostGitConfigForAgent}
+	for _, p := range []runtime.TrustProfile{runtime.ProfileCooperativeJob, runtime.ProfileUntrustedJob} {
+		r := req(p, need(runtime.FieldGitConfigProfile, "host_global_dir_rw"))
+		if got := runtime.Admit(r, fullCaps(p)); got.Allowed || !slices.Equal(got.Refusals, want) {
+			t.Errorf("%s: host_global_dir_rw requirement: %+v", p, got)
+		}
+		// Policy comes first: a report that does not even claim it gives the same code.
+		caps := fullCaps(p)
+		caps.GitConfigProfile = capability(runtime.StatusUnknown, "t", "host_global_dir_rw", "agent_policy_ro")
+		got := runtime.Admit(r, caps)
+		if got.Allowed || !slices.Contains(got.Refusals, runtime.RefusedHostGitConfigForAgent) {
+			t.Errorf("%s: unknown report: %+v", p, got)
+		}
+		// The agent profile itself is the admitted requirement.
+		if got := runtime.Admit(req(p, need(runtime.FieldGitConfigProfile, "agent_policy_ro")), fullCaps(p)); !got.Allowed {
+			t.Errorf("%s: agent_policy_ro must be admitted: %+v", p, got)
+		}
+	}
+	dev := req(runtime.ProfileDeveloper, need(runtime.FieldGitConfigProfile, "host_global_dir_rw"))
+	if got := runtime.Admit(dev, fullCaps(runtime.ProfileDeveloper)); !got.Allowed {
+		t.Errorf("developer control: %+v", got)
+	}
+}

@@ -198,6 +198,12 @@ func admitRequirement(profile TrustProfile, r Requirement, caps Capabilities, fo
 		found[RefusedProfileUnsupported] = true
 		return
 	}
+	if profile != ProfileDeveloper && r.Field == FieldGitConfigProfile && r.Value == GitConfigHostGlobalDirRW {
+		// The host global git configuration is developer-only (FR-024), as
+		// for the mount path.
+		found[RefusedHostGitConfigForAgent] = true
+		return
+	}
 	if profile == ProfileUntrustedJob && untrustedSharedRequirement(r) {
 		found[RefusedSharedGitMetadataUntrusted] = true
 		return
