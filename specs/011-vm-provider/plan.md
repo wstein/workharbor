@@ -139,7 +139,7 @@ operation named.
 
 | Risk | Effect | Mitigation |
 | --- | --- | --- |
-| Feature 008 is unbuilt | all library work is blocked; A1 regression rows need the unamended `Admit` first | order by dependency; T013 captures the container rows before A1 changes `Admit` (spec Assumptions) |
+| Feature 008 is only partly built (T001 to T003 merged in PR #303, T004 to T017 open) | library work that needs the open tasks is blocked; A1 regression rows need the unamended `Admit` first | order by dependency; T013 captures the container rows before A1 changes `Admit` (spec Assumptions) |
 | Unknown macOS Python results | enabling the macOS job could turn the aggregate red on first merge | measure on a draft first (T007), classify (FR-028), then enable (T008); OQ-4 |
 | Existing no-skip rules | `check_ci` rejects skips and the macOS jobs fail on any `SKIP`; FR-028 allows a recorded platform skip | reconcile in T005 and T008 with an exemption for a complete record only; OQ-3 |
 | 009 gaps | endpoint selection, Colima and Docker catalog entries have 009 tasks (merged PR 299) but no code; catalog count is 16 or 18 | tests assert the exact id set, not a literal count; OQ-6 |

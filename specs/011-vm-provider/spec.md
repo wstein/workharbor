@@ -821,8 +821,8 @@ Author proposals made while recording these decisions (the owner may change them
 
 ## Assumptions
 
-- Admit, TestAdmitTable, the conformance suite and `apps/whr/internal/runtime/` do not exist yet (Feature 008 tasks
-  T001 and T002 are open), so the before-and-after regression check of FR-003 depends on Feature 008 landing first.
+- Admit, TestAdmitTable, the conformance suite and `apps/whr/internal/runtime/` exist only in part (Feature 008 tasks
+  T001 to T003 are merged in PR #303; the conformance suite and T004 to T017 are open), so the before-and-after regression check of FR-003 depends on Feature 008 landing first.
 - The Feature 008 trust profiles and plan model are reused. A test run uses a job profile with a private copy and a
   scratch home. This feature does not redefine them.
 - License terms of host software are the user's responsibility and are not checked by `whr` (decision 15).

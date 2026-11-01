@@ -188,7 +188,7 @@ open question 1 (exit 70 versus 72 for the confirmation, and 72 for a killed or 
 2. Mechanism and home of the instance record store for the atomic `ready` to `running` update (D8c) and the owner process id and
    start time (FR-024). Feature 008 defines none; Feature 011 FR-009 (draft) has a locked local record store. Proposal in research
    R-1: use the Feature 011 store if it lands first, otherwise a minimal store with a conditional update in 008/T003.
-3. Landing order and ownership: Feature 011 is a draft and amendment A1 is not applied to Feature 008, whose T001 to T017 are unbuilt; the 009 selection function (tasks merged in PR #299) is unbuilt too. This feature's tasks depend on all three. Confirm that T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to Feature 008 contracts only if 011 has not landed them first (FR-004).
+3. Landing order and ownership: Feature 011 is a draft and amendment A1 is not applied to Feature 008, whose T001 to T003 are merged (PR #303) and T004 to T017 are open; the 009 selection function (tasks merged in PR #299) is unbuilt too. This feature's tasks depend on all three. Confirm that T022 (gated) may add `interactive_shell` and `refused.interactive_unavailable` to Feature 008 contracts only if 011 has not landed them first (FR-004).
 4. Which real hosts must SC-010 cover (Linux Docker Engine, macOS with OrbStack, both)? The spec says "a real Docker host" only.
 5. Terminal restore: should `whr` verify or restore the terminal mode after a killed client? The spec requires nothing; the plan
    adds nothing; this lists the risk only.
