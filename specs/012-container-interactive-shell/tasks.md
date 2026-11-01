@@ -287,4 +287,4 @@ Every requirement, success criterion and decision maps to at least one task, or 
 | D7 | T014 | |
 | D8 (a), (b), (c), (d) | T013, T012, T005, T013 | |
 | D9 | T008, T009, T023 | `--container-endpoint` on `sandbox shell` |
-| S12-C1 to S12-C9 | C1 T004; C2, C3 T007, T016; C4 T008; C5 T005, T008; C6 T008, T009, T013; C7 T012, T013, T017; C8 T010; C9 T014; all in T015 | |
+| S12-C1 to S12-C9 | C1 T004; C2, C3 T007, T016; C4 T008; C5 T005, T008; C6 T008, T009, T013, T024; C7 T012, T013, T017; C8 T010; C9 T014; all in T015 | |
