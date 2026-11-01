@@ -633,8 +633,8 @@ the exact confirmation form (FR-023), and the verification items below.
 ## Changes to existing documents (on approval; each lands through the plan and tasks, none is made by this change)
 
 - `specs/011-vm-provider/spec.md`: FR-003 (container provider report `interactive_shell` from `none` to `pty`/`enforced`
-  once this feature is implemented), the "Author proposals" entry on `interactive_shell` or, since PR #290 has merged, "Owner decisions" entry 1 (on `main` the line is "The container provider reports `interactive_shell=none`" under
-  "Author proposals"); the Feature 011 FR-016 text stays unchanged. Feature 011 A1 (capability field
+  once this feature is implemented), and the "Owner decisions" entry 1 of that spec (the line "the container provider reports `interactive_shell=none`";
+  PR #290 removed the earlier "Author proposals" entry); the Feature 011 FR-016 text stays unchanged. Feature 011 A1 (capability field
   `interactive_shell`) is a prerequisite of this feature; if A1 is not approved first, this feature has to add that field
   itself.
 - `specs/008-workspace-sandbox/spec.md`: FR-028 (verb list gains `shell`, proposed), FR-029 (a note that `shell` starts no
