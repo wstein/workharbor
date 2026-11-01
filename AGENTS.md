@@ -41,7 +41,8 @@ Source: `.github/workflows/check.yml` (workflow `repository-checks`), read on 20
 - Light, on every pull request: job `changes` (path classification, 5 min), job `docs` for docs-only changes
   (`scripts/check_repo.py`, `git diff --check`, 10 min), and the aggregate gate `check`. Locally:
   `make check-apps` (focused application checks), `make check-raw`, `python3 -m unittest discover -s tests`.
-- Heavy, on every pull request that is not docs-only: job `bootstrap` (`make check`, about 17 min, limit 35 min) and the macOS
+- Heavy, on every pull request that is not docs-only (changes to README, AGENTS, WORKFLOW and `.specify` count as not
+  docs-only, see `scripts/ci_changes.py`, so a change to this file runs the heavy jobs): job `bootstrap` (`make check`, about 17 min, limit 35 min) and the macOS
   jobs `macos-pty`, `macos-hostsetup`, `macos-dotfiles` (10 min limit each). `make check` stays the required check
   before handoff.
 - Deviation from the global rule (heavy checks only at the stack tip via label `ci-full`): today the workflows do not
