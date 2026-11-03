@@ -1,5 +1,7 @@
 # Feature Specification: Locally verifiable single-task entry
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 **Feature identifier**: `003-single-task-entry`
 
 **Feature Branch**: Not created; specification only.

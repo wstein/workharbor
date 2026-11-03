@@ -1,5 +1,7 @@
 # Feature 002: Symphony documentation smoke task
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 Status: proposed; awaiting human spec and plan review. Not implemented or dispatched.
 This feature concerns development tooling only. Feature 001 remains unchanged.
 

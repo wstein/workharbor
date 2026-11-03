@@ -1,5 +1,7 @@
 # Feature Specification: VM provider and cross-platform test evidence
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 **Feature identifier**: `011-vm-provider`
 **Feature Branch**: `docs/spec011-vm-provider`
 **Created**: 2026-10-31

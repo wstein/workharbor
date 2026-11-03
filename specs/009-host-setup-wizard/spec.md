@@ -1,5 +1,7 @@
 # Feature Specification: Host setup wizard and doctor repair
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 **Feature identifier**: `009-host-setup-wizard`
 **Feature Branch**: `docs/spec009-host-setup-wizard`
 **Created**: 2026-10-20
