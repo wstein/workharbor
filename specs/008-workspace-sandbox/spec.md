@@ -81,6 +81,9 @@ workspace, and no statement of what a container backend does and does not protec
   selected provider does not declare is refused; there is no fallback and no provider-specific behavior hidden from the
   contract. Providers beyond the container provider are separate provider specifications.
 - **2026-10-20 (PR target)**: pull requests for this feature target `main`.
+- **2026-11-03 (trust of repository configuration, OD-6, issue #320)**: configuration from a checked-out repository is
+  untrusted unless the repository is on the owner's trusted list that `whr` keeps outside the repository. Own repositories are
+  trusted; all others are not (FR-037).
 - **2026-11-03 (tool roots, OD-7, issue #320)**: tool mounts are generic tool roots supplied by tool providers; only the
   `developer` profile may write a tool root, and only one its provider declares writable (FR-016). The provider decision
   (mise as tool layer) stays open until spike #319 and its ADR; Feature 007 is unchanged until then.
@@ -316,6 +319,19 @@ outside the instance's own labelled set is touched.
   specification; until then a request requiring more than `none` is refused (`refused.egress_enforcement_unavailable`,
   FR-013). No text, profile name, label, result record or message of this feature may describe a sandbox as offline,
   isolated from the network or exfiltration-safe; "offline" appears only for the tests (FR-032).
+- **FR-037**: Configuration read from the checked-out repository that selects, installs or runs code (for example `mise.toml`:
+  tools, tasks, hooks and environment templates; also `.git/config`, attributes and hooks) is untrusted input. `whr` MUST
+  NOT execute it, apply it, mark it trusted on the user's behalf or base an admission, mount or environment decision on it,
+  unless the repository is on the **trusted list**: the owner-maintained list of repositories that `whr` keeps outside the
+  repository (owner decision OD-6: the owner's own repositories are trusted, all others are not). The trust anchor MUST NOT
+  be in any file the repository controls or any location a sandbox can write: not the repository tree, not `.git/config`
+  (writable in `developer` and `cooperative_job`), not `workharbor.json`, not the workspace home, and not the host git
+  configuration directory that `developer` mounts read/write (FR-019); the list is mounted into no instance of any profile.
+  A repository's identity for the list MUST NOT rest only on content the repository controls (a remote URL in
+  `.git/config`, a name in a file of the tree). A copy made for `untrusted_job` is instance-controlled and its
+  configuration stays untrusted even when its source repository is trusted. Absent list, unreadable list or unknown
+  repository means untrusted. The list's location, identity binding and the way the owner edits it are decided in T020; no command is
+  registered for it in Stage 1 (FR-028).
 - **FR-035**: Errors map to ADR 0013 codes without new codes: usage 64, not found 65, capability refusal, foreign
   object and wrong state 68, needs-human 70, timeout 71, interrupt 72, incomplete cleanup 73, internal 74. The stable
   refusal code travels in a separate field; the mapping is one pure function with a freeze test.
@@ -371,6 +387,9 @@ OwnershipLabels, ResultBundle, CopyPolicy, GitProfileReport, HostOnlyFinding ([d
 - **SC-013**: Every profile of the standard container provider reports `egress_enforcement=none`, the plans of all profiles
   carry no network restriction, a requirement above `none` is refused with zero provider calls, and no refusal, result or
   creation message calls an instance offline (FR-036, FR-013).
+- **SC-014**: A repository absent from the trusted list is untrusted, and no canary the repository or a sandbox can write
+  (`.git/config` key, tree file, remote URL, workspace home or host git configuration directory entry) makes it trusted; the
+  list is mounted into no profile; a job copy of a trusted repository stays untrusted (FR-037).
 - **SC-012**: Operator-supplied git-control variables are scrubbed for job profiles and refused for `developer` (FR-023).
 
 ## Assumptions
