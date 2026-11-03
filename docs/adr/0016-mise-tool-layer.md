@@ -87,6 +87,8 @@ Proposal (needs a spec; nothing implemented):
   shared tool and was rejected; the lock hash is recorded as a label or manifest of what was installed, not in the name.
   The name never contains a project, workspace or job id, so no container, workspace or job lifetime owns it.
 - **Population** only by a whr step outside the sandbox (`install --locked` into the store mounted `rw` by that step alone).
+  Which tools a profile uses is set by its tool configuration, not by the store content: fish is listed only in the `developer` configuration, so the job
+  profiles do not put it on `PATH`, although a shared store can hold its install.
 - **Profiles** (owner decision 2026-11-03): `cooperative_job` and `untrusted_job` mount the store `ro` (verified). `developer`
   mounts the same store `rw`. Consequence: any `developer` session can replace binaries that later jobs run from the `ro` mount (FR-024
   accepts this at the owner level); a job's tools are only as trustworthy as the last `developer` session on that store. The population step
@@ -130,10 +132,10 @@ Spec 009 catalogue (13 entries, `catalogue.json`):
 | --- | --- | --- |
 | orbstack | host-only | Homebrew cask, GUI/VM runtime |
 | git | host-only | not in the mise registry; base image supplies git in containers |
-| fish | mise-managed (`github:fish-shell/fish-shell`, owner decision 2026-11-03) | not in the registry; `mise install github:fish-shell/fish-shell@4.9.3` and `fish --version` worked on macOS arm64 (host) and on linux-arm64 (container, `fish-4.9.3-linux-aarch64.tar.xz`); Intel Mac and linux-amd64 UNVERIFIED; dotfile template stays with the wizard |
+| fish | mise-managed, `developer` tool configuration only (`github:fish-shell/fish-shell`; owner decisions 2026-11-03) | not in the registry; `mise install github:fish-shell/fish-shell@4.9.3` and `fish --version` worked on macOS arm64 (host) and on linux-arm64 (container, `fish-4.9.3-linux-aarch64.tar.xz`); Intel Mac and linux-amd64 UNVERIFIED; dotfile template stays with the wizard. AI containers (`cooperative_job`, `untrusted_job`) use bash or ash from the base image, not fish; fish is not part of the job-profile tool configuration |
 | gh, jq, starship, ripgrep, fd, fzf, zoxide, bat, jj, herdr | mise-managed | registry `aqua:` backends (`herdr`: aqua and github); gh, jq, rg, fd, bat, fzf, starship, zoxide installed in the lab on linux-arm64 (jq and rg also on macos-arm64); jj, herdr: registry only |
 
-Count: 11 mise-managed (with fish), 2 host-only (orbstack, git). The 4 dotfile templates (fish, fzf, starship, zoxide) are host configuration and stay with Spec 009. Open for the owner: the wizard keeps
+Shells: `developer` gets fish through its tool configuration; the shell of AI containers is bash or ash, base image content. Count: 11 mise-managed (with fish), 2 host-only (orbstack, git). The 4 dotfile templates (fish, fzf, starship, zoxide) are host configuration and stay with Spec 009. Open for the owner: the wizard keeps
 Homebrew for the host, so "no second catalogue" holds only if the host `mise.toml` replaces the 11 mise-managed entries.
 
 BundleDock toolbox catalog (57 entries, `packages.catalog.json`; 56 are `github` release assets, 1 is a source build):
