@@ -130,18 +130,18 @@ Spec 009 catalogue (13 entries, `catalogue.json`):
 | --- | --- | --- |
 | orbstack | host-only | Homebrew cask, GUI/VM runtime |
 | git | host-only | not in the mise registry; base image supplies git in containers |
-| fish | host-only on macOS | not in registry; `github:fish-shell/fish-shell` lists 4.9.3 (Linux asset only checked as listing); dotfiles templates stay with the wizard |
+| fish | mise-managed (`github:fish-shell/fish-shell`, owner decision 2026-11-03) | not in the registry; `mise install github:fish-shell/fish-shell@4.9.3` and `fish --version` worked on macOS arm64 (host) and on linux-arm64 (container, `fish-4.9.3-linux-aarch64.tar.xz`); Intel Mac and linux-amd64 UNVERIFIED; dotfile template stays with the wizard |
 | gh, jq, starship, ripgrep, fd, fzf, zoxide, bat, jj, herdr | mise-managed | registry `aqua:` backends (`herdr`: aqua and github); gh, jq, rg, fd, bat, fzf, starship, zoxide installed in the lab on linux-arm64 (jq and rg also on macos-arm64); jj, herdr: registry only |
 
-The 4 dotfile templates (fish, fzf, starship, zoxide) are host configuration and stay with Spec 009. Open for the owner: the wizard keeps
-Homebrew for the host, so "no second catalogue" holds only if the host `mise.toml` replaces the 10 formula entries.
+Count: 11 mise-managed (with fish), 2 host-only (orbstack, git). The 4 dotfile templates (fish, fzf, starship, zoxide) are host configuration and stay with Spec 009. Open for the owner: the wizard keeps
+Homebrew for the host, so "no second catalogue" holds only if the host `mise.toml` replaces the 11 mise-managed entries.
 
 BundleDock toolbox catalog (57 entries, `packages.catalog.json`; 56 are `github` release assets, 1 is a source build):
 - mise-managed with registry backend (46): actionlint, age, bat, bottom, btop, cosign, direnv, dust, fd, fzf, gh, git-cliff, git-lfs, gitleaks,
   hadolint, herdr, hugo, hyperfine, jj, jq, just, lazygit, lsd, lychee, navi, nu, opentofu, pinact, regctl, rg, ruff, shellcheck, shfmt, sops, starship,
   syft, tmux, trivy, trufflehog, typos, typst, uv, watchexec, xh, yq, zoxide (registry lookup for all; lab install only for the 8 tools of section 6
   plus jq and ripgrep on macOS; the rest UNVERIFIED beyond registry presence).
-- mise-managed through the `github:` backend (listing verified, install UNVERIFIED): fish, gh-stack, jsonschema-cli (listing shows only
+- mise-managed through the `github:` backend (listing verified; install verified only for fish, see section 7; others UNVERIFIED): fish, gh-stack, jsonschema-cli (listing shows only
   language-prefixed tags, likely needs an asset filter), misspell, and the owner's `stw`, `whr`, `smill`, `cscribe`, `scc`.
 - base image content: `mise` itself (bundle carries it; mise is not in its own registry), `sqlite3` (source build; base image or dropped).
 - dropped: none proposed. Optional trims are the owner's call (btop, bottom, navi and similar interactive tools).
