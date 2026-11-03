@@ -15,7 +15,7 @@ for i in 1 2 3; do $P docker run --rm "${MISEBASE[@]}" -v $B/d:/mise/data:ro --t
 echo "B2 mise WARM via shims on PATH (data ro)"
 for i in 1 2 3; do $P docker run --rm "${MISEBASE[@]}" -v $B/d:/mise/data:ro --tmpfs /mise/cache --tmpfs /mise/state -e PATH=/mise/data/shims:/usr/local/bin:/usr/bin:/bin $IMG bash -c "$TOOLS"; done
 echo "B3 mise WARM, PATH precomputed from installs (no mise process at all)"
-PATHS=$(docker run --rm "${MISEBASE[@]}" -v $B/d:/mise/data:ro --tmpfs /mise/cache --tmpfs /mise/state $IMG mise bin-paths | tr '\n' ':'); 
+PATHS=$(docker run --rm "${MISEBASE[@]}" -v $B/d:/mise/data:ro --tmpfs /mise/cache --tmpfs /mise/state $IMG mise bin-paths | tr '\n' ':');
 for i in 1 2 3; do $P docker run --rm -v $B/d:/mise/data:ro -e PATH=${PATHS}/usr/bin:/bin $IMG bash -c "$TOOLS"; done
 echo "C BundleDock COLD (new volume + init-volume from local carrier image; pull not included)"
 for i in 1 2 3; do docker volume rm bd-bench >/dev/null 2>&1; docker volume create bd-bench >/dev/null

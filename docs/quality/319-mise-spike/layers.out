@@ -1,0 +1,20 @@
+$ mise cfg
+~/.config/mise/config.toml                                                            jq, fd
+$T/lab/layers/whr/mise.toml                      jq, ripgrep
+$T/lab/layers/whr/ws/mise.toml                   jq, ba
+$T/lab/layers/whr/ws/repos/proj/mise.toml        jq, fzf
+$T/lab/layers/whr/ws/repos/proj/mise.local.toml  jq, zoxide
+$ mise ls --current --json (tool, requested, source)
+bat 0.25.0 $T/lab/layers/whr/ws/mise.toml
+fd 10.0.0 $T/home/.config/mise/config.toml
+fzf 0.60.0 $T/lab/layers/whr/ws/repos/proj/mise.toml
+jq 1.8.2 $T/lab/layers/whr/ws/repos/proj/mise.local.toml
+ripgrep 14.0.0 $T/lab/layers/whr/mise.toml
+zoxide 0.9.8 $T/lab/layers/whr/ws/repos/proj/mise.local.toml
+$ mise se
+LAYER_ORIGIN  local $T/lab/layers/whr/ws/repos/proj/mise.local.toml
+USER_ONLY     u     ~/.config/mise/config.toml
+WHR_ONLY      w     $T/lab/layers/whr/mise.toml
+WS_ONLY       r     $T/lab/layers/whr/ws/mise.toml
+PROJ_ONLY     p     $T/lab/layers/whr/ws/repos/proj/mise.toml
+LOCAL_ONLY    l     $T/lab/layers/whr/ws/repos/proj/mise.local.toml
