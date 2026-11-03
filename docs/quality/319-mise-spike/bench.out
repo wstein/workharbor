@@ -1,36 +1,36 @@
 E baseline: docker run true
-2.44 0 
-1.83 0 
-1.89 0 
+2.44 0
+1.83 0
+1.89 0
 A mise COLD (empty data+cache+state; install --locked then run 8 tools)
-4.27 0 
-3.76 0 
-3.83 0 
+4.27 0
+3.76 0
+3.83 0
 A2 mise COLD-DOWNLOAD-CACHED (empty data, cache kept)
-2.61 0 
-2.71 0 
-2.71 0 
+2.61 0
+2.71 0
+2.71 0
 B mise WARM (data ro, cache/state tmpfs): mise exec -- 8 tools
-1.58 0 
-1.81 0 
-1.82 0 
+1.58 0
+1.81 0
+1.82 0
 B2 mise WARM via shims on PATH (data ro)
-1.75 0 
-2.02 0 
-1.62 0 
+1.75 0
+2.02 0
+1.62 0
 B3 mise WARM, PATH precomputed from installs (no mise process at all)
-1.79 0 
-1.87 0 
-1.90 0 
+1.79 0
+1.87 0
+1.90 0
 C BundleDock COLD (new volume + init-volume from local carrier image; pull not included)
-38.65 0 
-2.04 0 
-25.72 0 
-1.72 0 
-39.07 0 
-1.78 0 
+38.65 0
+2.04 0
+25.72 0
+1.72 0
+39.07 0
+1.78 0
 D BundleDock WARM (existing volume ro): 8 tools
-2.75 0 
-1.61 0 
-1.63 0 
+2.75 0
+1.61 0
+1.63 0
  81M	$T/bench/d
