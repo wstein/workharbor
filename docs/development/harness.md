@@ -12,6 +12,23 @@ coarse dependency boundaries. Harness regression tests inject broken references,
 unsafe paths and forbidden dependencies to prove rejection. These checks do not
 replace compilation, runtime authorization tests or a security audit.
 
+## Host setup with mise
+[mise](https://mise.jdx.dev/) reads `.tool-versions` as is and provisions the pinned
+Python, Go, Node, Elixir and Erlang versions; the pin file stays the only authority.
+On a host with mise and none of the pinned tools:
+
+```sh
+mise trust            # once per checkout
+mise install          # installs every tool pinned in .tool-versions
+mise exec -- make check
+```
+
+`mise exec` puts the pinned tools first on `PATH`, so the Makefile's default
+`PYTHON ?= python3` resolves to the pinned CPython. Git, Make, Bash, curl and the
+native C build tools (on macOS: Xcode Command Line Tools) are not provided by mise.
+To keep a trial run out of the home directory, set `MISE_DATA_DIR`, `MISE_CACHE_DIR`,
+`MISE_CONFIG_DIR` and `MISE_STATE_DIR` to a scratch location.
+
 ## Feature loop
 Read constitution → specify/clarify → plan → tasks → analyze → implement → converge.
 Use generated Codex skills (`$speckit-*`) from `.agents/skills/`. Bootstrap 001 already
