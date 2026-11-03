@@ -1,7 +1,7 @@
 # Feature 008 work items
 
 Status: proposed with the specification; not approved or started. A task starts only after the spec, plan and this file are
-approved at one exact head (WORKFLOW.md) and its prerequisites have implementation and test evidence. IDs `T001` to `T015`
+approved at one exact head (WORKFLOW.md) and its prerequisites have implementation and test evidence. IDs `T001` to `T020`
 are Feature 008's own; Feature 006 items are written `006/T0nn`. Each task is one pull request of at most about 1,500
 changed lines (split a task into coherent halves when it would exceed that), targeting `main`. Write the named failing tests
 first, show them failing, then implement. All tests are offline; no Docker, image or documentation build, network, credential
@@ -45,6 +45,7 @@ acceptance, dependency, approval or runtime gate.
 - [ ] T016 [US3] Register the `sandbox` group (OD-4, option A) in three PRs, each at most about 1,500 changed lines. OWNER GATE and the named exception to SC-008 and to the T015 empty-diff rule: it starts only after the owner approves the ADR 0014 amendment (T017) and the `error.refusal` schema change at an exact head with a tracker or PR link. No `exec` (OD-1), no short forms. (a) `contracts/cli/output.schema.json` and its validator tests: the additive optional `error.refusal` field (OD-2); failing tests first `TestRefusalFieldOptionalAndAdditive`, `TestExistingOutputFixturesStillValid`. (b) `contracts/cli/commands.json`, `apps/whr/internal/commands/table*.go`: group and verbs registered, listed unavailable until wired; extend `TestCommandTableMatchesContract`, `TestCommandTableAliasRules`, `TestHelpShowsShortFormHint` for the group. (c) `apps/whr/internal/commands/sandbox*.go`: `create`, `ls`, `show`, `keep`, `discard`, `clean`, `export` wired to the library of T003 to T014 with the fake provider; failing tests first `TestSandboxCommandsRefuseWithExitCodes` (64, 65, 68, 70, 72, 73 per `sandbox.ExitFor`), `TestSandboxJSONMatchesSchema`. Traces FR-028, FR-035; SC-008. Prerequisites: T004, T014, T017.
 - [ ] T017 [US3] ADR 0014 amendment PR, docs only, owner-gated: edit `docs/adr/0014-whr-command-structure.md` to add the `sandbox` group (decision section 1 table and group list, the rule 3 and exit-code notes) as proposed text from T010, with `Status` and the approval-binding rules of that ADR (independent review CLEAR for the exact head, then explicit owner approval with a link); it edits no code and no `contracts/cli/` file. Acceptance: `python3 scripts/check_repo.py`, `git diff --check`. Prerequisite: T010.
 - [ ] T019 [US3] Developer-writable tool roots in `internal/runtime/admit.go` and the tool-root provider declaration: a root is `rw` only in `developer` and only when its provider declares it writable; BundleDock roots never. Blocked until the tool-layer decision (spike #319 and its ADR) names a provider with a writable root and the capability value for it; until then T002's refusal of every writable tool root stands. Failing tests first: `TestToolRootWritableOnlyInDeveloper`, `TestToolRootWritableRefusedForJobs`, `TestBundleDockRootNeverWritable`, `TestWritableRootNeedsProviderDeclaration`. Traces FR-016; SC-005. Exit: 68 (`refused.tool_mount_writable`). Prerequisites: T002, T008, owner decision after #319.
+- [ ] T020 [US3] Trusted list in `internal/trust/`: reader port for the owner-maintained list kept outside the repository, identity binding that does not rest on repository-controlled content, `Trusted(repo)` returning false for absent, unreadable or unknown. Decides and records the list's location (outside every mounted path, not the host git configuration directory) and how the owner edits it, without registering a command. Failing tests first: `TestUntrustedByDefault`, `TestTrustAnchorNotInRepoControlledFiles` (canaries: `.git/config` key, tree file, remote URL naming an owned organization, workspace home entry), `TestTrustedListNotMountedInAnyProfile`, `TestTrustedListNotInHostGitConfigDir`, `TestJobCopyAlwaysUntrusted`, `TestUnreadableListIsUntrusted`. Fixtures in `t.TempDir()`. Traces FR-037; SC-014. Exit: findings do not change the exit code; reader failure 74. Prerequisite: T001.
 
 ## Dependencies and execution
 
@@ -79,3 +80,4 @@ Machine-readable dependency table:
 | T016 | T004, T014, T017 |
 | T017 | T010 |
 | T019 | T002, T008, #319 |
+| T020 | T001 |

@@ -55,6 +55,7 @@ tests show for the stated provider.
 | Host global git configuration | mounted rw (owner decision); anything running there can write `credential.helper=!cmd`, `core.fsmonitor`, `core.sshCommand`, `core.hooksPath` or `alias.*`, which runs on the Mac host as the owner at the next git use; whr cannot detect an agent run here | not mounted | not mounted |
 | Workspace container of ADR 0009 | not a sandbox; no host-config mount (FR-024) | | |
 | Host credentials (keychain, SSH agent, tokens) | not provided by whr; the checkout's local config and the host global config apply | not provided by whr; credentials, `insteadOf` rules and hooks in the shared primary `.git/config` are visible and writable (acknowledged) | not provided by whr; a credential an external runner adds is exposed to the instance |
+| Repository-controlled configuration (`mise.toml`, `.git/config`, attributes, hooks; FR-037) | untrusted input unless the repository is on the trusted list kept outside the repository; the list is not mounted | untrusted input; list not mounted | untrusted input even for a trusted source repository; list not mounted |
 | Tool roots (FR-016; BundleDock provider: `/opt/bdock/<bundle>`, `bundledock-*`) | read-only; writable only if the provider declares the root writable (never BundleDock) | read-only | read-only |
 | Host Docker socket | never mounted | never mounted | never mounted |
 | Network (the sandbox is not offline, FR-036) | unrestricted; `egress_enforcement=none` | unrestricted; `egress_enforcement=none` | unrestricted; `egress_enforcement=none`; exfiltration over the network is not prevented |
@@ -78,6 +79,7 @@ Owner repository is `wstein/workharbor` for all rows except the Anchorage consum
 | FR-009 to FR-011, FR-016, FR-027, SC-005 | T006, T007 | `TestCanaryAssetsAbsentUntrusted`, `TestCooperativeNeedsAcknowledgement`, `TestToolMountsReadOnly`; writable developer roots: `TestToolRootWritableOnlyInDeveloper`, `TestBundleDockRootNeverWritable` (T019, after the provider decision) | `apps/whr/internal/runtime/canary_test.go` |
 | FR-007, SC-011 | T011 | `TestExportPatchAndManifest`, `TestExportParentRepoHostileConfigIgnored`, `TestExportNeverPushes`, `TestExportIgnoresInstanceGitConfig`, `TestExportFromFailedInstance`, `TestResultDirSymlinkSafe` | `apps/whr/internal/runtime/result/*_test.go` |
 | FR-036, SC-013 | T008, T013 | `TestContainerProviderReportsEgressNone`, `TestAdmitTable` (egress rows), `TestNoOfflineClaimInMessages` | `apps/whr/internal/runtime/docker/*_test.go`, `apps/whr/internal/runtime/*_test.go` |
+| FR-037, SC-014 | T001 | `TestUntrustedByDefault`, `TestTrustAnchorNotInRepoControlledFiles`, `TestTrustedListNotMountedInAnyProfile`, `TestTrustedListNotInHostGitConfigDir`, `TestJobCopyAlwaysUntrusted`, `TestUnreadableListIsUntrusted` | `apps/whr/internal/trust/*_test.go` |
 | FR-017, SC-007 | T013, 006/T038 | `TestCancelPreservesResults`, `TestCleanupOnlyTouchesLabelledObjects` | `apps/whr/internal/runtime/docker/*_test.go` |
 | FR-028, FR-029, FR-035, SC-008 | T003 | `TestExitMappingMatchesADR0013`; per-PR `git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr` empty | `apps/whr/internal/sandbox/exit_test.go`; PR description |
 | FR-014, FR-034, SC-010 | T009 | `TestConformanceSuiteSecondProvider`, `TestNoProviderKindBranchesInProductionCode` | `apps/whr/internal/runtime/conformance/` |
@@ -88,15 +90,17 @@ Owner repository is `wstein/workharbor` for all rows except the Anchorage consum
 ## Owner decisions
 
 Resolved on 2026-10-20 and recorded in the spec: the git configuration profile, backend neutrality, the PR target (`main`), the
-owner statement on the Mac host and the Docker VM, and OD-1 to OD-5 below.
+owner statement on the Mac host and the Docker VM, and OD-1 to OD-5 below; OD-6 and OD-7 (2026-11-03, issue #320) follow.
 
-| ID | Decision (owner, 2026-10-20) |
+| ID | Decision (owner, 2026-10-20 unless dated) |
 | --- | --- |
 | OD-1 | Generic `sandbox exec` of an opaque argv is outside Feature 006 FR-030. Exit-status passthrough needs a separate small ADR 0013 amendment; `exec` stays proposal text and is not in Stage 1 or in the Stage 2 registration. |
 | OD-2 | An additive optional `error.refusal` field in `contracts/cli/output.schema.json`, with a freeze test. Still an owner gate before any command registration. |
 | OD-3 | Agent git profile v1 and the host-only catalogue, including the five extension keys, are accepted as proposed (v1 "accepted by owner 2026-10-20"); the per-key rationale tables stay. The first tests still verify behavior against real git. |
 | OD-4 | A new `sandbox` group, option A. It needs an ADR 0014 amendment; commands are registered in Stage 2 only (T016). Stage 1 is library plus fake provider with no new command. |
 | OD-5 | The Mac-host git check and move are carried by Feature 009: doctor check `git.global_config` and the `git-config` step of the macOS `setup` wizard and `doctor --fix`; no `whr host git-config move` command (Feature 009 DP-4, AP-8; see below). |
+| OD-6 | 2026-11-03: repository configuration is untrusted unless the repository is on the owner's trusted list that `whr` keeps outside the repository; own repositories are trusted, all others are not (FR-037). Location and identity binding: T020. |
+| OD-7 | 2026-11-03: only the `developer` profile may write a tool root, and only one its provider declares writable; BundleDock roots are never writable (FR-016). Provider choice stays open until spike #319. |
 
 ### OD-5 (resolved 2026-10-20)
 
