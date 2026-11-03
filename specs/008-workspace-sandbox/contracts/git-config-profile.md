@@ -28,7 +28,7 @@ configuration mount is refused (`refused.git_config_single_file_mount`); the rea
 
 Host source: the Mac host's `$XDG_CONFIG_HOME/git` if set, else `~/.config/git`. Container target: `$XDG_CONFIG_HOME/git` if
 the container sets it, else `$HOME/.config/git` of the container user; the container `HOME` is provider-defined (for example
-`/home/captain` or `/home/vscode`), so the `Plan` records the resolved target and the preflight checks origins against it.
+`/home/vscode`), so the `Plan` records the resolved target and the preflight checks origins against it.
 `GIT_CONFIG_GLOBAL` is not set for `developer`.
 
 ## Writable configuration risk
