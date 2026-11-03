@@ -19,7 +19,7 @@ verification, review CLEAR or owner approval.
 - [x] Every FR group maps to an acceptance test and evidence location (plan: requirements to evidence).
 - [x] Success criteria SC-001 to SC-014 are testable offline.
 - [x] Edge cases listed.
-- [x] Owner decisions of 2026-10-20 recorded with date: git profile, setup host and Docker VM, backend neutrality, PR target. Owner decisions OD-6 (trust of repository configuration) and OD-7 (tool roots, one tool source) of 2026-11-03 are recorded with date; OD-8 (host-side path of a `cooperative_job` worktree) is recorded as open.
+- [x] Owner decisions of 2026-10-20 recorded with date: git profile, setup host and Docker VM, backend neutrality, PR target. Owner decisions OD-6 (trust of repository configuration) and OD-7 (tool roots, one tool source) of 2026-11-03 are recorded with date; OD-8 (host-side path of a `cooperative_job` worktree) is recorded as decided 2026-11-03 (staged; re-evaluated after #319).
 - [x] Terms Mac host, Docker VM and sandbox backend are used consistently; the phrase for a Linux VM host is not used.
 
 ## Feature Readiness
