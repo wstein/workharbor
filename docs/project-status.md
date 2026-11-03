@@ -21,3 +21,9 @@ deleted, and not extended until the owner reopens it. Reopening: owner decides.
 - The default workspace user stays `captain`. `whr create` creates it with `docker exec` (adduser or useradd); a
   Dockerfile is optional. The Anchorage devcontainer keeps `vscode` through `remoteUser`.
 - `fish` is provided through mise for the developer profile only. AI containers use bash or ash.
+
+## Note on specs 002 and 003
+
+The bytes of `specs/002-symphony-doc-smoke` (tree pinned in `tests/test_single_task_scope.py`) and of
+`specs/003-single-task-entry/spec.md` (hash recorded in `docs/development/bootstrap-t004.json`) are pinned. Their frozen
+status is recorded only on this page and carries no status line in the spec files.
