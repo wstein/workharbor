@@ -1,16 +1,19 @@
 # 0016-mise-tool-layer: mise as the tool layer of whr workspaces (spike #319)
 
 Date: 2026-11-03
-Status: Proposed (draft from spike [#319](https://github.com/wstein/workharbor/issues/319)). It needs an independent review CLEAR
-for its exact head. The owner decides about BundleDock, Specs 007, 008 and 009 and OD-8 afterwards. Nothing is implemented.
+Status: Proposed (draft from spike [#319](https://github.com/wstein/workharbor/issues/319)). Nothing is implemented. The owner
+decides about BundleDock, Specs 007, 008 and 009 and OD-8 afterwards.
 
 ## Context
 
 Tools come from BundleDock OCI volumes (`/opt/bdock/<bundle>`), versions are fixed per bundle, and the Mac host declares its
 tools again in the Spec 009 catalogue. Owner principle (#319): one source of truth for tools, `mise.toml` layers; GUI apps
 and system components stay with the host setup wizard. This ADR records what the spike measured on one Mac (Apple silicon,
-OrbStack, mise 2026.10.25, Debian 13 arm64 container). Evidence, scripts and raw output:
-[docs/quality/319-mise-spike](../quality/319-mise-spike/). The lab root `$T` is a scratch directory; no repository
+OrbStack, mise 2026.10.25, Debian 13 arm64 container). Evidence:
+[docs/quality/319-mise-spike](../quality/319-mise-spike/) holds the scripts, a lab setup script and stored output for layers
+(`layers.out`, section 1), `mise.lock` (`lock.out`, section 4) and start time (`bench.out`, section 6). Results of the trust,
+read-only, shared-store and volume experiments (sections 2, 3, 5, OD-8) come from runs of the listed scripts whose output is not
+stored; they are reproducible but not recorded as files. Inventory and registry lookups (section 7) are not scripted. The lab root `$T` is a scratch directory; no repository
 under `Anchorage/` was changed.
 
 ## Findings
@@ -61,7 +64,7 @@ on tmpfs: `mise exec`, shims and direct PATH use run (8 tools); `touch`/`mkdir` 
 missing tool fails (`create_dir_all ... Read-only file system`, exit 1); `mise install --locked` reports "already installed" but exits 1
 on shim regeneration, so installs must run outside the job. State and cache read-only also worked for `exec`. `MISE_SHARED_INSTALL_DIRS=/store/installs`
 makes a read-only store plus a writable overlay data directory work: tools resolve from the store (`(shared)`), a new tool
-installs into the overlay only. That fits `developer` (writable) without touching the store used by jobs.
+installs into the overlay only. That is the rejected alternative for `developer` in section 5.
 Compared with an in-sandbox install: the install needs network and write access, and a compromised install step would persist
 in the sandbox; outside install plus `ro` mount keeps the job profiles unwritable (FR-016, OD-7).
 
@@ -84,9 +87,12 @@ Proposal (needs a spec; nothing implemented):
   shared tool and was rejected; the lock hash is recorded as a label or manifest of what was installed, not in the name.
   The name never contains a project, workspace or job id, so no container, workspace or job lifetime owns it.
 - **Population** only by a whr step outside the sandbox (`install --locked` into the store mounted `rw` by that step alone).
-- **Profiles**: `cooperative_job`, `untrusted_job`: store `ro` (verified). `developer`: store `ro` plus a writable per-workspace
-  overlay volume `whr-mise-dev-<workspace-id>` through `MISE_SHARED_INSTALL_DIRS` (verified), or the store itself `rw` if the owner
-  prefers (then any `developer` session can alter binaries that jobs later run; FR-024 accepts this at the owner level).
+- **Profiles** (owner decision 2026-11-03): `cooperative_job` and `untrusted_job` mount the store `ro` (verified). `developer`
+  mounts the same store `rw`. Consequence: any `developer` session can replace binaries that later jobs run from the `ro` mount (FR-024
+  accepts this at the owner level); a job's tools are only as trustworthy as the last `developer` session on that store. The population step
+  and a `developer` session are then the only writers; concurrent writers on one store are UNKNOWN.
+  Rejected alternative: store `ro` plus a per-workspace overlay volume `whr-mise-dev-<workspace-id>` through `MISE_SHARED_INSTALL_DIRS`
+  (verified to work, section 3): it keeps job stores unwritable by `developer` but duplicates new tools per workspace and needs a promotion step.
 - **Prune** (proposed `whr tools prune`, dry-run by default, `--apply` deletes): candidates are volumes with the label above that are
   not the newest per platform (the retention rule is an owner decision). Deletion uses `docker volume rm <name>` per volume. Measured:
   the daemon refuses an in-use volume ("volume is in use") and a volume referenced by a **stopped** container is kept too
@@ -107,11 +113,13 @@ of `docker run`, same Debian image. Baseline `docker run true`: 2.44, 1.83, 1.89
 | mise warm, data `ro`, `mise exec` | 1.58, 1.81, 1.82 | 1.74 |
 | mise warm, shims on PATH | 1.75, 2.02, 1.62 | 1.80 |
 | mise warm, PATH precomputed (no mise process) | 1.79, 1.87, 1.90 | 1.85 |
-| BundleDock cold: new volume via `init-volume` from the local carrier image (image pull excluded) | 38.65, 25.72, 39.07 | 34.48 |
+| BundleDock cold, init only: new volume via `init-volume` from the local carrier image (image pull excluded) | 38.65, 25.72, 39.07 | 34.48 |
+| BundleDock cold, init plus the tool run that follows (comparable to the mise cold rows) | 40.69, 27.44, 40.85 | 36.33 |
 | BundleDock warm, existing volume `ro` | 2.75, 1.61, 1.63 | 2.00 |
 
-Warm start is not distinguishable between the two (differences are inside the baseline noise). Cold: mise 8 tools 4 s and 81 MB
-against 1.9 GB toolbox volume and 26 to 39 s (the volume holds 57 tools; pull time is not included and not measured). Cold mise
+Warm start is not distinguishable between the two (differences are inside the baseline noise). In `bench.out` the BundleDock cold section interleaves init and tool-run times (lines alternate: init, run, init, run, init, run); the init-only
+mean uses the init lines, the combined row adds each run's following tool run. Cold: mise 8 tools 4 s and 81 MB
+against 1.9 GB toolbox volume (57 tools) and 27 to 41 s combined (the volume holds 57 tools; pull time is not included and not measured). Cold mise
 needs network and depends on GitHub availability. The Anchorage workspace itself was not started: lab layers replicate its structure;
 real workspace start is UNKNOWN. Docker and mise versions vary; one Mac only.
 
@@ -155,7 +163,7 @@ global configuration makes `mise run|install|exec` refuse untrusted files instea
 in the Spec 009 wizard; OD-8 stays with the owner.
 
 ## Recommendation
-1. Adopt mise as the tool layer for whr workspaces with the store/overlay volume model above; keep BundleDock as the base image carrier (toolbox with `mise`) until the owner decides otherwise; freeze it as stated in #319.
+1. Adopt mise as the tool layer for whr workspaces with the explicit named store volume above (`rw` for `developer`, `ro` for jobs); keep BundleDock as the base image carrier (toolbox with `mise`) until the owner decides otherwise; freeze it as stated in #319.
 2. Amend Spec 008 before product code: FR-037 states that whr-started mise processes run with paranoid mode, ignore list, scrubbed `CI`/`MISE_YES`, exact-file trust of whr layers; the guard is not a boundary against the agent; add the volume, prune and `whr-mise-` removal rules; generalize `isToolRoot`.
 3. Content binding: implement the reviewed-commit hash check plus `mise trust` with a read-only state directory (T019); owner decides OD-8.
 4. Open: `whr mise plan` is not prototyped (no product code before the spec; the two reader commands above are its source); `whr tools prune` needs a spec and an owner retention rule.
