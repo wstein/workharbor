@@ -1,6 +1,6 @@
 # Feature 008 validation guide
 
-Status: future acceptance guide for the offline increment; not a runnable product claim. No Docker, build or host mutation.
+Status: future acceptance guide for the increment with offline tests (the sandbox itself is not offline, FR-036); not a runnable product claim. No Docker, build or host mutation.
 
 ```sh
 python3 scripts/select_feature.py 008-workspace-sandbox

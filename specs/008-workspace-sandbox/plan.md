@@ -6,7 +6,7 @@ Status: proposed for independent review and owner approval; no product code exis
 
 ## Approach
 
-Library-first and offline. Go packages in `apps/whr/internal/` (ADR 0010; module `apps/whr`), no new dependency, standard
+Library-first, with offline tests (FR-032; the sandbox itself is not offline, FR-036). Go packages in `apps/whr/internal/` (ADR 0010; module `apps/whr`), no new dependency, standard
 library only:
 
 | Package | Content |
@@ -57,7 +57,7 @@ tests show for the stated provider.
 | Host credentials (keychain, SSH agent, tokens) | not provided by whr; the checkout's local config and the host global config apply | not provided by whr; credentials, `insteadOf` rules and hooks in the shared primary `.git/config` are visible and writable (acknowledged) | not provided by whr; a credential an external runner adds is exposed to the instance |
 | Tool roots `/opt/bdock/<bundle>`, `bundledock-*` | read-only | read-only | read-only |
 | Host Docker socket | never mounted | never mounted | never mounted |
-| Network | unrestricted (no enforcement) | unrestricted | unrestricted; exfiltration over the network is not prevented |
+| Network (the sandbox is not offline, FR-036) | unrestricted; `egress_enforcement=none` | unrestricted; `egress_enforcement=none` | unrestricted; `egress_enforcement=none`; exfiltration over the network is not prevented |
 
 Attacker capabilities per profile: `developer` is trusted and can do anything the user can inside the mount plan;
 `cooperative_job` can write shared repository metadata (rewrite refs, add hooks that the human later runs); `untrusted_job`
@@ -77,6 +77,7 @@ Owner repository is `wstein/workharbor` for all rows except the Anchorage consum
 | FR-023 to FR-025, FR-030, SC-004, SC-012 | T002 | `TestAgentProfileMatchesContract`, `TestAgentNeverMountsHostConfig`, `TestCanaryKeysPerEnvironment`, `TestCommitWithoutIdentityFails`, `TestExecScrubsGitControlEnvForJobs`, `TestDeveloperRefusesGitConfigEnv`, `TestWorkspaceContainerPlanHasNoHostConfigMount` | same |
 | FR-009 to FR-011, FR-016, FR-027, SC-005 | T006, T007 | `TestCanaryAssetsAbsentUntrusted`, `TestCooperativeNeedsAcknowledgement`, `TestToolMountsReadOnly` | `apps/whr/internal/runtime/canary_test.go` |
 | FR-007, SC-011 | T011 | `TestExportPatchAndManifest`, `TestExportParentRepoHostileConfigIgnored`, `TestExportNeverPushes`, `TestExportIgnoresInstanceGitConfig`, `TestExportFromFailedInstance`, `TestResultDirSymlinkSafe` | `apps/whr/internal/runtime/result/*_test.go` |
+| FR-036, SC-013 | T008, T013 | `TestContainerProviderReportsEgressNone`, `TestAdmitTable` (egress rows), `TestNoOfflineClaimInMessages` | `apps/whr/internal/runtime/docker/*_test.go`, `apps/whr/internal/runtime/*_test.go` |
 | FR-017, SC-007 | T013, 006/T038 | `TestCancelPreservesResults`, `TestCleanupOnlyTouchesLabelledObjects` | `apps/whr/internal/runtime/docker/*_test.go` |
 | FR-028, FR-029, FR-035, SC-008 | T003 | `TestExitMappingMatchesADR0013`; per-PR `git diff --stat $(git merge-base origin/main HEAD) -- contracts/cli docs/adr` empty | `apps/whr/internal/sandbox/exit_test.go`; PR description |
 | FR-014, FR-034, SC-010 | T009 | `TestConformanceSuiteSecondProvider`, `TestNoProviderKindBranchesInProductionCode` | `apps/whr/internal/runtime/conformance/` |

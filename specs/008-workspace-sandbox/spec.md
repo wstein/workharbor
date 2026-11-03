@@ -33,7 +33,8 @@ workspace, and no statement of what a container backend does and does not protec
 3. a **Git configuration profile** per environment (owner decision, 2026-10-20);
 4. the threat model and its canary acceptance tests;
 5. a **proposed** command surface; and
-6. a first implementable increment that is library-level and offline.
+6. a first implementable increment that is library-level and tested offline. The sandbox itself is not offline: network
+   access is unrestricted today (FR-036).
 
 ### Terms
 
@@ -53,6 +54,8 @@ workspace, and no statement of what a container backend does and does not protec
   credential mediation, egress enforcement, host tool gateway, snapshots and rollback, IDE attachment verification.
 - Command registration: Stage 1 registers no command; task T016 (Stage 2, owner-gated) registers the `sandbox` group after the
   ADR 0014 amendment (T017).
+- Network: no profile restricts network access in this increment. `egress_enforcement` values above `none` are a later
+  increment with their own specification (FR-036).
 - No claim is made of universal containment, exfiltration prevention, performance or portability. Every protection is
   stated with its scope.
 
@@ -297,6 +300,12 @@ outside the instance's own labelled set is touched.
 - **FR-030**: `whr` MUST NOT receive, store or relay provider credentials for an instance. The four identity variables of
   FR-023 are not credentials; their values MUST NOT be logged. A credential an external runner places in an instance is
   outside `whr` and exposed to that instance.
+- **FR-036**: A sandbox is NOT offline. In this increment every profile has unrestricted network access and the standard
+  container provider reports `egress_enforcement=none` (proxy variables, if set, configure cooperative clients and enforce
+  nothing). The values `cooperative_proxy`, `enforced_allowlist` and `enforced_deny` are a later increment with their own
+  specification; until then a request requiring more than `none` is refused (`refused.egress_enforcement_unavailable`,
+  FR-013). No text, profile name, label, result record or message of this feature may describe a sandbox as offline,
+  isolated from the network or exfiltration-safe; "offline" appears only for the tests (FR-032).
 - **FR-035**: Errors map to ADR 0013 codes without new codes: usage 64, not found 65, capability refusal, foreign
   object and wrong state 68, needs-human 70, timeout 71, interrupt 72, incomplete cleanup 73, internal 74. The stable
   refusal code travels in a separate field; the mapping is one pure function with a freeze test.
@@ -307,7 +316,8 @@ outside the instance's own labelled set is touched.
   fake provider) and Stage 2 (container provider with private copy, scratch home, labels, cancellation and cleanup,
   verified with fake Docker only) plus, owner-gated, registration of the `sandbox` group (T016). Each stage is delivered as pull requests of at most about 1,500 changed lines.
 - **FR-032**: Tests MUST run offline with no Docker, no network, no credentials and no host mutation. Real Docker,
-  image builds and host mutation are owner gates.
+  image builds and host mutation are owner gates. "Offline" is a property of the test suite only, not of a sandbox
+  (FR-036).
 - **FR-033**: A requirements-to-evidence table ([plan.md](plan.md#requirements-to-evidence)) MUST name owner repository,
   prerequisite, acceptance test and evidence location for each requirement group, and be kept current.
 
@@ -348,6 +358,9 @@ OwnershipLabels, ResultBundle, CopyPolicy, GitProfileReport, HostOnlyFinding ([d
 - **SC-011**: Export from a finished and from a failed instance yields a patch and manifest; hostile `.git/config` and
   attributes canaries in the copy (fsmonitor, textconv, external diff, filter, hooks) execute nothing; the result directory
   refuses symlink and swap tricks; nothing is pushed or applied to the primary checkout (FR-007).
+- **SC-013**: Every profile of the standard container provider reports `egress_enforcement=none`, the plans of all profiles
+  carry no network restriction, a requirement above `none` is refused with zero provider calls, and no refusal, result or
+  creation message calls an instance offline (FR-036, FR-013).
 - **SC-012**: Operator-supplied git-control variables are scrubbed for job profiles and refused for `developer` (FR-023).
 
 ## Assumptions
