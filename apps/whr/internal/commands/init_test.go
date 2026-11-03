@@ -287,7 +287,7 @@ func TestInitPublicExitCodesAndClosedEnvelopes(t *testing.T) {
 			want := 68
 			switch kind {
 			case "absent":
-				dir = filepath.Join(t.TempDir(), "absent")
+				dir = filepath.Join(t.TempDir(), "absent", "leaf") // the parent is missing
 				want = 65
 			case "file":
 				dir = filepath.Join(t.TempDir(), "file")
@@ -490,6 +490,19 @@ func TestInitResultConsoleDefaultPlainMatchesSchema(t *testing.T) {
 		setting := result["settings"].(map[string]any)["console_mode"].(map[string]any)
 		if setting["value"] != want || setting["origin"] != origin {
 			t.Fatalf("%q: %+v", mode, setting)
+		}
+	}
+}
+
+func TestInitMissingDirectoryIsPlannedNotCreatedOnFailure(t *testing.T) {
+	target := filepath.Join(t.TempDir(), "cubing")
+	for _, flags := range [][]string{{"--dry-run"}, {"--non-interactive", "--yes"}} {
+		got := run(t, nil, append([]string{"init", target}, flags...)...)
+		if got.code == 65 || !strings.Contains(got.err, "devcontainer") {
+			t.Errorf("%v: a missing directory must be planned like an empty one: %+v", flags, got)
+		}
+		if _, err := os.Lstat(target); err == nil {
+			t.Errorf("%v: directory left behind after a failed init", flags)
 		}
 	}
 }
