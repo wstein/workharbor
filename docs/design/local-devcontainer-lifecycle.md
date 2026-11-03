@@ -69,7 +69,7 @@ Add dedicated local-only entries (`workspace.temp.ls`, `workspace.temp.rm`, `wor
     - `state` and `status`,
     - `workspace_folder` (resolved from `devcontainer.local_folder` or `/workspaces/*` bind mount, if present),
     - `labels` (the matched workspace/staging/temp labels),
-    - `home_volume` (name of the writable named volume mounted at `/home/vscode`, or `null`),
+    - `home_volume` (name of the writable named volume mounted at `/home/vscode` or legacy `/home/captain`, or `null`),
     - `protected_volumes` (names of read-only `/opt/bdock/*` or `bundledock-*` volumes attached to the container).
   - Human output escapes all container names, image strings, paths, and label values through the FR-022 terminal-escape filter. `--json` emits one schema-valid envelope (`localWorkspaceListResult` in [`contracts/cli/output.schema.json`](../../contracts/cli/output.schema.json)).
 
@@ -77,13 +77,13 @@ Add dedicated local-only entries (`workspace.temp.ls`, `workspace.temp.rm`, `wor
   - **Target selection**: Accepts an explicit container `<id|name>` positional argument, `--role <staging|temp>`, or `--label <key[=value]>` (for example `--label anchorage-temp=1` or `--label anchorage-staging=1`). Specifying none, or specifying conflicting selectors, exits `64` (`err_usage`).
   - **Ownership gate before mutation**: Before stopping or removing any container, `whr` inspects the target container and verifies that it carries a recognized workspace/devcontainer label (`anchorage-staging`, `anchorage-temp`, `devcontainer.local_folder`, `devcontainer.config_file`, or the explicit `--label` filter). A container that exists but lacks any recognized workspace/devcontainer label is refused with exit code `68` (`err_invalid_state` / foreign container refusal) and zero state changes.
   - **Operation 2 — Container removal (default, without `--volumes`)**:
-    - Stops and removes each verified target container (`docker rm -f -- <full-id>`) and leaves its `/home/vscode` named volume intact.
+    - Stops and removes each verified target container (`docker rm -f -- <full-id>`) and leaves its `/home/vscode` (or legacy `/home/captain`) named volume intact.
     - Reports removed container IDs and preserved `home_volume` names in human and `--json` output.
   - **Operation 3 — Container and temporary home volume removal (`--volumes`)**:
     - Inspects `.Mounts` of each verified container prior to container removal.
     - Selects a volume for deletion **only** when all four conditions hold:
       1. `Type == "volume"`,
-      2. `Destination` is `"/home/vscode"`,
+      2. `Destination` is `"/home/vscode"` (or legacy `"/home/captain"`),
       3. `RW == true`, and
       4. `Name` matches the workspace home volume pattern (`anchorage-home-*` or `workharbor-home-*`) and does **not** start with `bundledock-`.
     - **Hard safety invariant**: Volumes mounted under `/opt/bdock/*`, read-only mounts (`RW == false`), bind mounts, and `bundledock-*` tool volumes are **never** removed under any flag combination.
@@ -114,7 +114,7 @@ Add dedicated local-only entries (`workspace.temp.ls`, `workspace.temp.rm`, `wor
 - [ ] **T038 [US1, US4]** Local devcontainer and temporary container lifecycle (`FR-066`, `FR-067`, `SC-024`) in `apps/whr/internal/localdocker/`, `apps/whr/internal/commands/`, [`contracts/cli/commands.json`](../../contracts/cli/commands.json), and [`contracts/cli/output.schema.json`](../../contracts/cli/output.schema.json):
   - Add `--local` and `--label` flags to `workspace.ls`, and `--local`, `--label`, `--volumes`, `--dry-run`, and `--yes` flags to `workspace.rm` in `contracts/cli/commands.json` and `apps/whr/internal/commands/entries.go`.
   - Add `localWorkspaceListResult` and `localWorkspaceRemoveResult` definitions to `contracts/cli/output.schema.json`.
-  - Implement bounded local Docker inspection and removal in `apps/whr/internal/localdocker/` (5 s deadline, fixed argv, ownership label check, `/home/vscode` writable volume filter, hard exclusion of `/opt/bdock/*` and `bundledock-*` volumes).
+  - Implement bounded local Docker inspection and removal in `apps/whr/internal/localdocker/` (5 s deadline, fixed argv, ownership label check, `/home/vscode` (or legacy `/home/captain`) writable volume filter, hard exclusion of `/opt/bdock/*` and `bundledock-*` volumes).
   - **Failing tests first**:
     - `TestLocalLsListsLabelledContainersAndVolumes`
     - `TestLocalLsLabelFilter`
