@@ -59,8 +59,8 @@ mode, and only this section names provider paths. Every provider declares per ro
 
 | Provider | Roots | Access | Status |
 | --- | --- | --- | --- |
-| BundleDock volumes | `/opt/bdock/<bundle>` backed by `bundledock-*` volumes | always `ro`; no profile may write, remove or replace the volumes | current (Stage 2 reports `ro_bdock`) |
-| `mise` data directory | a directory of installed tools, path decided by the ADR | `ro`, or `rw` in `developer` only if declared | candidate; open until spike [#319](https://github.com/wstein/workharbor/issues/319) and its ADR |
+| `mise` data directory (primary) | a directory of installed tools, path decided by the ADR | `ro`, or `rw` in `developer` only if declared | primary provider (owner decision, one source of truth for tools); details open until spike [#319](https://github.com/wstein/workharbor/issues/319) and its ADR |
+| BundleDock volumes (subordinate) | `/opt/bdock/<bundle>` backed by `bundledock-*` volumes; base image content (toolbox, which contains `mise`) | always `ro`; no profile may write, remove or replace the volumes | current (Stage 2 reports `ro_bdock`) |
 
 Configuration that selects tools from the checked-out repository (for example `mise.toml`) is untrusted input unless the repository is on the owner's trusted list kept outside the repository (FR-037); no provider reads, applies or trusts it on its own.
 

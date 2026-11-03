@@ -117,10 +117,12 @@ the owner statement concerns the Docker VM. No owner-decision note on T015 is ne
 
 ## Open decision: tool layer (spike #319)
 
-The spike [#319](https://github.com/wstein/workharbor/issues/319) decides whether `mise` becomes a tool layer next to
-BundleDock. No ADR is written before it. Until then this feature specifies only the generic tool root (FR-016) and the
-BundleDock provider; a `mise` data directory is a candidate provider and Feature 007 stays as is. A provider that declares a
-writable root and the capability value for it are decided with that ADR (T019).
+The spike [#319](https://github.com/wstein/workharbor/issues/319) settles the details of `mise` as the tool layer. No ADR is
+written before it. Until then this feature specifies only the generic tool root (FR-016) and its two providers: the `mise` data directory is the primary tool provider (owner decision: one source of truth for tools, the
+`mise.toml` layers; no second catalog for the same tools) and BundleDock volumes are a subordinate provider for base image
+content (the toolbox, which contains `mise`). Data directory path, layer order, the writable root and its capability value are
+decided with that ADR (T019). Features 007 (shell policy) and 009 (host catalog) stay as they are and need adjustment after
+the spike.
 
 ## Owner gates
 
