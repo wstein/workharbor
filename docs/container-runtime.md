@@ -62,7 +62,8 @@ is pending. Local discovery does not implement removal or volume cleanup.
 From an existing host shell or host multiplexer pane, run
 `whr shell --local <container-name>` (also `whr workspace shell --local` or
 `whr ws shell --local`). An exact full name wins; otherwise use a unique
-12–64-character container ID prefix. Matching includes stopped containers,
+12–64-character container ID prefix; otherwise a workspace name `<name>` resolves
+to the container `whr-<name>` (FR-070). Matching includes stopped containers,
 which are refused with exit 68. Ambiguous selectors exit 64; absent/foreign
 containers exit 65. Labels are a usability guard for callers who already have
 host Docker access, as explained in [ADR 0015](adr/0015-host-session-and-local-shell.md).
