@@ -17,7 +17,7 @@ satisfies a requirement (FR-015). Reports state only what the provider's tests p
 | `git_config_profile` | `host_global_dir_rw` (developer), `agent_policy_ro` (jobs) | `refused.git_config_profile_unavailable`, `refused.host_git_config_for_agent`, `refused.git_env_override`, `refused.git_config_single_file_mount` | both; verified by preflight and canary tests only |
 | `home_state` | `persistent_volume`, `scratch`, `none` | `refused.profile_unsupported` | `persistent_volume` (developer), `scratch` (jobs) |
 | `tool_mounts` | `ro_bdock`, `none` | writable plan -> `refused.tool_mount_writable` | `ro_bdock`; protects tool files only, not other host resources |
-| `egress_enforcement` | `none`, `cooperative_proxy`, `enforced_allowlist`, `enforced_deny` | a requirement above what is `enforced` -> `refused.egress_enforcement_unavailable` | `none` (proxy variables configure cooperative clients and enforce nothing) |
+| `egress_enforcement` | `none`, `cooperative_proxy`, `enforced_allowlist`, `enforced_deny` | a requirement above what is `enforced` -> `refused.egress_enforcement_unavailable` | `none` (network is unrestricted and the sandbox is not offline, FR-036; proxy variables configure cooperative clients and enforce nothing) |
 | `credential_mediation` | `none`, `sentinel_mediated` | `refused.credential_mediation_unavailable` | `none` |
 | `host_tools` | `none`, `gateway` | `refused.host_tools_unavailable`; host Docker socket always `refused.host_socket_mount` | `none` |
 | `ide_access` | `attach`, `none` | informational, never a refusal | `unknown` until verified on a host (separate evidence) |
