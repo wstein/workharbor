@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/wsname"
 )
 
 // RemovalOptions selects one explicit target or one scoped group. Consent and
@@ -38,9 +39,19 @@ func planRemovalWithCandidate(all []inspection, o RemovalOptions, candidateHome 
 	}
 	key, value, hasValue := strings.Cut(o.Label, "=")
 	selected := []inspection{}
+	target := o.Target
+	if o.Target != "" {
+		exact := false
+		for _, c := range all {
+			exact = exact || c.ID == o.Target || strings.TrimPrefix(c.Name, "/") == o.Target
+		}
+		if derived := wsname.DerivedFromSelector(o.Target); !exact && derived != "" {
+			target = derived
+		}
+	}
 	for _, c := range all {
 		role, recognized := workspaceRole(c.Labels)
-		match := o.Target != "" && (c.ID == o.Target || strings.TrimPrefix(c.Name, "/") == o.Target)
+		match := target != "" && (c.ID == target || strings.TrimPrefix(c.Name, "/") == target)
 		if o.Role != "" {
 			match = recognized && role == o.Role
 		}
