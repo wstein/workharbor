@@ -329,7 +329,7 @@ outside the instance's own labelled set is touched.
   FR-013). No text, profile name, label, result record or message of this feature may describe a sandbox as offline,
   isolated from the network or exfiltration-safe; "offline" appears only for the tests (FR-032).
 - **FR-037**: Tool-layer configuration read from the checked-out repository (tools, tasks, hooks and environment templates; the input
-  files are `mise.toml`, `.mise.toml`, `mise.local.toml`, `mise.<env>.toml`, `.config/mise/`, `.tool-versions`, files included through `_.file` or `_.source`, parent directories and submodule configurations (mise's discovery semantics are UNKNOWN until checked in spike #319))  is untrusted input. `whr` MUST NOT execute it, apply it, mark it trusted on the user's behalf or
+  files are at least `mise.toml`, `.mise.toml`, `mise.local.toml`, `mise.<env>.toml`, `.mise.<env>.toml`, `mise.<env>.local.toml`, `mise/config.toml`, `.mise/config.toml`, `.config/mise.toml`, `.config/mise/`, `.tool-versions`, other version files (`.nvmrc`, `.python-version` and similar), files included through `_.file` or `_.source`, parent directories and submodule configurations; mise's discovery semantics are UNKNOWN until checked in spike #319) is untrusted input. `whr` MUST NOT execute it, apply it, mark it trusted on the user's behalf or
   base an admission, mount or environment decision on it, unless the repository is on the **trusted list**: the
   owner-maintained list of repositories that `whr` keeps outside the repository (owner decision OD-6: the owner's own
   repositories are trusted, all others are not). This exception never relaxes FR-007, FR-009, FR-010 or FR-023: `whr` never
