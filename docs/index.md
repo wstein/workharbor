@@ -33,6 +33,7 @@
 - [Fresh whr exit-code table](adr/0013-whr-exit-codes.md)
 - [whr command structure, aliases and first increment (proposed)](adr/0014-whr-command-structure.md)
 - [Host multiplexer session and host-local workspace shells (proposed)](adr/0015-host-session-and-local-shell.md)
+- [mise as the tool layer of whr workspaces (proposed, spike #319)](adr/0016-mise-tool-layer.md)
 
 ## Background and references
 
