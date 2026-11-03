@@ -101,7 +101,7 @@ owner statement on the Mac host and the Docker VM, and OD-1 to OD-5 below; OD-6 
 | OD-4 | A new `sandbox` group, option A. It needs an ADR 0014 amendment; commands are registered in Stage 2 only (T016). Stage 1 is library plus fake provider with no new command. |
 | OD-5 | The Mac-host git check and move are carried by Feature 009: doctor check `git.global_config` and the `git-config` step of the macOS `setup` wizard and `doctor --fix`; no `whr host git-config move` command (Feature 009 DP-4, AP-8; see below). |
 | OD-6 | 2026-11-03: repository configuration is untrusted unless the repository is on the owner's trusted list that `whr` keeps outside the repository; own repositories are trusted, all others are not (FR-037). Location and identity binding: T019. Content binding of trust (reviewed commit or `mise.lock`) is open for spike #319. |
-| OD-7 | 2026-11-03: only the `developer` profile may write a tool root, and only one its provider declares writable; BundleDock roots are never writable (FR-016). Provider choice stays open until spike #319. |
+| OD-7 | 2026-11-03: only the `developer` profile may write a tool root, and only one its provider declares writable; BundleDock roots are never writable (FR-016). Also recorded as an owner decision: one source of truth for tools, `mise` configuration layers; the `mise` data directory is the primary tool provider and BundleDock volumes a subordinate provider for base image content. Details (path, layers, writable root) open until spike #319. |
 
 ### OD-5 (resolved 2026-10-20)
 

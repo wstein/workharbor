@@ -16,7 +16,7 @@ satisfies a requirement (FR-015). Reports state only what the provider's tests p
 | `git_access` | `private_clone`, `linked_worktree`, `primary_rw` | untrusted with worktree or alternates -> `refused.shared_git_metadata_untrusted` | private clone, linked worktree (cooperative only), primary rw (developer only) |
 | `git_config_profile` | `host_global_dir_rw` (developer), `agent_policy_ro` (jobs) | `refused.git_config_profile_unavailable`, `refused.host_git_config_for_agent`, `refused.git_env_override`, `refused.git_config_single_file_mount` | both; verified by preflight and canary tests only |
 | `home_state` | `persistent_volume`, `scratch`, `none` | `refused.profile_unsupported` | `persistent_volume` (developer), `scratch` (jobs) |
-| `tool_mounts` | `ro_bdock`, `none` (current identifiers; a value for provider-declared writable roots is added with the first such provider, T018) | a tool root writable outside `developer`, or a BundleDock root writable anywhere -> `refused.tool_mount_writable` | `ro_bdock` (read-only BundleDock roots); protects tool files only, not other host resources |
+| `tool_mounts` | `ro_bdock`, `none` (current identifiers; a value for provider-declared writable roots is added with the first such provider, T018; until T018 every writable tool root is refused, as `Admit` does today) | a tool root writable outside `developer`, or a BundleDock root writable anywhere -> `refused.tool_mount_writable` | `ro_bdock` (read-only BundleDock roots); protects tool files only, not other host resources |
 | `egress_enforcement` | `none`, `cooperative_proxy`, `enforced_allowlist`, `enforced_deny` | a requirement above what is `enforced` -> `refused.egress_enforcement_unavailable` | `none` (network is unrestricted and the sandbox is not offline, FR-036; proxy variables configure cooperative clients and enforce nothing) |
 | `credential_mediation` | `none`, `sentinel_mediated` | `refused.credential_mediation_unavailable` | `none` |
 | `host_tools` | `none`, `gateway` | `refused.host_tools_unavailable`; host Docker socket always `refused.host_socket_mount` | `none` |
@@ -47,7 +47,7 @@ func Admit(req SandboxRequest, caps Capabilities) AdmissionDecision // pure, no 
 
 `Plan` is the testable artifact: ordered mounts (source kind, target, mode), environment, labels, user, home. Tests assert on
 the plan before any provider acts (FR-027). Forbidden in every plan: host Docker socket, a BundleDock root (see
-[Tool root providers](#tool-root-providers)) writable in any profile, any other tool root writable outside `developer` (FR-016), primary home volume in a job, primary `.git` in an untrusted job. Secret-pattern paths excluded from copies:
+[Tool root providers](#tool-root-providers)) writable in any profile, any other tool root writable outside `developer` (FR-016; until T018 every writable tool root is refused), primary home volume in a job, primary `.git` in an untrusted job. Secret-pattern paths excluded from copies:
 `.env*`, `*.pem`, `*.key`, `id_*`, `.git-credentials`, `.netrc`, `.npmrc`, `.pypirc`, `.aws/`, `.ssh/`, `.gnupg/`.
 
 ## Tool root providers
@@ -73,7 +73,7 @@ adds a constructor, not a case:
 2. A requirement above a declared capability is refused with the expected code, with zero side effects (provider call count).
 3. `unknown` never satisfies a requirement; `microvm` is satisfied only by a provider declaring it, never by substitution.
 4. `Create` applies the labels of the data model to every object; `List` returns only labelled objects; foreign objects are refused.
-5. The `Plan` has no forbidden mount (Docker socket, tool root writable outside `developer`, BundleDock root writable, primary home or `.git` in a job) per profile as the threat table of the plan states (FR-027).
+5. The `Plan` has no forbidden mount (Docker socket, tool root writable outside `developer` (until T018: any writable tool root), BundleDock root writable, primary home or `.git` in a job) per profile as the threat table of the plan states (FR-027).
 6. `Exec` passes `argv` as data (no shell, no interpretation); environment contains no credentials; git-control variables are scrubbed (jobs) or refused (developer).
 7. `Cancel` and `Remove` are bounded, idempotent, preserve results, allow `Export` from a failed instance and report leftovers.
 8. A provider that reports more than its tests prove fails the suite (declared `enforced` fields need a passing probe).
