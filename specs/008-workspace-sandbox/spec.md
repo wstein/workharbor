@@ -85,8 +85,10 @@ workspace, and no statement of what a container backend does and does not protec
   untrusted unless the repository is on the owner's trusted list that `whr` keeps outside the repository. Own repositories are
   trusted; all others are not (FR-037).
 - **2026-11-03 (tool roots, OD-7, issue #320)**: tool mounts are generic tool roots supplied by tool providers; only the
-  `developer` profile may write a tool root, and only one its provider declares writable (FR-016). The provider decision
-  (mise as tool layer) stays open until spike #319 and its ADR; Feature 007 is unchanged until then.
+  `developer` profile may write a tool root, and only one its provider declares writable (FR-016). One source of truth for
+  tools: `mise` (the `mise.toml` layers); the `mise` data directory is the primary tool provider and BundleDock volumes a
+  subordinate provider for base image content. The details stay open until spike #319 and its ADR; Features 007 and 009 are
+  unchanged until then and need adjustment after the spike.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -241,8 +243,11 @@ outside the instance's own labelled set is touched.
   (`refused.tool_mount_writable`). No instance profile may remove or replace a tool root's backing volume or directory. The
   BundleDock provider's roots are always `ro` in every profile. Tool providers and their paths are named only in the tool
   provider section of [runtime-provider.md](contracts/runtime-provider.md#tool-root-providers); no other requirement names a
-  provider path. Which providers exist beyond BundleDock (a `mise` data directory is a candidate) is open until the spike
-  [#319](https://github.com/wstein/workharbor/issues/319) and its ADR.
+  provider path. The primary tool provider is the `mise` data directory; BundleDock volumes are a subordinate provider for
+  base image content (the toolbox, which contains `mise`). Tools are declared in one place only, `mise` configuration
+  layers (owner decision OD-7); no second catalog may declare the same tools. The details (data directory path, layer
+  order, which roots are writable) are open until the spike [#319](https://github.com/wstein/workharbor/issues/319) and its
+  ADR.
 - **FR-017**: Cancellation and cleanup MUST be bounded by a deadline, release resources of the instance only, report
   leftovers by id and label, preserve retained results and never delete volumes outside the instance's labelled set.
 - **FR-018**: A conformance suite MUST run against the fake provider and any provider; a provider whose reports exceed
