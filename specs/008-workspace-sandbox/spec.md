@@ -1,5 +1,7 @@
 # Feature Specification: Workspace and sandbox execution model
 
+Status: frozen except the profiles the local walking skeleton needs (owner decision 2026-11-03, see issue #330). Reopening: owner decides. See [project status](../../docs/project-status.md).
+
 ## Pre-ready compatibility clarification (2026-10-20)
 
 Keep current schema_version/profile_version metadata and exact shape/type/policy

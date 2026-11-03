@@ -16,6 +16,7 @@
 - [Milestone roadmap and completion checklists](milestones.md)
 - [Execution plans](exec-plans/README.md)
 - [Quality register](quality.md)
+- [Project status and frozen scope](project-status.md)
 
 ## Architecture decisions
 

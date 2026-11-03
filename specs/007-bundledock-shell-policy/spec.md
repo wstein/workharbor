@@ -1,5 +1,7 @@
 # Feature 007: BundleDock workspace shell policy
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 Status: proposed owner-review scope for issue #81. The direct implementation request
 covers a bounded executable policy port with Starship disabled; it does not approve
 prompt trust, artifact execution, attachment or activation. Feature 002 remains the

@@ -1,5 +1,7 @@
 # Feature Specification: Optional provider-aware development orchestration
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 **Feature identifier**: `005-provider-aware-orchestration`
 **Feature Branch**: `docs/005-provider-aware-orchestration`
 **Created**: 2026-10-13

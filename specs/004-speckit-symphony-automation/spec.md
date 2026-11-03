@@ -1,5 +1,7 @@
 # Feature Specification: Spec Kit and Symphony task automation
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 **Feature identifier**: `004-speckit-symphony-automation`
 **Feature Branch**: `docs/speckit-symphony-automation`
 **Created**: 2026-10-12

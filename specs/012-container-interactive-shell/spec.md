@@ -1,5 +1,7 @@
 # Feature Specification: Interactive shell for the container provider
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 **Feature identifier**: `012-container-interactive-shell`
 **Feature Branch**: `docs/spec012-container-interactive-shell`
 **Created**: 2026-10-31
