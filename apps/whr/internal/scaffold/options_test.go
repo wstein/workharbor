@@ -25,7 +25,7 @@ func TestInitPreservesExistingSettings(t *testing.T) {
 		if !bytes.Equal(p.Files()["workharbor.json"], old) {
 			t.Fatal("a permission alone must not rewrite existing bytes")
 		}
-		if len(p.Preview().Settings) != 1 || p.Preview().Settings["console_mode"].Value != "plain" || p.Preview().Settings["console_mode"].Origin != "default" {
+		if cn := p.Preview().Settings["container_name"]; len(p.Preview().Settings) != 2 || cn.Origin != "derived" || p.Preview().Settings["console_mode"].Value != "plain" || p.Preview().Settings["console_mode"].Origin != "default" {
 			t.Fatalf("only the effective console default may appear; it must not be presented as persisted: %#v", p.Preview().Settings)
 		}
 	}
@@ -144,13 +144,30 @@ func TestInitDerivesContainerNameFromName(t *testing.T) {
 	if !strings.Contains(p.HumanPreview(), "container name whr-cubing") {
 		t.Fatalf("human preview lacks the derived name:\n%s", p.HumanPreview())
 	}
-	o.Name = nil
-	p, err = scaffold.Build(snapshot(), o)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := p.Preview().Settings["container_name"]; ok {
-		t.Fatal("no name, no derived container name")
+}
+
+func TestInitDerivesNameFromDirectoryBasename(t *testing.T) {
+	for _, tc := range []struct{ dir, name, want string }{
+		{"cubing", "", "whr-cubing"}, {"/x/y/cubing/", "", "whr-cubing"}, {"cubing", "other", "whr-other"}, {"My Dir", "", ""},
+	} {
+		s := snapshot()
+		s.Directory = tc.dir
+		o := defaults()
+		o.Name = nil
+		if tc.name != "" {
+			o.Name = str(tc.name)
+		}
+		p, err := scaffold.Build(s, o)
+		if err != nil {
+			t.Fatalf("%+v: %v", tc, err)
+		}
+		got, ok := p.Preview().Settings["container_name"]
+		if tc.want == "" && ok || tc.want != "" && (!ok || got.Value != tc.want || got.Origin != "derived") {
+			t.Errorf("%+v: container_name %+v present=%v", tc, got, ok)
+		}
+		if tc.name == "" && bytes.Contains(p.Files()["workharbor.json"], []byte(`"name"`)) {
+			t.Errorf("%+v: basename default must not be written to the manifest", tc)
+		}
 	}
 }
 
