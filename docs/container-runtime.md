@@ -81,8 +81,8 @@ workspace-folder label. A label naming a missing host directory is intentionally
 refused with exit 68: an unreadable/nonexistent directory cannot establish that
 the manifest file is absent. Other manifest read/validation failures also refuse
 entry. The container user comes from
-`devcontainer.metadata` remoteUser, configured user, then captain (target: vscode, changed together with the walking-skeleton
-code PR, #330). The working
+`devcontainer.metadata` remoteUser, configured user, then captain (target:
+vscode, changed together with the walking-skeleton code PR, #330). The working
 directory is the container mount destination corresponding to the host workspace
 folder, otherwise the validated configured container working directory.
 
