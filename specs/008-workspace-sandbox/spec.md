@@ -343,7 +343,7 @@ outside the instance's own labelled set is touched.
   Host-side path outside `whr`: in `cooperative_job` the linked worktree is a host path (FR-011), so a `mise.toml`,
   `mise.local.toml` or `.envrc` the job writes can run on the Mac host through the owner's own `mise` or `direnv` trust at
   the next `cd`. `whr` cannot prevent it; it is a named residual risk stated in the acknowledgement of FR-011, and any
-  countermeasure is governed by plan OD-8. Decided 2026-11-03 (owner): option (c), staged. `developer` accepts the residual risk of host-side execution (FR-024) now; whether a content binding (reviewed commit, `mise.lock`, or hash of config files, verified outside the sandbox) follows is re-evaluated after spike #319 and decided by the owner then.
+  countermeasure is governed by the decision in plan, OD-8 (decided 2026-11-03, staged).
   Escalation path sandbox to host: an instance can write the configuration of a trusted repository, which would later be
   honored as trusted. Therefore, by profile: for `untrusted_job` the copy is instance-controlled and its configuration stays
   untrusted even when the source repository is trusted; for `cooperative_job` configuration is untrusted even when the repository is trusted,
