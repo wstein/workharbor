@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"fmt"
 	"unicode/utf8"
+
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/wsname"
 )
 
 // File names and limits (FR-055).
@@ -204,7 +206,7 @@ func CheckManifest(raw []byte) ManifestResult {
 		return s
 	}
 	if s, ok := str("name"); ok {
-		if workspaceName.MatchString(s) {
+		if wsname.Valid(s) {
 			m.Name = s
 		} else {
 			schema("name must be 1-64 lowercase letters, digits or hyphens, without a leading or trailing hyphen")

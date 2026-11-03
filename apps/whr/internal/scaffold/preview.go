@@ -60,6 +60,9 @@ func (p *Proposal) HumanPreview() string {
 	for _, warning := range p.preview.AgentsBlockWarnings {
 		fmt.Fprintf(&b, "%s %s: left unchanged\n", warning.Code, warning.Path)
 	}
+	if s, ok := p.preview.Settings["container_name"]; ok {
+		fmt.Fprintf(&b, "container name %s\n", terminal.Escape(fmt.Sprint(s.Value)))
+	}
 	for _, step := range p.preview.NextSteps {
 		b.WriteString(terminal.Escape(step))
 		b.WriteByte('\n')

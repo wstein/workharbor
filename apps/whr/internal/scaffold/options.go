@@ -9,6 +9,7 @@ import (
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/wsname"
 )
 
 // Pointers distinguish an omitted setting from an explicitly supplied value.
@@ -55,6 +56,11 @@ func (o Options) validate() error {
 		}
 	}
 
+	if o.Name != nil {
+		if err := wsname.Check(*o.Name); err != nil {
+			return exitcode.Errorf(exitcode.PathBadArguments, "--name: %s", strings.TrimPrefix(err.Error(), "workspace name "))
+		}
+	}
 	if o.HelperBaseImage != nil && !workspacecfg.DigestPinnedImage(*o.HelperBaseImage) {
 		return exitcode.Errorf(exitcode.PathBadArguments, "--helper-base-image needs an image reference pinned by digest (registry/repository@sha256:<64 hex>)")
 	}

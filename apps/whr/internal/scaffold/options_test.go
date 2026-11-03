@@ -129,3 +129,38 @@ func TestInitInputDiagnosticsDeterministic(t *testing.T) {
 		}
 	}
 }
+
+func TestInitDerivesContainerNameFromName(t *testing.T) {
+	o := defaults()
+	o.Name = str("cubing")
+	p, err := scaffold.Build(snapshot(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := p.Preview().Settings["container_name"]
+	if !ok || got.Value != "whr-cubing" || got.Origin != "derived" {
+		t.Fatalf("container_name setting: %+v (present %v)", got, ok)
+	}
+	if !strings.Contains(p.HumanPreview(), "container name whr-cubing") {
+		t.Fatalf("human preview lacks the derived name:\n%s", p.HumanPreview())
+	}
+	o.Name = nil
+	p, err = scaffold.Build(snapshot(), o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.Preview().Settings["container_name"]; ok {
+		t.Fatal("no name, no derived container name")
+	}
+}
+
+func TestInitNameErrorNamesTheRule(t *testing.T) {
+	for _, bad := range []string{"Upper", "a b", "-a", "a-", "a_b", strings.Repeat("a", 65)} {
+		o := defaults()
+		o.Name = str(bad)
+		_, err := scaffold.Build(snapshot(), o)
+		if int(exitcode.FromError(err)) != 64 || err == nil || !strings.Contains(err.Error(), "--name") || !strings.Contains(err.Error(), "lowercase letters, digits or hyphens") {
+			t.Errorf("%q: want exit 64 naming --name and the rule, got %v", bad, err)
+		}
+	}
+}
