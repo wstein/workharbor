@@ -9,6 +9,7 @@ import (
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/localdocker"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/terminal"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/wsname"
 	"regexp"
 	"strings"
 )
@@ -28,6 +29,13 @@ func Select(all []localdocker.Workspace, selector string) (localdocker.Workspace
 	if len(matches) == 0 && idPrefix.MatchString(selector) {
 		for _, w := range workspaces {
 			if strings.HasPrefix(w.ID, strings.ToLower(selector)) {
+				matches = append(matches, w)
+			}
+		}
+	}
+	if derived := wsname.DerivedFromSelector(selector); len(matches) == 0 && derived != "" {
+		for _, w := range workspaces {
+			if w.Name == derived {
 				matches = append(matches, w)
 			}
 		}

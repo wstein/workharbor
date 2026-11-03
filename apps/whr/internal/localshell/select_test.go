@@ -51,3 +51,23 @@ func TestLocalShellNeverSelectsForeign(t *testing.T) {
 		t.Fatalf("foreign selected: %v", err)
 	}
 }
+
+func TestLocalShellResolvesWorkspaceNameToDerivedContainer(t *testing.T) {
+	ws := func(id, name string) localdocker.Workspace {
+		return localdocker.Workspace{ID: strings.Repeat(id, 64), Name: name, State: "running", Labels: map[string]string{"workharbor.workspace": "x"}}
+	}
+	all := []localdocker.Workspace{ws("a", "whr-cubing"), ws("b", "other")}
+	got, err := Select(all, "cubing")
+	if err != nil || got.Name != "whr-cubing" {
+		t.Fatalf("name selector: %+v %v", got, err)
+	}
+	// An exact container name wins over the derived one.
+	all = append(all, ws("c", "cubing"))
+	if got, err = Select(all, "cubing"); err != nil || got.Name != "cubing" {
+		t.Fatalf("exact name must win: %+v %v", got, err)
+	}
+	// A selector that is no valid workspace name is never derived.
+	if _, err = Select([]localdocker.Workspace{ws("d", "whr-Cu bing")}, "Cu bing"); exitcode.FromError(err) != 65 {
+		t.Fatalf("invalid selector derived: %v", err)
+	}
+}

@@ -122,3 +122,22 @@ func TestLocalRmSelectorErrorsReturnNoPlan(t *testing.T) {
 		}
 	}
 }
+
+func TestLocalRmResolvesWorkspaceNameToDerivedContainer(t *testing.T) {
+	all := removalFixture()
+	all[0].Name = "/whr-cubing"
+	plan, err := planRemoval(all, RemovalOptions{Target: "cubing"})
+	if err != nil || len(plan.Containers) != 1 || plan.Containers[0].Name != "/whr-cubing" {
+		t.Fatalf("plan=%+v err=%v", plan, err)
+	}
+	other := removalFixture()[0]
+	other.ID = strings.Repeat("b", 64)
+	other.Name = "/cubing"
+	plan, err = planRemoval(append(all, other), RemovalOptions{Target: "cubing"})
+	if err != nil || len(plan.Containers) != 1 || plan.Containers[0].Name != "/cubing" {
+		t.Fatalf("exact name must win: plan=%+v err=%v", plan, err)
+	}
+	if _, err = planRemoval(all, RemovalOptions{Target: "Cu bing"}); err == nil {
+		t.Fatal("invalid selector must not derive")
+	}
+}
