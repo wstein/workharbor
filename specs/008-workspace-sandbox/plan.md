@@ -56,7 +56,7 @@ tests show for the stated provider.
 | Workspace container of ADR 0009 | not a sandbox; no host-config mount (FR-024) | | |
 | Host credentials (keychain, SSH agent, tokens) | not provided by whr; the checkout's local config and the host global config apply | not provided by whr; credentials, `insteadOf` rules and hooks in the shared primary `.git/config` are visible and writable (acknowledged) | not provided by whr; a credential an external runner adds is exposed to the instance |
 | Tool-layer configuration from the repository (`mise.toml`; FR-037) | untrusted unless the repository is on the trusted list kept outside the repository; the list is not mounted; the instance can write the config that is later honored (escalation path), residual risk accepted by design (FR-024) | untrusted even for a trusted repository until the content binding of spike #319 exists (the instance writes the shared git directory, so "at the base commit" is not enforceable); list not mounted | untrusted even for a trusted source repository; list not mounted |
-| Host-side execution outside `whr` (FR-011, FR-037): files an instance writes in a host path (`mise.toml`, `mise.local.toml`, `.envrc`, hooks) | the checkout is the owner's own; accepted by design (FR-024) | the linked worktree is a host path; what the job writes runs on the Mac host through the owner's own `mise` or `direnv` trust at the next `cd` or `git` use; `whr` cannot prevent it; named residual risk, stated in the acknowledgement of FR-011, owner decision OD-8 pending | not reachable: the copy is not a host path, results leave only as a patch (FR-007) |
+| Host-side execution outside `whr` (FR-011, FR-037): files an instance writes in a host path (`mise.toml`, `mise.local.toml`, `.envrc`, hooks) | the checkout is the owner's own; accepted by design (FR-024) | the linked worktree is a host path; what the job writes runs on the Mac host through the owner's own `mise` or `direnv` trust at the next `cd` or `git` use; `whr` cannot prevent it; named residual risk, stated in the acknowledgement of FR-011, owner decision OD-8 pending | reachable only through an exported patch the owner applies: files such as `mise.toml`, `.envrc` or `.tool-versions` in a patch are inspected before applying; the copy is placed outside every path the owner enters with `cd` (T011, T013) |
 | `.git/config`, attributes, hooks of the repository (FR-007, FR-009, FR-010, FR-023, FR-037) | never executed or honored by `whr` on trust | same | same |
 | Tool roots (FR-016; BundleDock provider: `/opt/bdock/<bundle>`, `bundledock-*`) | read-only; writable only if the provider declares the root writable (never BundleDock) | read-only | read-only |
 | Host Docker socket | never mounted | never mounted | never mounted |
@@ -92,7 +92,7 @@ Owner repository is `wstein/workharbor` for all rows except the Anchorage consum
 ## Owner decisions
 
 Resolved on 2026-10-20 and recorded in the spec: the git configuration profile, backend neutrality, the PR target (`main`), the
-owner statement on the Mac host and the Docker VM, and OD-1 to OD-5 below; OD-6 and OD-7 (2026-11-03, issue #320) follow.
+owner statement on the Mac host and the Docker VM, and OD-1 to OD-5 below; OD-6 and OD-7 (2026-11-03, issue #320) follow; OD-8 is open with the owner.
 
 | ID | Decision (owner, 2026-10-20 unless dated) |
 | --- | --- |
@@ -103,7 +103,7 @@ owner statement on the Mac host and the Docker VM, and OD-1 to OD-5 below; OD-6 
 | OD-5 | The Mac-host git check and move are carried by Feature 009: doctor check `git.global_config` and the `git-config` step of the macOS `setup` wizard and `doctor --fix`; no `whr host git-config move` command (Feature 009 DP-4, AP-8; see below). |
 | OD-6 | 2026-11-03: repository configuration is untrusted unless the repository is on the owner's trusted list that `whr` keeps outside the repository; own repositories are trusted, all others are not (FR-037). Location and identity binding: T019. Content binding of trust (reviewed commit or `mise.lock`) is open for spike #319. |
 | OD-7 | 2026-11-03: only the `developer` profile may write a tool root, and only one its provider declares writable; BundleDock roots are never writable (FR-016). Also recorded as an owner decision: one source of truth for tools, `mise` configuration layers; the `mise` data directory is the primary tool provider and BundleDock volumes a subordinate provider for base image content. Details (path, layers, writable root) open until spike #319. |
-| OD-8 | Open (owner): the host-side path of a `cooperative_job` worktree (files the job writes run on the Mac host through the owner's `mise` or `direnv` trust). Recorded as a named residual risk stated in the FR-011 acknowledgement; whether to add a countermeasure (for example a content binding, #319) is the owner's decision. |
+| OD-8 | Open (owner); T008 does not wait for it and ships `cooperative_job` with the named residual risk: the host-side path of a `cooperative_job` worktree (files the job writes run on the Mac host through the owner's `mise` or `direnv` trust). Recorded as a named residual risk stated in the FR-011 acknowledgement; whether to add a countermeasure (for example a content binding, #319) is the owner's decision. |
 
 ### OD-5 (resolved 2026-10-20)
 
