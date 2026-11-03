@@ -1,0 +1,3 @@
+#!/bin/bash
+T=$CLAUDE_JOB_DIR/tmp; . $T/lin/img.env; mkdir -p $T/lin/rwdata
+docker run --rm -v $T/lin/bin/mise:/usr/local/bin/mise:ro -v $T/lin/data:/store:ro -v $T/lin/rwdata:/mise/data -v $T/lin/proj:/proj -w /proj --tmpfs /mise/cache --tmpfs /mise/state -e MISE_DATA_DIR=/mise/data -e MISE_CACHE_DIR=/mise/cache -e MISE_STATE_DIR=/mise/state -e MISE_SHARED_INSTALL_DIRS=/store/installs -e HOME=/tmp/h -e MISE_YES=1 $IMG bash -c 'mise ls --current; mise exec -- rg --version | head -1; mise install --locked 2>&1 | tail -2; ls /mise/data/installs 2>&1; printf "[tools]\nshellcheck=\"0.11.0\"\n" > mise.local.toml; mise install shellcheck@0.11.0 2>&1 | tail -1; ls /mise/data/installs; rm mise.local.toml'
