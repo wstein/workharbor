@@ -66,7 +66,6 @@ var (
 	// project.url and .gitmodules URLs: dot-separated labels of letters, digits and inner
 	// hyphens, none empty, with one optional trailing dot.
 	hostNamePattern = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.?$`)
-	workspaceName   = regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$`)
 )
 
 const maxURL = 2048

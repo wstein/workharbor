@@ -13,6 +13,7 @@ import (
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/workspacecfg"
+	"github.com/wstein/workharbor-nxt/apps/whr/internal/wsname"
 )
 
 const defaultDevcontainer = ".devcontainer/devcontainer.json"
@@ -162,6 +163,13 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 			*values[key] = *flag
 			p.preview.Settings[key] = Setting{*flag, "flag"}
 		}
+	}
+	if doc.Name != "" {
+		container, err := wsname.ContainerName(doc.Name, "")
+		if err != nil {
+			return nil, err
+		}
+		p.preview.Settings["container_name"] = Setting{container, "derived"}
 	}
 	if o.ProjectURL != nil {
 		doc.Project = &project{*o.ProjectURL, doc.ProjectsPath + "/" + projectName(*o.ProjectURL)}
