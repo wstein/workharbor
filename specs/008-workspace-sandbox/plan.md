@@ -29,7 +29,7 @@ later provider specification that adds a provider and its tests and changes no c
 | --- | --- | --- |
 | T025 foundation (`exitcode`, `output`) | exit table and envelope types | prerequisite of 008 T004 |
 | T038 local lifecycle (`localdocker`: 5 s bounded inspection, ownership gate, volume protection) | the `DockerAPI` port, label gate and `bundledock-*` protection | 008 Stage 2 reuses it; if T038 is not on `main`, stop and ask instead of reimplementing |
-| T039 drift reporting | none; tool-mount drift stays there | no overlap: 008 only forbids writable tool mounts |
+| T039 drift reporting | none; tool-mount drift stays there | no overlap: 008 only restricts writable tool roots to `developer` (FR-016) |
 | T027 doctor catalogue, T016 | the read-only git-config check is the doctor check `git.global_config` (OD-5, resolved by Feature 009) | wiring is owner gate OG-5, Feature 009 T011; T005 ships the library only |
 | T015 host setup | none; FR-026's Mac-host step is not T015 | OD-5 (resolved by Feature 009): the Mac-host step is the macOS `setup` wizard of Feature 009; T015 and FR-009 stay Linux-only and are not changed here |
 
@@ -55,7 +55,7 @@ tests show for the stated provider.
 | Host global git configuration | mounted rw (owner decision); anything running there can write `credential.helper=!cmd`, `core.fsmonitor`, `core.sshCommand`, `core.hooksPath` or `alias.*`, which runs on the Mac host as the owner at the next git use; whr cannot detect an agent run here | not mounted | not mounted |
 | Workspace container of ADR 0009 | not a sandbox; no host-config mount (FR-024) | | |
 | Host credentials (keychain, SSH agent, tokens) | not provided by whr; the checkout's local config and the host global config apply | not provided by whr; credentials, `insteadOf` rules and hooks in the shared primary `.git/config` are visible and writable (acknowledged) | not provided by whr; a credential an external runner adds is exposed to the instance |
-| Tool roots `/opt/bdock/<bundle>`, `bundledock-*` | read-only | read-only | read-only |
+| Tool roots (FR-016; BundleDock provider: `/opt/bdock/<bundle>`, `bundledock-*`) | read-only; writable only if the provider declares the root writable (never BundleDock) | read-only | read-only |
 | Host Docker socket | never mounted | never mounted | never mounted |
 | Network (the sandbox is not offline, FR-036) | unrestricted; `egress_enforcement=none` | unrestricted; `egress_enforcement=none` | unrestricted; `egress_enforcement=none`; exfiltration over the network is not prevented |
 
@@ -75,7 +75,7 @@ Owner repository is `wstein/workharbor` for all rows except the Anchorage consum
 | FR-002 to FR-006, FR-008, SC-006 | T001 | `TestStateTransitionTable`, `TestIDFormatAndUniqueness`, `TestForeignObjectRefused`, `TestKeepThenCleanKeeps` | `apps/whr/internal/sandbox/*_test.go` |
 | FR-019 to FR-022, SC-003 | T001 | `TestDeveloperPlanMountsDirectory`, `TestSingleFileConfigMountRefused`, `TestHostOnlyKeysReportedWithoutValues`, `TestPreflightEBUSYBlocksReady` | `apps/whr/internal/gitprofile/*_test.go` |
 | FR-023 to FR-025, FR-030, SC-004, SC-012 | T002 | `TestAgentProfileMatchesContract`, `TestAgentNeverMountsHostConfig`, `TestCanaryKeysPerEnvironment`, `TestCommitWithoutIdentityFails`, `TestExecScrubsGitControlEnvForJobs`, `TestDeveloperRefusesGitConfigEnv`, `TestWorkspaceContainerPlanHasNoHostConfigMount` | same |
-| FR-009 to FR-011, FR-016, FR-027, SC-005 | T006, T007 | `TestCanaryAssetsAbsentUntrusted`, `TestCooperativeNeedsAcknowledgement`, `TestToolMountsReadOnly` | `apps/whr/internal/runtime/canary_test.go` |
+| FR-009 to FR-011, FR-016, FR-027, SC-005 | T006, T007 | `TestCanaryAssetsAbsentUntrusted`, `TestCooperativeNeedsAcknowledgement`, `TestToolMountsReadOnly`; writable developer roots: `TestToolRootWritableOnlyInDeveloper`, `TestBundleDockRootNeverWritable` (T019, after the provider decision) | `apps/whr/internal/runtime/canary_test.go` |
 | FR-007, SC-011 | T011 | `TestExportPatchAndManifest`, `TestExportParentRepoHostileConfigIgnored`, `TestExportNeverPushes`, `TestExportIgnoresInstanceGitConfig`, `TestExportFromFailedInstance`, `TestResultDirSymlinkSafe` | `apps/whr/internal/runtime/result/*_test.go` |
 | FR-036, SC-013 | T008, T013 | `TestContainerProviderReportsEgressNone`, `TestAdmitTable` (egress rows), `TestNoOfflineClaimInMessages` | `apps/whr/internal/runtime/docker/*_test.go`, `apps/whr/internal/runtime/*_test.go` |
 | FR-017, SC-007 | T013, 006/T038 | `TestCancelPreservesResults`, `TestCleanupOnlyTouchesLabelledObjects` | `apps/whr/internal/runtime/docker/*_test.go` |
@@ -110,6 +110,13 @@ Linux-only. Stage 1 depends on OD-5 only for the read-only doctor check (T005 li
 
 A-3 (analysis): the earlier reading of T015 as a control-plane server is withdrawn; T015 mutates the Linux host it enrolls and
 the owner statement concerns the Docker VM. No owner-decision note on T015 is needed beyond OD-5.
+
+## Open decision: tool layer (spike #319)
+
+The spike [#319](https://github.com/wstein/workharbor/issues/319) decides whether `mise` becomes a tool layer next to
+BundleDock. No ADR is written before it. Until then this feature specifies only the generic tool root (FR-016) and the
+BundleDock provider; a `mise` data directory is a candidate provider and Feature 007 stays as is. A provider that declares a
+writable root and the capability value for it are decided with that ADR (T019).
 
 ## Owner gates
 
