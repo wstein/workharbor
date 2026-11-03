@@ -1,5 +1,7 @@
 # Feature Specification: Host and workspace panes in one host session
 
+Status: frozen (owner decision 2026-11-03, see issue #330). Reopening: owner decides. The status text below is the state at freeze time and is unchanged. See [project status](../../docs/project-status.md).
+
 **Feature identifier**: `010-host-and-workspace-panes`
 **Feature Branch**: `docs/spec-010-host-and-workspace-panes`
 **Created**: 2026-10-23
@@ -127,7 +129,7 @@ harness and assert the exact argument vectors, the exit codes and the refusals. 
 
 **Acceptance Scenarios**:
 
-1. **Given** one running labelled workspace container `ws-a` with remote user `captain` and workspace folder `/workspaces/a`,
+1. **Given** one running labelled workspace container `ws-a` with remote user `vscode` and workspace folder `/workspaces/a`,
    **When** `whr shell --local ws-a` runs on a terminal, **Then** `whr` runs one read-only `docker inspect` and exactly one
    `docker exec`, with the byte-exact vectors of FR-004, and no shell string is evaluated.
 2. **Given** that shell, **When** the owner runs `exit 7`, **Then** `whr` exits 7 and writes no `whr:` line; **When** the shell is
@@ -304,7 +306,7 @@ multiplexer nested in their host pane.
   running in the container; the start notice names the sequence (FR-010) to keep that visible.
 - **FR-005**: Values for the exec vector. `<name>` MUST be the container name and match `[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}`.
   `<user>` MUST be, in order, the `remoteUser` of the `devcontainer.metadata` label, the container's configured user, and
-  otherwise `captain`; it MUST match `[a-z_][a-z0-9_-]{0,31}` or be a numeric uid with an optional `:gid`. `<dir>` MUST be the
+  otherwise `vscode`; it MUST match `[a-z_][a-z0-9_-]{0,31}` or be a numeric uid with an optional `:gid`. `<dir>` MUST be the
   in-container path of the workspace folder (the mount destination matching the host `workspace_folder` of FR-066); when none is
   determinable it is the container's configured working directory and a warning names the fallback. `<dir>` MUST be an absolute path
   of at most 4096 bytes without NUL or newline. `<term>` MUST be the host `TERM` when it matches `[A-Za-z0-9._+-]{1,64}`, otherwise
