@@ -1393,6 +1393,15 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   [the local bundle drift contract](contracts/local-bundle-drift.md). Both drift and unknown use exit 68,
   distinguished by report status; unknown dominates mixed evidence. Canonical volume names establish only
   declared reference alignment, never content attestation. Other pin protocols remain unsupported.
+- **FR-070**: A workspace name is 1-64 lowercase letters, digits or hyphens without a leading or trailing hyphen (the
+  manifest `name` rule, FR-058; `--name` MUST enforce the same rule and exit 64 otherwise). The default container and
+  volume name of a workspace is `whr-<name>`, defined by one function that `init`, `shell`, `ls`, `rm` and later `create`
+  use. An explicit override replaces the default and is not validated against the workspace name rule. `init --dry-run`
+  reports the derived name as `settings.container_name` (source `derived`). `shell --local` and `rm --local` resolve a
+  selector in this order: exact container name, full ID or 12-64-hex ID prefix, then `whr-<selector>` when the selector is a
+  valid workspace name; the first step that matches wins. Existing fixed names (`whr-anchorage-staging`,
+  `whr-recover-<op>`, `whr-stage-home-<id>`, `anchorage-home-*`) are unchanged; a workspace name can derive such a name
+  and is then addressed by it.
 - **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
   credential or provider account (FR-028). No secret is accepted, read, stored or printed by them: a
   `--project-url` with `https` userinfo or any password or token (`ssh://git@host/...` is admitted) and a `.gitmodules`
