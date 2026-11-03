@@ -218,7 +218,7 @@ outside the instance's own labelled set is touched.
   The copy's `.git/config` is generated and MUST NOT carry remotes with credentials, `credential.*`, `url.*.insteadOf`
   or include paths from the primary.
 - **FR-011**: A `cooperative_job` MUST require an explicit acknowledgement that the worktree shares repository metadata,
-  refs, hooks and the primary `.git/config` (including any credentials or `url.*.insteadOf` rules in it); the instance record,
+  refs, hooks and the primary `.git/config` (including any credentials or `url.*.insteadOf` rules in it), and that files the job writes in the worktree (`mise.toml`, `mise.local.toml`, `.envrc`, hooks) can run on the host through the owner's own tools (FR-037); the instance record,
   labels and manifest MUST carry `shared_git_metadata=writable`. In this increment the linked worktree is supplied by the
   operator; `whr` MUST NOT run `git worktree add`, `remove` or `prune` (they write primary `.git/worktrees`). The worktree's
   `.git` file holds an absolute host path, so the worktree and its common git directory MUST be mounted at their host
@@ -328,8 +328,8 @@ outside the instance's own labelled set is touched.
   specification; until then a request requiring more than `none` is refused (`refused.egress_enforcement_unavailable`,
   FR-013). No text, profile name, label, result record or message of this feature may describe a sandbox as offline,
   isolated from the network or exfiltration-safe; "offline" appears only for the tests (FR-032).
-- **FR-037**: Tool-layer configuration read from the checked-out repository (for example `mise.toml`: tools, tasks, hooks and
-  environment templates) is untrusted input. `whr` MUST NOT execute it, apply it, mark it trusted on the user's behalf or
+- **FR-037**: Tool-layer configuration read from the checked-out repository (tools, tasks, hooks and environment templates; the input
+  files are `mise.toml`, `.mise.toml`, `mise.local.toml`, `mise.<env>.toml`, `.config/mise/`, `.tool-versions`, files included through `_.file` or `_.source`, parent directories and submodule configurations (mise's discovery semantics are UNKNOWN until checked in spike #319))  is untrusted input. `whr` MUST NOT execute it, apply it, mark it trusted on the user's behalf or
   base an admission, mount or environment decision on it, unless the repository is on the **trusted list**: the
   owner-maintained list of repositories that `whr` keeps outside the repository (owner decision OD-6: the owner's own
   repositories are trusted, all others are not). This exception never relaxes FR-007, FR-009, FR-010 or FR-023: `whr` never
@@ -340,11 +340,16 @@ outside the instance's own labelled set is touched.
   list is mounted into no instance of any profile. A repository's identity for the list MUST NOT rest only on content the
   repository controls (a remote URL in `.git/config`, a name in a file of the tree). Absent list, unreadable list or unknown
   repository means untrusted.
+  Host-side path outside `whr`: in `cooperative_job` the linked worktree is a host path (FR-011), so a `mise.toml`,
+  `mise.local.toml` or `.envrc` the job writes can run on the Mac host through the owner's own `mise` or `direnv` trust at
+  the next `cd`. `whr` cannot prevent it; it is a named residual risk stated in the acknowledgement of FR-011, and any
+  countermeasure is an open owner decision (plan, OD-8).
   Escalation path sandbox to host: an instance can write the configuration of a trusted repository, which would later be
   honored as trusted. Therefore, by profile: for `untrusted_job` the copy is instance-controlled and its configuration stays
-  untrusted even when the source repository is trusted; for `cooperative_job` configuration is trusted only as it is at the
-  base commit recorded at create (FR-007), and any content the instance wrote or committed is untrusted until the owner has
-  reviewed it outside the instance; for `developer` the residual risk is accepted by design, as in FR-024 (whatever runs
+  untrusted even when the source repository is trusted; for `cooperative_job` configuration is untrusted even when the repository is trusted,
+  until the content binding of spike #319 exists, because the instance writes the shared git directory (replace refs,
+  alternates, injected objects, commits that a later instance would start from) and `whr` cannot tell reviewed from unreviewed
+  content (a possible binding is the base snapshot hash of FR-007, read with replace objects and alternates disabled); for `developer` the residual risk is accepted by design, as in FR-024 (whatever runs
   there is trusted at the owner's level). Binding trust to reviewed content (a reviewed commit, a committed `mise.lock` or a
   hash of the configuration files, checked outside the sandbox) is an open decision for the spike
   [#319](https://github.com/wstein/workharbor/issues/319) and T019; it keeps OD-6, because own repositories stay trusted at
@@ -405,7 +410,7 @@ OwnershipLabels, ResultBundle, CopyPolicy, GitProfileReport, HostOnlyFinding ([d
   creation message calls an instance offline (FR-036, FR-013).
 - **SC-014**: A repository absent from the trusted list is untrusted, and no canary the repository or a sandbox can write
   (`.git/config` key, tree file, remote URL, workspace home or host git configuration directory entry) makes it trusted; the
-  list is mounted into no profile; a job copy of a trusted repository stays untrusted, `cooperative_job` content written by the instance is untrusted, and `.git/config`, attributes and hooks are never honored on trust (FR-037).
+  list is mounted into no profile; a job copy of a trusted repository stays untrusted, `cooperative_job` configuration is untrusted until the content binding of #319 exists, and `.git/config`, attributes and hooks are never honored on trust (FR-037).
 
 ## Assumptions
 
