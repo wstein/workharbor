@@ -21,7 +21,7 @@ or PR link (WORKFLOW.md). Research input: `IDEAS_NOTES.md` sections 4 to 11 of t
 stated in this specification).
 **Related**: [Feature 006](../006-whr-cli/spec.md) (FR-030 of Feature 006, FR-066 to FR-069, T038, T039),
 [ADR 0009](../../docs/adr/0009-in-container-ai-agents.md), [ADR 0013](../../docs/adr/0013-whr-exit-codes.md),
-[ADR 0014](../../docs/adr/0014-whr-command-structure.md), [Feature 007](../007-bundledock-shell-policy/spec.md).
+[ADR 0014](../../docs/adr/0014-whr-command-structure.md), [Feature 007](../007-bundledock-shell-policy/spec.md) (unchanged; depends on the open spike [#319](https://github.com/wstein/workharbor/issues/319)).
 
 ## Context and scope
 
@@ -81,6 +81,9 @@ workspace, and no statement of what a container backend does and does not protec
   selected provider does not declare is refused; there is no fallback and no provider-specific behavior hidden from the
   contract. Providers beyond the container provider are separate provider specifications.
 - **2026-10-20 (PR target)**: pull requests for this feature target `main`.
+- **2026-11-03 (tool roots, OD-7, issue #320)**: tool mounts are generic tool roots supplied by tool providers; only the
+  `developer` profile may write a tool root, and only one its provider declares writable (FR-016). The provider decision
+  (mise as tool layer) stays open until spike #319 and its ADR; Feature 007 is unchanged until then.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -228,8 +231,15 @@ outside the instance's own labelled set is touched.
 - **FR-014**: A request for `kernel_isolation=microvm` MUST NEVER be satisfied by a shared-kernel container provider.
   Provider selection MUST NOT substitute another provider kind implicitly.
 - **FR-015**: Capability values are `enforced`, `not_enforced` or `unknown`; `unknown` never satisfies a requirement.
-- **FR-016**: Tool bundles are mounted read-only at `/opt/bdock/<bundle>`; no instance profile may mount them writable or
-  remove, replace or write `bundledock-*` volumes.
+- **FR-016**: Tool mounts are a generic concept, the **tool root**: a directory mounted into the instance that supplies
+  tools and is delivered by a **tool provider**. A tool root has an access mode, `ro` or `rw`, and is `ro` by default. A
+  tool root MUST be `ro` in `cooperative_job` and `untrusted_job`. It MAY be `rw` only in `developer`, only when its provider
+  declares it writable (owner decision OD-7). A writable tool root in any other profile is refused
+  (`refused.tool_mount_writable`). No instance profile may remove or replace a tool root's backing volume or directory. The
+  BundleDock provider's roots are always `ro` in every profile. Tool providers and their paths are named only in the tool
+  provider section of [runtime-provider.md](contracts/runtime-provider.md#tool-root-providers); no other requirement names a
+  provider path. Which providers exist beyond BundleDock (a `mise` data directory is a candidate) is open until the spike
+  [#319](https://github.com/wstein/workharbor/issues/319) and its ADR.
 - **FR-017**: Cancellation and cleanup MUST be bounded by a deadline, release resources of the instance only, report
   leftovers by id and label, preserve retained results and never delete volumes outside the instance's labelled set.
 - **FR-018**: A conformance suite MUST run against the fake provider and any provider; a provider whose reports exceed
@@ -286,7 +296,7 @@ outside the instance's own labelled set is touched.
   primary `.git/config` (including any credentials or `url.*.insteadOf` rules in it) are visible and writable, acknowledged
   through `--acknowledge-shared-git` (FR-011), while the keychain and other host credentials, sibling workspaces, primary
   home, Docker socket and host global git configuration are absent; `developer`: checkout, home and host global git
-  configuration are writable by design, the Docker socket and sibling workspaces are absent. Tool roots are read-only in all.
+  configuration are writable by design, the Docker socket and sibling workspaces are absent. Tool roots are read-only in `cooperative_job` and `untrusted_job`; in `developer` they are read-only unless the provider declares a root writable, and BundleDock roots are read-only there too (FR-016).
 
 **Command surface and boundary**
 
