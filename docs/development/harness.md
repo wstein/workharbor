@@ -18,7 +18,6 @@ Python, Go, Node, Elixir and Erlang versions; the pin file stays the only author
 On a host with mise and none of the pinned tools:
 
 ```sh
-mise trust            # once per checkout
 mise install          # installs every tool pinned in .tool-versions
 mise exec -- make check
 ```
