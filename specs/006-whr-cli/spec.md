@@ -1276,8 +1276,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   `--role <primary|staging|temp>` or `--label <key[=value]>` filters discovery accordingly; foreign, unlabelled containers
   are never returned. For each matched container, discovery reports: `id` (64-hex container ID; 12-char prefix in human
   output), `name` (without leading slash), `role` (`primary`, `staging`, `temp`), `image` reference, `state` and `status`,
-  `workspace_folder` (from labels or bind mounts), `labels`, `home_volume` (named volume mounted at `/home/vscode` or legacy
-  `/home/captain`, or null), and `protected_volumes` (read-only volumes, mounts under `/opt/bdock/*` and `bundledock-*` tool
+  `workspace_folder` (from labels or bind mounts), `labels`, `home_volume` (named volume mounted at `/home/captain` or legacy
+  `/home/vscode`, or null), and `protected_volumes` (read-only volumes, mounts under `/opt/bdock/*` and `bundledock-*` tool
   volumes). Terminal output is escaped per FR-022; `--json` emits a validated `localWorkspaceListResult`. Omitting `--local`
   preserves the remote control-plane contract (exit 64). `shell --local` (Feature 010) reuses this discovery, label rules and socket
   rules; it does not copy them.
@@ -1287,8 +1287,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   omitting selectors or providing conflicting selectors is a usage error (64).
   (b) Pre-mutation ownership check: before stopping or removing any container, `whr` verifies that the target carries a
   recognized workspace/devcontainer label; foreign unlabelled containers are refused with exit 68 (`conflict`) with zero mutations.
-  (c) Hard volume invariant 1 (Default preservation): removing or recreating a container preserves its `/home/vscode` (or
-  legacy `/home/captain`) named home volume by default and states `preserve_home_volume: true` in the preview,
+  (c) Hard volume invariant 1 (Default preservation): removing or recreating a container preserves its `/home/captain` (or
+  legacy `/home/vscode`) named home volume by default and states `preserve_home_volume: true` in the preview,
   except the receipt-bound new whr-managed staging candidates in the owner
   [throwaway amendment of 2026-10-25](contracts/throwaway-staging-amendment-20261025.md).
   Their normal confirmed removal deletes all candidate artifacts, including home,

@@ -18,6 +18,6 @@ deleted, and not extended until the owner reopens it. Reopening: owner decides.
 - Heavy CI runs only at the stack tip, triggered by the label `ci-full` (see [AGENTS.md](../AGENTS.md)). The workflow
   does not evaluate the label yet; changing it is an owner task.
 - The `AGENTS.md` and `.claude` files written by `init` are opt-in. Implementation belongs to the skeleton work.
-- The default workspace user is `vscode` (home `/home/vscode`). Documentation uses `vscode`. Code fallbacks to
-  `captain` remain until the skeleton work changes them.
-- `fish` is provided through mise.
+- The default workspace user stays `captain`. `whr create` creates it with `docker exec` (adduser or useradd); a
+  Dockerfile is optional. The Anchorage devcontainer keeps `vscode` through `remoteUser`.
+- `fish` is provided through mise for the developer profile only. AI containers use bash or ash.
