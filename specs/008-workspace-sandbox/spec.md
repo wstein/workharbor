@@ -244,8 +244,9 @@ outside the instance's own labelled set is touched.
   BundleDock provider's roots are always `ro` in every profile. Tool providers and their paths are named only in the tool
   provider section of [runtime-provider.md](contracts/runtime-provider.md#tool-root-providers); no other requirement names a
   provider path. The primary tool provider is the `mise` data directory; BundleDock volumes are a subordinate provider for
-  base image content (the toolbox, which contains `mise`). Tools are declared in one place only, `mise` configuration
-  layers (owner decision OD-7); no second catalog may declare the same tools. The details (data directory path, layer
+  base image content (the toolbox, which contains `mise`). Owner decision OD-7, a direction and not a requirement of
+  this feature until the spike settles it: tools are declared in one place only, the `mise` configuration layers, with no
+  second catalog for the same tools; Features 007 and 009 are unchanged and do not yet follow it. The details (data directory path, layer
   order, which roots are writable) are open until the spike [#319](https://github.com/wstein/workharbor/issues/319) and its
   ADR.
 - **FR-017**: Cancellation and cleanup MUST be bounded by a deadline, release resources of the instance only, report
@@ -318,6 +319,9 @@ outside the instance's own labelled set is touched.
 - **FR-030**: `whr` MUST NOT receive, store or relay provider credentials for an instance. The four identity variables of
   FR-023 are not credentials; their values MUST NOT be logged. A credential an external runner places in an instance is
   outside `whr` and exposed to that instance.
+- **FR-035**: Errors map to ADR 0013 codes without new codes: usage 64, not found 65, capability refusal, foreign
+  object and wrong state 68, needs-human 70, timeout 71, interrupt 72, incomplete cleanup 73, internal 74. The stable
+  refusal code travels in a separate field; the mapping is one pure function with a freeze test.
 - **FR-036**: A sandbox is NOT offline. In this increment every profile has unrestricted network access and the standard
   container provider reports `egress_enforcement=none` (proxy variables, if set, configure cooperative clients and enforce
   nothing). The values `cooperative_proxy`, `enforced_allowlist` and `enforced_deny` are a later increment with their own
@@ -346,9 +350,6 @@ outside the instance's own labelled set is touched.
   [#319](https://github.com/wstein/workharbor/issues/319) and T019; it keeps OD-6, because own repositories stay trusted at
   their reviewed state. The list's location, identity binding and the way the owner edits it are decided in T019; no command is
   registered for it in Stage 1 (FR-028).
-- **FR-035**: Errors map to ADR 0013 codes without new codes: usage 64, not found 65, capability refusal, foreign
-  object and wrong state 68, needs-human 70, timeout 71, interrupt 72, incomplete cleanup 73, internal 74. The stable
-  refusal code travels in a separate field; the mapping is one pure function with a freeze test.
 
 **Increment**
 
@@ -398,13 +399,13 @@ OwnershipLabels, ResultBundle, CopyPolicy, GitProfileReport, HostOnlyFinding ([d
 - **SC-011**: Export from a finished and from a failed instance yields a patch and manifest; hostile `.git/config` and
   attributes canaries in the copy (fsmonitor, textconv, external diff, filter, hooks) execute nothing; the result directory
   refuses symlink and swap tricks; nothing is pushed or applied to the primary checkout (FR-007).
+- **SC-012**: Operator-supplied git-control variables are scrubbed for job profiles and refused for `developer` (FR-023).
 - **SC-013**: Every profile of the standard container provider reports `egress_enforcement=none`, the plans of all profiles
   carry no network restriction, a requirement above `none` is refused with zero provider calls, and no refusal, result or
   creation message calls an instance offline (FR-036, FR-013).
 - **SC-014**: A repository absent from the trusted list is untrusted, and no canary the repository or a sandbox can write
   (`.git/config` key, tree file, remote URL, workspace home or host git configuration directory entry) makes it trusted; the
   list is mounted into no profile; a job copy of a trusted repository stays untrusted, `cooperative_job` content written by the instance is untrusted, and `.git/config`, attributes and hooks are never honored on trust (FR-037).
-- **SC-012**: Operator-supplied git-control variables are scrubbed for job profiles and refused for `developer` (FR-023).
 
 ## Assumptions
 
