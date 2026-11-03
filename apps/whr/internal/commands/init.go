@@ -3,8 +3,11 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
+	"os"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
@@ -29,7 +32,7 @@ func initHandler(ctx context.Context, call Call) (Result, error) {
 }
 
 // initWithApply is a private failure-output seam; it exposes no CLI flag.
-func initWithApply(ctx context.Context, call Call, apply func(context.Context, *scaffold.Proposal) (scaffold.Preview, error)) (Result, error) {
+func initWithApply(ctx context.Context, call Call, apply func(context.Context, *scaffold.Proposal) (scaffold.Preview, error)) (res Result, retErr error) {
 	invocation, ok := ctx.Value(initContextKey{}).(initInvocation)
 	if !ok {
 		return Result{}, exitcode.Errorf(exitcode.PathUnclassified, "init options are unavailable")
@@ -44,7 +47,29 @@ func initWithApply(ctx context.Context, call Call, apply func(context.Context, *
 	if len(call.Args) == 1 {
 		directory = call.Args[0]
 	}
-	snapshot, err := scaffold.DiscoverWithOptions(ctx, directory, invocation.options)
+	// A missing target directory is created for a real run (removed again if
+	// init fails while it is still empty); a dry run plans against an empty one.
+	_, statErr := os.Lstat(directory)
+	missing := len(call.Args) == 1 && errors.Is(statErr, fs.ErrNotExist)
+	if missing && !invocation.options.DryRun {
+		if err := os.Mkdir(directory, 0o755); errors.Is(err, fs.ErrNotExist) {
+			return Result{}, exitcode.Errorf(exitcode.PathTargetAbsent, "init directory does not exist and its parent is missing")
+		} else if err != nil {
+			return Result{}, exitcode.Errorf(exitcode.PathConflict, "init directory cannot be created: %v", err)
+		}
+		defer func() {
+			if retErr != nil {
+				_ = os.Remove(directory)
+			}
+		}()
+	}
+	var snapshot scaffold.Snapshot
+	var err error
+	if missing && invocation.options.DryRun {
+		snapshot = scaffold.Snapshot{Directory: directory, Entries: map[string]scaffold.Entry{}}
+	} else {
+		snapshot, err = scaffold.DiscoverWithOptions(ctx, directory, invocation.options)
+	}
 	if err != nil {
 		return Result{}, initFailure(ctx, directory, invocation.options.DryRun, nil, err)
 	}

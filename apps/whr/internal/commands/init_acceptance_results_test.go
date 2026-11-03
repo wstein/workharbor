@@ -130,7 +130,7 @@ func TestInitExitCodes(t *testing.T) {
 					args = append(args, "--human-shell=unsupported")
 				case "absent":
 					want = 65
-					args[1] = filepath.Join(dir, "absent")
+					args[1] = filepath.Join(dir, "absent", "leaf") // missing parent: a missing leaf is created (FR-070)
 				case "conflict":
 					want = 68
 					if err := os.WriteFile(filepath.Join(dir, "workharbor.json"), []byte(`{"schema_version":true}`), 0600); err != nil {

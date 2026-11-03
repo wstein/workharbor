@@ -1401,7 +1401,13 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   selector in this order: exact container name, full ID or 12-64-hex ID prefix, then `whr-<selector>` when the selector is a
   valid workspace name; the first step that matches wins. Existing fixed names (`whr-anchorage-staging`,
   `whr-recover-<op>`, `whr-stage-home-<id>`, `anchorage-home-*`) are unchanged; a workspace name can derive such a name
-  and is then addressed by it.
+  and is then addressed by it. `whr workspace init <dir>` takes the workspace directory as its positional argument (default
+  `.`); a missing `<dir>` whose parent exists is created for a real run (and removed again when init fails while it is
+  empty) and planned as an empty directory in a dry run; a missing parent exits 65. Without `--name`, the workspace name
+  defaults to the basename of `<dir>` when that is a valid workspace name; the default derives the container name only and is
+  not written to the manifest. `--start-dir` is the session start directory inside the workspace, not the target.
+  Init still requires the existing devcontainer file (FR-056 narrowing); a fresh directory therefore fails with exit 70
+  until a starter or `--devcontainer` source exists.
 - **FR-062**: The commands of the first increment MUST work offline, unattended where their flags allow and without a
   credential or provider account (FR-028). No secret is accepted, read, stored or printed by them: a
   `--project-url` with `https` userinfo or any password or token (`ssh://git@host/...` is admitted) and a `.gitmodules`
