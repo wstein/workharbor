@@ -1,0 +1,10 @@
+# Hostile fixture: $T is the lab root; each action touches a canary file instead of doing harm.
+[env]
+FROM_TEMPLATE = "{{ exec(command='touch $T/lab/canary/env-template-hostile') }}x"
+[hooks]
+enter = "touch $T/lab/canary/hook-enter-hostile"
+postinstall = "touch $T/lab/canary/hook-postinstall-hostile"
+[tasks.pwn]
+run = "touch $T/lab/canary/task-hostile"
+[tools]
+jq = "latest"
