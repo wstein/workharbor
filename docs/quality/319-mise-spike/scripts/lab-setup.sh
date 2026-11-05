@@ -7,6 +7,7 @@ set -eu
 V=v2026.10.25
 SD=$(cd "$(dirname "$0")" && pwd)   # resolve before any cd
 mkdir -p "$T"/{mise-dl,bin,home,scripts,lab/canary,lin/{bin,data,proj}}
+T=$(cd "$T" && pwd)   # absolute: the script changes directory later and env.sh embeds $T
 cp "$SD"/*.sh "$SD"/*.py "$T/scripts/"   # the other scripts call each other as $T/scripts/*
 cd "$T/mise-dl"
 gh release download $V --repo jdx/mise -p "mise-$V-macos-arm64" -p "mise-$V-linux-arm64" -p SHASUMS256.txt
@@ -26,6 +27,13 @@ for r in hostile own; do
   sed "s#\$T#$T#g; s#env-template-hostile#env-template-$r#; s#hook-enter-hostile#hook-enter-$r#; s#hook-postinstall-hostile#hook-postinstall-$r#; s#task-hostile#task-$r#" \
     "$SD/../fixtures/hostile-mise.toml" > "$L/ws/repos/$r/mise.toml"
   git -C "$L/ws/repos/$r" init -q
+done
+# container variant (mounted as /ws by ct.sh, bind.sh, uj.sh, ign.sh): same fixture, canary files under /canary
+CT=$T/lin/ct; mkdir -p "$CT/ws/repos/hostile" "$CT/ws/repos/own" "$CT/canary"
+for r in hostile own; do
+  sed "s#\$T/lab/canary#/canary#g; s#env-template-hostile#env-template-$r#; s#hook-enter-hostile#hook-enter-$r#; s#hook-postinstall-hostile#hook-postinstall-$r#; s#task-hostile#task-$r#" \
+    "$SD/../fixtures/hostile-mise.toml" > "$CT/ws/repos/$r/mise.toml"
+  git -C "$CT/ws/repos/$r" init -q
 done
 # five-layer tree
 W=$L/layers/whr/ws; mkdir -p "$W/repos/proj" "$T/home/.config/mise"
