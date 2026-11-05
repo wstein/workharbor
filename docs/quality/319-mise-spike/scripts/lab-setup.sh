@@ -5,7 +5,9 @@
 set -eu
 : "${T:?set T to an empty scratch directory}"
 V=v2026.10.25
+SD=$(cd "$(dirname "$0")" && pwd)   # resolve before any cd
 mkdir -p "$T"/{mise-dl,bin,home,scripts,lab/canary,lin/{bin,data,proj}}
+cp "$SD"/*.sh "$SD"/*.py "$T/scripts/"   # the other scripts call each other as $T/scripts/*
 cd "$T/mise-dl"
 gh release download $V --repo jdx/mise -p "mise-$V-macos-arm64" -p "mise-$V-linux-arm64" -p SHASUMS256.txt
 grep -E "(macos|linux)-arm64$" SHASUMS256.txt | shasum -a 256 -c -
@@ -22,7 +24,7 @@ L=$T/lab
 mkdir -p "$L/ws/repos/hostile" "$L/ws/repos/own"
 for r in hostile own; do
   sed "s#\$T#$T#g; s#env-template-hostile#env-template-$r#; s#hook-enter-hostile#hook-enter-$r#; s#hook-postinstall-hostile#hook-postinstall-$r#; s#task-hostile#task-$r#" \
-    "$(dirname "$0")/../fixtures/hostile-mise.toml" > "$L/ws/repos/$r/mise.toml"
+    "$SD/../fixtures/hostile-mise.toml" > "$L/ws/repos/$r/mise.toml"
   git -C "$L/ws/repos/$r" init -q
 done
 # five-layer tree
@@ -35,4 +37,4 @@ printf '[tools]\njq = "1.8.2"\nzoxide = "0.9.8"\n[env]\nLAYER_ORIGIN = "local"\n
 git -C "$W/repos/proj" init -q
 # lock project
 mkdir -p "$L/lock"; printf '[tools]\njq = "1.8.2"\nripgrep = "15.1.0"\n' > "$L/lock/mise.toml"; git -C "$L/lock" init -q
-echo "lab ready in $T (the user-global layer file is removed again by layers.sh after use)"
+echo "lab ready in $T (the user-global layer file is moved away by lock.sh)"
