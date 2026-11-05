@@ -53,7 +53,7 @@ func initWithApply(ctx context.Context, call Call, apply func(context.Context, *
 	_, statErr := os.Lstat(directory)
 	missing := len(call.Args) == 1 && errors.Is(statErr, fs.ErrNotExist)
 	if missing && invocation.options.DryRun {
-		if _, perr := os.Lstat(filepath.Dir(directory)); errors.Is(perr, fs.ErrNotExist) {
+		if _, perr := os.Lstat(filepath.Dir(filepath.Clean(directory))); errors.Is(perr, fs.ErrNotExist) {
 			return Result{}, initFailure(ctx, directory, true, nil, exitcode.Errorf(exitcode.PathTargetAbsent, "init directory does not exist and its parent is missing"))
 		}
 	}

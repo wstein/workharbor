@@ -1395,8 +1395,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   declared reference alignment, never content attestation. Other pin protocols remain unsupported.
 - **FR-070**: A workspace name is 1-64 lowercase letters, digits or hyphens without a leading or trailing hyphen (the
   manifest `name` rule, FR-058; `--name` MUST enforce the same rule and exit 64 otherwise). The default container and
-  volume name of a workspace is `whr-<name>`, defined by one function that `init` and later `create` use; `shell` and `rm` use
-  `DerivedFromSelector`. An explicit override replaces the default and is not validated against the workspace name rule. `init --dry-run`
+  volume name of a workspace is `whr-<name>`, defined by `ContainerName` for `init` and later `create`, and by `DerivedFromSelector` for
+  `shell` and `rm`. An explicit override replaces the default and is not validated against the workspace name rule. `init --dry-run`
   reports the derived name as `settings.container_name` (source `derived`). `shell --local` and `rm --local` resolve a
   selector in this order: exact container name, full ID (`shell` also: 12-64-hex ID prefix), then `whr-<selector>` when the selector is a
   valid workspace name; the first step that matches wins. Only whr-labelled containers take part in the exact-name
