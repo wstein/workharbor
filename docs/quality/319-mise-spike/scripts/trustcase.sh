@@ -3,7 +3,7 @@
 . "$CLAUDE_JOB_DIR/tmp/env.sh"
 L=$CLAUDE_JOB_DIR/tmp/lab
 label=$1; dir=$2; shift 2
-envs=(); while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shif
+envs=(); while [ "$1" != "--" ]; do envs+=("$1"); shift; done; shift
 rm -rf "$L/canary"; mkdir -p "$L/canary"
 export MISE_STATE_DIR=$CLAUDE_JOB_DIR/tmp/state-$$; mkdir -p $MISE_STATE_DIR
 cd "$dir"
