@@ -281,7 +281,7 @@ func TestInitPublicAliasesAndConflictSchema(t *testing.T) {
 }
 func TestInitPublicExitCodesAndClosedEnvelopes(t *testing.T) {
 	schema := compileSchema(t)
-	for _, kind := range []string{"absent", "file", "missing-devcontainer", "invalid-manifest", "link"} {
+	for _, kind := range []string{"absent", "file", "missing-devcontainer", "invalid-manifest", "link", "dry-run-absent", "parent-readonly"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := initFixture(t)
 			want := 68
@@ -289,6 +289,19 @@ func TestInitPublicExitCodesAndClosedEnvelopes(t *testing.T) {
 			case "absent":
 				dir = filepath.Join(t.TempDir(), "absent", "leaf") // the parent is missing
 				want = 65
+			case "dry-run-absent":
+				dir = filepath.Join(t.TempDir(), "absent", "leaf")
+				want = 65
+			case "parent-readonly":
+				if os.Geteuid() == 0 {
+					t.Skip("root ignores directory modes")
+				}
+				parent := t.TempDir()
+				if err := os.Chmod(parent, 0o555); err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { _ = os.Chmod(parent, 0o755) })
+				dir = filepath.Join(parent, "leaf")
 			case "file":
 				dir = filepath.Join(t.TempDir(), "file")
 				if err := os.WriteFile(dir, []byte("x"), 0644); err != nil {
@@ -309,7 +322,11 @@ func TestInitPublicExitCodesAndClosedEnvelopes(t *testing.T) {
 				}
 				dir = link + "/."
 			}
-			got := run(t, nil, "init", dir, "--non-interactive", "--yes", "--json")
+			args := []string{"init", dir, "--non-interactive", "--yes", "--json"}
+			if kind == "dry-run-absent" {
+				args = append(args, "--dry-run")
+			}
+			got := run(t, nil, args...)
 			if got.code != want {
 				t.Fatalf("wrong exit: %+v want%d", got, want)
 			}

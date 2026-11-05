@@ -43,6 +43,9 @@ func planRemovalWithCandidate(all []inspection, o RemovalOptions, candidateHome 
 	if o.Target != "" {
 		exact := false
 		for _, c := range all {
+			if _, recognized := workspaceRole(c.Labels); !recognized {
+				continue // foreign containers never count as an exact match, as in shell
+			}
 			exact = exact || c.ID == o.Target || strings.TrimPrefix(c.Name, "/") == o.Target
 		}
 		if derived := wsname.DerivedFromSelector(o.Target); !exact && derived != "" {

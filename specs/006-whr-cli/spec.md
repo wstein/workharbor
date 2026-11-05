@@ -1395,16 +1395,18 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
   declared reference alignment, never content attestation. Other pin protocols remain unsupported.
 - **FR-070**: A workspace name is 1-64 lowercase letters, digits or hyphens without a leading or trailing hyphen (the
   manifest `name` rule, FR-058; `--name` MUST enforce the same rule and exit 64 otherwise). The default container and
-  volume name of a workspace is `whr-<name>`, defined by one function that `init`, `shell`, `ls`, `rm` and later `create`
-  use. An explicit override replaces the default and is not validated against the workspace name rule. `init --dry-run`
+  volume name of a workspace is `whr-<name>`, defined by one function that `init` and later `create` use; `shell` and `rm` use
+  `DerivedFromSelector`. An explicit override replaces the default and is not validated against the workspace name rule. `init --dry-run`
   reports the derived name as `settings.container_name` (source `derived`). `shell --local` and `rm --local` resolve a
-  selector in this order: exact container name, full ID or 12-64-hex ID prefix, then `whr-<selector>` when the selector is a
-  valid workspace name; the first step that matches wins. Existing fixed names (`whr-anchorage-staging`,
+  selector in this order: exact container name, full ID (`shell` also: 12-64-hex ID prefix), then `whr-<selector>` when the selector is a
+  valid workspace name; the first step that matches wins. Only whr-labelled containers take part in the exact-name
+  step in both commands; an unlabelled container of the same name never shadows `whr-<selector>`. Existing fixed names (`whr-anchorage-staging`,
   `whr-recover-<op>`, `whr-stage-home-<id>`, `anchorage-home-*`) are unchanged; a workspace name can derive such a name
   and is then addressed by it. `whr workspace init <dir>` takes the workspace directory as its positional argument (default
   `.`); a missing `<dir>` whose parent exists is created for a real run (and removed again when init fails while it is
-  empty) and planned as an empty directory in a dry run; a missing parent exits 65. Without `--name`, the workspace name
-  defaults to the basename of `<dir>` when that is a valid workspace name; the default derives the container name only and is
+  empty) and planned as an empty directory in a dry run; a missing parent exits 65 (also in a dry run). Without `--name`, the workspace name
+  defaults to the basename of `<dir>`, with one leading `whr-` removed (`whr-cubing` yields `cubing`, so the container
+  stays `whr-cubing`), when that is a valid workspace name; the default derives the container name only and is
   not written to the manifest. `--start-dir` is the session start directory inside the workspace, not the target.
   Init still requires the existing devcontainer file (FR-056 narrowing); a fresh directory therefore fails with exit 70
   until a starter or `--devcontainer` source exists.
