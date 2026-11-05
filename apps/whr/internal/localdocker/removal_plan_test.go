@@ -50,6 +50,16 @@ func TestLocalRmRefusesForeignUnlabelledContainer(t *testing.T) {
 	}
 }
 
+func TestLocalRmForeignExactNameDoesNotShadowDerivedName(t *testing.T) {
+	foreign := inspection{ID: strings.Repeat("b", 64), Name: "/sample"}
+	owned := removalFixture()[0]
+	owned.Name = "/whr-sample"
+	plan, err := planRemoval([]inspection{foreign, owned}, RemovalOptions{Target: "sample"})
+	if err != nil || len(plan.Containers) != 1 || plan.Containers[0].Name != "/whr-sample" {
+		t.Fatalf("plan=%+v error=%v", plan, err)
+	}
+}
+
 func TestLocalRmNeverRemovesBundleDockOrReadOnlyVolumes(t *testing.T) {
 	for _, change := range []string{"name", "readonly", "tool-path"} {
 		t.Run(change, func(t *testing.T) {

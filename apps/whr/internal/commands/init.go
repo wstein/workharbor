@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/exitcode"
 	"github.com/wstein/workharbor-nxt/apps/whr/internal/scaffold"
@@ -51,11 +52,16 @@ func initWithApply(ctx context.Context, call Call, apply func(context.Context, *
 	// init fails while it is still empty); a dry run plans against an empty one.
 	_, statErr := os.Lstat(directory)
 	missing := len(call.Args) == 1 && errors.Is(statErr, fs.ErrNotExist)
+	if missing && invocation.options.DryRun {
+		if _, perr := os.Lstat(filepath.Dir(directory)); errors.Is(perr, fs.ErrNotExist) {
+			return Result{}, initFailure(ctx, directory, true, nil, exitcode.Errorf(exitcode.PathTargetAbsent, "init directory does not exist and its parent is missing"))
+		}
+	}
 	if missing && !invocation.options.DryRun {
 		if err := os.Mkdir(directory, 0o755); errors.Is(err, fs.ErrNotExist) {
 			return Result{}, exitcode.Errorf(exitcode.PathTargetAbsent, "init directory does not exist and its parent is missing")
 		} else if err != nil {
-			return Result{}, exitcode.Errorf(exitcode.PathConflict, "init directory cannot be created: %v", err)
+			return Result{}, initFailure(ctx, directory, false, nil, exitcode.Errorf(exitcode.PathConflict, "init directory cannot be created: %v", err))
 		}
 		defer func() {
 			if retErr != nil {

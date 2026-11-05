@@ -169,8 +169,11 @@ func Build(snapshot Snapshot, o Options) (*Proposal, error) {
 	if effective == "" {
 		// Without a name the directory basename is the default; it is not
 		// written to the manifest and is ignored when it is not a valid name.
-		if abs, err := filepath.Abs(s.Directory); err == nil && wsname.Valid(filepath.Base(abs)) {
-			effective = filepath.Base(abs)
+		// One leading "whr-" is dropped so whr-cubing yields whr-cubing.
+		if abs, err := filepath.Abs(s.Directory); err == nil {
+			if base := strings.TrimPrefix(filepath.Base(abs), wsname.Prefix); wsname.Valid(base) {
+				effective = base
+			}
 		}
 	}
 	if effective != "" {

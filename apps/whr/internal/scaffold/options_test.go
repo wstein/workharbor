@@ -26,7 +26,7 @@ func TestInitPreservesExistingSettings(t *testing.T) {
 			t.Fatal("a permission alone must not rewrite existing bytes")
 		}
 		if cn := p.Preview().Settings["container_name"]; len(p.Preview().Settings) != 2 || cn.Origin != "derived" || p.Preview().Settings["console_mode"].Value != "plain" || p.Preview().Settings["console_mode"].Origin != "default" {
-			t.Fatalf("only the effective console default may appear; it must not be presented as persisted: %#v", p.Preview().Settings)
+			t.Fatalf("only the derived container name and the effective console default may appear; it must not be presented as persisted: %#v", p.Preview().Settings)
 		}
 	}
 	o := scaffold.Options{DryRun: true, HumanShell: str("fish")}
@@ -149,6 +149,7 @@ func TestInitDerivesContainerNameFromName(t *testing.T) {
 func TestInitDerivesNameFromDirectoryBasename(t *testing.T) {
 	for _, tc := range []struct{ dir, name, want string }{
 		{"cubing", "", "whr-cubing"}, {"/x/y/cubing/", "", "whr-cubing"}, {"cubing", "other", "whr-other"}, {"My Dir", "", ""},
+		{"/x/whr-cubing", "", "whr-cubing"}, {"whr-whr-a", "", "whr-whr-a"}, {"whr-", "", ""},
 	} {
 		s := snapshot()
 		s.Directory = tc.dir
