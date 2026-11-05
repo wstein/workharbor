@@ -11,7 +11,7 @@ tools again in the Spec 009 catalogue. Owner principle (#319): one source of tru
 and system components stay with the host setup wizard. This ADR records what the spike measured on one Mac (Apple silicon,
 OrbStack, mise 2026.10.25, Debian 13 arm64 container). Evidence:
 [docs/quality/319-mise-spike](../quality/319-mise-spike/) holds the scripts, a lab setup script and stored output for layers
-(`layers.out`, section 1), `mise.lock` (`lock.out`, section 4) and start time (`bench.out`, section 6). Results of the trust,
+(`layers.out`, section 1), `mise.lock` exit codes and the checksum mismatch message (`lock.out`, section 4) and start time (`bench.out`, section 6). Results of the trust,
 read-only, shared-store and volume experiments (sections 2, 3, 5, OD-8) come from runs of the listed scripts whose output is not
 stored; they are reproducible but not recorded as files. Inventory and registry lookups (section 7) are not scripted. The lab root `$T` is a scratch directory; no repository
 under `Anchorage/` was changed.
@@ -74,6 +74,8 @@ in the sandbox; outside install plus `ro` mount keeps the job profiles unwritabl
 whr: `mise install --locked --dry-run-code` exits 1 on drift. Costs: the lock must contain the target platform (`fd 10.4.0` had no
 `linux-arm64` entry; `--locked` refused it); `mise install <tool>` rewrites `mise.lock` in the project. Release-age hiding
 (`minimum_release_age`) was seen on `github:wstein/sourcesteward`.
+`lock.out` stores only the exit codes of the four cases and the mismatch message of case 4; the platform count, the `fd 10.4.0`
+observation, the `mise.lock` rewrite and the release-age hiding were observed in the run but have no stored output.
 
 ### 5. Volume model (owner addition: explicit, named, persistent)
 Current patterns: BundleDock `bundledock-<name>-<64 hex from the image ID>`, mounted `readonly,volume-nocopy` at `/opt/bdock/<name>`,
@@ -143,11 +145,11 @@ BundleDock toolbox catalog (57 entries, `packages.catalog.json`; 56 are `github`
   hadolint, herdr, hugo, hyperfine, jj, jq, just, lazygit, lsd, lychee, navi, nu, opentofu, pinact, regctl, rg, ruff, shellcheck, shfmt, sops, starship,
   syft, tmux, trivy, trufflehog, typos, typst, uv, watchexec, xh, yq, zoxide (registry lookup for all; lab install only for the 8 tools of section 6
   plus jq and ripgrep on macOS; the rest UNVERIFIED beyond registry presence).
-- mise-managed through the `github:` backend (listing verified; install verified only for fish, see section 7; others UNVERIFIED): fish, gh-stack, jsonschema-cli (listing shows only
+- mise-managed through the `github:` backend (listing verified; install verified only for fish, see the fish row in this section; others UNVERIFIED): fish, gh-stack, jsonschema-cli (listing shows only
   language-prefixed tags, likely needs an asset filter), misspell, and the owner's `stw`, `whr`, `smill`, `cscribe`, `scc`.
 - base image content: `mise` itself (bundle carries it; mise is not in its own registry), `sqlite3` (source build; base image or dropped).
 - dropped: none proposed. Optional trims are the owner's call (btop, bottom, navi and similar interactive tools).
-Counts: 46 + 9 + 2 = 57. Catalog name `rg` is `ripgrep` in the mise registry. A per-row table with install proof for all 57 is a follow-up.
+Counts: 46 + 9 + 2 = 57. `rg` is an alias of `ripgrep` in the mise registry. A per-row table with install proof for all 57 is a follow-up.
 
 ## Content binding of trust (OD-8)
 Spec 008 records OD-8 as decided in stages (2026-11-03): the residual risk stays accepted now; this section is the input for the owner's
@@ -172,5 +174,5 @@ in the Spec 009 wizard; OD-8 stays with the owner.
 
 ## Not verified (UNKNOWN)
 Windows/Intel Mac; the Anchorage workspace start; image pull time of the carrier; `_.file`, `_.source` and `include` handling; mise `exec`
-while the data volume is shared by two concurrent writers; prune racing a concurrent `docker create`; macOS installs of the `github:` tools;
+while the data volume is shared by two concurrent writers; prune racing a concurrent `docker create`; macOS installs of the `github:` tools other than fish;
 `.nvmrc` and similar idiomatic files; origin of the `anchorage-tools-*` volumes; mise behavior after upgrades (trust record format).
