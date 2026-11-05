@@ -281,7 +281,7 @@ func TestInitPublicAliasesAndConflictSchema(t *testing.T) {
 }
 func TestInitPublicExitCodesAndClosedEnvelopes(t *testing.T) {
 	schema := compileSchema(t)
-	for _, kind := range []string{"absent", "file", "missing-devcontainer", "invalid-manifest", "link", "dry-run-absent", "parent-readonly"} {
+	for _, kind := range []string{"absent", "file", "missing-devcontainer", "invalid-manifest", "link", "dry-run-absent", "dry-run-slash", "dry-run-dot-slash", "parent-readonly"} {
 		t.Run(kind, func(t *testing.T) {
 			dir := initFixture(t)
 			want := 68
@@ -292,6 +292,13 @@ func TestInitPublicExitCodesAndClosedEnvelopes(t *testing.T) {
 			case "dry-run-absent":
 				dir = filepath.Join(t.TempDir(), "absent", "leaf")
 				want = 65
+			case "dry-run-slash":
+				dir = filepath.Join(t.TempDir(), "newdir") + "/"
+				want = 70
+			case "dry-run-dot-slash":
+				t.Chdir(t.TempDir())
+				dir = "./newdir/"
+				want = 70
 			case "parent-readonly":
 				if os.Geteuid() == 0 {
 					t.Skip("root ignores directory modes")
@@ -323,7 +330,7 @@ func TestInitPublicExitCodesAndClosedEnvelopes(t *testing.T) {
 				dir = link + "/."
 			}
 			args := []string{"init", dir, "--non-interactive", "--yes", "--json"}
-			if kind == "dry-run-absent" {
+			if strings.HasPrefix(kind, "dry-run") {
 				args = append(args, "--dry-run")
 			}
 			got := run(t, nil, args...)
