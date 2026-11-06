@@ -7,7 +7,7 @@
     "node": "26.11.1"
   },
   "dependencies": {
-    "@devcontainers/cli": "0.89.0",
+    "@devcontainers/cli": "0.90.0",
     "jsonc-parser": "3.3.1"
   }
 }
