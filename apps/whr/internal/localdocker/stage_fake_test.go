@@ -173,7 +173,7 @@ func TestLocalStageFakeToolProcess(t *testing.T) {
 			os.Exit(0)
 		}
 		if len(args) == 2 && args[1] == "--version" {
-			fmt.Println("0.89.0")
+			fmt.Println("0.90.0")
 			os.Exit(0)
 		}
 		if len(args) < 2 {

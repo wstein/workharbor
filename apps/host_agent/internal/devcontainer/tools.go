@@ -84,7 +84,7 @@ func (p Tools) Verify(ctx context.Context, cli bool) error {
 		c.Env = p.Environment()
 		c.Stderr = io.Discard
 		raw, e := c.Output()
-		if e != nil || strings.TrimSpace(string(raw)) != "0.89.0" {
+		if e != nil || strings.TrimSpace(string(raw)) != "0.90.0" {
 			return unavailable()
 		}
 	}

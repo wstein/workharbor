@@ -174,7 +174,7 @@ func validateResourceUser(result map[string]any, remotePair string) error {
 		return fail("configuration_changed")
 	}
 	expected := strings.SplitN(remotePair, ":", 2)[0]
-	// Pinned CLI0.89.0 createContainerProperties displays UID0 as root.
+	// Pinned CLI0.90.0 createContainerProperties displays UID0 as root.
 	// This does not resolve names or alter the enforced UID:GID pair.
 	if uid == 0 {
 		expected = "root"

@@ -168,7 +168,7 @@ is mandatory rather than an assumed label guarantee.
 
 Exact candidate pins and integrity records are in
 [tool-pins.json](../../../apps/host_agent/internal/providers/docker/tool-pins.json).
-The host companion package lock pins CLI0.89.0 and jsonc-parser3.3.1. The CLI npm
+The host companion package lock pins CLI0.90.0 and jsonc-parser3.3.1. The CLI npm
 artifact is bundled with no runtime npm dependencies. Dockerfile parser is
 Moby/BuildKit v0.34.0 (Apache-2.0), selected maintained release with Go1.26.8 minimum,
 compatible with pinned Go1.27.2; its dependency graph is locked in go.mod/go.sum.
@@ -371,7 +371,7 @@ head; run appropriate native/pristine app/source/manifest gates and retain raw l
 
 ## Official references and unresolved implementation evidence
 
-- [CLI0.89.0 release](https://github.com/devcontainers/cli/releases/tag/v0.89.0).
+- [CLI0.90.0 release](https://github.com/devcontainers/cli/releases/tag/v0.90.0).
 - Pinned CLI sources: devContainersSpecCLI.ts, configContainer.ts,
   injectHeadless.ts, singleContainer.ts, imageMetadata.ts, containerFeatures.ts,
   utils.ts in the official release; inspected semantics, never copied implementation.
@@ -411,7 +411,7 @@ same-ID agreement precede immutable proof registration. Missing, stale, partial,
 foreign, mismatched, failed or canceled evidence never registers/adopts/reuses.
 The final built image supplies command expectations when overrideCommand is false;
 never substitute the original base image's command. Official startup script bytes
-are measured against pinned CLI0.89.0 and retained only as SHA256 expectation.
+are measured against pinned CLI0.90.0 and retained only as SHA256 expectation.
 
 The private Unix streaming adapter registers a random 32-byte/64-hex token before
 one-use invoke. Registration alone starts no work. Duplicate/canceled/unregistered

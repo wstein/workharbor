@@ -52,7 +52,7 @@ func fixtureStagePreparationNamed(t *testing.T, basename string) (Client, StageO
 	node := filepath.Join(tools, "node")
 	cli := filepath.Join(tools, "devcontainer.js")
 	script := "#!/bin/sh\nshift 2\ncase \"$1:$2\" in\n--version:) printf 'Docker version fixture\\n';;\ninfo:--format) printf '%s\\n' '{\"ID\":\"daemon\",\"OSType\":\"linux\",\"OperatingSystem\":\"Debian\",\"KernelVersion\":\"fixture\",\"Name\":\"fixture\",\"Architecture\":\"x86_64\"}' ;;\ncontainer:ls) printf '%s\\n' '{\"ID\":\"" + id + "\",\"Status\":\"Up\"}' ;;\ncontainer:inspect) printf '%s\\n' " + stageShellLiteral(string(b)) + " ;;\n*) exit 83 ;;\nesac\n"
-	for path, data := range map[string]string{docker: script, node: "#!/bin/sh\nif test \"$1\" = --version; then printf 'v22.0.0\\n'; elif test \"$2\" = --version; then printf '0.89.0\\n'; else printf '%s\\n' '{\"configuration\":{\"image\":\"example:local\"},\"mergedConfiguration\":{\"image\":\"example:local\"}}'; fi\n", cli: "#!/usr/bin/env node\n// official CLI entry fixture\n"} {
+	for path, data := range map[string]string{docker: script, node: "#!/bin/sh\nif test \"$1\" = --version; then printf 'v22.0.0\\n'; elif test \"$2\" = --version; then printf '0.90.0\\n'; else printf '%s\\n' '{\"configuration\":{\"image\":\"example:local\"},\"mergedConfiguration\":{\"image\":\"example:local\"}}'; fi\n", cli: "#!/usr/bin/env node\n// official CLI entry fixture\n"} {
 		if e = os.WriteFile(path, []byte(data), 0700); e != nil {
 			t.Fatal(e)
 		}

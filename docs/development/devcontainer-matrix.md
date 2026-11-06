@@ -3,7 +3,7 @@
 Feature006 T009 remains unaccepted. This matrix describes the reviewed initial
 subset and its source implementation; real Linux/Docker acceptance is still pending.
 The [provider contract](../../specs/006-whr-cli/contracts/devcontainer-provider.md)
-is authoritative. The official Dev Container CLI 0.89.0 supplies provisioning
+is authoritative. The official Dev Container CLI 0.90.0 supplies provisioning
 semantics, with locked JSONC/parser/tool integrity recorded in the contract and pins.
 
 | Input or behavior | Initial subset |

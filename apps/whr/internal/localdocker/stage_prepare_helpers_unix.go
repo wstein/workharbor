@@ -123,8 +123,8 @@ func admitStageToolVersions(ctx context.Context, r *stageRunner) error {
 		if version == "" || len(version) > 4096 || strings.ContainsAny(version, "\x00\r\x1b") {
 			return stageConflict("installed " + name + " version observation invalid")
 		}
-		if name == "devcontainer" && version != "0.89.0" {
-			return stageConflict("official Dev Container CLI 0.89.0 required")
+		if name == "devcontainer" && version != "0.90.0" {
+			return stageConflict("official Dev Container CLI 0.90.0 required")
 		}
 		if name == "git" && !stageGitVersionAdmitted(version) {
 			return stageConflict("Git 2.39.5 or later required")

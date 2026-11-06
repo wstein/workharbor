@@ -233,7 +233,7 @@ implementation tests then exercise it rather than circularly preceding all code.
 
 ## Tool, endpoint, argv and output contract
 
-Use official Dev Container CLI 0.89.0, trusted installed Node/Docker/Git/shell tools;
+Use official Dev Container CLI 0.90.0, trusted installed Node/Docker/Git/shell tools;
 record actual absolute paths, versions and content digests, recheck before launch.
 Retain existing Git >= 2.39.5 baseline; do not invent Node 26-only, Docker 27-only or
 API 1.46 safety gates. Test actual official-CLI/runtime capability and report exact
@@ -649,11 +649,11 @@ No receipt is evidence of success; no receipt is also not evidence of no effects
 
 ## Evidence and remaining gate
 
-Source-only basis: official CLI v0.89.0
-[options](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/devContainersSpecCLI.ts),
-[initialize ordering](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/configContainer.ts),
-[metadata](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/imageMetadata.ts)
-and [unchanged-image/UID paths](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/containerFeatures.ts).
+Source-only basis: official CLI v0.90.0
+[options](https://github.com/devcontainers/cli/blob/v0.90.0/src/spec-node/devContainersSpecCLI.ts),
+[initialize ordering](https://github.com/devcontainers/cli/blob/v0.90.0/src/spec-node/configContainer.ts),
+[metadata](https://github.com/devcontainers/cli/blob/v0.90.0/src/spec-node/imageMetadata.ts)
+and [unchanged-image/UID paths](https://github.com/devcontainers/cli/blob/v0.90.0/src/spec-node/containerFeatures.ts).
 Read-only Anchorage graph at observed umbrella HEAD 28a9662f61ab6b8b2853bdc7453b78685ed63f64:
 [config](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/devcontainer.json),
 [setup](https://github.com/wstein/anchorage-workspace/blob/28a9662f61ab6b8b2853bdc7453b78685ed63f64/.devcontainer/setup.sh),

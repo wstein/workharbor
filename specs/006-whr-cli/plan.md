@@ -460,8 +460,8 @@ its contexts or add T009/control-plane prerequisites to T038. Any narrowly share
 pure-source extraction needs explicit scope review; neither broad copying nor a
 second Dev Container semantics implementation is an approved shortcut.
 
-The current official companion pins Dev Container CLI 0.89.0; its
-[CLI source](https://github.com/devcontainers/cli/blob/v0.89.0/src/spec-node/devContainersSpecCLI.ts)
+The current official companion pins Dev Container CLI 0.90.0; its
+[CLI source](https://github.com/devcontainers/cli/blob/v0.90.0/src/spec-node/devContainersSpecCLI.ts)
 exposes the relevant up/read-configuration/run-user-commands/exec operations.
 `--override-config` replaces the full document. Existing provider evidence says
 skip-post-create suppresses container hooks, not initializeCommand; source/effective
