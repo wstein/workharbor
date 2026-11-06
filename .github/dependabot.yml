@@ -1,29 +1,65 @@
 version: 2
 updates:
-  - package-ecosystem: "github-actions"
-    directory: "/"
+  - package-ecosystem: github-actions
+    directory: /
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "ci(deps)"
-
-  - package-ecosystem: "gomod"
-    directory: "/apps/api_client"
+    groups:
+      github-actions:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: gomod
+    directories:
+      - /apps/api_client
+      - /apps/host_agent
+      - /apps/whr
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
-
-  - package-ecosystem: "gomod"
-    directory: "/apps/host_agent"
+    groups:
+      go:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: mix
+    directory: /apps/control_plane
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
-
-  - package-ecosystem: "gomod"
-    directory: "/apps/whr"
+    groups:
+      mix:
+        patterns: ["*"]
+        update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /apps/host_agent/tools/devcontainer
     schedule:
-      interval: "weekly"
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 3
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]
