@@ -1016,8 +1016,9 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
     `https` URL or a password, never echoed), an `update` value that is a command, a gitlink without an entry, an
     entry without a gitlink (the resolver rejects it), a path outside `projects_path` (error; `.agents` and paths below
     `legacy/` are the warning `submodule.outside_projects_allowed`, owner decision of 2026-11-10), nested or
-    overlapping paths, an index gitlink that differs from `HEAD` (warning) and the pinned commit (info). Git-derived checks read the
-    index, the `HEAD` tree and the committed blob, as the resolver does; the other checks read the working tree.
+    overlapping paths, an index gitlink that differs from `HEAD` (warning) and the pinned commit (info).
+    Git-derived checks read the index, the `HEAD` tree and the committed blob, as the resolver does; the other
+    checks read the working tree.
     HEAD is unborn exactly when `git rev-parse --verify --quiet HEAD` exits 1 with empty standard error and `.git/HEAD`
     is a symbolic reference to a missing ref; then `git.head_missing` is reported, `ls-tree` and `cat-file HEAD:` are
     skipped, `.gitmodules` is read from the index (`cat-file blob :.gitmodules`, only when the index lists it) and the
