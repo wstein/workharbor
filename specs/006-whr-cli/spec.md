@@ -641,7 +641,8 @@ created and that no network connection was attempted.
    **When** it runs, **Then** each is a warning that names the capability matrix and the result remains valid.
 7. **Given** a Git repository root with `.gitmodules` and gitlinks, **When** it runs, **Then** each submodule is
    reported with its pinned commit; a `.gitmodules` entry with credentials in the URL (reported redacted), a
-   non-HTTPS/SSH or relative or `ext::`/`file:` URL, an `update = !command` or a path outside `projects_path`, and
+   non-HTTPS/SSH or relative or `ext::`/`file:` URL, an `update = !command` or a path outside `projects_path` (except `.agents` and paths below `legacy/`, which are the warning
+   `submodule.outside_projects_allowed`), and
    a gitlink with no `.gitmodules` entry are errors; an entry without a gitlink is an error (the resolver rejects it) and a gitlink that differs from
    `HEAD` is a warning.
 8. **Given** a hostile repository whose configuration would run code when processed by an unhardened Git or
@@ -1012,7 +1013,8 @@ in a directory with valid and invalid `workharbor.json`; compare status, evidenc
     and `url`, which the resolver rejects), and each submodule: URL form (`https://`, `ssh://` or the scp-like
     `user@host:path` the resolver admits; relative, `file:` and `ext::` refused), credentials (any userinfo in an
     `https` URL or a password, never echoed), an `update` value that is a command, a gitlink without an entry, an
-    entry without a gitlink (the resolver rejects it), a path outside `projects_path`, nested or overlapping paths,
+    entry without a gitlink (the resolver rejects it), a path outside `projects_path` (error; `.agents` and paths below `legacy/` are the
+    warning `submodule.outside_projects_allowed`), nested or overlapping paths,
     an index gitlink that differs from `HEAD` (warning) and the pinned commit (info). Git-derived checks read the
     index, the `HEAD` tree and the committed blob, as the resolver does; the other checks read the working tree.
     HEAD is unborn exactly when `git rev-parse --verify --quiet HEAD` exits 1 with empty standard error and `.git/HEAD`

@@ -109,6 +109,35 @@ func TestValidateSubmoduleRules(t *testing.T) {
 	}
 }
 
+// .agents and legacy/ may hold submodules outside projects_path: a warning, the
+// configuration stays valid. Every other outside path is still an error.
+func TestValidateRealSubmoduleOutsideAllowed(t *testing.T) {
+	realGit(t)
+	for path, want := range map[string]string{
+		".agents":    "submodule.outside_projects_allowed",
+		"legacy/app": "submodule.outside_projects_allowed",
+		"other/app":  "submodule.outside_projects",
+	} {
+		t.Run(path, func(t *testing.T) {
+			dir := repoDir(t, false)
+			write(t, dir, ".gitmodules", "[submodule \"app\"]\n\tpath = "+path+"\n\turl = https://f.example/o/app.git\n")
+			runGit(t, dir, "", "add", "-A")
+			addGitlink(t, dir, path, sha)
+			runGit(t, dir, "", "commit", "-q", "-m", "x")
+			r := validate(t, dir, workspacecfg.Options{})
+			if !has(r, want) {
+				t.Fatalf("no %s: %+v", want, r.Findings)
+			}
+			if wantValid := want == "submodule.outside_projects_allowed"; r.Valid != wantValid {
+				t.Errorf("valid %v, want %v: %+v", r.Valid, wantValid, r.Findings)
+			}
+			if want == "submodule.outside_projects_allowed" && (find(r, want).Severity != workspacecfg.SevWarning || has(r, "submodule.outside_projects")) {
+				t.Errorf("%+v", r.Findings)
+			}
+		})
+	}
+}
+
 func TestValidateRealUnlistedAndNotPinned(t *testing.T) {
 	realGit(t)
 	dir := repoDir(t, false)

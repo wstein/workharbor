@@ -158,6 +158,12 @@ func checkSubmoduleKeys(c *collector, res gitmodulesResult) {
 	}
 }
 
+// outsideProjectsAllowed reports the canonical paths that may hold a submodule
+// outside projects_path: .agents itself and anything below legacy/.
+func outsideProjectsAllowed(path string) bool {
+	return path == ".agents" || strings.HasPrefix(path, "legacy/")
+}
+
 func checkSubmodules(c *collector, s GitSnapshot, entries []smEntry, links map[string]string) {
 	listed := map[string]bool{}
 	paths := map[string]int{}
@@ -173,7 +179,11 @@ func checkSubmodules(c *collector, s GitSnapshot, entries []smEntry, links map[s
 		if why := canonicalPathProblem(e.path); why != "" {
 			c.add("submodule.outside_projects", e.path, "submodule "+quoteKey(e.name)+" has a path that is not canonical", "")
 		} else if s.ProjectsPath != "" && !strings.HasPrefix(e.path, s.ProjectsPath+"/") {
-			c.add("submodule.outside_projects", e.path, "submodule "+quoteKey(e.name)+" is not below the projects directory", "")
+			if outsideProjectsAllowed(e.path) {
+				c.add("submodule.outside_projects_allowed", e.path, "submodule "+quoteKey(e.name)+" is not below the projects directory; .agents and legacy/ are allowed", "")
+			} else {
+				c.add("submodule.outside_projects", e.path, "submodule "+quoteKey(e.name)+" is not below the projects directory", "")
+			}
 		}
 		if sha, ok := links[e.path]; ok {
 			c.add("submodule.pinned", e.path, "pinned at "+sha, "")

@@ -72,6 +72,7 @@ var catalogue = []CodeInfo{
 	{"submodule.unlisted", SevError},
 	{"submodule.not_pinned", SevError},
 	{"submodule.outside_projects", SevError},
+	{"submodule.outside_projects_allowed", SevWarning},
 	{"submodule.nested", SevError},
 	{"submodule.not_committed", SevWarning},
 	{"submodule.pinned", SevInfo},

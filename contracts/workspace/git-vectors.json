@@ -123,6 +123,78 @@
    ]
   },
   {
+   "id": "outside-projects-agents-allowed",
+   "tree": [
+    "160000 a .agents",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = .agents\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects_allowed",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-legacy-allowed",
+   "tree": [
+    "160000 a legacy/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = legacy/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects_allowed",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-agents-prefix-only",
+   "tree": [
+    "160000 a .agentsx",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = .agentsx\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-agents-below",
+   "tree": [
+    "160000 a .agents/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = .agents/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-legacy-itself",
+   "tree": [
+    "160000 a legacy",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = legacy\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-legacy-prefix-only",
+   "tree": [
+    "160000 a legacyx/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = legacyx/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
    "id": "outside-projects-prefix-only",
    "tree": [
     "160000 a projectsx/app",
