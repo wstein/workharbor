@@ -116,6 +116,9 @@ func TestValidateRealSubmoduleOutsideAllowed(t *testing.T) {
 	for path, want := range map[string]string{
 		".agents":    "submodule.outside_projects_allowed",
 		"legacy/app": "submodule.outside_projects_allowed",
+		"legacy/a/b": "submodule.outside_projects_allowed",
+		".Agents":    "submodule.outside_projects",
+		"Legacy/app": "submodule.outside_projects",
 		"other/app":  "submodule.outside_projects",
 	} {
 		t.Run(path, func(t *testing.T) {
@@ -130,6 +133,9 @@ func TestValidateRealSubmoduleOutsideAllowed(t *testing.T) {
 			}
 			if wantValid := want == "submodule.outside_projects_allowed"; r.Valid != wantValid {
 				t.Errorf("valid %v, want %v: %+v", r.Valid, wantValid, r.Findings)
+			}
+			if find(r, want).Remediation == "" {
+				t.Errorf("no remediation on %s", want)
 			}
 			if want == "submodule.outside_projects_allowed" && (find(r, want).Severity != workspacecfg.SevWarning || has(r, "submodule.outside_projects")) {
 				t.Errorf("%+v", r.Findings)
