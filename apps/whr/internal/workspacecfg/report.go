@@ -223,7 +223,7 @@ var defaultRemediation = map[string]string{
 	"submodule.unlisted":                   "add a .gitmodules entry for the gitlink",
 	"submodule.not_pinned":                 "run git submodule add or remove the entry",
 	"submodule.outside_projects":           "place the submodule below projects_path",
-	"submodule.outside_projects_allowed":   "move the submodule below projects_path if it must be provisioned",
+	"submodule.outside_projects_allowed":   "move the submodule below projects_path to treat it as a project",
 	"submodule.nested":                     "do not nest or overlap submodule paths",
 	"submodule.not_committed":              "commit the submodule change",
 	"project.declared_not_pinned":          "add the project as a submodule at its path and commit it",

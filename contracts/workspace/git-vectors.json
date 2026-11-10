@@ -195,6 +195,68 @@
    ]
   },
   {
+   "id": "outside-projects-legacy-deep",
+   "tree": [
+    "160000 a legacy/a/b",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = legacy/a/b\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects_allowed",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-legacy-dotdot",
+   "tree": [
+    "160000 a legacy/../x",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = legacy/../x\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "git.tree_path_invalid",
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-legacy-empty-component",
+   "tree": [
+    "160000 a legacy//app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = legacy//app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "git.tree_path_invalid",
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-agents-case",
+   "tree": [
+    "160000 a .Agents",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = .Agents\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
+   "id": "outside-projects-legacy-case",
+   "tree": [
+    "160000 a Legacy/app",
+    "100644 b .gitmodules"
+   ],
+   "gitmodules": "[submodule \"app\"]\n\tpath = Legacy/app\n\turl = https://f.example/o/app.git\n",
+   "expect_codes": [
+    "submodule.outside_projects",
+    "submodule.pinned"
+   ]
+  },
+  {
    "id": "outside-projects-prefix-only",
    "tree": [
     "160000 a projectsx/app",
