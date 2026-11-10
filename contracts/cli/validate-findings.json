@@ -214,6 +214,11 @@
       "note": "path not below projects_path"
     },
     {
+      "code": "submodule.outside_projects_allowed",
+      "severity": "warning",
+      "note": ".agents or a path below legacy/ outside projects_path"
+    },
+    {
       "code": "submodule.nested",
       "severity": "error",
       "note": "nested or overlapping submodule paths"
